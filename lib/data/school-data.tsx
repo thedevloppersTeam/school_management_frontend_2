@@ -397,7 +397,24 @@ export const periods: Period[] = [
 ]
 
 // Élèves - Génération de 187 élèves répartis dans les 12 classes
+
+// ── Seeded PRNG (Mulberry32) ──────────────────────────────────────────────────
+// Remplace Math.random() pour garantir des données identiques entre SSR et client.
+// Même seed → même séquence → pas de mismatch hydration.
+function createRng(seed: number) {
+  let s = seed
+  return function () {
+    s |= 0; s = s + 0x6d2b79f5 | 0
+    let t = Math.imul(s ^ s >>> 15, 1 | s)
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t
+    return ((t ^ t >>> 14) >>> 0) / 4294967296
+  }
+}
+
+// Élèves - Génération de 187 élèves répartis dans les 12 classes
 const generateStudents = (): Student[] => {
+  const rng = createRng(42) // seed fixe → résultat identique SSR + client
+
   const maleFirstNames = [
     'Michel', 'Nicolas', 'Jean', 'Pierre', 'Luc', 'Marc', 'Paul', 'Jacques', 'François', 'Philippe', 'André',
     'David', 'Daniel', 'Christian', 'Bernard', 'Robert', 'Thomas', 'Laurent', 'Patrick', 'Alain',
@@ -427,12 +444,12 @@ const generateStudents = (): Student[] => {
   ]
   
   const classDistribution = [
-    { classId: 'room-1', levelId: 'level-7e', count: 32 },
-    { classId: 'room-2', levelId: 'level-7e', count: 30 },
-    { classId: 'room-3', levelId: 'level-8e', count: 31 },
-    { classId: 'room-4', levelId: 'level-8e', count: 28 },
-    { classId: 'room-5', levelId: 'level-9e', count: 30 },
-    { classId: 'room-6', levelId: 'level-nsi', count: 0 }, // Will add specific students
+    { classId: 'room-1', levelId: 'level-7e',  count: 32 },
+    { classId: 'room-2', levelId: 'level-7e',  count: 30 },
+    { classId: 'room-3', levelId: 'level-8e',  count: 31 },
+    { classId: 'room-4', levelId: 'level-8e',  count: 28 },
+    { classId: 'room-5', levelId: 'level-9e',  count: 30 },
+    { classId: 'room-6', levelId: 'level-nsi', count: 0  },
     { classId: 'room-7', levelId: 'level-nsi', count: 28 },
     { classId: 'room-8', levelId: 'level-nsi', count: 26 },
     { classId: 'room-9', levelId: 'level-nsi', count: 27 }
@@ -441,31 +458,27 @@ const generateStudents = (): Student[] => {
   const students: Student[] = []
   let studentCounter = 1
   
-  // Add specific students for NSI LLA (room-6) first
   const nsiLLAStudents = [
-    { firstName: 'Alain', lastName: 'Dupont', gender: 'M' as const },
-    { firstName: 'Robert', lastName: 'Emmanuel', gender: 'M' as const },
-    { firstName: 'Marie', lastName: 'François', gender: 'F' as const },
-    { firstName: 'Sophie', lastName: 'Jean', gender: 'F' as const },
-    { firstName: 'Patrick', lastName: 'Joseph', gender: 'M' as const },
-    { firstName: 'Claire', lastName: 'Louis', gender: 'F' as const },
-    { firstName: 'André', lastName: 'Michel', gender: 'M' as const },
-    { firstName: 'Nathalie', lastName: 'Pierre', gender: 'F' as const }
+    { firstName: 'Alain',    lastName: 'Dupont',    gender: 'M' as const },
+    { firstName: 'Robert',   lastName: 'Emmanuel',  gender: 'M' as const },
+    { firstName: 'Marie',    lastName: 'François',  gender: 'F' as const },
+    { firstName: 'Sophie',   lastName: 'Jean',      gender: 'F' as const },
+    { firstName: 'Patrick',  lastName: 'Joseph',    gender: 'M' as const },
+    { firstName: 'Claire',   lastName: 'Louis',     gender: 'F' as const },
+    { firstName: 'André',    lastName: 'Michel',    gender: 'M' as const },
+    { firstName: 'Nathalie', lastName: 'Pierre',    gender: 'F' as const }
   ]
   
-  nsiLLAStudents.forEach((student, index) => {
-    const year = 2008 + Math.floor(Math.random() * 2)
-    const month = Math.floor(Math.random() * 12) + 1
-    const day = Math.floor(Math.random() * 28) + 1
-    
-    const nisu = `${String(studentCounter).padStart(12, '0')}`
-    const avatar = avatars[Math.floor(Math.random() * avatars.length)]
-    
-    // Generate student code
-    const firstPart = student.firstName.slice(0, 2).toUpperCase().padEnd(2, 'X')
-    const lastPart = student.lastName.slice(0, 2).toUpperCase().padEnd(2, 'X')
+  nsiLLAStudents.forEach((student) => {
+    const year  = 2008 + Math.floor(rng() * 2)
+    const month = Math.floor(rng() * 12) + 1
+    const day   = Math.floor(rng() * 28) + 1
+    const nisu  = `${String(studentCounter).padStart(12, '0')}`
+    const avatar = avatars[Math.floor(rng() * avatars.length)]
+    const firstPart      = student.firstName.slice(0, 2).toUpperCase().padEnd(2, 'X')
+    const lastPart       = student.lastName.slice(0, 2).toUpperCase().padEnd(2, 'X')
     const sequentialNumber = String(studentCounter).padStart(4, '0')
-    const studentCode = `${firstPart}${lastPart}${sequentialNumber}`
+    const studentCode    = `${firstPart}${lastPart}${sequentialNumber}`
     
     students.push({
       id: `student-${studentCounter}`,
@@ -473,7 +486,7 @@ const generateStudents = (): Student[] => {
       studentCode,
       nisu,
       firstName: student.firstName,
-      lastName: student.lastName,
+      lastName:  student.lastName,
       dateOfBirth: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
       gender: student.gender,
       classroomId: 'room-6',
@@ -481,40 +494,35 @@ const generateStudents = (): Student[] => {
       avatar,
       academicYearId: 'ay-2024'
     })
-    
     studentCounter++
   })
   
-  // Generate remaining students
   classDistribution.forEach(({ classId, levelId, count }) => {
     for (let i = 0; i < count; i++) {
-      const gender = Math.random() > 0.5 ? 'M' : 'F'
-      const firstName = gender === 'M' 
-        ? maleFirstNames[Math.floor(Math.random() * maleFirstNames.length)]
-        : femaleFirstNames[Math.floor(Math.random() * femaleFirstNames.length)]
-      const lastName = lastNames[Math.floor(Math.random() * lastNames.length)]
-      const year = 2008 + Math.floor(Math.random() * 6)
-      const month = Math.floor(Math.random() * 12) + 1
-      const day = Math.floor(Math.random() * 28) + 1
-      
-      // Pour les tests : 3 élèves avec NISU invalide, 8 sans photo
+      const gender    = rng() > 0.5 ? 'M' : 'F'
+      const firstName = gender === 'M'
+        ? maleFirstNames[Math.floor(rng() * maleFirstNames.length)]
+        : femaleFirstNames[Math.floor(rng() * femaleFirstNames.length)]
+      const lastName  = lastNames[Math.floor(rng() * lastNames.length)]
+      const year  = 2008 + Math.floor(rng() * 6)
+      const month = Math.floor(rng() * 12) + 1
+      const day   = Math.floor(rng() * 28) + 1
+
       let nisu = `${String(studentCounter).padStart(12, '0')}`
-      if (studentCounter === 15) nisu = '12345' // NISU invalide (5 chiffres)
-      if (studentCounter === 22) nisu = '123456789' // NISU invalide (9 chiffres)
-      if (studentCounter === 33) nisu = '12345678901' // NISU invalide (11 chiffres)
-      
-      let avatar: string | undefined = avatars[Math.floor(Math.random() * avatars.length)]
-      // 8 élèves sans photo
+      if (studentCounter === 15) nisu = '12345'
+      if (studentCounter === 22) nisu = '123456789'
+      if (studentCounter === 33) nisu = '12345678901'
+
+      let avatar: string | undefined = avatars[Math.floor(rng() * avatars.length)]
       if ([13, 17, 21, 25, 29, 34, 38, 42].includes(studentCounter)) {
         avatar = undefined
       }
-      
-      // Generate student code: 2 letters from first name + 2 letters from last name + 4 sequential digits
-      const firstPart = firstName.slice(0, 2).toUpperCase().padEnd(2, 'X')
-      const lastPart = lastName.slice(0, 2).toUpperCase().padEnd(2, 'X')
+
+      const firstPart      = firstName.slice(0, 2).toUpperCase().padEnd(2, 'X')
+      const lastPart       = lastName.slice(0, 2).toUpperCase().padEnd(2, 'X')
       const sequentialNumber = String(studentCounter).padStart(4, '0')
-      const studentCode = `${firstPart}${lastPart}${sequentialNumber}`
-      
+      const studentCode    = `${firstPart}${lastPart}${sequentialNumber}`
+
       students.push({
         id: `student-${studentCounter}`,
         matricule: `CPMSL${String(studentCounter).padStart(4, '0')}`,
@@ -525,11 +533,10 @@ const generateStudents = (): Student[] => {
         dateOfBirth: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
         gender,
         classroomId: classId,
-        levelId: levelId,
+        levelId,
         avatar,
         academicYearId: 'ay-2024'
       })
-      
       studentCounter++
     }
   })

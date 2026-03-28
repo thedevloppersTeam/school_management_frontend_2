@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Skip Next.js internals and auth API routes
+  // Toujours laisser passer : Next.js internals + API auth
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api/auth') ||
@@ -12,15 +12,27 @@ export function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  const sessionCookie = request.cookies.get('connect.sid')
+  const session = request.cookies.get('connect.sid')
 
-  // On the login page: no redirect needed, let the page handle post-login redirect
+  // Page login : accessible sans session
+  // Si déjà connecté → rediriger directement vers le dashboard
   if (pathname === '/login') {
+    if (session) {
+      return NextResponse.redirect(new URL('/admin/dashboard', request.url))
+    }
     return NextResponse.next()
   }
 
-  // Protected routes — redirect to login if no session cookie
-  if (!sessionCookie) {
+  // Page racine / → rediriger vers login (ou dashboard si connecté)
+  if (pathname === '/') {
+    if (session) {
+      return NextResponse.redirect(new URL('/admin/dashboard', request.url))
+    }
+    return NextResponse.redirect(new URL('/login', request.url))
+  }
+
+  // Toutes les routes /admin/* → session obligatoire
+  if (!session) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 

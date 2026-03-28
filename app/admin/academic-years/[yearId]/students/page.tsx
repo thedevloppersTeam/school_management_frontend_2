@@ -26,7 +26,6 @@ import {
   type StudentRow,
 } from "@/lib/api/students"
 import { cn } from "@/lib/utils"
-import { StudentEnrollForm } from "@/components/school/students/student-enroll-form"
 
 // ── Palette CPMSL ─────────────────────────────────────────────────────────────
 const C = {
@@ -62,13 +61,13 @@ export default function StudentsManagementPage() {
   const [sortCol, setSortCol] = useState<SortCol | null>(null)
   const [sortDir, setSortDir] = useState<SortDir>(null)
   const [deactivating, setDeactivating]   = useState<StudentRow | null>(null)
-  const [enrollOpen, setEnrollOpen]       = useState(false)
 
   // ── Load ───────────────────────────────────────────────────────────────────
   async function loadData() {
     setLoading(true); setError(null)
     try {
       const [active, all, sessions] = await Promise.all([
+        
         fetchStudentsByYear(yearId),
         fetchAllStudentsByYear(yearId),
         fetchClassSessionsForYear(yearId),
@@ -82,7 +81,7 @@ export default function StudentsManagementPage() {
       setLoading(false)
     }
   }
-
+console.log(yearId, activeStudents, allStudents, classSessions);
   useEffect(() => { loadData() }, [yearId])
   useEffect(() => setCurrentPage(1), [searchQuery, selectedClass, showInactive])
 
@@ -226,16 +225,9 @@ export default function StudentsManagementPage() {
               {classSessions.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Button onClick={() => setEnrollOpen(true)} style={{ backgroundColor: C.primary500, color: "white" }}>
+          <Button style={{ backgroundColor: C.primary500, color: "white" }}>
             <PlusIcon className="mr-2 h-4 w-4" /> Inscrire un élève
           </Button>
-          <StudentEnrollForm
-            open={enrollOpen}
-            onOpenChange={setEnrollOpen}
-            classSessions={classSessions}
-            academicYearId={yearId}
-            onSuccess={() => { setEnrollOpen(false); loadData() }}
-          />
         </div>
       </div>
 
