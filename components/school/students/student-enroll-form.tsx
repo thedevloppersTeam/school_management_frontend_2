@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -27,7 +27,6 @@ export interface ClassSessionOption {
 interface StudentEnrollFormProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  classSessions: ClassSessionOption[]
   academicYearId: string
   onSuccess: () => void
   trigger?: React.ReactNode
@@ -40,6 +39,7 @@ interface FormState {
   birthDate: string
   classSessionId: string
   password: string
+  address: string
   fatherName: string
   motherName: string
   phone1: string
@@ -48,6 +48,7 @@ interface FormState {
 const EMPTY_FORM: FormState = {
   nisu: "", firstName: "", lastName: "", birthDate: "",
   classSessionId: "", password: "",
+  address: "",
   fatherName: "", motherName: "", phone1: "",
 }
 
@@ -65,11 +66,8 @@ function generateUsername(firstName: string, lastName: string): string {
   return `${normalize(firstName)}.${normalize(lastName)}.${new Date().getFullYear()}`
 }
 
-async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`/api/proxy?path=${encodeURIComponent(path)}`, {
-    credentials: "include",
-    ...options,
-  })
+async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(url, { credentials: "include", ...options })
   const data = await res.json()
   if (!res.ok) throw new Error(data.message ?? `Erreur ${res.status}`)
   return data
@@ -80,7 +78,7 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
 export function StudentEnrollForm({
   open,
   onOpenChange,
-  classSessions,
+  academicYearId,
   onSuccess,
   trigger,
 }: StudentEnrollFormProps) {
@@ -89,12 +87,34 @@ export function StudentEnrollForm({
   const [submitting, setSubmitting]   = useState(false)
   const [apiError, setApiError]       = useState<string | null>(null)
   const [successMsg, setSuccessMsg]   = useState<string | null>(null)
+  const [classSessions, setClassSessions] = useState<ClassSessionOption[]>([])
+  const [loadingClasses, setLoadingClasses] = useState(false)
+
+  useEffect(() => {
+    if (!open || !academicYearId) return
+    setLoadingClasses(true)
+    fetch(`/api/class-sessions?academicYearId=${academicYearId}`, { credentials: "include" })
+      .then(r => r.json())
+      .then((data: Array<{ id: string; class: { classType: { name: string }; letter: string; track?: { code: string } | null } }>) => {
+        console.log(data)
+        setClassSessions(
+          data
+            .map(s => ({
+              id: s.id,
+              name: `${s.class.classType.name} ${s.class.letter}${s.class.track ? ` ${s.class.track.code}` : ""}`,
+            }))
+            .sort((a, b) => a.name.localeCompare(b.name))
+        )
+      })
+      .catch(() => setClassSessions([]))
+      .finally(() => setLoadingClasses(false))
+  }, [open, academicYearId])
 
   const set = (field: keyof FormState) =>
     (e: React.ChangeEvent<HTMLInputElement>) =>
       setForm(f => ({ ...f, [field]: e.target.value }))
 
-  const nisuValid = /^[A-Z0-9]{13}$/i.test(form.nisu)
+  const nisuValid = /^[A-Z0-9]{13,}$/i.test(form.nisu)
 
   const canSubmit =
     nisuValid &&
@@ -114,24 +134,26 @@ export function StudentEnrollForm({
     const username = generateUsername(form.firstName, form.lastName)
 
     console.log("=== DONNÉES ENVOYÉES ===", {
-    step1_user: {
-      firstname: form.firstName.trim(),
-      lastname:  form.lastName.trim(),
-      birthDate: form.birthDate,
-      username,
-      password:  form.password,
-      type:      "STUDENT",
-    },
-    step2_student: {
-      nisu:       form.nisu.toUpperCase(),
-      fatherName: form.fatherName || undefined,
-      motherName: form.motherName || undefined,
-      phone1:     form.phone1 || undefined,
-    },
-    step3_enrollment: {
-      classSessionId: form.classSessionId,
-    }
-  })
+      step1_user: {
+        firstname: form.firstName.trim(),
+        lastname:  form.lastName.trim(),
+        birthDate: form.birthDate,
+        username,
+        password:  form.password,
+        type:      "STUDENT",
+      },
+      step2_student: {
+        nisu:       form.nisu.toUpperCase(),
+        address:    form.address.trim(),
+        fatherName: form.fatherName || undefined,
+        motherName: form.motherName || undefined,
+        phone1:     form.phone1 || undefined,
+      },
+      step3_enrollment: {
+        classSessionId: form.classSessionId,
+        notes:          "Nouvelle inscription",
+      }
+    })
     try {
       // 1. Créer le user
       const userRes = await apiFetch<{ user: { id: string } }>("/api/users/create", {
@@ -153,11 +175,12 @@ export function StudentEnrollForm({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          nisu:    form.nisu.toUpperCase(),
-          userId:  userRes.user.id,
+          userId:     userRes.user.id,
+          nisu:       form.nisu.toUpperCase(),
+          address:    form.address.trim(),
           ...(form.fatherName && { fatherName: form.fatherName.trim() }),
           ...(form.motherName && { motherName: form.motherName.trim() }),
-          ...(form.phone1     && { phone1: form.phone1.trim() }),
+          ...(form.phone1     && { phone1:     form.phone1.trim() }),
         }),
       })
       console.log("Student profile created:", studentRes.student.id);
@@ -169,6 +192,7 @@ export function StudentEnrollForm({
         body: JSON.stringify({
           studentId:      studentRes.student.id,
           classSessionId: form.classSessionId,
+          notes:          "Nouvelle inscription",
         }),
       })
 
@@ -176,10 +200,10 @@ export function StudentEnrollForm({
       setForm(EMPTY_FORM)
       onSuccess()
 
-} catch (err: unknown) {
-  console.error("ERREUR INSCRIPTION:", err)
-  setApiError(err instanceof Error ? err.message : "Une erreur est survenue.")
-} finally {
+    } catch (err: unknown) {
+      console.error("ERREUR INSCRIPTION:", err)
+      setApiError(err instanceof Error ? err.message : "Une erreur est survenue.")
+    } finally {
       setSubmitting(false)
     }
   }
@@ -243,20 +267,19 @@ export function StudentEnrollForm({
                 <Label className="font-sans" style={{ fontSize: "13px", fontWeight: 500 }}>
                   NISU <span className="text-destructive">*</span>
                   <span className="font-sans ml-2" style={{ fontSize: "11px", color: "#78756F", fontWeight: 400 }}>
-                    13 caractères alphanumériques
+                    13 caractères alphanumériques minimum
                   </span>
                 </Label>
                 <Input
                   type="text"
-                  maxLength={13}
-                  placeholder="Ex: TAH7E7T2UMK26"
+                  placeholder="Ex: 1111114211111"
                   value={form.nisu}
                   onChange={e => setForm(f => ({ ...f, nisu: e.target.value.toUpperCase() }))}
                   className={cn("h-9 font-mono", form.nisu && !nisuValid && "border-destructive")}
                   style={{ letterSpacing: "0.05em" }}
                 />
                 {form.nisu && !nisuValid && (
-                  <p className="text-xs text-destructive">13 caractères requis (lettres et chiffres)</p>
+                  <p className="text-xs text-destructive">13 caractères alphanumériques minimum requis</p>
                 )}
                 {nisuValid && (
                   <p className="text-xs" style={{ color: "#2D7D46" }}>✓ NISU valide</p>
@@ -327,9 +350,9 @@ export function StudentEnrollForm({
               <Label className="font-sans" style={{ fontSize: "13px", fontWeight: 500 }}>
                 Classe <span className="text-destructive">*</span>
               </Label>
-              <Select value={form.classSessionId} onValueChange={v => setForm(f => ({ ...f, classSessionId: v }))}>
+              <Select value={form.classSessionId} onValueChange={v => setForm(f => ({ ...f, classSessionId: v }))} disabled={loadingClasses}>
                 <SelectTrigger className="h-9">
-                  <SelectValue placeholder="Sélectionnez une classe" />
+                  <SelectValue placeholder={loadingClasses ? "Chargement..." : "Sélectionnez une classe"} />
                 </SelectTrigger>
                 <SelectContent>
                   {classSessions.map(s => (
@@ -389,6 +412,10 @@ export function StudentEnrollForm({
               </span>
             </h3>
             <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label className="font-sans" style={{ fontSize: "13px", fontWeight: 500 }}>Adresse</Label>
+                <Input type="text" placeholder="123 Rue Principale, Port-au-Prince" value={form.address} onChange={set("address")} className="h-9" />
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label className="font-sans" style={{ fontSize: "13px", fontWeight: 500 }}>Nom du père</Label>

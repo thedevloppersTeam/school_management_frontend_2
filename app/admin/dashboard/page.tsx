@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { useRouter } from "next/navigation"
 import {
   CalendarIcon,
@@ -68,6 +68,7 @@ export default function AdminDashboardPage() {
       try {
         // 1. Année active
         const activeYear = await fetchActiveAcademicYear()
+        console.log('[loadDashboard] Active academic year:', activeYear)
 
         if (!activeYear) {
           setState(s => ({ ...s, loading: false, activeYear: null }))
@@ -168,6 +169,7 @@ export default function AdminDashboardPage() {
               Réessayer
             </Button>
           </CardContent>
+          
         </Card>
       </div>
     )

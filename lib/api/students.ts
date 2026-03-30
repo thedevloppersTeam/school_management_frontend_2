@@ -85,12 +85,9 @@ export interface StudentRow {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`/api/proxy?path=${encodeURIComponent(path)}`, {
-    credentials: 'include',
-    ...options,
-  })
-  if (!res.ok) throw new Error(`API ${res.status} — ${path}`)
+async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(url, { credentials: 'include', ...options })
+  if (!res.ok) throw new Error(`API ${res.status} — ${url}`)
   return res.json()
 }
 
@@ -109,7 +106,7 @@ export function buildClassName(session: ApiClassSession): string {
 export async function fetchStudentsByYear(academicYearId: string): Promise<StudentRow[]> {
   // 1. Toutes les sessions de classe pour cette année
   const sessions: ApiClassSession[] = await apiFetch(
-    `/api/class-sessions/?academicYearId=${academicYearId}`
+    `/api/class-sessions?academicYearId=${academicYearId}`
   )
 
   if (!sessions.length) return []
@@ -118,7 +115,7 @@ export async function fetchStudentsByYear(academicYearId: string): Promise<Stude
   const enrollmentArrays = await Promise.all(
     sessions.map(session =>
       apiFetch<ApiEnrollment[]>(
-        `/api/enrollments/?classSessionId=${session.id}&status=ACTIVE`
+        `/api/enrollments?classSessionId=${session.id}&status=ACTIVE`
       ).catch(() => [] as ApiEnrollment[])
     )
   )
@@ -163,7 +160,7 @@ export async function fetchStudentsByYear(academicYearId: string): Promise<Stude
  */
 export async function fetchAllStudentsByYear(academicYearId: string): Promise<StudentRow[]> {
   const sessions: ApiClassSession[] = await apiFetch(
-    `/api/class-sessions/?academicYearId=${academicYearId}`
+    `/api/class-sessions?academicYearId=${academicYearId}`
   )
 
   if (!sessions.length) return []
@@ -171,7 +168,7 @@ export async function fetchAllStudentsByYear(academicYearId: string): Promise<St
   const enrollmentArrays = await Promise.all(
     sessions.map(session =>
       apiFetch<ApiEnrollment[]>(
-        `/api/enrollments/?classSessionId=${session.id}`
+        `/api/enrollments?classSessionId=${session.id}`
       ).catch(() => [] as ApiEnrollment[])
     )
   )
@@ -216,7 +213,7 @@ export async function fetchClassSessionsForYear(
   academicYearId: string
 ): Promise<{ id: string; name: string }[]> {
   const sessions: ApiClassSession[] = await apiFetch(
-    `/api/class-sessions/?academicYearId=${academicYearId}`
+    `/api/class-sessions?academicYearId=${academicYearId}`
   )
   return sessions
     .map(s => ({ id: s.id, name: buildClassName(s) }))
@@ -230,7 +227,7 @@ export async function dropEnrollment(enrollmentId: string): Promise<void> {
   await apiFetch(`/api/enrollments/status-update/${enrollmentId}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status: 'DROPPED', notes: 'Désactivé par l\'administrateur' }),
+    body: JSON.stringify({ status: 'DROPPED', notes: "Désactivé par l'administrateur" }),
   })
 }
 

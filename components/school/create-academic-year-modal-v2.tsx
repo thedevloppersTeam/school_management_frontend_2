@@ -20,18 +20,13 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { PlusIcon } from "lucide-react"
+import { PlusIcon, LoaderIcon, AlertTriangleIcon, CheckCircle2Icon } from "lucide-react"
 import type { AcademicYear } from "@/lib/data/school-data"
 
 interface CreateAcademicYearModalV2Props {
   activeYear?: AcademicYear
   archivedYears?: AcademicYear[]
-  onSubmit?: (data: {
-    name: string
-    startDate?: string
-    endDate?: string
-    copyFromYearId?: string
-  }) => void
+  onSubmit?: () => void
   trigger?: React.ReactNode
 }
 
@@ -60,34 +55,86 @@ export function CreateAcademicYearModalV2({
   const [numberOfPeriods, setNumberOfPeriods] = useState<4 | 5>(4)
   const [creationType, setCreationType] = useState<"scratch" | "copy">("scratch")
   const [copyFromYearId, setCopyFromYearId] = useState<string>("")
+  const [submitting, setSubmitting] = useState(false)
+  const [apiError, setApiError] = useState<string | null>(null)
+  const [successMsg, setSuccessMsg] = useState<string | null>(null)
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    if (!name.trim()) return
-
-    onSubmit?.({
-      name: name.trim(),
-      startDate: startDate || undefined,
-      endDate: endDate || undefined,
-      copyFromYearId: creationType === "copy" ? copyFromYearId : undefined
-    })
-
-    // Reset form
+  const resetForm = () => {
     setStartDate("")
     setEndDate("")
     setNumberOfPeriods(4)
     setCreationType("scratch")
     setCopyFromYearId("")
-    setOpen(false)
+    setApiError(null)
+    setSuccessMsg(null)
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!name.trim() || submitting) return
+
+    setSubmitting(true)
+    setApiError(null)
+    setSuccessMsg(null)
+
+    try {
+      // 1. Create the academic year
+      const yearRes = await fetch("/api/academic-years/create", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: `Année Scolaire ${name.trim()}`,
+          yearString: name.trim(),
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
+        }),
+      })
+      const yearData = await yearRes.json()
+      console.log("=== RESPONSE academic-years/create ===", JSON.stringify(yearData, null, 2))
+      if (!yearRes.ok) throw new Error(yearData.message ?? `Erreur ${yearRes.status}`)
+
+      const academicYearId = yearData.id ?? yearData.academicYear?.id ?? yearData.data?.id ?? yearData.year?.id
+      if (!academicYearId) throw new Error("ID de l'année scolaire non retourné par le serveur. Réponse: " + JSON.stringify(yearData))
+
+      console.log("Academic year created:", academicYearId)
+
+      // 2. Create each step sequentially
+      const stepNames = getPeriodNames(numberOfPeriods)
+      for (let i = 0; i < stepNames.length; i++) {
+        const stepRes = await fetch(`/api/academic-years/${academicYearId}/steps/create`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: stepNames[i],
+            stepNumber: i + 1,
+          }),
+        })
+        const stepData = await stepRes.json()
+        if (!stepRes.ok) throw new Error(stepData.message ?? `Erreur création étape ${i + 1}`)
+        console.log(`Step ${i + 1} created:`, stepData)
+      }
+
+      setSuccessMsg(`${name.trim()} créée avec ${stepNames.length} étapes.`)
+
+      onSubmit?.()
+
+      setTimeout(() => {
+        resetForm()
+        setOpen(false)
+      }, 1500)
+
+    } catch (err: unknown) {
+      console.error("ERREUR CRÉATION ANNÉE:", err)
+      setApiError(err instanceof Error ? err.message : "Une erreur est survenue.")
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const handleCancel = () => {
-    setStartDate("")
-    setEndDate("")
-    setNumberOfPeriods(4)
-    setCreationType("scratch")
-    setCopyFromYearId("")
+    resetForm()
     setOpen(false)
   }
 
@@ -107,8 +154,26 @@ export function CreateAcademicYearModalV2({
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[560px] border border-[#bebbb4] rounded-xl" style={{ backgroundColor: "#ffffff" }}>
+      <DialogContent className="w-full max-w-[560px] max-h-[90vh] overflow-y-auto border border-[#bebbb4] rounded-xl" style={{ backgroundColor: "#ffffff" }}>
         <form onSubmit={handleSubmit}>
+          {/* Succès */}
+          {successMsg && (
+            <div className="flex items-start gap-2 rounded-lg p-3 font-sans mb-2"
+              style={{ backgroundColor: "#E8F5EC", fontSize: "13px", color: "#2D7D46" }}>
+              <CheckCircle2Icon className="h-4 w-4 mt-0.5 flex-shrink-0" />
+              <span>{successMsg}</span>
+            </div>
+          )}
+
+          {/* Erreur API */}
+          {apiError && (
+            <div className="flex items-start gap-2 rounded-lg p-3 font-sans mb-2"
+              style={{ backgroundColor: "#FDE8E8", fontSize: "13px", color: "#C43C3C" }}>
+              <AlertTriangleIcon className="h-4 w-4 mt-0.5 flex-shrink-0" />
+              <span>{apiError}</span>
+            </div>
+          )}
+
           <DialogHeader>
             <DialogTitle 
               className="font-serif" 
@@ -476,15 +541,19 @@ export function CreateAcademicYearModalV2({
             </Button>
             <Button 
               type="submit" 
-              disabled={!name.trim() || (creationType === "copy" && !copyFromYearId)}
+              disabled={!name.trim() || (creationType === "copy" && !copyFromYearId) || submitting}
               className="border-0 disabled:opacity-100"
               style={{ 
-                backgroundColor: (!name.trim() || (creationType === "copy" && !copyFromYearId)) ? "#9CA3AF" : "#2C4A6E",
+                backgroundColor: (!name.trim() || (creationType === "copy" && !copyFromYearId) || submitting) ? "#9CA3AF" : "#2C4A6E",
                 color: "#ffffff" 
               }}
             >
-              Créer l'année
+              {submitting
+                ? <><LoaderIcon className="h-4 w-4 mr-2" style={{ animation: "spin 1s linear infinite" }} />Création...</>
+                : "Créer l'année"
+              }
             </Button>
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
           </DialogFooter>
         </form>
       </DialogContent>

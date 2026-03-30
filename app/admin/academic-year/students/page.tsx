@@ -27,6 +27,7 @@ import {
 } from "@/lib/api/students"
 import { cn } from "@/lib/utils"
 import { StudentEnrollForm } from "@/components/school/students/student-enroll-form"
+import { fetchActiveAcademicYear } from "@/lib/api/dashboard"
 
 // ── Palette CPMSL ─────────────────────────────────────────────────────────────
 const C = {
@@ -43,7 +44,9 @@ type SortDir = "asc" | "desc" | null
 
 export default function StudentsManagementPage() {
   const params = useParams()
-  const yearId = params.yearId as string
+  //const yearId = params.yearId as string
+
+  const [yearId, setYearId] = useState<string | null>(null)
   const { toast } = useToast()
 
   // ── State ──────────────────────────────────────────────────────────────────
@@ -67,11 +70,21 @@ export default function StudentsManagementPage() {
   // ── Load ───────────────────────────────────────────────────────────────────
   async function loadData() {
     setLoading(true); setError(null)
+     const activeYear = await fetchActiveAcademicYear()
+    
+
+     if (activeYear) {
+       
+      setYearId(activeYear.id)
+     }
+
+     const ay =  activeYear?.id as string
+     
     try {
       const [active, all, sessions] = await Promise.all([
-        fetchStudentsByYear(yearId),
-        fetchAllStudentsByYear(yearId),
-        fetchClassSessionsForYear(yearId),
+        fetchStudentsByYear(ay!),
+        fetchAllStudentsByYear(ay!),
+        fetchClassSessionsForYear(ay!),
       ])
       setActiveStudents(active)
       setAllStudents(all)
@@ -83,7 +96,7 @@ export default function StudentsManagementPage() {
     }
   }
 
-  useEffect(() => { loadData() }, [yearId])
+  useEffect(() => { loadData() }, [])
   useEffect(() => setCurrentPage(1), [searchQuery, selectedClass, showInactive])
 
   // ── Derived ────────────────────────────────────────────────────────────────
@@ -232,8 +245,7 @@ export default function StudentsManagementPage() {
           <StudentEnrollForm
             open={enrollOpen}
             onOpenChange={setEnrollOpen}
-            classSessions={classSessions}
-            academicYearId={yearId}
+            academicYearId={yearId || ""}
             onSuccess={() => { setEnrollOpen(false); loadData() }}
           />
         </div>

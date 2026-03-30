@@ -10,7 +10,7 @@ interface CPMSLYearCardProps {
   stats?: {
     periods: { current: number; total: number; complete: boolean }
     classes: { current: number; complete: boolean }
-    subjects: { current: number; complete: boolean }
+    students: { current: number }
   }
   onConfigure: (yearId: string) => void
   isSelected?: boolean
@@ -80,37 +80,32 @@ export function CPMSLYearCard({ year, stats, onConfigure, isSelected }: CPMSLYea
         </Button>
       </div>
 
-      {stats && year.status === 'preparation' && (
+      {stats && (
         <div className="flex items-center gap-4 mt-3">
           <div className="flex items-center gap-2">
             <span className="label-ui text-muted-foreground">Étapes</span>
-            <span className="label-ui text-muted-foreground">{stats.periods.current}/{stats.periods.total}</span>
-            <InfoIcon className="h-4 w-4" style={{ color: '#A8A5A2' }} />
+            <span className="label-ui font-medium" style={{ color: '#2A3740' }}>{stats.periods.current}</span>
+            {stats.periods.complete
+              ? <CheckCircle2Icon className="h-4 w-4" style={{ color: '#2D7D46' }} />
+              : <InfoIcon className="h-4 w-4" style={{ color: '#A8A5A2' }} />}
           </div>
 
           <div style={{ width: '1px', height: '16px', backgroundColor: '#E8E6E3' }} />
 
           <div className="flex items-center gap-2">
             <span className="label-ui text-muted-foreground">Classes</span>
-            <span className="label-ui text-muted-foreground">{stats.classes.current}</span>
-            <InfoIcon className="h-4 w-4" style={{ color: '#A8A5A2' }} />
+            <span className="label-ui font-medium" style={{ color: '#2A3740' }}>{stats.classes.current}</span>
+            {stats.classes.complete
+              ? <CheckCircle2Icon className="h-4 w-4" style={{ color: '#2D7D46' }} />
+              : <InfoIcon className="h-4 w-4" style={{ color: '#A8A5A2' }} />}
           </div>
 
           <div style={{ width: '1px', height: '16px', backgroundColor: '#E8E6E3' }} />
 
           <div className="flex items-center gap-2">
-            <span className="label-ui text-muted-foreground">Matières</span>
-            <span className="label-ui text-muted-foreground">{stats.subjects.current}</span>
-            <InfoIcon className="h-4 w-4" style={{ color: '#A8A5A2' }} />
+            <span className="label-ui text-muted-foreground">Élèves</span>
+            <span className="label-ui font-medium" style={{ color: '#2A3740' }}>{stats.students.current}</span>
           </div>
-        </div>
-      )}
-
-      {year.status === 'archived' && (
-        <div className="mt-3">
-          <p className="font-sans text-muted-foreground" style={{ fontSize: '13px', fontWeight: 400 }}>
-            19 classes  |  285 élèves  |  Archivée le 30/06/2024
-          </p>
         </div>
       )}
     </div>

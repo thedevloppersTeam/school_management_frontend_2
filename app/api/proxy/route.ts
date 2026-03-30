@@ -63,17 +63,21 @@ async function proxyRequest(request: NextRequest, method: string) {
 }
 
 export async function GET(request: NextRequest) {
+  console.log('[proxy] GET request received')
   return proxyRequest(request, 'GET')
 }
 
 export async function POST(request: NextRequest) {
+  console.log('[proxy] POST request received')
   return proxyRequest(request, 'POST')
 }
 
-export async function PUT(request: NextRequest) {
+/* export async function PUT(request: NextRequest) {
+  console.log('[proxy] PUT request received')
   return proxyRequest(request, 'PUT')
 }
 
 export async function DELETE(request: NextRequest) {
+  console.log('[proxy] DELETE request received')
   return proxyRequest(request, 'DELETE')
-}
+} */

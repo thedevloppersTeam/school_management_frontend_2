@@ -1,52 +1,103 @@
 "use client"
 
+import { useState, useEffect, useCallback } from "react"
 import { useParams } from "next/navigation"
 import Link from "next/link"
 import { CPMSLYearConfigTabs } from "@/components/school/cpmsl-year-config-tabs"
-import { useToast } from "@/components/ui/use-toast"
-import { academicYears, periods, levels, subjectParents, subjectChildren, classrooms, students } from "@/lib/data/school-data"
-import { ArrowLeftIcon } from "lucide-react"
+import { ArrowLeftIcon, LoaderIcon, AlertTriangleIcon } from "lucide-react"
+import { Button } from "@/components/ui/button"
+
+interface ApiStep {
+  id: string
+  name: string
+  stepNumber: number
+  startDate?: string | null
+  endDate?: string | null
+  status?: string
+}
+
+interface ApiAcademicYear {
+  id: string
+  name: string
+  yearString: string
+  isCurrent: boolean
+  startDate?: string
+  endDate?: string
+}
 
 export default function AcademicYearConfigPage() {
   const params = useParams()
   const yearId = params.yearId as string
-  const { toast } = useToast()
+  const [year, setYear] = useState<ApiAcademicYear | null>(null)
+  const [steps, setSteps] = useState<ApiStep[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const year = academicYears.find(y => y.id === yearId)
+  const loadData = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const [yearRes, stepsRes] = await Promise.all([
+        fetch(`/api/academic-years/${yearId}`, { credentials: "include" }),
+        fetch(`/api/academic-years/${yearId}/steps`, { credentials: "include" }),
+      ])
+      if (!yearRes.ok) throw new Error("Impossible de charger l'année scolaire")
+      const found: ApiAcademicYear = await yearRes.json()
+      if (!found?.id) throw new Error("Année académique introuvable")
+      setYear(found)
 
-  if (!year) {
-    return (
-      <div style={{ backgroundColor: '#FAFAF8', minHeight: '100vh', padding: '32px' }}>
-        <div style={{ color: '#C43C3C', fontSize: '16px' }}>
-          Année académique introuvable
+      if (stepsRes.ok) {
+        const stepsData: ApiStep[] = await stepsRes.json()
+        setSteps(stepsData.sort((a, b) => a.stepNumber - b.stepNumber))
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erreur de chargement")
+    } finally {
+      setLoading(false)
+    }
+  }, [yearId])
+
+  useEffect(() => { loadData() }, [loadData])
+
+  if (loading) return (
+    <div style={{ backgroundColor: '#FAFAF8', minHeight: '100vh' }}>
+      <div className="p-4 sm:p-6 space-y-4">
+        <Link href="/admin/academic-years" className="inline-flex items-center gap-2 hover:opacity-70 transition-opacity" style={{ color: '#5A7085', fontSize: '14px', fontWeight: 500 }}>
+          <ArrowLeftIcon className="h-4 w-4" />Années Scolaires
+        </Link>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300 }}>
+          <div style={{ textAlign: "center" }}>
+            <LoaderIcon className="h-8 w-8" style={{ color: "#5A7085", animation: "spin 1s linear infinite", margin: "0 auto 12px" }} />
+            <p className="font-sans" style={{ fontSize: 14, color: "#78756F" }}>Chargement...</p>
+          </div>
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
       </div>
-    )
-  }
+    </div>
+  )
 
-  const yearPeriods = periods
-    .filter(p => p.academicYearId === year.id)
-    .slice(0, 4)
-    .map(p => ({ id: p.id, name: p.name, status: p.status as 'open' | 'closed' }))
+  if (error || !year) return (
+    <div style={{ backgroundColor: '#FAFAF8', minHeight: '100vh' }}>
+      <div className="p-4 sm:p-6 space-y-4">
+        <Link href="/admin/academic-years" className="inline-flex items-center gap-2 hover:opacity-70 transition-opacity" style={{ color: '#5A7085', fontSize: '14px', fontWeight: 500 }}>
+          <ArrowLeftIcon className="h-4 w-4" />Années Scolaires
+        </Link>
+        <div className="flex flex-col items-center justify-center py-12">
+          <AlertTriangleIcon className="h-10 w-10 mb-4" style={{ color: "#C43C3C" }} />
+          <p className="font-sans mb-6" style={{ fontSize: 14, color: "#C43C3C" }}>{error ?? "Année introuvable"}</p>
+          <Button onClick={loadData} style={{ backgroundColor: "#5A7085", color: "white" }}>Réessayer</Button>
+        </div>
+      </div>
+    </div>
+  )
 
-  const yearLevels = levels.filter(l => l.academicYearId === year.id).map(l => ({
-    id: l.id, name: l.name, niveau: l.niveau, filiere: l.filiere
-  }))
-
-  const yearSubjectParents = subjectParents.filter(sp => sp.academicYearId === year.id).map(sp => ({
-    id: sp.id, code: sp.code, name: sp.name, rubrique: sp.rubrique as 'R1' | 'R2' | 'R3', coefficient: sp.coefficients[0]?.valeur || 0
-  }))
-
-  const yearSubjectChildren = subjectChildren.filter(sc => sc.academicYearId === year.id).map(sc => ({
-    id: sc.id, code: sc.code, parentId: sc.parentId, name: sc.name, type: sc.type, coefficient: sc.coefficient
-  }))
-
-  const yearClassrooms = classrooms.filter(c => c.academicYearId === year.id).map(c => ({
-    id: c.id, name: c.name, levelId: c.levelId, capacity: c.capacity
-  }))
-
-  const yearStudents = students.filter(s => s.academicYearId === year.id).map(s => ({
-    id: s.id, classroomId: s.classroomId, levelId: s.levelId
+  const mappedSteps = steps.map(s => ({
+    id: s.id,
+    name: s.name,
+    stepNumber: s.stepNumber,
+    startDate: s.startDate ?? "",
+    endDate: s.endDate ?? "",
+    status: (s.status === 'closed' ? 'closed' : 'open') as 'open' | 'closed',
   }))
 
   return (
@@ -74,29 +125,11 @@ export default function AcademicYearConfigPage() {
         </div>
 
         <CPMSLYearConfigTabs
+          yearId={yearId}
           yearName={year.name}
-          isArchived={year.status === 'archived'}
-          periods={yearPeriods}
-          levels={yearLevels}
-          subjectParents={yearSubjectParents}
-          subjectChildren={yearSubjectChildren}
-          classrooms={yearClassrooms}
-          students={yearStudents}
-          onAddPeriod={() => toast({ title: "Étape ajoutée", description: "La nouvelle étape a été configurée." })}
-          onClosePeriod={() => toast({ title: "Étape clôturée" })}
-          onReopenPeriod={() => toast({ title: "Étape réouverte" })}
-          onAddLevel={() => toast({ title: "Niveau ajouté" })}
-          onAddSubjectParent={() => toast({ title: "Matière ajoutée" })}
-          onAddSubjectChild={() => toast({ title: "Sous-matière ajoutée" })}
-          onEditSubjectParent={() => toast({ title: "Matière modifiée" })}
-          onDeleteSubjectParent={() => toast({ title: "Matière supprimée", variant: "destructive" })}
-          onEditSubjectChild={() => toast({ title: "Sous-matière modifiée" })}
-          onDeleteSubjectChild={() => toast({ title: "Sous-matière supprimée", variant: "destructive" })}
-          onAddClassroom={() => toast({ title: "Classe ajoutée" })}
-          onEditClassroom={() => toast({ title: "Classe modifiée" })}
-          onDeleteClassroom={() => toast({ title: "Classe supprimée", variant: "destructive" })}
-          onEditLevel={() => toast({ title: "Niveau modifié" })}
-          onDeleteLevel={() => toast({ title: "Niveau supprimé", variant: "destructive" })}
+          isArchived={!year.isCurrent}
+          periods={mappedSteps}
+          onPeriodsChanged={loadData}
         />
       </div>
     </div>
