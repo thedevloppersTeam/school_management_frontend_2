@@ -76,6 +76,7 @@ interface SubjectChild {
 
 interface CPMSLYearConfigTabsProps {
   yearName: string
+  yearId: string
   isArchived?: boolean
   periods: Period[]
   levels: Level[]
@@ -131,6 +132,7 @@ interface CPMSLYearConfigTabsProps {
 
 export function CPMSLYearConfigTabs({
   yearName,
+  yearId,
   isArchived,
   periods,
   levels,
@@ -178,6 +180,22 @@ export function CPMSLYearConfigTabs({
   const [deleteSubjectChildModalOpen, setDeleteSubjectChildModalOpen] = useState(false)
   const [selectedSubjectParent, setSelectedSubjectParent] = useState<SubjectParent | null>(null)
   const [selectedSubjectChild, setSelectedSubjectChild] = useState<SubjectChild | null>(null)
+
+  // ── Affectation des matières ───────────────────────────────────────────────
+  const [selectedSessionForAssign, setSelectedSessionForAssign] = useState("")
+  const [classSubjects, setClassSubjects] = useState<Array<{
+    id: string
+    subjectId: string
+    subjectName: string
+    subjectCode: string
+    rubriqueCode?: string
+    coefficient: number
+    coefficientOverride?: number | null
+  }>>([])
+  const [loadingClassSubjects, setLoadingClassSubjects] = useState(false)
+  const [assignModalOpen, setAssignModalOpen] = useState(false)
+  const [assignForm, setAssignForm] = useState({ subjectId: '', coefficientOverride: '' })
+  const [assignSubmitting, setAssignSubmitting] = useState(false)
 
   const toggleLevelExpansion = (levelId: string) => {
     const newExpanded = new Set(expandedLevels)
@@ -313,6 +331,76 @@ export function CPMSLYearConfigTabs({
   const handleDeleteSubjectChild = (child: SubjectChild) => {
     setSelectedSubjectChild(child)
     setDeleteSubjectChildModalOpen(true)
+  }
+
+  // ── Handlers Affectation ──────────────────────────────────────────────────
+
+  const loadClassSubjects = async (sessionId: string) => {
+    setLoadingClassSubjects(true)
+    try {
+      const res = await fetch(
+        `/api/class-subjects?classSessionId=${sessionId}`,
+        { credentials: 'include' }
+      )
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      setClassSubjects(data.map((cs: {
+        id: string
+        subjectId: string
+        coefficientOverride?: number | null
+        subject?: {
+          name: string
+          code: string
+          coefficient: number
+          rubric?: { code: string }
+        }
+      }) => ({
+        id: cs.id,
+        subjectId: cs.subjectId,
+        subjectName: cs.subject?.name || '—',
+        subjectCode: cs.subject?.code || '—',
+        rubriqueCode: cs.subject?.rubric?.code,
+        coefficient: Number(cs.subject?.coefficient) || 1,
+        coefficientOverride: cs.coefficientOverride != null ? Number(cs.coefficientOverride) : null,
+      })))
+    } catch {
+      console.error('[affectation] erreur chargement class subjects')
+    } finally {
+      setLoadingClassSubjects(false)
+    }
+  }
+
+  const handleSessionChangeForAssign = (sessionId: string) => {
+    setSelectedSessionForAssign(sessionId)
+    if (sessionId) loadClassSubjects(sessionId)
+    else setClassSubjects([])
+  }
+
+  const handleAssignSubject = async () => {
+    if (!selectedSessionForAssign || !assignForm.subjectId) return
+    setAssignSubmitting(true)
+    try {
+      const res = await fetch('/api/class-subjects/create', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          classSessionId: selectedSessionForAssign,
+          subjectId: assignForm.subjectId,
+          coefficientOverride: assignForm.coefficientOverride
+            ? parseFloat(assignForm.coefficientOverride)
+            : null,
+        })
+      })
+      if (!res.ok) throw new Error()
+      setAssignModalOpen(false)
+      setAssignForm({ subjectId: '', coefficientOverride: '' })
+      loadClassSubjects(selectedSessionForAssign)
+    } catch {
+      console.error('[affectation] erreur assignation')
+    } finally {
+      setAssignSubmitting(false)
+    }
   }
 
   const filteredLevels = levels.filter(l =>
@@ -947,17 +1035,24 @@ export function CPMSLYearConfigTabs({
                 />
               </div>
               {!isArchived && (
-                <Button
-                  onClick={() => setCreateSubjectParentModalOpen(true)}
+                <a
+                  href="/admin/settings"
                   style={{
                     backgroundColor: '#5A7085',
                     color: '#FFFFFF',
-                    borderRadius: '8px'
+                    borderRadius: '8px',
+                    padding: '8px 16px',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    textDecoration: 'none'
                   }}
                 >
-                  <PlusIcon className="mr-2 h-4 w-4" />
-                  Nouvelle matière
-                </Button>
+                  <PlusIcon className="h-4 w-4" />
+                  Gérer les matières
+                </a>
               )}
             </div>
           </div>
@@ -1248,10 +1343,160 @@ export function CPMSLYearConfigTabs({
               </tbody>
             </table>
           </div>
+
+          {/* ── Section Affectation aux classes ── */}
+          <div style={{ marginTop: '32px', paddingTop: '32px', borderTop: '2px solid #E8E6E3' }}>
+            <div className="flex items-center justify-between" style={{ marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: '18px', fontWeight: 600, color: '#2A3740' }}>
+                  Affectation aux classes
+                </h3>
+                <p style={{ fontSize: '13px', color: '#78756F', marginTop: '2px' }}>
+                  Sélectionnez une classe pour voir et gérer ses matières assignées
+                </p>
+              </div>
+              {selectedSessionForAssign && !isArchived && (
+                <button
+                  onClick={() => { setAssignForm({ subjectId: '', coefficientOverride: '' }); setAssignModalOpen(true) }}
+                  style={{ backgroundColor: '#2C4A6E', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}
+                >
+                  + Assigner une matière
+                </button>
+              )}
+            </div>
+
+            {/* Sélecteur de classe */}
+            <div style={{ marginBottom: '16px', maxWidth: '300px' }}>
+              <select
+                value={selectedSessionForAssign}
+                onChange={e => handleSessionChangeForAssign(e.target.value)}
+                style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #D1CECC', fontSize: '14px', color: '#1E1A17', backgroundColor: 'white' }}
+              >
+                <option value="">— Choisir une classe —</option>
+                {classrooms.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Table des matières assignées */}
+            {selectedSessionForAssign && (
+              loadingClassSubjects ? (
+                <p style={{ fontSize: '13px', color: '#78756F' }}>Chargement...</p>
+              ) : (
+                <div style={{ border: '1px solid #E8E6E3', borderRadius: '8px', overflow: 'hidden' }}>
+                  <table className="w-full">
+                    <thead>
+                      <tr style={{ backgroundColor: '#F1F5F9', borderBottom: '2px solid #D1D5DB' }}>
+                        {['Code', 'Matière', 'Rubrique', 'Coeff. global', 'Coeff. override'].map(h => (
+                          <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#2C4A6E' }}>
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {classSubjects.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} style={{ padding: '24px', textAlign: 'center', color: '#78756F', fontSize: '14px' }}>
+                            Aucune matière assignée à cette classe
+                          </td>
+                        </tr>
+                      ) : classSubjects.map((cs, i) => (
+                        <tr key={cs.id} style={{ borderTop: i > 0 ? '1px solid #E8E6E3' : 'none', backgroundColor: 'white' }} className="hover:bg-[#FAF8F3]">
+                          <td style={{ padding: '12px 16px', fontFamily: 'monospace', fontSize: '12px', fontWeight: 600, color: '#1E1A17', textTransform: 'uppercase' }}>
+                            {cs.subjectCode}
+                          </td>
+                          <td style={{ padding: '12px 16px', fontSize: '14px', fontWeight: 600, color: '#1E1A17' }}>
+                            {cs.subjectName}
+                          </td>
+                          <td style={{ padding: '12px 16px' }}>
+                            {cs.rubriqueCode ? (
+                              <span style={{
+                                backgroundColor: cs.rubriqueCode === 'R1' ? '#E3EFF9' : cs.rubriqueCode === 'R2' ? '#E8F5EC' : '#FAF8F3',
+                                color: cs.rubriqueCode === 'R1' ? '#2B6CB0' : cs.rubriqueCode === 'R2' ? '#2D7D46' : '#B0A07A',
+                                padding: '2px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 700
+                              }}>
+                                {cs.rubriqueCode}
+                              </span>
+                            ) : <span style={{ color: '#A8A5A2' }}>—</span>}
+                          </td>
+                          <td style={{ padding: '12px 16px', fontSize: '14px', color: '#1E1A17' }}>{cs.coefficient}</td>
+                          <td style={{ padding: '12px 16px', fontSize: '14px', color: cs.coefficientOverride ? '#2B6CB0' : '#A8A5A2' }}>
+                            {cs.coefficientOverride ?? '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )
+            )}
+
+            {!selectedSessionForAssign && (
+              <div style={{ padding: '24px', textAlign: 'center', color: '#78756F', fontSize: '14px', backgroundColor: '#FAFAF8', borderRadius: '8px', border: '1px solid #E8E6E3' }}>
+                Sélectionnez une classe pour voir ses matières assignées
+              </div>
+            )}
+          </div>
+
+          {/* Modal assignation */}
+          {assignModalOpen && (
+            <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
+              <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '24px', width: '420px', boxShadow: '0 20px 60px rgba(0,0,0,0.15)' }}>
+                <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: '20px', fontWeight: 700, color: '#2A3740', marginBottom: '20px' }}>
+                  Assigner une matière
+                </h3>
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 500, color: '#1E1A17', display: 'block', marginBottom: '6px' }}>Matière *</label>
+                  <select
+                    value={assignForm.subjectId}
+                    onChange={e => setAssignForm(f => ({ ...f, subjectId: e.target.value }))}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #D1CECC', fontSize: '14px' }}
+                  >
+                    <option value="">Sélectionner une matière</option>
+                    {subjectParents
+                      .filter(s => !classSubjects.find(cs => cs.subjectId === s.id))
+                      .map(s => (
+                        <option key={s.id} value={s.id}>{s.code} — {s.name}</option>
+                      ))
+                    }
+                  </select>
+                </div>
+                <div style={{ marginBottom: '24px' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 500, color: '#1E1A17', display: 'block', marginBottom: '6px' }}>
+                    Coefficient override (optionnel)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    value={assignForm.coefficientOverride}
+                    onChange={e => setAssignForm(f => ({ ...f, coefficientOverride: e.target.value }))}
+                    placeholder="Laisser vide pour utiliser le coefficient global"
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #D1CECC', fontSize: '14px' }}
+                  />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                  <button
+                    onClick={() => setAssignModalOpen(false)}
+                    style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #D1CECC', backgroundColor: 'white', fontSize: '13px', cursor: 'pointer' }}
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    onClick={handleAssignSubject}
+                    disabled={assignSubmitting || !assignForm.subjectId}
+                    style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', backgroundColor: assignSubmitting || !assignForm.subjectId ? '#9CA3AF' : '#2C4A6E', color: 'white', fontSize: '13px', fontWeight: 500, cursor: assignSubmitting || !assignForm.subjectId ? 'not-allowed' : 'pointer' }}
+                  >
+                    {assignSubmitting ? 'En cours...' : 'Assigner'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
         </TabsContent>
       </Tabs>
-
-      {/* Modals */}
       {selectedPeriod && (
         <>
           <ClosePeriodModal

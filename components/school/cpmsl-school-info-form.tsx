@@ -8,6 +8,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { UploadIcon } from "lucide-react"
 
+// ── Type local — plus de dépendance sur school-data ───────────────────────────
+
 interface SchoolInfo {
   name: string
   motto?: string
@@ -73,7 +75,7 @@ export function CPMSLSchoolInfoForm({ schoolInfo, onSave }: CPMSLSchoolInfoFormP
           {/* Nom */}
           <div className="space-y-2">
             <Label className="label-ui" style={{ color: "#1E1A17" }}>
-              Nom de l'école <span style={{ color: "#C43C3C" }}>*</span>
+              Nom de l&apos;école <span style={{ color: "#C43C3C" }}>*</span>
             </Label>
             <Input value={editedInfo.name} onChange={(e) => setEditedInfo({ ...editedInfo, name: e.target.value })} style={{ borderColor: "#D1CECC", borderRadius: "8px" }} />
           </div>
@@ -81,13 +83,13 @@ export function CPMSLSchoolInfoForm({ schoolInfo, onSave }: CPMSLSchoolInfoFormP
           {/* Devise */}
           <div className="space-y-2">
             <Label className="label-ui" style={{ color: "#1E1A17" }}>Devise</Label>
-            <Input value={editedInfo.motto} onChange={(e) => setEditedInfo({ ...editedInfo, motto: e.target.value })} placeholder="Ex: L'excellence avant tout" style={{ borderColor: "#D1CECC", borderRadius: "8px" }} />
+            <Input value={editedInfo.motto || ''} onChange={(e) => setEditedInfo({ ...editedInfo, motto: e.target.value })} placeholder="Ex: L'excellence avant tout" style={{ borderColor: "#D1CECC", borderRadius: "8px" }} />
           </div>
 
           {/* Fondée en */}
           <div className="space-y-2" style={{ width: "25%" }}>
             <Label className="label-ui" style={{ color: "#1E1A17" }}>Fondée en</Label>
-            <Input type="number" value={editedInfo.foundedYear} onChange={(e) => setEditedInfo({ ...editedInfo, foundedYear: parseInt(e.target.value) })} style={{ borderColor: "#D1CECC", borderRadius: "8px" }} />
+            <Input type="number" value={editedInfo.foundedYear || ''} onChange={(e) => setEditedInfo({ ...editedInfo, foundedYear: parseInt(e.target.value) })} style={{ borderColor: "#D1CECC", borderRadius: "8px" }} />
           </div>
         </div>
       </div>
@@ -102,19 +104,19 @@ export function CPMSLSchoolInfoForm({ schoolInfo, onSave }: CPMSLSchoolInfoFormP
           {/* Adresse */}
           <div className="space-y-2">
             <Label className="label-ui" style={{ color: "#1E1A17" }}>Adresse complète</Label>
-            <Textarea value={editedInfo.address} onChange={(e) => setEditedInfo({ ...editedInfo, address: e.target.value })} rows={2} className="resize-none" style={{ borderColor: "#D1CECC", borderRadius: "8px" }} />
+            <Textarea value={editedInfo.address || ''} onChange={(e) => setEditedInfo({ ...editedInfo, address: e.target.value })} rows={2} className="resize-none" style={{ borderColor: "#D1CECC", borderRadius: "8px" }} />
           </div>
 
           {/* Téléphone */}
           <div className="space-y-2">
             <Label className="label-ui" style={{ color: "#1E1A17" }}>Téléphone</Label>
-            <Input type="tel" value={editedInfo.phone} onChange={(e) => setEditedInfo({ ...editedInfo, phone: e.target.value })} style={{ borderColor: "#D1CECC", borderRadius: "8px" }} />
+            <Input type="tel" value={editedInfo.phone || ''} onChange={(e) => setEditedInfo({ ...editedInfo, phone: e.target.value })} style={{ borderColor: "#D1CECC", borderRadius: "8px" }} />
           </div>
 
           {/* Email */}
           <div className="space-y-2">
             <Label className="label-ui" style={{ color: "#1E1A17" }}>Email</Label>
-            <Input type="email" value={editedInfo.email} onChange={(e) => setEditedInfo({ ...editedInfo, email: e.target.value })} style={{ borderColor: "#D1CECC", borderRadius: "8px" }} />
+            <Input type="email" value={editedInfo.email || ''} onChange={(e) => setEditedInfo({ ...editedInfo, email: e.target.value })} style={{ borderColor: "#D1CECC", borderRadius: "8px" }} />
           </div>
         </div>
       </div>

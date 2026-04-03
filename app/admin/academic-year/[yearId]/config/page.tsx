@@ -8,7 +8,6 @@ import { useToast } from "@/components/ui/use-toast"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ArrowLeftIcon } from "lucide-react"
 import {
-  fetchActiveAcademicYear,
   fetchSteps,
   fetchClassSessions,
   type AcademicYear,
@@ -61,7 +60,7 @@ interface SubjectChild {
 function deriveStepStatus(step: AcademicYearStep): 'open' | 'closed' {
   const today = new Date()
   const start = new Date(step.startDate)
-  const end = new Date(step.endDate)
+  const end   = new Date(step.endDate)
   return today >= start && today <= end ? 'open' : 'closed'
 }
 
@@ -75,28 +74,26 @@ function deriveYearStatus(year: AcademicYear): 'active' | 'preparation' | 'archi
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function AcademicYearConfigPage() {
-  const params = useParams()
-  const yearId = params.yearId as string
+  const params  = useParams()
+  const yearId  = params.yearId as string
   const { toast } = useToast()
 
   // ── État ────────────────────────────────────────────────────────────────────
-  const [year, setYear] = useState<AcademicYear | null>(null)
-  const [periods, setPeriods] = useState<Period[]>([])
-  const [levels, setLevels] = useState<Level[]>([])
-  const [classrooms, setClassrooms] = useState<Classroom[]>([])
-  const [subjectParents, setSubjectParents] = useState<SubjectParent[]>([])
+  const [year,            setYear]            = useState<AcademicYear | null>(null)
+  const [periods,         setPeriods]         = useState<Period[]>([])
+  const [levels,          setLevels]          = useState<Level[]>([])
+  const [classrooms,      setClassrooms]      = useState<Classroom[]>([])
+  const [subjectParents,  setSubjectParents]  = useState<SubjectParent[]>([])
   const [subjectChildren, setSubjectChildren] = useState<SubjectChild[]>([])
-  const [loading, setLoading] = useState(true)
-  const [notFound, setNotFound] = useState(false)
+  const [loading,         setLoading]         = useState(true)
+  const [notFound,        setNotFound]        = useState(false)
 
   // ── Chargement des données ──────────────────────────────────────────────────
   const loadData = useCallback(async () => {
     setLoading(true)
     try {
       // 1. Année scolaire
-      const yearRes = await fetch(`/api/academic-years/${yearId}`, {
-        credentials: 'include'
-      })
+      const yearRes = await fetch(`/api/academic-years/${yearId}`, { credentials: 'include' })
       if (!yearRes.ok) { setNotFound(true); return }
       const yearData: AcademicYear = await yearRes.json()
       setYear(yearData)
@@ -104,16 +101,16 @@ export default function AcademicYearConfigPage() {
       // 2. Étapes → periods
       const stepsData = await fetchSteps(yearId)
       setPeriods(stepsData.map(s => ({
-        id: s.id,
-        name: s.name,
+        id:     s.id,
+        name:   s.name,
         status: deriveStepStatus(s)
       })))
 
       // 3. Sessions de classe → classrooms
       const sessionsData = await fetchClassSessions(yearId)
       setClassrooms(sessionsData.map(s => ({
-        id: s.id,
-        name: `${s.class.classType.name} ${s.class.letter}${s.class.track ? ` — ${s.class.track.code}` : ''}`,
+        id:      s.id,
+        name:    `${s.class.classType.name} ${s.class.letter}${s.class.track ? ` — ${s.class.track.code}` : ''}`,
         levelId: s.class.classType.id,
         capacity: 30
       })))
@@ -123,19 +120,19 @@ export default function AcademicYearConfigPage() {
       if (typesRes.ok) {
         const types = await typesRes.json()
         setLevels(types.map((t: { id: string; name: string; isTerminal: boolean }) => ({
-          id: t.id,
-          name: t.name,
+          id:     t.id,
+          name:   t.name,
           niveau: t.isTerminal ? 'Nouveau Secondaire' : 'Fondamentale',
         })))
       }
 
       // 5. Matières → subjectParents
-      const subjectsRes = await fetch('/api/subjects', { credentials: 'include' })
-      const rubricsRes = await fetch('/api/subject-rubrics', { credentials: 'include' })
+      const subjectsRes = await fetch('/api/subjects',        { credentials: 'include' })
+      const rubricsRes  = await fetch('/api/subject-rubrics', { credentials: 'include' })
 
       if (subjectsRes.ok && rubricsRes.ok) {
         const subjects = await subjectsRes.json()
-        const rubrics = await rubricsRes.json()
+        const rubrics  = await rubricsRes.json()
 
         const rubricMap: Record<string, 'R1' | 'R2' | 'R3'> = {}
         rubrics.forEach((r: { id: string; code: string }) => {
@@ -148,11 +145,11 @@ export default function AcademicYearConfigPage() {
           id: string; code: string; name: string
           rubricId?: string; coefficient: number; hasSections: boolean
         }) => ({
-          id: s.id,
-          code: s.code,
-          name: s.name,
-          rubrique: s.rubricId ? (rubricMap[s.rubricId] || 'R1') : 'R1',
-          coefficient: s.coefficient
+          id:          s.id,
+          code:        s.code,
+          name:        s.name,
+          rubrique:    s.rubricId ? (rubricMap[s.rubricId] || 'R1') : 'R1',
+          coefficient: Number(s.coefficient) || 0   // fix Decimal Prisma
         }))
         setSubjectParents(parents)
 
@@ -170,15 +167,16 @@ export default function AcademicYearConfigPage() {
                 if (sectionsRes.ok) {
                   const sections = await sectionsRes.json()
                   sections.forEach((sec: {
-                    id: string; code: string; name: string; displayOrder: number
+                    id: string; code: string; name: string
+                    displayOrder: number; coefficient?: number
                   }) => {
                     children.push({
-                      id: sec.id,
-                      code: sec.code,
-                      parentId: s.id,
-                      name: sec.name,
-                      type: 'N',
-                      coefficient: 1
+                      id:          sec.id,
+                      code:        sec.code,
+                      parentId:    s.id,
+                      name:        sec.name,
+                      type:        'N',
+                      coefficient: Number(sec.coefficient) || 1  // fix Decimal Prisma
                     })
                   })
                 }
@@ -204,20 +202,17 @@ export default function AcademicYearConfigPage() {
     startDate: string; endDate: string; description?: string
   }) => {
     try {
-      const res = await fetch(
-        `/api/academic-years/${yearId}/steps/create`,
-        {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: data.name,
-            stepNumber: periods.length + 1,
-            startDate: data.startDate,
-            endDate: data.endDate,
-          })
-        }
-      )
+      const res = await fetch(`/api/academic-years/${yearId}/steps/create`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name:        data.name,
+          stepNumber:  periods.length + 1,
+          startDate:   data.startDate,
+          endDate:     data.endDate,
+        })
+      })
       if (!res.ok) throw new Error()
       toast({ title: "Étape créée", description: `L'étape ${data.name} a été configurée.` })
       loadData()
@@ -253,20 +248,20 @@ export default function AcademicYearConfigPage() {
   }) => {
     try {
       const rubricsRes = await fetch('/api/subject-rubrics', { credentials: 'include' })
-      const rubrics = await rubricsRes.json()
-      const rubric = rubrics.find((r: { code: string }) => r.code === data.rubrique)
+      const rubrics    = await rubricsRes.json()
+      const rubric     = rubrics.find((r: { code: string }) => r.code === data.rubrique)
 
       const res = await fetch('/api/subjects/create', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: data.name,
-          code: data.code,
-          coefficient: data.coefficient,
-          maxScore: 100,
-          hasSections: false,
-          rubricId: rubric?.id || null,
+          name:         data.name,
+          code:         data.code,
+          coefficient:  data.coefficient,
+          maxScore:     100,
+          hasSections:  false,
+          rubricId:     rubric?.id || null,
         })
       })
       if (!res.ok) throw new Error()
@@ -274,6 +269,32 @@ export default function AcademicYearConfigPage() {
       loadData()
     } catch {
       toast({ title: "Erreur", description: "Impossible de créer la matière", variant: "destructive" })
+    }
+  }
+
+  const handleEditSubjectParent = async (parentId: string, data: {
+    name: string; rubrique: 'R1' | 'R2' | 'R3'; coefficient: number
+  }) => {
+    try {
+      const rubricsRes = await fetch('/api/subject-rubrics', { credentials: 'include' })
+      const rubrics    = await rubricsRes.json()
+      const rubric     = rubrics.find((r: { code: string }) => r.code === data.rubrique)
+
+      const res = await fetch(`/api/subjects/update/${parentId}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name:        data.name,
+          coefficient: data.coefficient,
+          rubricId:    rubric?.id || null,
+        })
+      })
+      if (!res.ok) throw new Error()
+      toast({ title: "Matière modifiée" })
+      loadData()
+    } catch {
+      toast({ title: "Erreur", description: "Impossible de modifier la matière", variant: "destructive" })
     }
   }
 
@@ -286,9 +307,9 @@ export default function AcademicYearConfigPage() {
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: data.name,
-          code: data.code,
-          maxScore: 100,
+          name:         data.name,
+          code:         data.code,
+          maxScore:     100,
           displayOrder: subjectChildren.filter(c => c.parentId === parentId).length + 1,
         })
       })
@@ -297,6 +318,24 @@ export default function AcademicYearConfigPage() {
       loadData()
     } catch {
       toast({ title: "Erreur", description: "Impossible de créer la sous-matière", variant: "destructive" })
+    }
+  }
+
+  const handleEditSubjectChild = async (childId: string, data: {
+    name: string; type: string; coefficient: number
+  }) => {
+    try {
+      const res = await fetch(`/api/subjects/sections/update/${childId}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: data.name })
+      })
+      if (!res.ok) throw new Error()
+      toast({ title: "Sous-matière modifiée" })
+      loadData()
+    } catch {
+      toast({ title: "Erreur", description: "Impossible de modifier la sous-matière", variant: "destructive" })
     }
   }
 
@@ -384,6 +423,7 @@ export default function AcademicYearConfigPage() {
 
         <CPMSLYearConfigTabs
           yearName={year.name}
+          yearId={yearId}
           isArchived={isArchived}
           periods={periods}
           levels={levels}
@@ -397,9 +437,9 @@ export default function AcademicYearConfigPage() {
           onAddLevel={handleAddLevel}
           onAddSubjectParent={handleAddSubjectParent}
           onAddSubjectChild={handleAddSubjectChild}
-          onEditSubjectParent={() => toast({ title: "Modification en cours..." })}
+          onEditSubjectParent={handleEditSubjectParent}
           onDeleteSubjectParent={handleDeleteSubjectParent}
-          onEditSubjectChild={() => toast({ title: "Modification en cours..." })}
+          onEditSubjectChild={handleEditSubjectChild}
           onDeleteSubjectChild={handleDeleteSubjectChild}
           onAddClassroom={handleAddClassroom}
           onEditClassroom={handleEditClassroom}
