@@ -125,3 +125,22 @@ export async function bulkCreateGrades(grades: CreateGradePayload[]): Promise<vo
     throw new Error(data?.message ?? "Erreur lors de l'enregistrement des notes")
   }
 }
+
+// ── Update an existing grade ──────────────────────────────────────────────────
+
+export async function updateGrade(
+  gradeId: string,
+  studentScore: number,
+  gradeType: 'EXAM' | 'HOMEWORK' | 'ORAL' = 'EXAM'
+): Promise<void> {
+  const res = await fetch(`/api/grades/update/${gradeId}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ studentScore, gradeType }),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => null)
+    throw new Error(data?.message ?? "Erreur lors de la mise à jour de la note")
+  }
+}

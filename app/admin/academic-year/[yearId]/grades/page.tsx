@@ -11,7 +11,8 @@ import GradesViewPage from "@/app/admin/academic-year/[yearId]/grades/view/page"
 import type { ApiClassSession } from "@/lib/api/students"
 import type { AcademicYearStep, ClassSession } from "@/lib/api/dashboard"
 import type { ApiClassSubject, ApiEnrollment, ApiGrade, CreateGradePayload } from "@/lib/api/grades"
-import { fetchClassSubjects, fetchEnrollments, fetchGradesForClassSubjectStep, bulkCreateGrades } from "@/lib/api/grades"
+import { fetchClassSubjects, fetchEnrollments, fetchGradesForClassSubjectStep, bulkCreateGrades, updateGrade } from "@/lib/api/grades"
+import type { UpdateGradePayload } from "@/components/school/cpmsl-grades-grid"
 
 export default function GradesPage() {
   const params  = useParams()
@@ -107,16 +108,27 @@ export default function GradesPage() {
     if (selectedClassSubjectId && id) loadGrades(selectedClassSubjectId, id)
   }
 
-  async function handleSaveGrades(grades: CreateGradePayload[]) {
+  async function handleSaveGrades(toCreate: CreateGradePayload[], toUpdate: UpdateGradePayload[]) {
     setSaving(true)
     try {
-      await bulkCreateGrades(grades)
-      toast({ title: 'Notes enregistrées', description: 'Les notes ont été sauvegardées avec succès.' })
+      const ops: Promise<void>[] = []
+      if (toCreate.length > 0) ops.push(bulkCreateGrades(toCreate))
+      toUpdate.forEach(u => ops.push(updateGrade(u.gradeId, u.studentScore, u.gradeType)))
+      await Promise.all(ops)
+
+      const created = toCreate.length
+      const updated = toUpdate.length
+      const desc = [
+        created > 0 ? `${created} note${created > 1 ? 's' : ''} créée${created > 1 ? 's' : ''}` : '',
+        updated > 0 ? `${updated} note${updated > 1 ? 's' : ''} mise${updated > 1 ? 's' : ''} à jour` : '',
+      ].filter(Boolean).join(', ')
+
+      toast({ title: 'Notes enregistrées', description: desc })
       if (selectedClassSubjectId && selectedStepId) {
         await loadGrades(selectedClassSubjectId, selectedStepId)
       }
     } catch (e) {
-      toast({ title: 'Erreur', description: e instanceof Error ? e.message : "Erreur lors de l'enregistrement" })
+      toast({ title: 'Erreur', description: e instanceof Error ? e.message : "Erreur lors de l'enregistrement", variant: 'destructive' })
     } finally {
       setSaving(false)
     }

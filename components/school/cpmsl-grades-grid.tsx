@@ -10,6 +10,12 @@ import type { ApiClassSession } from "@/lib/api/students"
 import type { AcademicYearStep } from "@/lib/api/dashboard"
 import type { ApiClassSubject, ApiEnrollment, ApiGrade, CreateGradePayload } from "@/lib/api/grades"
 
+export interface UpdateGradePayload {
+  gradeId:      string
+  studentScore: number
+  gradeType:    'EXAM' | 'HOMEWORK' | 'ORAL'
+}
+
 interface GradeEntry {
   enrollmentId: string
   value: string
@@ -32,7 +38,7 @@ interface CPMSLGradesGridProps {
   onSessionChange: (sessionId: string) => void
   onClassSubjectChange: (classSubjectId: string) => void
   onStepChange: (stepId: string) => void
-  onSaveGrades: (grades: CreateGradePayload[]) => void
+  onSaveGrades: (toCreate: CreateGradePayload[], toUpdate: UpdateGradePayload[]) => void
 }
 
 function sessionLabel(session: ApiClassSession): string {
@@ -152,20 +158,40 @@ export function CPMSLGradesGrid({
 
   function handleSaveGrades() {
     if (!selectedClassSubjectId || !selectedStepId || hasErrors) return
-    const existingByEnrollment = new Set(existingGrades.map(g => g.enrollmentId))
-    const payload: CreateGradePayload[] = []
+
+    // Map existingGrades par enrollmentId pour lookup O(1)
+    const existingMap = new Map(existingGrades.map(g => [g.enrollmentId, g]))
+
+    const toCreate: CreateGradePayload[] = []
+    const toUpdate: UpdateGradePayload[] = []
+
     gradeEntries.forEach((entry, enrollmentId) => {
-      if (entry.value && entry.isValid && !existingByEnrollment.has(enrollmentId)) {
-        payload.push({
+      if (!entry.value || !entry.isValid) return
+      const score = parseFloat(entry.value)
+      const existing = existingMap.get(enrollmentId)
+
+      if (!existing) {
+        // Nouvelle note
+        toCreate.push({
           enrollmentId,
           classSubjectId: selectedClassSubjectId,
           stepId: selectedStepId,
-          studentScore: parseFloat(entry.value),
+          studentScore: score,
           gradeType: 'EXAM',
         })
+      } else if (score !== existing.studentScore) {
+        // Note existante modifiée
+        toUpdate.push({
+          gradeId:      existing.id,
+          studentScore: score,
+          gradeType:    'EXAM',
+        })
       }
+      // score === existing.studentScore → aucun changement, on skippe
     })
-    onSaveGrades(payload)
+
+    if (toCreate.length === 0 && toUpdate.length === 0) return
+    onSaveGrades(toCreate, toUpdate)
   }
 
   const headerLabel = useMemo(() => {
