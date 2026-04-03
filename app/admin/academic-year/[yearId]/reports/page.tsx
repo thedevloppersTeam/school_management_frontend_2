@@ -2,9 +2,9 @@
 
 import { useParams } from "next/navigation"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ArchivedYearBanner } from "@/components/archived-year-banner"
-import { CPMSLBulletinsSection } from "@/components/cpmsl-bulletins-section"
-import { CPMSLRapportsSection } from "@/components/cpmsl-rapports-section"
+import { ArchivedYearBanner } from "@/components/school/archived-year-banner"
+import { CPMSLBulletinsSection } from "@/components/school/cpmsl-bulletins-section"
+import { CPMSLRapportsSection } from "@/components/school/cpmsl-rapports-section"
 import { useAcademicYear } from "@/hooks/use-academic-year"
 
 export default function ReportsPage() {
