@@ -4,35 +4,41 @@ import { useState, useEffect } from "react"
 import { useParams } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { CPMSLGradesGrid } from "@/components/school/cpmsl-grades-grid"
 import { CPMSLBehaviorGrid } from "@/components/school/cpmsl-behavior-grid"
-import { CPMSLProgressionPanel } from "@/components/school/cpmsl-progression-panel"
+import { CPMSLProgressionTab } from "@/components/school/cpmsl-progression-tab"
+import GradesViewPage from "@/app/admin/academic-year/[yearId]/grades/view/page"
 import type { ApiClassSession } from "@/lib/api/students"
-import type { AcademicYearStep } from "@/lib/api/dashboard"
+import type { AcademicYearStep, ClassSession } from "@/lib/api/dashboard"
 import type { ApiClassSubject, ApiEnrollment, ApiGrade, CreateGradePayload } from "@/lib/api/grades"
 import { fetchClassSubjects, fetchEnrollments, fetchGradesForClassSubjectStep, bulkCreateGrades } from "@/lib/api/grades"
 
 export default function GradesPage() {
-  const params = useParams()
-  const yearId = params.yearId as string
+  const params  = useParams()
+  const yearId  = params.yearId as string
   const { toast } = useToast()
 
-  const [sessions, setSessions] = useState<ApiClassSession[]>([])
-  const [steps, setSteps] = useState<AcademicYearStep[]>([])
-  const [classSubjects, setClassSubjects] = useState<ApiClassSubject[]>([])
-  const [enrollments, setEnrollments] = useState<ApiEnrollment[]>([])
-  const [existingGrades, setExistingGrades] = useState<ApiGrade[]>([])
-  const [selectedSessionId, setSelectedSessionId] = useState<string>("")
-  const [selectedClassSubjectId, setSelectedClassSubjectId] = useState<string>("")
-  const [selectedStepId, setSelectedStepId] = useState<string>("")
-  const [loadingContext, setLoadingContext] = useState(false)
-  const [loadingSession, setLoadingSession] = useState(false)
-  const [loadingGrades, setLoadingGrades] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<string>("notes")
+  // ── Contexte partagé ──────────────────────────────────────────────────────
+  const [sessions,    setSessions]    = useState<ClassSession[]>([])
+  const [steps,       setSteps]       = useState<AcademicYearStep[]>([])
 
+  // ── Onglet Saisie (W3) ────────────────────────────────────────────────────
+  const [apiSessions,            setApiSessions]            = useState<ApiClassSession[]>([])
+  const [classSubjects,          setClassSubjects]          = useState<ApiClassSubject[]>([])
+  const [enrollments,            setEnrollments]            = useState<ApiEnrollment[]>([])
+  const [existingGrades,         setExistingGrades]         = useState<ApiGrade[]>([])
+  const [selectedSessionId,      setSelectedSessionId]      = useState<string>("")
+  const [selectedClassSubjectId, setSelectedClassSubjectId] = useState<string>("")
+  const [selectedStepId,         setSelectedStepId]         = useState<string>("")
+  const [loadingSession,         setLoadingSession]         = useState(false)
+  const [loadingGrades,          setLoadingGrades]          = useState(false)
+  const [saving,                 setSaving]                 = useState(false)
+
+  const [loadingContext, setLoadingContext] = useState(false)
+  const [error,          setError]          = useState<string | null>(null)
+  const [activeTab,      setActiveTab]      = useState<string>("notes")
+
+  // ── Chargement contexte ───────────────────────────────────────────────────
   useEffect(() => {
     async function loadContext() {
       setLoadingContext(true)
@@ -43,11 +49,12 @@ export default function GradesPage() {
           fetch(`/api/academic-years/${yearId}/steps`, { credentials: 'include' }),
         ])
         if (!sessionsRes.ok || !stepsRes.ok) throw new Error('Erreur de chargement du contexte')
-        const [sessionsData, stepsData]: [ApiClassSession[], AcademicYearStep[]] = await Promise.all([
+        const [sessionsData, stepsData] = await Promise.all([
           sessionsRes.json(),
           stepsRes.json(),
         ])
         setSessions(sessionsData)
+        setApiSessions(sessionsData)
         setSteps([...stepsData].sort((a, b) => a.stepNumber - b.stepNumber))
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Erreur inconnue')
@@ -58,6 +65,7 @@ export default function GradesPage() {
     loadContext()
   }, [yearId])
 
+  // ── Handlers W3 ──────────────────────────────────────────────────────────
   async function handleSessionChange(sessionId: string) {
     setSelectedSessionId(sessionId)
     setSelectedClassSubjectId('')
@@ -91,16 +99,12 @@ export default function GradesPage() {
 
   function handleClassSubjectChange(id: string) {
     setSelectedClassSubjectId(id)
-    if (id && selectedStepId) {
-      loadGrades(id, selectedStepId)
-    }
+    if (id && selectedStepId) loadGrades(id, selectedStepId)
   }
 
   function handleStepChange(id: string) {
     setSelectedStepId(id)
-    if (selectedClassSubjectId && id) {
-      loadGrades(selectedClassSubjectId, id)
-    }
+    if (selectedClassSubjectId && id) loadGrades(selectedClassSubjectId, id)
   }
 
   async function handleSaveGrades(grades: CreateGradePayload[]) {
@@ -118,6 +122,15 @@ export default function GradesPage() {
     }
   }
 
+  // ── Navigation depuis Avancement → Saisie ────────────────────────────────
+  function handleNavigateToSaisie(sessionId: string, stepId: string) {
+    setActiveTab("notes")
+    setSelectedSessionId(sessionId)
+    setSelectedStepId(stepId)
+    handleSessionChange(sessionId)
+  }
+
+  // ── Rendu ─────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
       <div>
@@ -133,11 +146,7 @@ export default function GradesPage() {
       ) : error ? (
         <div className="rounded-lg p-8 flex flex-col items-center justify-center gap-4" style={{ backgroundColor: "white", border: "1px solid #E8E6E3" }}>
           <p className="font-sans" style={{ color: "#C43C3C", fontSize: "14px" }}>{error}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 rounded-lg font-sans text-sm font-medium text-white"
-            style={{ backgroundColor: "#5A7085" }}
-          >
+          <button onClick={() => window.location.reload()} className="px-4 py-2 rounded-lg font-sans text-sm font-medium text-white" style={{ backgroundColor: "#5A7085" }}>
             Réessayer
           </button>
         </div>
@@ -145,31 +154,23 @@ export default function GradesPage() {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList style={{ backgroundColor: "#F0F4F7", borderRadius: "8px", padding: "4px" }}>
             <TabsTrigger value="notes" className="label-ui data-[state=active]:bg-white data-[state=active]:shadow-sm" style={{ borderRadius: "6px" }}>
-              <span className="data-[state=active]:text-[#3A4A57] text-[#78756F]">Notes</span>
+              <span className="data-[state=active]:text-[#3A4A57] text-[#78756F]">Saisie</span>
+            </TabsTrigger>
+            <TabsTrigger value="consultation" className="label-ui data-[state=active]:bg-white data-[state=active]:shadow-sm" style={{ borderRadius: "6px" }}>
+              <span className="data-[state=active]:text-[#3A4A57] text-[#78756F]">Consultation</span>
+            </TabsTrigger>
+            <TabsTrigger value="avancement" className="label-ui data-[state=active]:bg-white data-[state=active]:shadow-sm" style={{ borderRadius: "6px" }}>
+              <span className="data-[state=active]:text-[#3A4A57] text-[#78756F]">Avancement</span>
             </TabsTrigger>
             <TabsTrigger value="comportement" className="label-ui data-[state=active]:bg-white data-[state=active]:shadow-sm" style={{ borderRadius: "6px" }}>
               <span className="data-[state=active]:text-[#3A4A57] text-[#78756F]">Comportement</span>
             </TabsTrigger>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <TabsTrigger value="progression-v2" disabled={true} className="label-ui" style={{ borderRadius: "6px", color: "#A8A5A2", cursor: "not-allowed", opacity: 0.6 }}>
-                    Progression
-                  </TabsTrigger>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Disponible prochainement</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <TabsTrigger value="progression" className="label-ui data-[state=active]:bg-white data-[state=active]:shadow-sm" style={{ borderRadius: "6px" }}>
-              <span className="data-[state=active]:text-[#3A4A57] text-[#78756F]">Avancement</span>
-            </TabsTrigger>
           </TabsList>
 
+          {/* Saisie — W3 */}
           <TabsContent value="notes">
             <CPMSLGradesGrid
-              sessions={sessions}
+              sessions={apiSessions}
               steps={steps}
               classSubjects={classSubjects}
               enrollments={enrollments}
@@ -187,6 +188,22 @@ export default function GradesPage() {
             />
           </TabsContent>
 
+          {/* Consultation — W4 */}
+          <TabsContent value="consultation">
+            <GradesViewPage />
+          </TabsContent>
+
+          {/* Avancement */}
+          <TabsContent value="avancement">
+            <CPMSLProgressionTab
+              yearId={yearId}
+              sessions={sessions}
+              steps={steps}
+              onNavigateToSaisie={handleNavigateToSaisie}
+            />
+          </TabsContent>
+
+          {/* Comportement */}
           <TabsContent value="comportement">
             <CPMSLBehaviorGrid
               levels={[]}
@@ -196,20 +213,8 @@ export default function GradesPage() {
               attitudes={[]}
               behaviors={[]}
               isArchived={false}
-              onSaveBehaviors={() => toast({ title: "Comportements enregistrés", description: "Les évaluations de comportement ont été sauvegardées." })}
+              onSaveBehaviors={() => toast({ title: "Comportements enregistrés" })}
               onAddAttitude={(label: string, academicYearId: string) => ({ id: `att-${Date.now()}`, label, academicYearId })}
-            />
-          </TabsContent>
-
-          <TabsContent value="progression">
-            <CPMSLProgressionPanel
-              levels={[]}
-              classrooms={[]}
-              periods={[]}
-              students={[]}
-              subjectParents={[]}
-              subjectChildren={[]}
-              grades={[]}
             />
           </TabsContent>
         </Tabs>
