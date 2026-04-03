@@ -5,7 +5,7 @@
  * qui proxyfient vers https://apicpmsl.stelloud.cloud
  */
 
-// ── Types réponses backend ────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface AcademicYear {
   id: string
@@ -45,51 +45,49 @@ export interface Enrollment {
   status: 'ACTIVE' | 'TRANSFERRED' | 'DROPPED' | 'GRADUATED'
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Helper ────────────────────────────────────────────────────────────────────
 
 async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
-  console.log('[apiFetch] Fetching:', url)
-  console.log('[apiFetch] Options:', options)
   const res = await fetch(url, { credentials: 'include', ...options })
   if (!res.ok) throw new Error(`API error ${res.status} — ${url}`)
   return res.json()
 }
 
-// ── Fonctions dashboard ───────────────────────────────────────────────────────
+// ── Fonctions ─────────────────────────────────────────────────────────────────
 
-/** Récupère toutes les années scolaires et retourne la courante */
+/**
+ * Récupère l'année scolaire courante via GET /api/academic-years/current.
+ * Retourne null si aucune année n'est marquée courante (404).
+ */
 export async function fetchActiveAcademicYear(): Promise<AcademicYear | null> {
-  console.log('[fetchActiveAcademicYear] Fetching active academic year')
-  const years: any = await apiFetch('/api/academic-years')
-  //console.log('[fetchActiveAcademicYear] Response:', years)
-  return years.find((y: any) => y.isCurrent) ?? null
+  try {
+    return await apiFetch<AcademicYear>('/api/academic-years/current')
+  } catch {
+    return null
+  }
 }
 
-/** Récupère les étapes (steps) d'une année scolaire */
+/** Récupère toutes les années scolaires */
+export async function fetchAllAcademicYears(): Promise<AcademicYear[]> {
+  return apiFetch<AcademicYear[]>('/api/academic-years')
+}
+
+/** Récupère les étapes d'une année scolaire */
 export async function fetchSteps(academicYearId: string): Promise<AcademicYearStep[]> {
-  return apiFetch(`/api/academic-years/${academicYearId}/steps`)
+  return apiFetch<AcademicYearStep[]>(`/api/academic-years/${academicYearId}/steps`)
 }
 
 /** Récupère les sessions de classe pour une année scolaire */
 export async function fetchClassSessions(academicYearId: string): Promise<ClassSession[]> {
-  console.log(`[fetchClassSessions] Fetching class sessions for year ${academicYearId}`)
-  return apiFetch(`/api/class-sessions?academicYearId=${academicYearId}`)
+  return apiFetch<ClassSession[]>(`/api/class-sessions?academicYearId=${academicYearId}`)
 }
 
 /** Récupère le nombre d'élèves inscrits (ACTIVE) pour une session de classe */
 export async function fetchEnrollmentCount(classSessionId: string): Promise<number> {
-  const enrollments: Enrollment[] = await apiFetch(
+  const enrollments = await apiFetch<Enrollment[]>(
     `/api/enrollments?classSessionId=${classSessionId}&status=ACTIVE`
   )
   return enrollments.length
-}
-
-/** Récupère le total d'élèves actifs pour une année scolaire */
-export async function fetchTotalStudents(academicYearId: string): Promise<number> {
-  // On récupère toutes les sessions puis on somme les inscriptions actives
-  const sessions = await fetchClassSessions(academicYearId)
-  const counts = await Promise.all(sessions.map(s => fetchEnrollmentCount(s.id)))
-  return counts.reduce((sum, n) => sum + n, 0)
 }
 
 /** Retourne le nom affiché d'une session de classe */
@@ -102,14 +100,12 @@ export function getClassSessionName(session: ClassSession): string {
 /** Détermine l'étape en cours selon la date du jour */
 export function getCurrentStep(steps: AcademicYearStep[]): AcademicYearStep | null {
   const today = new Date()
-  // Chercher d'abord une étape dont la date encadre aujourd'hui
   const active = steps.find(s => {
     const start = new Date(s.startDate)
-    const end   = new Date(s.endDate)
+    const end = new Date(s.endDate)
     return today >= start && today <= end
   })
   if (active) return active
-  // Sinon retourner la dernière étape passée
   const past = steps
     .filter(s => new Date(s.endDate) < today)
     .sort((a, b) => b.stepNumber - a.stepNumber)
