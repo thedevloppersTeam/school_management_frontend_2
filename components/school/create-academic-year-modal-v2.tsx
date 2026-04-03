@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { PlusIcon } from "lucide-react"
-import type { AcademicYear } from "@/lib/data/school-data"
+import type { AcademicYear } from "@/lib/api/dashboard"
 
 interface CreateAcademicYearModalV2Props {
   activeYear?: AcademicYear
@@ -107,7 +107,7 @@ export function CreateAcademicYearModalV2({
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[560px] border border-[#bebbb4] rounded-xl" style={{ backgroundColor: "#ffffff" }}>
+      <DialogContent className="sm:max-w-[560px] border border-[#bebbb4] rounded-xl" style={{ backgroundColor: "#ffffff", maxHeight: "90vh", overflowY: "auto" }}>
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle 

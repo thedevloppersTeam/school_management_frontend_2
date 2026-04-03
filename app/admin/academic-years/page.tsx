@@ -119,6 +119,7 @@ export default function AcademicYearsPage() {
   }) => {
     setCreating(true)
     try {
+      // 1. Créer l'année
       const res = await fetch('/api/academic-years/create', {
         method: 'POST',
         credentials: 'include',
@@ -134,13 +135,74 @@ export default function AcademicYearsPage() {
       })
 
       if (!res.ok) throw new Error('Erreur création')
+      const { year } = await res.json()
+      const newYearId = year.id
 
-      toast({
-        title: "Année créée",
-        description: `L'année ${data.name} a été créée avec succès.`
-      })
+      // 2. Copie de structure si demandé
+      if (data.copyFromYearId && newYearId) {
+        // Fetch sessions de l'année source
+        const sessionsRes = await fetch(
+          `/api/class-sessions?academicYearId=${data.copyFromYearId}`,
+          { credentials: 'include' }
+        )
+        const sourceSessions: Array<{ id: string; classId: string }> =
+          sessionsRes.ok ? await sessionsRes.json() : []
 
-      // Recharger la liste
+        // Pour chaque session source → créer session + copier matières
+        await Promise.all(sourceSessions.map(async (sourceSession) => {
+          // Créer la nouvelle session
+          const newSessionRes = await fetch('/api/class-sessions/create', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              classId: sourceSession.classId,
+              academicYearId: newYearId,
+            })
+          })
+          if (!newSessionRes.ok) return
+
+          const newSessionData = await newSessionRes.json()
+          const newSessionId = newSessionData.classSession?.id || newSessionData.id
+          if (!newSessionId) return
+
+          // Fetch les matières de la session source
+          const subjectsRes = await fetch(
+            `/api/class-subjects?classSessionId=${sourceSession.id}`,
+            { credentials: 'include' }
+          )
+          if (!subjectsRes.ok) return
+          const sourceSubjects: Array<{
+            subjectId: string
+            coefficientOverride: number | null
+          }> = await subjectsRes.json()
+
+          // Recréer chaque matière dans la nouvelle session
+          await Promise.all(sourceSubjects.map(cs =>
+            fetch('/api/class-subjects/create', {
+              method: 'POST',
+              credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                classSessionId: newSessionId,
+                subjectId: cs.subjectId,
+                coefficientOverride: cs.coefficientOverride ?? null,
+              })
+            })
+          ))
+        }))
+
+        toast({
+          title: "Année créée avec copie",
+          description: `${data.name} créée — ${sourceSessions.length} classe(s) et leurs matières copiées.`
+        })
+      } else {
+        toast({
+          title: "Année créée",
+          description: `L'année ${data.name} a été créée avec succès.`
+        })
+      }
+
       loadYears()
     } catch {
       toast({
