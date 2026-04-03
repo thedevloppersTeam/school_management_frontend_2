@@ -61,7 +61,7 @@ const navItems: NavItem[] = [
     section: "gestion",
     icon: SchoolIcon,
     children: [
-      { label: "Élèves",    href: "/admin/academic-year/students", icon: UsersIcon },
+      { label: "Élèves",    href: "/admin/academic-year/:yearId/students", icon: UsersIcon },
       { label: "Notes",     href: "/admin/academic-year/:yearId/grades",   icon: ClipboardEditIcon },
       { label: "Bulletins", href: "/admin/academic-year/:yearId/reports",  icon: FileTextIcon },
     ],

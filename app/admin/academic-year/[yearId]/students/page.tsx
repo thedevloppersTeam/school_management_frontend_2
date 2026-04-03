@@ -17,21 +17,29 @@ import { Switch } from "@/components/ui/switch"
 import { PlusIcon, SearchIcon, UserIcon, ArrowUpIcon, ArrowDownIcon } from "lucide-react"
 import { ArchivedYearBanner } from "@/components/school/archived-year-banner"
 import { StudentEnrollForm } from "@/components/school/students/student-enroll-form"
+import { EditStudentModal } from "@/components/school/edit-student-modal"
+import { TransferEnrollmentModal } from "@/components/school/transfer-enrollment-modal"
 import { fetchClassSessions, type AcademicYear, type ClassSession } from "@/lib/api/dashboard"
 
 // ── Types locaux ──────────────────────────────────────────────────────────────
 
 interface StudentRow {
-  enrollmentId: string
-  studentId: string
-  studentCode: string
-  nisu: string
-  firstname: string
-  lastname: string
+  enrollmentId:  string
+  studentId:     string
+  studentCode:   string
+  nisu:          string
+  firstname:     string
+  lastname:      string
   profilePhoto?: string
   classSessionId: string
-  className: string
-  status: 'ACTIVE' | 'TRANSFERRED' | 'DROPPED' | 'GRADUATED'
+  className:     string
+  status:        'ACTIVE' | 'TRANSFERRED' | 'DROPPED' | 'GRADUATED'
+  address?:      string
+  motherName?:   string
+  fatherName?:   string
+  phone1?:       string
+  phone2?:       string
+  parentsEmail?: string
 }
 
 // ── Palette CPMSL ─────────────────────────────────────────────────────────────
@@ -88,6 +96,14 @@ export default function StudentsManagementPage() {
   const [deactivationReason, setDeactivationReason] = useState("")
   const [deactivating, setDeactivating] = useState(false)
 
+  // Modification profil
+  const [editingStudent, setEditingStudent]     = useState<StudentRow | null>(null)
+  const [editSubmitting, setEditSubmitting]     = useState(false)
+
+  // Transfert
+  const [transferringStudent, setTransferringStudent] = useState<StudentRow | null>(null)
+  const [transferSubmitting, setTransferSubmitting]   = useState(false)
+
   // Tri
   type SortCol = 'nisu' | 'name' | 'class'
   const [sortCol, setSortCol]   = useState<SortCol | null>(null)
@@ -119,6 +135,12 @@ export default function StudentsManagementPage() {
               id: string
               studentCode?: string
               nisu?: string
+              address?: string
+              motherName?: string
+              fatherName?: string
+              phone1?: string
+              phone2?: string
+              parentsEmail?: string
               user?: { firstname?: string; lastname?: string; profilePhoto?: string }
             }
           }>>(`/api/enrollments?classSessionId=${session.id}`)
@@ -127,16 +149,22 @@ export default function StudentsManagementPage() {
 
           enrollments.forEach(enr => {
             allEnrollments.push({
-              enrollmentId: enr.id,
-              studentId: enr.studentId,
-              studentCode: enr.student?.studentCode || '—',
-              nisu: enr.student?.nisu || '',
-              firstname: enr.student?.user?.firstname || '',
-              lastname: enr.student?.user?.lastname || '',
-              profilePhoto: enr.student?.user?.profilePhoto,
+              enrollmentId:  enr.id,
+              studentId:     enr.studentId,
+              studentCode:   enr.student?.studentCode || '—',
+              nisu:          enr.student?.nisu || '',
+              firstname:     enr.student?.user?.firstname || '',
+              lastname:      enr.student?.user?.lastname || '',
+              profilePhoto:  enr.student?.user?.profilePhoto,
               classSessionId: session.id,
               className,
-              status: enr.status,
+              status:        enr.status,
+              address:       enr.student?.address || '',
+              motherName:    enr.student?.motherName || '',
+              fatherName:    enr.student?.fatherName || '',
+              phone1:        enr.student?.phone1 || '',
+              phone2:        enr.student?.phone2 || '',
+              parentsEmail:  enr.student?.parentsEmail || '',
             })
           })
         } catch { /* ignorer les erreurs par session */ }
@@ -246,6 +274,57 @@ export default function StudentsManagementPage() {
       loadStudents()
     } catch {
       toast({ title: "Erreur", variant: "destructive" })
+    }
+  }
+
+  // ── Modification profil ────────────────────────────────────────────────────
+  const handleEditStudent = async (data: {
+    address: string; motherName: string; fatherName: string
+    phone1: string; phone2: string; parentsEmail: string
+  }) => {
+    if (!editingStudent) return
+    setEditSubmitting(true)
+    try {
+      const res = await fetch(`/api/students/update/${editingStudent.studentId}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+      if (!res.ok) throw new Error()
+      toast({ title: "Profil mis à jour" })
+      setEditingStudent(null)
+      loadStudents()
+    } catch {
+      toast({ title: "Erreur", description: "Impossible de modifier le profil", variant: "destructive" })
+    } finally {
+      setEditSubmitting(false)
+    }
+  }
+
+  // ── Transfert ──────────────────────────────────────────────────────────────
+  const handleTransfer = async (data: { newClassSessionId: string; notes?: string }) => {
+    if (!transferringStudent) return
+    setTransferSubmitting(true)
+    try {
+      const res = await fetch('/api/enrollments/transfer', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          enrollmentId: transferringStudent.enrollmentId,
+          newClassSessionId: data.newClassSessionId,
+          notes: data.notes,
+        }),
+      })
+      if (!res.ok) throw new Error()
+      toast({ title: "Élève transféré avec succès" })
+      setTransferringStudent(null)
+      loadStudents()
+    } catch {
+      toast({ title: "Erreur", description: "Impossible de transférer l'élève", variant: "destructive" })
+    } finally {
+      setTransferSubmitting(false)
     }
   }
 
@@ -455,12 +534,28 @@ export default function StudentsManagementPage() {
                                 Réactiver
                               </button>
                             ) : (
-                              <button
-                                onClick={() => { setDeactivatingId(student.enrollmentId); setDeactivationReason('') }}
-                                style={{ fontSize: '13px', fontWeight: 500, color: '#B91C1C', background: 'none', border: 'none', cursor: 'pointer' }}
-                              >
-                                Désactiver
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => setEditingStudent(student)}
+                                  style={{ fontSize: '13px', fontWeight: 500, color: C.primary[600], background: 'none', border: 'none', cursor: 'pointer' }}
+                                >
+                                  Modifier
+                                </button>
+                                <span style={{ color: C.neutral[300] }}>|</span>
+                                <button
+                                  onClick={() => setTransferringStudent(student)}
+                                  style={{ fontSize: '13px', fontWeight: 500, color: '#2B6CB0', background: 'none', border: 'none', cursor: 'pointer' }}
+                                >
+                                  Transférer
+                                </button>
+                                <span style={{ color: C.neutral[300] }}>|</span>
+                                <button
+                                  onClick={() => { setDeactivatingId(student.enrollmentId); setDeactivationReason('') }}
+                                  style={{ fontSize: '13px', fontWeight: 500, color: '#B91C1C', background: 'none', border: 'none', cursor: 'pointer' }}
+                                >
+                                  Désactiver
+                                </button>
+                              </>
                             )}
                           </div>
                         )}
@@ -526,6 +621,44 @@ export default function StudentsManagementPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Modal modification profil */}
+      {editingStudent && (
+        <EditStudentModal
+          open={!!editingStudent}
+          onOpenChange={open => !open && setEditingStudent(null)}
+          studentName={`${editingStudent.firstname} ${editingStudent.lastname}`}
+          studentCode={editingStudent.studentCode}
+          initialData={{
+            address:      editingStudent.address,
+            motherName:   editingStudent.motherName,
+            fatherName:   editingStudent.fatherName,
+            phone1:       editingStudent.phone1,
+            phone2:       editingStudent.phone2,
+            parentsEmail: editingStudent.parentsEmail,
+          }}
+          submitting={editSubmitting}
+          onSubmit={handleEditStudent}
+        />
+      )}
+
+      {/* Modal transfert */}
+      {transferringStudent && (
+        <TransferEnrollmentModal
+          open={!!transferringStudent}
+          onOpenChange={open => !open && setTransferringStudent(null)}
+          studentName={`${transferringStudent.firstname} ${transferringStudent.lastname}`}
+          currentClassName={transferringStudent.className}
+          sessions={sessions
+            .filter(s => s.id !== transferringStudent.classSessionId)
+            .map(s => ({
+              id: s.id,
+              label: `${s.class.classType.name} ${s.class.letter}${s.class.track ? ` — ${s.class.track.code}` : ''}`,
+            }))}
+          submitting={transferSubmitting}
+          onSubmit={handleTransfer}
+        />
+      )}
     </div>
   )
 }
