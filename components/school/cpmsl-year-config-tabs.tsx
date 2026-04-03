@@ -17,6 +17,7 @@ import { ClosePeriodModal } from "@/components/school/close-period-modal"
 import { ReopenPeriodModalV2 } from "@/components/school/reopen-period-modal-v2"
 import { CreatePeriodModalV2 } from "@/components/school/create-period-modal-v2"
 import { AddClassroomModal } from "@/components/school/add-classroom-modal"
+import { AddClassSessionModal } from "@/components/school/add-class-session-modal"
 import { DeleteClassroomModal } from "@/components/school/delete-classroom-modal"
 import { EditClassroomModal } from "@/components/school/edit-classroom-modal"
 import { CreateLevelModalV2 } from "@/components/school/create-level-modal-v2"
@@ -35,12 +36,19 @@ interface Period {
   status: 'open' | 'closed'
 }
 
+interface Track {
+  id: string
+  code: string
+  name: string
+}
+
 interface Level {
   id: string
   name: string
   niveau: string
   filiere?: string
   description?: string
+  category?: 'fondamental' | 'ns-tronc' | 'ns-filiere'
 }
 
 interface Classroom {
@@ -84,6 +92,7 @@ interface CPMSLYearConfigTabsProps {
   subjectChildren: SubjectChild[]
   classrooms: Classroom[]
   students: Student[]
+  tracks?: Track[]
   onAddPeriod?: (data: {
     name: string
     type: 'normal' | 'blanc'
@@ -123,7 +132,7 @@ interface CPMSLYearConfigTabsProps {
     coefficient: number
   }) => void
   onDeleteSubjectChild?: (childId: string) => void
-  onAddClassroom?: (levelId: string) => void
+  onAddClassroom?: (levelId: string, data: { letter?: string; trackId?: string }) => void
   onEditClassroom?: (classroomId: string) => void
   onDeleteClassroom?: (classroomId: string) => void
   onEditLevel?: (levelId: string, data: { description?: string }) => void
@@ -140,6 +149,7 @@ export function CPMSLYearConfigTabs({
   subjectChildren,
   classrooms,
   students,
+  tracks = [],
   onAddPeriod,
   onClosePeriod,
   onReopenPeriod,
@@ -164,6 +174,7 @@ export function CPMSLYearConfigTabs({
   const [reopenPeriodModalOpen, setReopenPeriodModalOpen] = useState(false)
   const [createPeriodModalOpen, setCreatePeriodModalOpen] = useState(false)
   const [addClassroomModalOpen, setAddClassroomModalOpen] = useState(false)
+  const [addClassroomSubmitting, setAddClassroomSubmitting] = useState(false)
   const [deleteClassroomModalOpen, setDeleteClassroomModalOpen] = useState(false)
   const [editClassroomModalOpen, setEditClassroomModalOpen] = useState(false)
   const [createLevelModalOpen, setCreateLevelModalOpen] = useState(false)
@@ -1521,14 +1532,21 @@ export function CPMSLYearConfigTabs({
         onSubmit={(data) => onAddPeriod?.(data)}
       />
       {selectedLevel && (
-        <AddClassroomModal
+        <AddClassSessionModal
           open={addClassroomModalOpen}
           onOpenChange={setAddClassroomModalOpen}
-          level={selectedLevel}
-          existingClassrooms={getClassroomsForLevel(selectedLevel.id)}
-          onSubmit={(data) => {
-            onAddClassroom?.(selectedLevel.id)
-            console.log('Add classroom:', selectedLevel.id, data)
+          level={{
+            id:       selectedLevel.id,
+            name:     selectedLevel.name,
+            category: selectedLevel.category || 'fondamental',
+          }}
+          tracks={tracks}
+          submitting={addClassroomSubmitting}
+          onSubmit={async (data) => {
+            setAddClassroomSubmitting(true)
+            await onAddClassroom?.(selectedLevel.id, data)
+            setAddClassroomSubmitting(false)
+            setAddClassroomModalOpen(false)
           }}
         />
       )}
@@ -1666,3 +1684,4 @@ export function CPMSLYearConfigTabs({
     </div>
   )
 }
+

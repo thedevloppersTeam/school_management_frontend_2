@@ -28,6 +28,8 @@ interface Level {
   name: string
   niveau: string
   filiere?: string
+  category: 'fondamental' | 'ns-tronc' | 'ns-filiere'
+  isTerminal: boolean
 }
 
 interface Classroom {
@@ -85,6 +87,7 @@ export default function AcademicYearConfigPage() {
   const [classrooms,      setClassrooms]      = useState<Classroom[]>([])
   const [subjectParents,  setSubjectParents]  = useState<SubjectParent[]>([])
   const [subjectChildren, setSubjectChildren] = useState<SubjectChild[]>([])
+  const [tracks,          setTracks]          = useState<Array<{ id: string; code: string; name: string }>>([])
   const [loading,         setLoading]         = useState(true)
   const [notFound,        setNotFound]        = useState(false)
 
@@ -119,10 +122,29 @@ export default function AcademicYearConfigPage() {
       const typesRes = await fetch('/api/class-types', { credentials: 'include' })
       if (typesRes.ok) {
         const types = await typesRes.json()
-        setLevels(types.map((t: { id: string; name: string; isTerminal: boolean }) => ({
-          id:     t.id,
-          name:   t.name,
-          niveau: t.isTerminal ? 'Nouveau Secondaire' : 'Fondamentale',
+        setLevels(types.map((t: { id: string; name: string; isTerminal: boolean }) => {
+          const category: Level['category'] =
+            t.name === 'NS3' || t.name === 'NS4' ? 'ns-filiere' :
+            t.name === 'NS1' || t.name === 'NS2' ? 'ns-tronc' :
+            'fondamental'
+          return {
+            id:         t.id,
+            name:       t.name,
+            niveau:     t.name.startsWith('NS') ? 'Nouveau Secondaire' : 'Fondamentale',
+            category,
+            isTerminal: t.isTerminal,
+          }
+        }))
+      }
+
+      // 4b. Tracks (filières)
+      const tracksRes = await fetch('/api/class-tracks', { credentials: 'include' })
+      if (tracksRes.ok) {
+        const tracksData = await tracksRes.json()
+        setTracks(tracksData.map((t: { id: string; code: string; name: string }) => ({
+          id:   t.id,
+          code: t.code,
+          name: t.name,
         })))
       }
 
@@ -348,8 +370,50 @@ export default function AcademicYearConfigPage() {
   }
 
   // ── Handlers — Classes ──────────────────────────────────────────────────────
-  const handleAddClassroom = async (levelId: string) => {
-    toast({ title: "Ajout de classe", description: "Utilisez la page Sessions de classe pour ajouter une classe." })
+  const handleAddClassroom = async (levelId: string, data: { letter?: string; trackId?: string }) => {
+    try {
+      const level = levels.find(l => l.id === levelId)
+      if (!level) throw new Error('Niveau introuvable')
+
+      // 1. Créer la classe
+      const classBody: Record<string, unknown> = {
+        classTypeId: levelId,
+        maxStudents: 30,
+        description: `${level.name}${data.letter ? ` ${data.letter}` : ''}${data.trackId ? ` — ${tracks.find(t => t.id === data.trackId)?.code || ''}` : ''}`,
+      }
+      if (data.letter)  classBody.letter  = data.letter
+      if (data.trackId) classBody.trackId = data.trackId
+
+      const classRes = await fetch('/api/classes/create', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(classBody),
+      })
+      if (!classRes.ok) {
+        const err = await classRes.json().catch(() => ({}))
+        throw new Error(err.message || 'Erreur création classe')
+      }
+      const classData = await classRes.json()
+      const classId = classData.class?.id || classData.id
+      if (!classId) throw new Error('ID classe manquant')
+
+      // 2. Créer la session pour l'année active
+      const sessionRes = await fetch('/api/class-sessions/create', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ classId, academicYearId: yearId }),
+      })
+      if (!sessionRes.ok) throw new Error('Erreur création session')
+
+      toast({ title: "Classe créée", description: classBody.description as string })
+      loadData()
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Impossible de créer la classe'
+      toast({ title: "Erreur", description: message, variant: "destructive" })
+      throw err // remonte l'erreur pour désactiver le spinner du modal
+    }
   }
 
   const handleEditClassroom = async (classroomId: string) => {
@@ -431,6 +495,7 @@ export default function AcademicYearConfigPage() {
           subjectChildren={subjectChildren}
           classrooms={classrooms}
           students={[]}
+          tracks={tracks}
           onAddPeriod={handleAddPeriod}
           onClosePeriod={handleClosePeriod}
           onReopenPeriod={handleReopenPeriod}
