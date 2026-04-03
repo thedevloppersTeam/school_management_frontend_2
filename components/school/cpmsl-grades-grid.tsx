@@ -335,7 +335,7 @@ export function CPMSLGradesGrid({
                                   <Input
                                     type="number"
                                     min="0"
-                                    max={maxScore}
+                                    max={String(maxScore)}
                                     step="0.25"
                                     value={entry?.value || ''}
                                     onChange={e => handleGradeChange(enrollment.id, e.target.value)}

@@ -59,13 +59,31 @@ export interface CreateGradePayload {
   comment?: string
 }
 
+// ── Fetch class subjects — normalise les Decimal Prisma ───────────────────────
+
 export async function fetchClassSubjects(classSessionId: string): Promise<ApiClassSubject[]> {
   const res = await fetch(`/api/class-subjects?classSessionId=${classSessionId}`, {
     credentials: 'include',
   })
   if (!res.ok) throw new Error('Impossible de charger les matières')
-  return res.json()
+  const data = await res.json()
+
+  return data.map((cs: ApiClassSubject) => ({
+    ...cs,
+    coefficientOverride: cs.coefficientOverride != null ? Number(cs.coefficientOverride) : null,
+    subject: {
+      ...cs.subject,
+      maxScore:    Number(cs.subject.maxScore),
+      coefficient: Number(cs.subject.coefficient),
+      sections: (cs.subject.sections || []).map(sec => ({
+        ...sec,
+        maxScore: Number(sec.maxScore),
+      }))
+    }
+  }))
 }
+
+// ── Fetch enrollments ─────────────────────────────────────────────────────────
 
 export async function fetchEnrollments(classSessionId: string): Promise<ApiEnrollment[]> {
   const res = await fetch(`/api/enrollments?classSessionId=${classSessionId}&status=ACTIVE`, {
@@ -75,6 +93,8 @@ export async function fetchEnrollments(classSessionId: string): Promise<ApiEnrol
   return res.json()
 }
 
+// ── Fetch grades — normalise studentScore ─────────────────────────────────────
+
 export async function fetchGradesForClassSubjectStep(
   classSubjectId: string,
   stepId: string
@@ -83,8 +103,15 @@ export async function fetchGradesForClassSubjectStep(
     credentials: 'include',
   })
   if (!res.ok) throw new Error('Impossible de charger les notes')
-  return res.json()
+  const data = await res.json()
+
+  return data.map((g: ApiGrade) => ({
+    ...g,
+    studentScore: Number(g.studentScore),
+  }))
 }
+
+// ── Bulk create grades ────────────────────────────────────────────────────────
 
 export async function bulkCreateGrades(grades: CreateGradePayload[]): Promise<void> {
   const res = await fetch('/api/grades/bulk-create', {
