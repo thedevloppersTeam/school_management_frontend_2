@@ -8,20 +8,8 @@ import { Loader2, Download, Eye, Printer } from "lucide-react"
 import { toast } from "sonner"
 import html2canvas from "html2canvas"
 import jsPDF from "jspdf"
-import {
-  gradesApi,
-  classSubjectsApi,
-  enrollmentsApi,
-  studentsApi,
-  subjectsApi,
-  subjectRubricsApi,
-} from "@/services/api"
-import { parseDecimal, formatDate } from "@/lib/decimal"
-import BulletinScolaire, {
-  type BulletinData,
-  type RubriqueEntry,
-  type ComportementItem,
-} from "./BulletinScolaire"
+import { buildBulletinData } from "@/lib/api/bulletin"
+import BulletinScolaire, { type BulletinData } from "./BulletinScolaire"
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -36,43 +24,6 @@ interface BulletinPDFGeneratorProps {
   className:      string
   enrollmentId:   string
   onDownload?:    () => void
-}
-
-// ── Types locaux ──────────────────────────────────────────────────────────────
-
-interface RubricInfo {
-  id:   string
-  name: string
-  code: string
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function avg(arr: number[]): number | null {
-  return arr.length > 0 ? arr.reduce((s, v) => s + v, 0) / arr.length : null
-}
-
-function rubriqueAverage(entries: RubriqueEntry[]): number | null {
-  // BR-001 : moyenne pondérée des sous-matières (non-parents)
-  let total = 0, totalCoeff = 0
-  for (const e of entries) {
-    if (!e.isParent && e.note !== null && e.note !== undefined && e.coeff) {
-      total      += e.note * e.coeff
-      totalCoeff += e.coeff
-    }
-  }
-  return totalCoeff > 0 ? total / totalCoeff : null
-}
-
-function getAppreciation(moyenne: number): string {
-  if (moyenne >= 9.0) return 'A+'
-  if (moyenne >= 8.5) return 'A'
-  if (moyenne >= 7.8) return 'B+'
-  if (moyenne >= 7.5) return 'B'
-  if (moyenne >= 6.9) return 'C+'
-  if (moyenne >= 6.0) return 'C'
-  if (moyenne >= 5.1) return 'D'
-  return 'E'
 }
 
 // ── Composant ─────────────────────────────────────────────────────────────────
@@ -102,168 +53,16 @@ export function BulletinPDFGenerator({
     setLoading(true)
 
     try {
-      // 1. Élève + matières + rubriques + notes en parallèle
-      const [student, classSubjects, rubrics, allGrades] = await Promise.all([
-        studentsApi.getById(studentId) as Promise<any>,
-        classSubjectsApi.getAll({ classSessionId }),
-        subjectRubricsApi.getAll() as Promise<RubricInfo[]>,
-        gradesApi.getByEnrollment(enrollmentId, { stepId }),
-      ])
 
-      // Map rubricId → code (R1/R2/R3)
-      const rubricCodeMap: Record<string, string> = {}
-      const rubricNameMap: Record<string, string> = {}
-      rubrics.forEach(r => {
-        rubricCodeMap[r.id] = r.code
-        rubricNameMap[r.id] = r.name
+      const data = await buildBulletinData({
+        enrollmentId,
+        studentId,
+        classSessionId,
+        stepId,
+        stepName,
+        className,
       })
-
-      // Index des notes : classSubjectId → { direct[], sections: Map<sectionId, score[]> }
-      const gradeIndex = new Map<string, { direct: number[]; sections: Map<string, number[]> }>()
-      for (const grade of allGrades) {
-        const score = parseDecimal(grade.studentScore)
-        if (score === null) continue
-        if (!gradeIndex.has(grade.classSubjectId)) {
-          gradeIndex.set(grade.classSubjectId, { direct: [], sections: new Map() })
-        }
-        const bucket = gradeIndex.get(grade.classSubjectId)!
-        if (grade.sectionId) {
-          if (!bucket.sections.has(grade.sectionId)) bucket.sections.set(grade.sectionId, [])
-          bucket.sections.get(grade.sectionId)!.push(score)
-        } else {
-          bucket.direct.push(score)
-        }
-      }
-
-      // Regroupement par rubrique → RubriqueEntry[]
-      const r1Entries: RubriqueEntry[] = []
-      const r2Entries: RubriqueEntry[] = []
-      const r3Entries: RubriqueEntry[] = []
-
-      for (const cs of classSubjects) {
-        const subject = await subjectsApi.getById(cs.subjectId) as any
-        if (!subject) continue
-
-        const rubricCode = rubricCodeMap[subject.rubricId] ?? ''
-        const coeff      = parseDecimal(cs.coefficientOverride) ?? parseDecimal(subject.coefficient) ?? 1
-        const bucket     = gradeIndex.get(cs.id)
-
-        let entries: RubriqueEntry[] = []
-
-        if (subject.hasSections) {
-          // Matière MENFP = parent (pas de note)
-          entries.push({ name: subject.name, isParent: true })
-
-          const sectionsData = await subjectsApi.getSections(subject.id) as any[]
-          for (const sec of sectionsData) {
-            const secScores = bucket?.sections.get(sec.id) ?? []
-            const secNote   = avg(secScores)
-            entries.push({
-              name:     sec.name,
-              note:     secNote !== null ? parseDecimal(secNote) : null,
-              coeff:    parseDecimal(sec.coefficient) ?? 1,
-              isParent: false,
-            })
-          }
-        } else {
-          // Matière directe
-          const directNote = avg(bucket?.direct ?? [])
-          entries.push({
-            name:     subject.name,
-            note:     directNote !== null ? parseDecimal(directNote) : null,
-            coeff,
-            isParent: false,
-          })
-        }
-
-        if (rubricCode === 'R1') r1Entries.push(...entries)
-        else if (rubricCode === 'R2') r2Entries.push(...entries)
-        else if (rubricCode === 'R3') r3Entries.push(...entries)
-      }
-
-      // Moyennes rubriques
-      const moyR1 = rubriqueAverage(r1Entries)
-      const moyR2 = rubriqueAverage(r2Entries)
-      const moyR3 = rubriqueAverage(r3Entries)
-
-      // Moyenne finale BR-001 : 70% R1 + 25% R2 + 5% R3
-      const finalAvg = ((moyR1 ?? 0) * 0.70) + ((moyR2 ?? 0) * 0.25) + ((moyR3 ?? 0) * 0.05)
-
-      // Noms des rubriques depuis l'API
-      const r1Name = rubrics.find(r => r.code === 'R1')?.name ?? 'Rubrique 1'
-      const r2Name = rubrics.find(r => r.code === 'R2')?.name ?? 'Rubrique 2'
-      const r3Name = rubrics.find(r => r.code === 'R3')?.name ?? 'Rubrique 3'
-
-      // Comportement : items vides par défaut (saisie manuelle W5 futur)
-      const comportItems: ComportementItem[] = [
-        { label: "Manque d'attention",  oui: null, col: 1 },
-        { label: "Manque de respect",   oui: null, col: 1 },
-        { label: "Indiscipline",        oui: null, col: 1 },
-        { label: "Bavardage",           oui: null, col: 2 },
-        { label: "Agressivité",         oui: null, col: 2 },
-        { label: "Tricherie",           oui: null, col: 2 },
-        { label: "Respect uniforme",    oui: null, col: 3 },
-        { label: "Discipline générale", oui: null, col: 3 },
-        { label: "Participation active",oui: null, col: 3 },
-      ]
-
-      setBulletinData({
-        // Élève
-        prenoms:       student?.user?.firstname ?? studentName.split(' ')[1] ?? '',
-        nom:           student?.user?.lastname  ?? studentName.split(' ')[0] ?? '',
-        sexe:          student?.user?.gender    ?? '—',
-        niveau:        className,
-        filiere:       student?.filiere ?? '—',
-        dateNaissance: formatDate(student?.user?.birth_date ?? ''),
-        anneeScolaire: `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`,
-        periode:       stepName,
-        code:          student?.studentCode ?? '',
-        nisu:          student?.nisu ?? '',
-        photoUrl:      student?.user?.profilePhoto ?? undefined,
-
-        // Rubriques
-        rubrique1Name:  r1Name,
-        rubrique1Poids: '70%',
-        rubrique1:      r1Entries,
-        moyR1,
-
-        rubrique2Name:  r2Name,
-        rubrique2Poids: '25%',
-        rubrique2:      r2Entries,
-        moyR2,
-
-        rubrique3Name:  r3Name,
-        rubrique3Poids: '5%',
-        rubrique3:      r3Entries,
-        moyR3,
-
-        // Résultats
-        moyenneEtape:  finalAvg.toFixed(2),
-        appreciation:  getAppreciation(finalAvg),
-        moyenneClasse: '—',   // TODO : calculer depuis tous les élèves de la classe
-
-        // Comportement
-        comportement: {
-          absences:        '—',
-          retards:         '—',
-          devoirsNonRemis: '—',
-          leconsNonSues:   '—',
-          items:           comportItems,
-          pointsForts:     '',
-          defis:           '',
-          remarque:        '',
-        },
-
-        // Établissement (TODO : récupérer en base via API)
-        etablissement: {
-          nomLigne1: 'Cours Privé Mixte',
-          nomLigne2: 'SAINT LÉONARD',
-          adresse:   'Delmas, Angle 47 & 41 #10',
-          telephone: '2813-1205 / 2264-2081 / 4893-3367',
-          email:     'information@stleonard.ht',
-          logoUrl:   '/test.jpeg',
-        },
-      })
+      setBulletinData(data)
 
       setHasFetched(true)
     } catch (error) {

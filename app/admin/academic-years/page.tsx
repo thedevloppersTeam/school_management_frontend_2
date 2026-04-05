@@ -13,8 +13,6 @@ import {
   fetchSteps,
   fetchClassSessions,
   type AcademicYear,
-  type AcademicYearStep,
-  type ClassSession
 } from "@/lib/api/dashboard"
 
 // ── Types locaux ──────────────────────────────────────────────────────────────

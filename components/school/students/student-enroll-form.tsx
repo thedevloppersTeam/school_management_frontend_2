@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { AlertTriangleIcon, CheckCircle2Icon, LoaderIcon, EyeIcon, EyeOffIcon } from "lucide-react"
+import { AlertTriangleIcon, CheckCircle2Icon, LoaderIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -33,23 +33,25 @@ interface StudentEnrollFormProps {
 }
 
 interface FormState {
-  nisu: string
-  firstName: string
-  lastName: string
-  birthDate: string
+  nisu:          string
+  firstName:     string
+  lastName:      string
+  birthDate:     string
   classSessionId: string
-  password: string
-  address: string
-  fatherName: string
-  motherName: string
-  phone1: string
+  address:       string
+  fatherName:    string
+  motherName:    string
+  phone1:        string
+  phone2:        string
+  parentsEmail:  string
 }
 
 const EMPTY_FORM: FormState = {
   nisu: "", firstName: "", lastName: "", birthDate: "",
-  classSessionId: "", password: "",
+  classSessionId: "",
   address: "",
-  fatherName: "", motherName: "", phone1: "",
+  fatherName: "", motherName: "",
+  phone1: "", phone2: "", parentsEmail: "",
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -82,11 +84,10 @@ export function StudentEnrollForm({
   onSuccess,
   trigger,
 }: StudentEnrollFormProps) {
-  const [form, setForm]               = useState<FormState>(EMPTY_FORM)
-  const [showPassword, setShowPassword] = useState(false)
-  const [submitting, setSubmitting]   = useState(false)
-  const [apiError, setApiError]       = useState<string | null>(null)
-  const [successMsg, setSuccessMsg]   = useState<string | null>(null)
+  const [form, setForm]           = useState<FormState>(EMPTY_FORM)
+  const [submitting, setSubmitting] = useState(false)
+  const [apiError, setApiError]   = useState<string | null>(null)
+  const [successMsg, setSuccessMsg] = useState<string | null>(null)
   const [classSessions, setClassSessions] = useState<ClassSessionOption[]>([])
   const [loadingClasses, setLoadingClasses] = useState(false)
 
@@ -96,7 +97,6 @@ export function StudentEnrollForm({
     fetch(`/api/class-sessions?academicYearId=${academicYearId}`, { credentials: "include" })
       .then(r => r.json())
       .then((data: Array<{ id: string; class: { classType: { name: string }; letter: string; track?: { code: string } | null } }>) => {
-        console.log(data)
         setClassSessions(
           data
             .map(s => ({
@@ -114,15 +114,14 @@ export function StudentEnrollForm({
     (e: React.ChangeEvent<HTMLInputElement>) =>
       setForm(f => ({ ...f, [field]: e.target.value }))
 
-  const nisuValid = /^[A-Z0-9]{13,}$/i.test(form.nisu)
+  const nisuValid = /^[A-Z0-9]{14}$/i.test(form.nisu)
 
   const canSubmit =
     nisuValid &&
     form.firstName.trim() !== "" &&
     form.lastName.trim() !== "" &&
     form.birthDate !== "" &&
-    form.classSessionId !== "" &&
-    form.password.length >= 6
+    form.classSessionId !== ""
 
   // ── Submit ──────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
@@ -132,28 +131,9 @@ export function StudentEnrollForm({
     setSuccessMsg(null)
 
     const username = generateUsername(form.firstName, form.lastName)
+    // Mot de passe par défaut = NISU (l'admin peut le changer ultérieurement)
+    const defaultPassword = form.nisu.toUpperCase()
 
-    console.log("=== DONNÉES ENVOYÉES ===", {
-      step1_user: {
-        firstname: form.firstName.trim(),
-        lastname:  form.lastName.trim(),
-        birthDate: form.birthDate,
-        username,
-        password:  form.password,
-        type:      "STUDENT",
-      },
-      step2_student: {
-        nisu:       form.nisu.toUpperCase(),
-        address:    form.address.trim(),
-        fatherName: form.fatherName || undefined,
-        motherName: form.motherName || undefined,
-        phone1:     form.phone1 || undefined,
-      },
-      step3_enrollment: {
-        classSessionId: form.classSessionId,
-        notes:          "Nouvelle inscription",
-      }
-    })
     try {
       // 1. Créer le user
       const userRes = await apiFetch<{ user: { id: string } }>("/api/users/create", {
@@ -164,11 +144,10 @@ export function StudentEnrollForm({
           lastname:  form.lastName.trim(),
           birthDate: form.birthDate,
           username,
-          password:  form.password,
+          password:  defaultPassword,
           type:      "STUDENT",
         }),
       })
-      console.log("User created:", userRes.user.id);
 
       // 2. Créer le profil student
       const studentRes = await apiFetch<{ student: { id: string } }>("/api/students/create", {
@@ -177,13 +156,14 @@ export function StudentEnrollForm({
         body: JSON.stringify({
           userId:     userRes.user.id,
           nisu:       form.nisu.toUpperCase(),
-          address:    form.address.trim(),
-          ...(form.fatherName && { fatherName: form.fatherName.trim() }),
-          ...(form.motherName && { motherName: form.motherName.trim() }),
-          ...(form.phone1     && { phone1:     form.phone1.trim() }),
+          address:    form.address.trim() || undefined,
+          ...(form.fatherName   && { fatherName:   form.fatherName.trim() }),
+          ...(form.motherName   && { motherName:   form.motherName.trim() }),
+          ...(form.phone1       && { phone1:       form.phone1.trim() }),
+          ...(form.phone2       && { phone2:       form.phone2.trim() }),
+          ...(form.parentsEmail && { parentsEmail: form.parentsEmail.trim() }),
         }),
       })
-      console.log("Student profile created:", studentRes.student.id);
 
       // 3. Inscrire dans la classe
       await apiFetch("/api/enrollments/create", {
@@ -196,7 +176,7 @@ export function StudentEnrollForm({
         }),
       })
 
-      setSuccessMsg(`${form.firstName} ${form.lastName} inscrit avec succès. Username : ${username}`)
+      setSuccessMsg(`${form.firstName} ${form.lastName} inscrit(e) avec succès.`)
       setForm(EMPTY_FORM)
       onSuccess()
 
@@ -230,7 +210,7 @@ export function StudentEnrollForm({
             className="font-sans"
             style={{ fontSize: "13px", fontWeight: 400, color: "hsl(var(--muted-foreground))" }}
           >
-            Remplissez les informations de l'élève
+            Remplissez les informations de l&apos;élève
           </DialogDescription>
         </DialogHeader>
 
@@ -267,19 +247,20 @@ export function StudentEnrollForm({
                 <Label className="font-sans" style={{ fontSize: "13px", fontWeight: 500 }}>
                   NISU <span className="text-destructive">*</span>
                   <span className="font-sans ml-2" style={{ fontSize: "11px", color: "#78756F", fontWeight: 400 }}>
-                    13 caractères alphanumériques minimum
+                    14 caractères alphanumériques
                   </span>
                 </Label>
                 <Input
                   type="text"
-                  placeholder="Ex: 1111114211111"
+                  placeholder="Ex: M4XGKTJTXYN4SM"
                   value={form.nisu}
                   onChange={e => setForm(f => ({ ...f, nisu: e.target.value.toUpperCase() }))}
                   className={cn("h-9 font-mono", form.nisu && !nisuValid && "border-destructive")}
                   style={{ letterSpacing: "0.05em" }}
+                  maxLength={14}
                 />
                 {form.nisu && !nisuValid && (
-                  <p className="text-xs text-destructive">13 caractères alphanumériques minimum requis</p>
+                  <p className="text-xs text-destructive">14 caractères alphanumériques requis</p>
                 )}
                 {nisuValid && (
                   <p className="text-xs" style={{ color: "#2D7D46" }}>✓ NISU valide</p>
@@ -292,25 +273,13 @@ export function StudentEnrollForm({
                   <Label className="font-sans" style={{ fontSize: "13px", fontWeight: 500 }}>
                     Nom <span className="text-destructive">*</span>
                   </Label>
-                  <Input
-                    type="text"
-                    placeholder="PIERRE"
-                    value={form.lastName}
-                    onChange={set("lastName")}
-                    className="h-9"
-                  />
+                  <Input type="text" placeholder="PIERRE" value={form.lastName} onChange={set("lastName")} className="h-9" />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="font-sans" style={{ fontSize: "13px", fontWeight: 500 }}>
                     Prénom <span className="text-destructive">*</span>
                   </Label>
-                  <Input
-                    type="text"
-                    placeholder="Jean"
-                    value={form.firstName}
-                    onChange={set("firstName")}
-                    className="h-9"
-                  />
+                  <Input type="text" placeholder="Jean" value={form.firstName} onChange={set("firstName")} className="h-9" />
                 </div>
               </div>
 
@@ -319,12 +288,7 @@ export function StudentEnrollForm({
                 <Label className="font-sans" style={{ fontSize: "13px", fontWeight: 500 }}>
                   Date de naissance <span className="text-destructive">*</span>
                 </Label>
-                <Input
-                  type="date"
-                  value={form.birthDate}
-                  onChange={set("birthDate")}
-                  className="h-9"
-                />
+                <Input type="date" value={form.birthDate} onChange={set("birthDate")} className="h-9" />
               </div>
 
               {/* Username preview */}
@@ -363,46 +327,7 @@ export function StudentEnrollForm({
             </div>
           </div>
 
-          {/* ── Section Accès ── */}
-          <div className="space-y-3">
-            <h3 className="font-serif"
-              style={{ fontSize: "15px", fontWeight: 600, color: "#2C4A6E", borderLeft: "3px solid #2C4A6E", paddingLeft: "8px" }}>
-              Accès
-            </h3>
-            <div className="space-y-1.5">
-              <Label className="font-sans" style={{ fontSize: "13px", fontWeight: 500 }}>
-                Mot de passe initial <span className="text-destructive">*</span>
-                <span className="font-sans ml-2" style={{ fontSize: "11px", color: "#78756F", fontWeight: 400 }}>
-                  6 caractères minimum
-                </span>
-              </Label>
-              <div className="relative">
-                <Input
-                  type={showPassword ? "text" : "password"}
-                  placeholder="••••••••"
-                  value={form.password}
-                  onChange={set("password")}
-                  className={cn("h-9 pr-10", form.password && form.password.length < 6 && "border-destructive")}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(s => !s)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2"
-                  style={{ background: "none", border: "none", cursor: "pointer", padding: 0, color: "#A8A5A2" }}
-                >
-                  {showPassword
-                    ? <EyeOffIcon style={{ width: 16, height: 16 }} />
-                    : <EyeIcon    style={{ width: 16, height: 16 }} />
-                  }
-                </button>
-              </div>
-              {form.password && form.password.length < 6 && (
-                <p className="text-xs text-destructive">6 caractères minimum requis</p>
-              )}
-            </div>
-          </div>
-
-          {/* ── Section Contact (optionnel) ── */}
+          {/* ── Section Contact ── */}
           <div className="space-y-3">
             <h3 className="font-serif"
               style={{ fontSize: "15px", fontWeight: 600, color: "#2C4A6E", borderLeft: "3px solid #2C4A6E", paddingLeft: "8px" }}>
@@ -416,6 +341,7 @@ export function StudentEnrollForm({
                 <Label className="font-sans" style={{ fontSize: "13px", fontWeight: 500 }}>Adresse</Label>
                 <Input type="text" placeholder="123 Rue Principale, Port-au-Prince" value={form.address} onChange={set("address")} className="h-9" />
               </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label className="font-sans" style={{ fontSize: "13px", fontWeight: 500 }}>Nom du père</Label>
@@ -426,9 +352,21 @@ export function StudentEnrollForm({
                   <Input type="text" placeholder="Marie Pierre" value={form.motherName} onChange={set("motherName")} className="h-9" />
                 </div>
               </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="font-sans" style={{ fontSize: "13px", fontWeight: 500 }}>Téléphone 1</Label>
+                  <Input type="text" placeholder="+509 XX XX XXXX" value={form.phone1} onChange={set("phone1")} className="h-9" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="font-sans" style={{ fontSize: "13px", fontWeight: 500 }}>Téléphone 2</Label>
+                  <Input type="text" placeholder="+509 XX XX XXXX" value={form.phone2} onChange={set("phone2")} className="h-9" />
+                </div>
+              </div>
+
               <div className="space-y-1.5">
-                <Label className="font-sans" style={{ fontSize: "13px", fontWeight: 500 }}>Téléphone</Label>
-                <Input type="text" placeholder="+509 XX XX XXXX" value={form.phone1} onChange={set("phone1")} className="h-9" />
+                <Label className="font-sans" style={{ fontSize: "13px", fontWeight: 500 }}>Email des parents</Label>
+                <Input type="email" placeholder="parents@example.com" value={form.parentsEmail} onChange={set("parentsEmail")} className="h-9" />
               </div>
             </div>
           </div>

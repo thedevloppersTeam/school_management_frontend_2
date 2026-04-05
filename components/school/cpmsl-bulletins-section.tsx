@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -9,7 +9,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { StatCard } from "@/components/school/stat-card"
 import { BulletinPDFGenerator } from "@/components/bulletin-pdf-generator"
-import { AlertTriangleIcon, CheckCircleIcon, FileTextIcon, AlertCircleIcon, UserIcon } from "lucide-react"
+import BulletinScolaire, { type BulletinData } from "@/components/BulletinScolaire"
+import { buildBulletinData } from "@/lib/api/bulletin"
+import { AlertTriangleIcon, CheckCircleIcon, FileTextIcon, AlertCircleIcon, UserIcon, LayersIcon, Loader2 } from "lucide-react"
 import {
   fetchSteps,
   fetchClassSessions,
@@ -40,7 +42,7 @@ interface CPMSLBulletinsSectionProps {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function isNisuValid(nisu: string): boolean {
-  return !!nisu && /^\d{12,13}$/.test(nisu.trim())
+  return !!nisu && /^[A-Z0-9]{14}$/.test(nisu.trim())
 }
 
 async function apiFetch<T>(url: string): Promise<T> {
@@ -69,6 +71,12 @@ export function CPMSLBulletinsSection({
   // ── PDF Generator ─────────────────────────────────────────────────────────────
   const [pdfOpen, setPdfOpen]           = useState(false)
   const [pdfStudent, setPdfStudent]     = useState<EnrollmentRow | null>(null)
+
+  // ── Génération en lot ──────────────────────────────────────────────────────
+  const [generatingLot, setGeneratingLot] = useState(false)
+  const [lotProgress, setLotProgress]     = useState({ current: 0, total: 0 })
+  const [lotData, setLotData]             = useState<BulletinData | null>(null)
+  const lotRef = useRef<HTMLDivElement>(null)
 
   // ── Chargement initial ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -137,6 +145,80 @@ export function CPMSLBulletinsSection({
   const withNisu    = enrollments.filter(e => isNisuValid(e.nisu))
   const withoutNisu = enrollments.filter(e => !isNisuValid(e.nisu))
   const selectedStepObj = steps.find(s => s.id === selectedStep)
+
+  // ── Génération en lot ──────────────────────────────────────────────────────
+  const generateLot = async () => {
+    const eligible = enrollments.filter(e => isNisuValid(e.nisu))
+    if (eligible.length === 0 || !selectedStep || !selectedSession) return
+
+    setGeneratingLot(true)
+    setLotProgress({ current: 0, total: eligible.length })
+
+    try {
+      const html2canvas = (await import('html2canvas')).default
+      const jsPDF       = (await import('jspdf')).default
+      const pdf         = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+      const stepObj     = steps.find(s => s.id === selectedStep)
+      const stepName    = stepObj?.name ?? 'etape'
+      const sessionObj  = sessions.find(s => s.id === selectedSession)
+      const className   = sessionObj ? getClassSessionName(sessionObj) : 'classe'
+
+      for (let i = 0; i < eligible.length; i++) {
+        const student = eligible[i]
+        setLotProgress({ current: i + 1, total: eligible.length })
+
+        // Construire les données
+        const data = await buildBulletinData({
+          enrollmentId:   student.enrollmentId,
+          studentId:      student.studentId,
+          classSessionId: student.classSessionId,
+          stepId:         selectedStep,
+          stepName,
+          className:      student.className,
+        })
+
+        // Afficher dans le div caché
+        setLotData(data)
+        await new Promise(r => setTimeout(r, 600)) // laisser React rendre
+
+        if (!lotRef.current) continue
+
+        // Capturer
+        const canvas = await html2canvas(lotRef.current, {
+          scale: 2, useCORS: true,
+          backgroundColor: '#ffffff',
+          windowWidth: lotRef.current.scrollWidth,
+          windowHeight: lotRef.current.scrollHeight,
+        })
+
+        // Ajouter une page (sauf la première)
+        if (i > 0) pdf.addPage()
+        const imgData   = canvas.toDataURL('image/png')
+        const imgWidth  = 210
+        const imgHeight = (canvas.height * imgWidth) / canvas.width
+        pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight)
+
+        // Pages supplémentaires si bulletin dépasse A4
+        const pageHeight = 297
+        let heightLeft   = imgHeight - pageHeight
+        let position     = -pageHeight
+        while (heightLeft > 0) {
+          pdf.addPage()
+          pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+          heightLeft -= pageHeight
+          position   -= pageHeight
+        }
+      }
+
+      pdf.save(`bulletins_lot_${className}_${stepName}_${new Date().toISOString().slice(0, 10)}.pdf`)
+    } catch (e) {
+      console.error('[generateLot]', e)
+    } finally {
+      setGeneratingLot(false)
+      setLotData(null)
+      setLotProgress({ current: 0, total: 0 })
+    }
+  }
 
   // ── Ouvrir PDF Generator ──────────────────────────────────────────────────────
   const handleGenerateBulletin = (student: EnrollmentRow) => {
@@ -212,12 +294,58 @@ export function CPMSLBulletinsSection({
       {/* Contenu si sélections faites */}
       {selectedStep && selectedSession && (
         <>
-          {/* KPIs */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <StatCard label="Élèves" value={enrollments.length} icon={AlertCircleIcon} iconBgColor="#F0F4F7" iconColor="#5A7085" />
-            <StatCard label="NISU valides" value={withNisu.length} icon={CheckCircleIcon} iconBgColor="#E8F5EC" iconColor="#2D7D46" />
-            <StatCard label="NISU manquants" value={withoutNisu.length} icon={AlertTriangleIcon} iconBgColor="#FEF6E0" iconColor="#C48B1A" />
-            <StatCard label="Étape" value={selectedStepObj?.name || '—'} icon={FileTextIcon} iconBgColor="#E3EFF9" iconColor="#2B6CB0" />
+          {/* KPIs + bouton lot */}
+          <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <StatCard label="Élèves" value={enrollments.length} icon={AlertCircleIcon} iconBgColor="#F0F4F7" iconColor="#5A7085" />
+              <StatCard label="NISU valides" value={withNisu.length} icon={CheckCircleIcon} iconBgColor="#E8F5EC" iconColor="#2D7D46" />
+              <StatCard label="NISU manquants" value={withoutNisu.length} icon={AlertTriangleIcon} iconBgColor="#FEF6E0" iconColor="#C48B1A" />
+              <StatCard label="Étape" value={selectedStepObj?.name || '—'} icon={FileTextIcon} iconBgColor="#E3EFF9" iconColor="#2B6CB0" />
+            </div>
+
+            {/* Bouton génération en lot */}
+            <div className="flex items-center gap-4">
+              <Button
+                onClick={generateLot}
+                disabled={isArchived || generatingLot || withNisu.length === 0}
+                style={{
+                  backgroundColor: isArchived || withNisu.length === 0 ? '#E8E6E3' : '#2C4A6E',
+                  color: isArchived || withNisu.length === 0 ? '#A8A5A2' : 'white',
+                  borderRadius: '8px',
+                  fontWeight: 600,
+                }}
+              >
+                {generatingLot ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Génération {lotProgress.current} / {lotProgress.total}...
+                  </>
+                ) : (
+                  <>
+                    <LayersIcon className="mr-2 h-4 w-4" />
+                    Générer le lot ({withNisu.length} bulletin{withNisu.length > 1 ? 's' : ''})
+                  </>
+                )}
+              </Button>
+
+              {/* Barre de progression */}
+              {generatingLot && lotProgress.total > 0 && (
+                <div className="flex items-center gap-3 flex-1">
+                  <div style={{ flex: 1, height: '6px', background: '#E8E6E3', borderRadius: '3px', overflow: 'hidden' }}>
+                    <div style={{
+                      width: `${(lotProgress.current / lotProgress.total) * 100}%`,
+                      height: '100%',
+                      background: '#2C4A6E',
+                      borderRadius: '3px',
+                      transition: 'width 0.3s ease',
+                    }} />
+                  </div>
+                  <span style={{ fontSize: '12px', color: '#5A7085', whiteSpace: 'nowrap' }}>
+                    {Math.round((lotProgress.current / lotProgress.total) * 100)}%
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Table élèves */}
@@ -314,6 +442,13 @@ export function CPMSLBulletinsSection({
           </p>
         </div>
       )}
+
+      {/* Div caché pour capture lot PDF */}
+      <div style={{ position: 'fixed', left: '-9999px', top: 0, zIndex: -1, background: 'white' }}>
+        <div ref={lotRef}>
+          {lotData && <BulletinScolaire data={lotData} />}
+        </div>
+      </div>
 
       {/* PDF Generator Modal */}
       {pdfStudent && selectedStepObj && (

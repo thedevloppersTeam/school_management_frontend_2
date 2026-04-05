@@ -55,7 +55,7 @@ const C = {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function isNisuValid(nisu: string): boolean {
-  return !!nisu && /^\d{12,13}$/.test(nisu.trim())
+  return !!nisu && /^[A-Z0-9]{14}$/.test(nisu.trim())
 }
 
 function deriveYearStatus(year: AcademicYear): 'active' | 'preparation' | 'archived' {
