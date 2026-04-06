@@ -58,10 +58,10 @@ export function CPMSLBulletinsSection({
   isArchived = false,
 }: CPMSLBulletinsSectionProps) {
   // ── Données ──────────────────────────────────────────────────────────────────
-  const [steps, setSteps]         = useState<AcademicYearStep[]>([])
-  const [sessions, setSessions]   = useState<ClassSession[]>([])
+  const [steps, setSteps]             = useState<AcademicYearStep[]>([])
+  const [sessions, setSessions]       = useState<ClassSession[]>([])
   const [enrollments, setEnrollments] = useState<EnrollmentRow[]>([])
-  const [loadingInit, setLoadingInit]   = useState(true)
+  const [loadingInit, setLoadingInit]         = useState(true)
   const [loadingStudents, setLoadingStudents] = useState(false)
 
   // ── Sélections ───────────────────────────────────────────────────────────────
@@ -69,8 +69,8 @@ export function CPMSLBulletinsSection({
   const [selectedSession, setSelectedSession] = useState("")
 
   // ── PDF Generator ─────────────────────────────────────────────────────────────
-  const [pdfOpen, setPdfOpen]           = useState(false)
-  const [pdfStudent, setPdfStudent]     = useState<EnrollmentRow | null>(null)
+  const [pdfOpen, setPdfOpen]       = useState(false)
+  const [pdfStudent, setPdfStudent] = useState<EnrollmentRow | null>(null)
 
   // ── Génération en lot ──────────────────────────────────────────────────────
   const [generatingLot, setGeneratingLot] = useState(false)
@@ -115,19 +115,19 @@ export function CPMSLBulletinsSection({
         }
       }>>(`/api/enrollments?classSessionId=${sessionId}&status=ACTIVE`)
 
-      const session = sessions.find(s => s.id === sessionId)
+      const session   = sessions.find(s => s.id === sessionId)
       const className = session ? getClassSessionName(session) : ''
 
       setEnrollments(data.map(enr => ({
-        enrollmentId: enr.id,
-        studentId: enr.studentId,
-        studentCode: enr.student?.studentCode || '—',
-        nisu: enr.student?.nisu || '',
-        firstname: enr.student?.user?.firstname || '',
-        lastname: enr.student?.user?.lastname || '',
+        enrollmentId:   enr.id,
+        studentId:      enr.studentId,
+        studentCode:    enr.student?.studentCode || '—',
+        nisu:           enr.student?.nisu || '',
+        firstname:      enr.student?.user?.firstname || '',
+        lastname:       enr.student?.user?.lastname  || '',
         classSessionId: sessionId,
         className,
-        status: enr.status,
+        status:         enr.status,
       })))
     } catch (err) {
       console.error('[bulletins] enrollments error:', err)
@@ -142,8 +142,8 @@ export function CPMSLBulletinsSection({
   }, [selectedSession, loadEnrollments])
 
   // ── KPIs ──────────────────────────────────────────────────────────────────────
-  const withNisu    = enrollments.filter(e => isNisuValid(e.nisu))
-  const withoutNisu = enrollments.filter(e => !isNisuValid(e.nisu))
+  const withNisu        = enrollments.filter(e => isNisuValid(e.nisu))
+  const withoutNisu     = enrollments.filter(e => !isNisuValid(e.nisu))
   const selectedStepObj = steps.find(s => s.id === selectedStep)
 
   // ── Génération en lot ──────────────────────────────────────────────────────
@@ -167,7 +167,7 @@ export function CPMSLBulletinsSection({
         const student = eligible[i]
         setLotProgress({ current: i + 1, total: eligible.length })
 
-        // Construire les données
+        // Construire les données bulletin avec yearId pour behavior + attitudes
         const data = await buildBulletinData({
           enrollmentId:   student.enrollmentId,
           studentId:      student.studentId,
@@ -175,30 +175,28 @@ export function CPMSLBulletinsSection({
           stepId:         selectedStep,
           stepName,
           className:      student.className,
+          yearId:         academicYearId,
         })
 
         // Afficher dans le div caché
         setLotData(data)
-        await new Promise(r => setTimeout(r, 600)) // laisser React rendre
+        await new Promise(r => setTimeout(r, 600))
 
         if (!lotRef.current) continue
 
-        // Capturer
         const canvas = await html2canvas(lotRef.current, {
           scale: 2, useCORS: true,
           backgroundColor: '#ffffff',
-          windowWidth: lotRef.current.scrollWidth,
+          windowWidth:  lotRef.current.scrollWidth,
           windowHeight: lotRef.current.scrollHeight,
         })
 
-        // Ajouter une page (sauf la première)
         if (i > 0) pdf.addPage()
         const imgData   = canvas.toDataURL('image/png')
         const imgWidth  = 210
         const imgHeight = (canvas.height * imgWidth) / canvas.width
         pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight)
 
-        // Pages supplémentaires si bulletin dépasse A4
         const pageHeight = 297
         let heightLeft   = imgHeight - pageHeight
         let position     = -pageHeight
@@ -249,40 +247,28 @@ export function CPMSLBulletinsSection({
         </div>
         <div style={{ padding: '24px' }}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-            {/* Étape */}
             <div>
-              <label style={{ fontSize: '13px', fontWeight: 500, color: '#1E1A17', display: 'block', marginBottom: '8px' }}>
-                Étape
-              </label>
+              <label style={{ fontSize: '13px', fontWeight: 500, color: '#1E1A17', display: 'block', marginBottom: '8px' }}>Étape</label>
               <Select value={selectedStep} onValueChange={setSelectedStep}>
                 <SelectTrigger style={{ borderColor: '#D1CECC', borderRadius: '8px' }}>
                   <SelectValue placeholder="Sélectionner une étape" />
                 </SelectTrigger>
                 <SelectContent>
                   {steps.map(step => (
-                    <SelectItem key={step.id} value={step.id}>
-                      {step.name}
-                    </SelectItem>
+                    <SelectItem key={step.id} value={step.id}>{step.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-
-            {/* Classe */}
             <div>
-              <label style={{ fontSize: '13px', fontWeight: 500, color: '#1E1A17', display: 'block', marginBottom: '8px' }}>
-                Classe
-              </label>
+              <label style={{ fontSize: '13px', fontWeight: 500, color: '#1E1A17', display: 'block', marginBottom: '8px' }}>Classe</label>
               <Select value={selectedSession} onValueChange={setSelectedSession}>
                 <SelectTrigger style={{ borderColor: '#D1CECC', borderRadius: '8px' }}>
                   <SelectValue placeholder="Sélectionner une classe" />
                 </SelectTrigger>
                 <SelectContent>
                   {sessions.map(session => (
-                    <SelectItem key={session.id} value={session.id}>
-                      {getClassSessionName(session)}
-                    </SelectItem>
+                    <SelectItem key={session.id} value={session.id}>{getClassSessionName(session)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -297,13 +283,12 @@ export function CPMSLBulletinsSection({
           {/* KPIs + bouton lot */}
           <div className="flex flex-col gap-4">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <StatCard label="Élèves" value={enrollments.length} icon={AlertCircleIcon} iconBgColor="#F0F4F7" iconColor="#5A7085" />
-              <StatCard label="NISU valides" value={withNisu.length} icon={CheckCircleIcon} iconBgColor="#E8F5EC" iconColor="#2D7D46" />
-              <StatCard label="NISU manquants" value={withoutNisu.length} icon={AlertTriangleIcon} iconBgColor="#FEF6E0" iconColor="#C48B1A" />
-              <StatCard label="Étape" value={selectedStepObj?.name || '—'} icon={FileTextIcon} iconBgColor="#E3EFF9" iconColor="#2B6CB0" />
+              <StatCard label="Élèves"          value={enrollments.length} icon={AlertCircleIcon} iconBgColor="#F0F4F7" iconColor="#5A7085" />
+              <StatCard label="NISU valides"    value={withNisu.length}    icon={CheckCircleIcon}  iconBgColor="#E8F5EC" iconColor="#2D7D46" />
+              <StatCard label="NISU manquants"  value={withoutNisu.length} icon={AlertTriangleIcon} iconBgColor="#FEF6E0" iconColor="#C48B1A" />
+              <StatCard label="Étape"           value={selectedStepObj?.name || '—'} icon={FileTextIcon} iconBgColor="#E3EFF9" iconColor="#2B6CB0" />
             </div>
 
-            {/* Bouton génération en lot */}
             <div className="flex items-center gap-4">
               <Button
                 onClick={generateLot}
@@ -311,33 +296,22 @@ export function CPMSLBulletinsSection({
                 style={{
                   backgroundColor: isArchived || withNisu.length === 0 ? '#E8E6E3' : '#2C4A6E',
                   color: isArchived || withNisu.length === 0 ? '#A8A5A2' : 'white',
-                  borderRadius: '8px',
-                  fontWeight: 600,
+                  borderRadius: '8px', fontWeight: 600,
                 }}
               >
                 {generatingLot ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Génération {lotProgress.current} / {lotProgress.total}...
-                  </>
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Génération {lotProgress.current} / {lotProgress.total}...</>
                 ) : (
-                  <>
-                    <LayersIcon className="mr-2 h-4 w-4" />
-                    Générer le lot ({withNisu.length} bulletin{withNisu.length > 1 ? 's' : ''})
-                  </>
+                  <><LayersIcon className="mr-2 h-4 w-4" />Générer le lot ({withNisu.length} bulletin{withNisu.length > 1 ? 's' : ''})</>
                 )}
               </Button>
 
-              {/* Barre de progression */}
               {generatingLot && lotProgress.total > 0 && (
                 <div className="flex items-center gap-3 flex-1">
                   <div style={{ flex: 1, height: '6px', background: '#E8E6E3', borderRadius: '3px', overflow: 'hidden' }}>
                     <div style={{
                       width: `${(lotProgress.current / lotProgress.total) * 100}%`,
-                      height: '100%',
-                      background: '#2C4A6E',
-                      borderRadius: '3px',
-                      transition: 'width 0.3s ease',
+                      height: '100%', background: '#2C4A6E', borderRadius: '3px', transition: 'width 0.3s ease',
                     }} />
                   </div>
                   <span style={{ fontSize: '12px', color: '#5A7085', whiteSpace: 'nowrap' }}>
@@ -377,54 +351,45 @@ export function CPMSLBulletinsSection({
                             Aucun élève actif dans cette classe
                           </TableCell>
                         </TableRow>
-                      ) : (
-                        enrollments.map(student => {
-                          const nisuOk = isNisuValid(student.nisu)
-                          return (
-                            <TableRow key={student.enrollmentId} style={{ borderBottom: '1px solid #E8E6E3' }} className="hover:bg-[#FAF8F3]">
-                              <TableCell>
-                                <Avatar className="h-8 w-8">
-                                  <AvatarFallback style={{ backgroundColor: '#F0F4F7', color: '#5A7085', fontSize: '12px' }}>
-                                    <UserIcon className="h-4 w-4" />
-                                  </AvatarFallback>
-                                </Avatar>
-                              </TableCell>
-                              <TableCell style={{ fontWeight: 600, color: '#1E1A17', fontSize: '14px' }}>
-                                {student.lastname}
-                              </TableCell>
-                              <TableCell style={{ color: '#1E1A17', fontSize: '14px' }}>
-                                {student.firstname}
-                              </TableCell>
-                              <TableCell style={{ fontFamily: 'monospace', fontSize: '13px', color: nisuOk ? '#1E1A17' : '#C43C3C' }}>
-                                {student.nisu || '—'}
-                              </TableCell>
-                              <TableCell>
-                                {nisuOk ? (
-                                  <Badge style={{ backgroundColor: '#E8F5EC', color: '#2D7D46', border: 'none' }}>Valide</Badge>
-                                ) : (
-                                  <Badge style={{ backgroundColor: '#FDE8E8', color: '#C43C3C', border: 'none' }}>Invalide</Badge>
-                                )}
-                              </TableCell>
-                              <TableCell>
-                                <Button
-                                  size="sm"
-                                  disabled={isArchived || !nisuOk}
-                                  onClick={() => handleGenerateBulletin(student)}
-                                  style={{
-                                    backgroundColor: isArchived || !nisuOk ? '#E8E6E3' : '#2C4A6E',
-                                    color: isArchived || !nisuOk ? '#A8A5A2' : 'white',
-                                    fontSize: '12px',
-                                    borderRadius: '6px',
-                                  }}
-                                >
-                                  <FileTextIcon className="mr-1 h-3 w-3" />
-                                  Générer
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          )
-                        })
-                      )}
+                      ) : enrollments.map(student => {
+                        const nisuOk = isNisuValid(student.nisu)
+                        return (
+                          <TableRow key={student.enrollmentId} style={{ borderBottom: '1px solid #E8E6E3' }} className="hover:bg-[#FAF8F3]">
+                            <TableCell>
+                              <Avatar className="h-8 w-8">
+                                <AvatarFallback style={{ backgroundColor: '#F0F4F7', color: '#5A7085', fontSize: '12px' }}>
+                                  <UserIcon className="h-4 w-4" />
+                                </AvatarFallback>
+                              </Avatar>
+                            </TableCell>
+                            <TableCell style={{ fontWeight: 600, color: '#1E1A17', fontSize: '14px' }}>{student.lastname}</TableCell>
+                            <TableCell style={{ color: '#1E1A17', fontSize: '14px' }}>{student.firstname}</TableCell>
+                            <TableCell style={{ fontFamily: 'monospace', fontSize: '13px', color: nisuOk ? '#1E1A17' : '#C43C3C' }}>
+                              {student.nisu || '—'}
+                            </TableCell>
+                            <TableCell>
+                              {nisuOk
+                                ? <Badge style={{ backgroundColor: '#E8F5EC', color: '#2D7D46', border: 'none' }}>Valide</Badge>
+                                : <Badge style={{ backgroundColor: '#FDE8E8', color: '#C43C3C', border: 'none' }}>Invalide</Badge>}
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                size="sm"
+                                disabled={isArchived || !nisuOk}
+                                onClick={() => handleGenerateBulletin(student)}
+                                style={{
+                                  backgroundColor: isArchived || !nisuOk ? '#E8E6E3' : '#2C4A6E',
+                                  color: isArchived || !nisuOk ? '#A8A5A2' : 'white',
+                                  fontSize: '12px', borderRadius: '6px',
+                                }}
+                              >
+                                <FileTextIcon className="mr-1 h-3 w-3" />
+                                Générer
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
                     </TableBody>
                   </Table>
                 </div>
@@ -450,7 +415,7 @@ export function CPMSLBulletinsSection({
         </div>
       </div>
 
-      {/* PDF Generator Modal */}
+      {/* PDF Generator Modal — individuel */}
       {pdfStudent && selectedStepObj && (
         <BulletinPDFGenerator
           open={pdfOpen}
@@ -465,6 +430,7 @@ export function CPMSLBulletinsSection({
           stepName={selectedStepObj.name}
           className={pdfStudent.className}
           enrollmentId={pdfStudent.enrollmentId}
+          yearId={academicYearId}
         />
       )}
     </div>

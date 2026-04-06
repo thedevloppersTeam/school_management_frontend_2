@@ -105,7 +105,9 @@ const TH = { fontSize: '12px', fontWeight: 700, textTransform: 'uppercase' as co
 export default function SchoolSettingsPage() {
   const { toast } = useToast()
 
-  const [schoolInfo, setSchoolInfo] = useState<SchoolInfo>(DEFAULT_SCHOOL_INFO)
+  const [schoolInfo,        setSchoolInfo]        = useState<SchoolInfo>(DEFAULT_SCHOOL_INFO)
+  const [loadingSchoolInfo, setLoadingSchoolInfo] = useState(false)
+  const [schoolInfoLoaded,  setSchoolInfoLoaded]  = useState(false)
   const [holidays, setHolidays]     = useState<Holiday[]>([])
   const [events, setEvents]         = useState<SchoolEvent[]>([])
 
@@ -224,11 +226,45 @@ export default function SchoolSettingsPage() {
         })
         .catch(err => console.error('[settings] current year error:', err))
     }
-  }, [activeTab, referentielLoaded, classesLoaded, attitudesLoaded, loadReferentiel, loadClasses, loadAttitudes])
+  }, [activeTab, referentielLoaded, classesLoaded, attitudesLoaded, schoolInfoLoaded, loadReferentiel, loadClasses, loadAttitudes])
+
+  // ── Chargement school info (onglet général) ───────────────────────────────
+  useEffect(() => {
+    if (activeTab !== 'general' || schoolInfoLoaded) return
+    setSchoolInfoLoaded(true)
+    setLoadingSchoolInfo(true)
+    fetch('/api/school-info', { credentials: 'include' }).then(r => r.json())
+      .then(data => {
+        if (data) setSchoolInfo({
+          name:        data.name        ?? DEFAULT_SCHOOL_INFO.name,
+          motto:       data.motto       ?? '',
+          foundedYear: data.foundedYear ?? undefined,
+          logo:        data.logo        ?? '',
+          address:     data.address     ?? '',
+          phone:       data.phone       ?? '',
+          email:       data.email       ?? '',
+        })
+      })
+      .catch(err => console.error('[settings] school-info load error:', err))
+      .finally(() => setLoadingSchoolInfo(false))
+  }, [activeTab, schoolInfoLoaded])
 
   // ── Handlers établissement ────────────────────────────────────────────────
 
-  const handleSaveSchoolInfo = (info: SchoolInfo) => { setSchoolInfo(info); toast({ title: "Paramètres enregistrés" }) }
+  const handleSaveSchoolInfo = async (info: SchoolInfo) => {
+    setSchoolInfo(info)
+    try {
+      await fetch('/api/school-info/update', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(info),
+      })
+      toast({ title: "Paramètres enregistrés" })
+    } catch {
+      toast({ title: "Erreur", description: "Impossible de sauvegarder les paramètres", variant: "destructive" })
+    }
+  }
   const handleAddHoliday    = (data: { name: string; date: string }) => setHolidays(prev => [...prev, { id: `h-${Date.now()}`, ...data }])
   const handleEditHoliday   = (id: string, data: { name: string; date: string }) => setHolidays(prev => prev.map(h => h.id === id ? { ...h, ...data } : h))
   const handleDeleteHoliday = (id: string) => setHolidays(prev => prev.filter(h => h.id !== id))
@@ -527,7 +563,7 @@ export default function SchoolSettingsPage() {
 
         {/* ── Général ── */}
         <TabsContent value="general" className="space-y-6 mt-6">
-          <CPMSLSchoolInfoForm schoolInfo={schoolInfo} onSave={handleSaveSchoolInfo} />
+          <CPMSLSchoolInfoForm schoolInfo={schoolInfo} onSave={handleSaveSchoolInfo} loading={loadingSchoolInfo} />
         </TabsContent>
 
         {/* ── Calendrier ── */}

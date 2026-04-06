@@ -151,8 +151,10 @@ export async function buildBulletinData(params: {
 
   // 6. Construction bloc comportement
   //
-  // Attitudes → ComportementItem[] répartis en 3 colonnes (col 1, 2, 3)
-  // Si aucune attitude configurée → fallback sur DEFAULT_COMPORTEMENT_ITEMS
+  // Si des attitudes sont configurées → on les utilise exclusivement.
+  // Si aucune attitude n'est configurée → section vide.
+  // On ne tombe jamais sur DEFAULT_COMPORTEMENT_ITEMS : ces items hardcodés
+  // s'affichaient même quand l'école avait ses propres attitudes configurées.
   let comportementItems: ComportementItem[]
 
   if (attitudes.length > 0) {
@@ -165,7 +167,8 @@ export async function buildBulletinData(params: {
       }
     })
   } else {
-    comportementItems = DEFAULT_COMPORTEMENT_ITEMS
+    // Aucune attitude configurée dans Settings → section vide sur le bulletin
+    comportementItems = []
   }
 
   const comportement = {
