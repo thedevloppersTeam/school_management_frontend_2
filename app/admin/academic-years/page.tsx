@@ -35,9 +35,25 @@ interface YearCard {
 
 function deriveStatus(year: AcademicYear): 'active' | 'preparation' | 'archived' {
   if (year.isCurrent) return 'active'
-  // Archivée = explicitement marquée via un champ backend
-  // Pas de déduction automatique par la date — trop fragile
   return 'preparation'
+}
+
+// ── Calcul des dates des étapes ───────────────────────────────────────────────
+// Divise l'année en N tranches égales
+
+function computeStepDates(
+  yearStart: string,
+  yearEnd: string,
+  count: number
+): Array<{ startDate: string; endDate: string }> {
+  const start = new Date(yearStart).getTime()
+  const end   = new Date(yearEnd).getTime()
+  const slice = (end - start) / count
+
+  return Array.from({ length: count }, (_, i) => ({
+    startDate: new Date(start + i * slice).toISOString(),
+    endDate:   new Date(start + (i + 1) * slice).toISOString(),
+  }))
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -46,10 +62,10 @@ export default function AcademicYearsPage() {
   const router = useRouter()
   const { toast } = useToast()
 
-  const [years, setYears]           = useState<AcademicYear[]>([])
-  const [yearCards, setYearCards]   = useState<YearCard[]>([])
-  const [loading, setLoading]       = useState(true)
-  const [creating, setCreating]     = useState(false)
+  const [years, setYears]               = useState<AcademicYear[]>([])
+  const [yearCards, setYearCards]       = useState<YearCard[]>([])
+  const [loading, setLoading]           = useState(true)
+  const [creating, setCreating]         = useState(false)
   const [activatingId, setActivatingId] = useState<string | null>(null)
 
   // ── Chargement ────────────────────────────────────────────────────────────
@@ -65,9 +81,7 @@ export default function AcademicYearsPage() {
           const status = deriveStatus(year)
 
           if (status === 'archived') {
-            return {
-              year: { id: year.id, name: year.name, status, endDate: year.endDate }
-            }
+            return { year: { id: year.id, name: year.name, status, endDate: year.endDate } }
           }
 
           try {
@@ -99,9 +113,7 @@ export default function AcademicYearsPage() {
 
   useEffect(() => { loadYears() }, [loadYears])
 
-  // ── Activation d'une année ─────────────────────────────────────────────────
-  // Endpoint : POST /api/academic-years/set-current/:id
-  // Effet backend : isCurrent=true sur cet id, isCurrent=false sur toutes les autres
+  // ── Activation d'une année ────────────────────────────────────────────────
 
   const handleActivateYear = async (yearId: string) => {
     const target = years.find(y => y.id === yearId)
@@ -123,21 +135,15 @@ export default function AcademicYearsPage() {
         title: "Année activée",
         description: `${target.name} est maintenant l'année scolaire active.`
       })
-
-      // Recharger — l'ancienne année active devient automatiquement "preparation" ou "archived"
       await loadYears()
     } catch (e: any) {
-      toast({
-        title: "Erreur d'activation",
-        description: e.message,
-        variant: "destructive"
-      })
+      toast({ title: "Erreur d'activation", description: e.message, variant: "destructive" })
     } finally {
       setActivatingId(null)
     }
   }
 
-  // ── Création d'une année ───────────────────────────────────────────────────
+  // ── Création d'une année ──────────────────────────────────────────────────
 
   const handleCreateYear = async (data: {
     name: string
@@ -148,6 +154,11 @@ export default function AcademicYearsPage() {
   }) => {
     setCreating(true)
     try {
+      // Dates réelles de l'année
+      const yearStart = data.startDate || new Date(new Date().getFullYear(), 8, 1).toISOString()
+      const yearEnd   = data.endDate   || new Date(new Date().getFullYear() + 1, 5, 30).toISOString()
+
+      // ── Étape 1 : Créer l'année ──────────────────────────────────────────
       const res = await fetch('/api/academic-years/create', {
         method: 'POST',
         credentials: 'include',
@@ -155,18 +166,21 @@ export default function AcademicYearsPage() {
         body: JSON.stringify({
           name:       data.name,
           yearString: data.name,
-          startDate:  data.startDate || new Date().toISOString(),
-          endDate:    data.endDate   || new Date(new Date().getFullYear() + 1, 5, 30).toISOString(),
+          startDate:  yearStart,
+          endDate:    yearEnd,
         })
       })
 
-      if (!res.ok) throw new Error('Erreur création')
+      if (!res.ok) throw new Error('Erreur création année')
       const { year } = await res.json()
       const newYearId = year.id
 
-      // Créer les étapes automatiquement
-      const stepNames = ['1ère Étape', '2ème Étape', '3ème Étape', '4ème Étape']
-      if (data.numberOfPeriods === 5) stepNames.push('5ème Étape')
+      // ── Étape 2 : Créer les étapes avec dates réparties ──────────────────
+      const stepCount = data.numberOfPeriods || 4
+      const stepNames = ['1ère Étape', '2ème Étape', '3ème Étape', '4ème Étape', '5ème Étape']
+        .slice(0, stepCount)
+
+      const stepDates = computeStepDates(yearStart, yearEnd, stepCount)
 
       await Promise.all(
         stepNames.map((name, index) =>
@@ -177,14 +191,36 @@ export default function AcademicYearsPage() {
             body: JSON.stringify({
               name,
               stepNumber: index + 1,
-              startDate: data.startDate || new Date().toISOString(),
-              endDate:   data.endDate   || new Date(new Date().getFullYear() + 1, 5, 30).toISOString(),
+              startDate:  stepDates[index].startDate,
+              endDate:    stepDates[index].endDate,
             })
           })
         )
       )
 
-      // Copie de structure si demandé
+      // ── Étape 3 : Créer les sessions pour toutes les classes existantes ──
+      const classesRes = await fetch('/api/classes/', { credentials: 'include' })
+      if (classesRes.ok) {
+        const classes: Array<{ id: string }> = await classesRes.json()
+
+        if (classes.length > 0) {
+          await Promise.all(
+            classes.map(cls =>
+              fetch('/api/class-sessions/create', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  classId:        cls.id,
+                  academicYearId: newYearId,
+                })
+              })
+            )
+          )
+        }
+      }
+
+      // ── Étape 4 (optionnelle) : Copie de structure ───────────────────────
       if (data.copyFromYearId && newYearId) {
         const sessionsRes = await fetch(
           `/api/class-sessions?academicYearId=${data.copyFromYearId}`,
@@ -194,18 +230,6 @@ export default function AcademicYearsPage() {
           sessionsRes.ok ? await sessionsRes.json() : []
 
         await Promise.all(sourceSessions.map(async (sourceSession) => {
-          const newSessionRes = await fetch('/api/class-sessions/create', {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ classId: sourceSession.classId, academicYearId: newYearId })
-          })
-          if (!newSessionRes.ok) return
-
-          const newSessionData = await newSessionRes.json()
-          const newSessionId = newSessionData.classSession?.id || newSessionData.id
-          if (!newSessionId) return
-
           const subjectsRes = await fetch(
             `/api/class-subjects?classSessionId=${sourceSession.id}`,
             { credentials: 'include' }
@@ -214,14 +238,23 @@ export default function AcademicYearsPage() {
           const sourceSubjects: Array<{ subjectId: string; coefficientOverride: number | null }> =
             await subjectsRes.json()
 
+          // Trouver la session déjà créée pour cette classe
+          const existingSessionRes = await fetch(
+            `/api/class-sessions?academicYearId=${newYearId}&classId=${sourceSession.classId}`,
+            { credentials: 'include' }
+          )
+          const existingSessions = existingSessionRes.ok ? await existingSessionRes.json() : []
+          const targetSessionId = existingSessions[0]?.id
+          if (!targetSessionId) return
+
           await Promise.all(sourceSubjects.map(cs =>
             fetch('/api/class-subjects/create', {
               method: 'POST',
               credentials: 'include',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                classSessionId:     newSessionId,
-                subjectId:          cs.subjectId,
+                classSessionId:      targetSessionId,
+                subjectId:           cs.subjectId,
                 coefficientOverride: cs.coefficientOverride ?? null,
               })
             })
@@ -230,18 +263,20 @@ export default function AcademicYearsPage() {
 
         toast({
           title: "Année créée avec copie",
-          description: `${data.name} créée — ${sourceSessions.length} classe(s) copiée(s).`
+          description: `${data.name} créée — structure copiée.`
         })
       } else {
         toast({
           title: "Année créée",
-          description: `${data.name} créée. Activez-la quand vous êtes prêt.`
+          description: `${data.name} créée avec ${stepCount} étapes et ${
+            classesRes.ok ? (await classesRes.json().catch(() => [])).length : 0
+          } classes.`
         })
       }
 
       await loadYears()
-    } catch {
-      toast({ title: "Erreur", description: "Impossible de créer l'année scolaire", variant: "destructive" })
+    } catch (e: any) {
+      toast({ title: "Erreur", description: e.message || "Impossible de créer l'année scolaire", variant: "destructive" })
     } finally {
       setCreating(false)
     }

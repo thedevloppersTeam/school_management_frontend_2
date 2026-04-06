@@ -650,19 +650,6 @@ export function CPMSLYearConfigTabs({
                   className="focus:border-[#5A7085] focus:ring-[#5A7085]"
                 />
               </div>
-              {!isArchived && (
-                <Button
-                  onClick={() => setCreateLevelModalOpen(true)}
-                  style={{
-                    backgroundColor: '#5A7085',
-                    color: '#FFFFFF',
-                    borderRadius: '8px'
-                  }}
-                >
-                  <PlusIcon className="mr-2 h-4 w-4" />
-                  Nouvelle classe
-                </Button>
-              )}
             </div>
           </div>
 

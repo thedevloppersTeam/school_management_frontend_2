@@ -24,6 +24,7 @@ export interface AcademicYearStep {
   startDate: string
   endDate: string
   academicYearId: string
+  isCurrent: boolean  // ← source de vérité pour le statut ouvert/clôturé
 }
 
 export interface ClassSession {
@@ -97,17 +98,11 @@ export function getClassSessionName(session: ClassSession): string {
   return `${classType.name} ${letter}${trackCode}`
 }
 
-/** Détermine l'étape en cours selon la date du jour */
+/**
+ * Retourne l'étape en cours.
+ * Source de vérité : isCurrent du backend (enable/disable endpoints).
+ * Fallback : première étape de la liste.
+ */
 export function getCurrentStep(steps: AcademicYearStep[]): AcademicYearStep | null {
-  const today = new Date()
-  const active = steps.find(s => {
-    const start = new Date(s.startDate)
-    const end = new Date(s.endDate)
-    return today >= start && today <= end
-  })
-  if (active) return active
-  const past = steps
-    .filter(s => new Date(s.endDate) < today)
-    .sort((a, b) => b.stepNumber - a.stepNumber)
-  return past[0] ?? steps[0] ?? null
+  return steps.find(s => s.isCurrent) ?? steps[0] ?? null
 }

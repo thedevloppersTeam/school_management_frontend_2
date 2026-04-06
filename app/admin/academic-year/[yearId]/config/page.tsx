@@ -58,12 +58,12 @@ interface SubjectChild {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** Dérive le statut d'une étape depuis ses dates */
+/**
+ * Dérive le statut d'une étape depuis isCurrent.
+ * Source de vérité : backend via enable/disable endpoints.
+ */
 function deriveStepStatus(step: AcademicYearStep): 'open' | 'closed' {
-  const today = new Date()
-  const start = new Date(step.startDate)
-  const end   = new Date(step.endDate)
-  return today >= start && today <= end ? 'open' : 'closed'
+  return step.isCurrent ? 'open' : 'closed'
 }
 
 /** Dérive le statut d'une année depuis isCurrent + dates */
@@ -80,7 +80,7 @@ export default function AcademicYearConfigPage() {
   const yearId  = params.yearId as string
   const { toast } = useToast()
 
-  // ── État ────────────────────────────────────────────────────────────────────
+  // ── État ───────────────────────────────────────────────────────────────────
   const [year,            setYear]            = useState<AcademicYear | null>(null)
   const [periods,         setPeriods]         = useState<Period[]>([])
   const [levels,          setLevels]          = useState<Level[]>([])
@@ -91,7 +91,8 @@ export default function AcademicYearConfigPage() {
   const [loading,         setLoading]         = useState(true)
   const [notFound,        setNotFound]        = useState(false)
 
-  // ── Chargement des données ──────────────────────────────────────────────────
+  // ── Chargement des données ─────────────────────────────────────────────────
+
   const loadData = useCallback(async () => {
     setLoading(true)
     try {
@@ -101,7 +102,7 @@ export default function AcademicYearConfigPage() {
       const yearData: AcademicYear = await yearRes.json()
       setYear(yearData)
 
-      // 2. Étapes → periods
+      // 2. Étapes → periods (statut depuis isCurrent)
       const stepsData = await fetchSteps(yearId)
       setPeriods(stepsData.map(s => ({
         id:     s.id,
@@ -171,7 +172,7 @@ export default function AcademicYearConfigPage() {
           code:        s.code,
           name:        s.name,
           rubrique:    s.rubricId ? (rubricMap[s.rubricId] || 'R1') : 'R1',
-          coefficient: Number(s.coefficient) || 0   // fix Decimal Prisma
+          coefficient: Number(s.coefficient) || 0
         }))
         setSubjectParents(parents)
 
@@ -198,7 +199,7 @@ export default function AcademicYearConfigPage() {
                       parentId:    s.id,
                       name:        sec.name,
                       type:        'N',
-                      coefficient: Number(sec.coefficient) || 1  // fix Decimal Prisma
+                      coefficient: Number(sec.coefficient) || 1
                     })
                   })
                 }
@@ -218,7 +219,8 @@ export default function AcademicYearConfigPage() {
 
   useEffect(() => { loadData() }, [loadData])
 
-  // ── Handlers — Étapes ───────────────────────────────────────────────────────
+  // ── Handlers — Étapes ──────────────────────────────────────────────────────
+
   const handleAddPeriod = async (data: {
     name: string; type: string
     startDate: string; endDate: string; description?: string
@@ -245,7 +247,10 @@ export default function AcademicYearConfigPage() {
 
   const handleClosePeriod = async (periodId: string) => {
     try {
-      await fetch(`/api/academic-years/steps/disable/${periodId}`, { credentials: 'include' })
+      const res = await fetch(`/api/academic-years/steps/disable/${periodId}`, {
+        credentials: 'include'
+      })
+      if (!res.ok) throw new Error()
       toast({ title: "Étape clôturée" })
       loadData()
     } catch {
@@ -255,7 +260,10 @@ export default function AcademicYearConfigPage() {
 
   const handleReopenPeriod = async (periodId: string) => {
     try {
-      await fetch(`/api/academic-years/steps/enable/${periodId}`, { credentials: 'include' })
+      const res = await fetch(`/api/academic-years/steps/enable/${periodId}`, {
+        credentials: 'include'
+      })
+      if (!res.ok) throw new Error()
       toast({ title: "Étape réouverte" })
       loadData()
     } catch {
@@ -263,7 +271,8 @@ export default function AcademicYearConfigPage() {
     }
   }
 
-  // ── Handlers — Matières ─────────────────────────────────────────────────────
+  // ── Handlers — Matières ────────────────────────────────────────────────────
+
   const handleAddSubjectParent = async (data: {
     name: string; code: string
     rubrique: 'R1' | 'R2' | 'R3'; coefficient: number
@@ -278,12 +287,12 @@ export default function AcademicYearConfigPage() {
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name:         data.name,
-          code:         data.code,
-          coefficient:  data.coefficient,
-          maxScore:     100,
-          hasSections:  false,
-          rubricId:     rubric?.id || null,
+          name:        data.name,
+          code:        data.code,
+          coefficient: data.coefficient,
+          maxScore:    100,
+          hasSections: false,
+          rubricId:    rubric?.id || null,
         })
       })
       if (!res.ok) throw new Error()
@@ -361,27 +370,27 @@ export default function AcademicYearConfigPage() {
     }
   }
 
-  const handleDeleteSubjectParent = async (parentId: string) => {
+  const handleDeleteSubjectParent = async (_parentId: string) => {
     toast({ title: "Suppression non disponible", description: "Cette action sera disponible prochainement.", variant: "destructive" })
   }
 
-  const handleDeleteSubjectChild = async (childId: string) => {
+  const handleDeleteSubjectChild = async (_childId: string) => {
     toast({ title: "Suppression non disponible", description: "Cette action sera disponible prochainement.", variant: "destructive" })
   }
 
-  // ── Handlers — Classes ──────────────────────────────────────────────────────
+  // ── Handlers — Classes (salles) ────────────────────────────────────────────
+
   const handleAddClassroom = async (levelId: string, data: { letter?: string; trackId?: string }) => {
     try {
       const level = levels.find(l => l.id === levelId)
       if (!level) throw new Error('Niveau introuvable')
 
-      // 1. Créer la classe
+      // 1. Créer la classe (nouvelle salle)
       const classBody: Record<string, unknown> = {
         classTypeId: levelId,
+        letter:      data.letter || 'B',
         maxStudents: 30,
-        description: `${level.name}${data.letter ? ` ${data.letter}` : ''}${data.trackId ? ` — ${tracks.find(t => t.id === data.trackId)?.code || ''}` : ''}`,
       }
-      if (data.letter)  classBody.letter  = data.letter
       if (data.trackId) classBody.trackId = data.trackId
 
       const classRes = await fetch('/api/classes/create', {
@@ -398,7 +407,7 @@ export default function AcademicYearConfigPage() {
       const classId = classData.class?.id || classData.id
       if (!classId) throw new Error('ID classe manquant')
 
-      // 2. Créer la session pour l'année active
+      // 2. Créer la session pour cette année
       const sessionRes = await fetch('/api/class-sessions/create', {
         method: 'POST',
         credentials: 'include',
@@ -407,39 +416,42 @@ export default function AcademicYearConfigPage() {
       })
       if (!sessionRes.ok) throw new Error('Erreur création session')
 
-      toast({ title: "Classe créée", description: classBody.description as string })
+      toast({
+        title: "Salle créée",
+        description: `${level.name} — Salle ${data.letter || 'B'} ajoutée pour cette année.`
+      })
       loadData()
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Impossible de créer la classe'
+      const message = err instanceof Error ? err.message : 'Impossible de créer la salle'
       toast({ title: "Erreur", description: message, variant: "destructive" })
-      throw err // remonte l'erreur pour désactiver le spinner du modal
+      throw err
     }
   }
 
-  const handleEditClassroom = async (classroomId: string) => {
+  const handleEditClassroom = async (_classroomId: string) => {
     toast({ title: "Modification en cours..." })
   }
 
-  const handleDeleteClassroom = async (classroomId: string) => {
+  const handleDeleteClassroom = async (_classroomId: string) => {
     toast({ title: "Suppression non disponible", description: "Cette action sera disponible prochainement.", variant: "destructive" })
   }
 
-  // ── Handlers — Niveaux ──────────────────────────────────────────────────────
-  const handleAddLevel = async (data: {
-    niveau: string; name: string; filieres?: string[]
-  }) => {
-    toast({ title: "Ajout de niveau", description: "Les niveaux sont préconfigurés pour CPMSL." })
+  // ── Handlers — Niveaux ─────────────────────────────────────────────────────
+
+  const handleAddLevel = async (_data: { niveau: string; name: string; filieres?: string[] }) => {
+    toast({ title: "Niveaux préconfigurés", description: "Les niveaux MENFP sont fixes pour CPMSL." })
   }
 
-  const handleEditLevel = async (levelId: string, data: { description?: string }) => {
+  const handleEditLevel = async (_levelId: string, _data: { description?: string }) => {
     toast({ title: "Niveau modifié" })
   }
 
-  const handleDeleteLevel = async (levelId: string) => {
+  const handleDeleteLevel = async (_levelId: string) => {
     toast({ title: "Suppression non disponible", variant: "destructive" })
   }
 
-  // ── Rendu ───────────────────────────────────────────────────────────────────
+  // ── Rendu ──────────────────────────────────────────────────────────────────
+
   if (loading) {
     return (
       <div className="space-y-4 p-4 sm:p-6">
