@@ -33,17 +33,17 @@ interface StudentEnrollFormProps {
 }
 
 interface FormState {
-  nisu:          string
-  firstName:     string
-  lastName:      string
-  birthDate:     string
+  nisu:           string
+  firstName:      string
+  lastName:       string
+  birthDate:      string
   classSessionId: string
-  address:       string
-  fatherName:    string
-  motherName:    string
-  phone1:        string
-  phone2:        string
-  parentsEmail:  string
+  address:        string
+  fatherName:     string
+  motherName:     string
+  phone1:         string
+  phone2:         string
+  parentsEmail:   string
 }
 
 const EMPTY_FORM: FormState = {
@@ -84,9 +84,9 @@ export function StudentEnrollForm({
   onSuccess,
   trigger,
 }: StudentEnrollFormProps) {
-  const [form, setForm]           = useState<FormState>(EMPTY_FORM)
+  const [form, setForm]             = useState<FormState>(EMPTY_FORM)
   const [submitting, setSubmitting] = useState(false)
-  const [apiError, setApiError]   = useState<string | null>(null)
+  const [apiError, setApiError]     = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
   const [classSessions, setClassSessions] = useState<ClassSessionOption[]>([])
   const [loadingClasses, setLoadingClasses] = useState(false)
@@ -116,12 +116,16 @@ export function StudentEnrollForm({
 
   const nisuValid = /^[A-Z0-9]{14}$/i.test(form.nisu)
 
+  // fatherName, motherName, phone1 sont obligatoires (champs requis en DB)
   const canSubmit =
     nisuValid &&
     form.firstName.trim() !== "" &&
     form.lastName.trim() !== "" &&
     form.birthDate !== "" &&
-    form.classSessionId !== ""
+    form.classSessionId !== "" &&
+    form.fatherName.trim() !== "" &&
+    form.motherName.trim() !== "" &&
+    form.phone1.trim() !== ""
 
   // ── Submit ──────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
@@ -130,8 +134,8 @@ export function StudentEnrollForm({
     setApiError(null)
     setSuccessMsg(null)
 
+    // Username généré côté client, envoyé au backend — pas affiché à l'écran
     const username = generateUsername(form.firstName, form.lastName)
-    // Mot de passe par défaut = NISU (l'admin peut le changer ultérieurement)
     const defaultPassword = form.nisu.toUpperCase()
 
     try {
@@ -150,18 +154,19 @@ export function StudentEnrollForm({
       })
 
       // 2. Créer le profil student
+      // fatherName, motherName, phone1 sont obligatoires en DB (String, pas String?)
       const studentRes = await apiFetch<{ student: { id: string } }>("/api/students/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId:     userRes.user.id,
           nisu:       form.nisu.toUpperCase(),
-          address:    form.address.trim() || undefined,
-          ...(form.fatherName   && { fatherName:   form.fatherName.trim() }),
-          ...(form.motherName   && { motherName:   form.motherName.trim() }),
-          ...(form.phone1       && { phone1:       form.phone1.trim() }),
-          ...(form.phone2       && { phone2:       form.phone2.trim() }),
-          ...(form.parentsEmail && { parentsEmail: form.parentsEmail.trim() }),
+          fatherName: form.fatherName.trim(),
+          motherName: form.motherName.trim(),
+          phone1:     form.phone1.trim(),
+          ...(form.address.trim()      && { address:      form.address.trim() }),
+          ...(form.phone2.trim()       && { phone2:       form.phone2.trim() }),
+          ...(form.parentsEmail.trim() && { parentsEmail: form.parentsEmail.trim() }),
         }),
       })
 
@@ -181,7 +186,6 @@ export function StudentEnrollForm({
       onSuccess()
 
     } catch (err: unknown) {
-      console.error("ERREUR INSCRIPTION:", err)
       setApiError(err instanceof Error ? err.message : "Une erreur est survenue.")
     } finally {
       setSubmitting(false)
@@ -291,16 +295,6 @@ export function StudentEnrollForm({
                 <Input type="date" value={form.birthDate} onChange={set("birthDate")} className="h-9" />
               </div>
 
-              {/* Username preview */}
-              {form.firstName.trim() && form.lastName.trim() && (
-                <div className="font-sans rounded-lg px-3 py-2"
-                  style={{ backgroundColor: "#F0F4F7", fontSize: "12px", color: "#78756F" }}>
-                  Username généré :&nbsp;
-                  <span style={{ fontWeight: 600, color: "#3A4A57" }}>
-                    {generateUsername(form.firstName, form.lastName)}
-                  </span>
-                </div>
-              )}
             </div>
           </div>
 
@@ -332,42 +326,56 @@ export function StudentEnrollForm({
             <h3 className="font-serif"
               style={{ fontSize: "15px", fontWeight: 600, color: "#2C4A6E", borderLeft: "3px solid #2C4A6E", paddingLeft: "8px" }}>
               Contact
-              <span className="font-sans ml-2" style={{ fontSize: "11px", fontWeight: 400, color: "#A8A5A2" }}>
-                optionnel
-              </span>
             </h3>
             <div className="space-y-3">
+
               <div className="space-y-1.5">
-                <Label className="font-sans" style={{ fontSize: "13px", fontWeight: 500 }}>Adresse</Label>
+                <Label className="font-sans" style={{ fontSize: "13px", fontWeight: 500 }}>
+                  Adresse
+                  <span className="font-sans ml-2" style={{ fontSize: "11px", color: "#78756F", fontWeight: 400 }}>optionnel</span>
+                </Label>
                 <Input type="text" placeholder="123 Rue Principale, Port-au-Prince" value={form.address} onChange={set("address")} className="h-9" />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label className="font-sans" style={{ fontSize: "13px", fontWeight: 500 }}>Nom du père</Label>
+                  <Label className="font-sans" style={{ fontSize: "13px", fontWeight: 500 }}>
+                    Nom du père <span className="text-destructive">*</span>
+                  </Label>
                   <Input type="text" placeholder="Paul Pierre" value={form.fatherName} onChange={set("fatherName")} className="h-9" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="font-sans" style={{ fontSize: "13px", fontWeight: 500 }}>Nom de la mère</Label>
+                  <Label className="font-sans" style={{ fontSize: "13px", fontWeight: 500 }}>
+                    Nom de la mère <span className="text-destructive">*</span>
+                  </Label>
                   <Input type="text" placeholder="Marie Pierre" value={form.motherName} onChange={set("motherName")} className="h-9" />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label className="font-sans" style={{ fontSize: "13px", fontWeight: 500 }}>Téléphone 1</Label>
+                  <Label className="font-sans" style={{ fontSize: "13px", fontWeight: 500 }}>
+                    Téléphone 1 <span className="text-destructive">*</span>
+                  </Label>
                   <Input type="text" placeholder="+509 XX XX XXXX" value={form.phone1} onChange={set("phone1")} className="h-9" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="font-sans" style={{ fontSize: "13px", fontWeight: 500 }}>Téléphone 2</Label>
+                  <Label className="font-sans" style={{ fontSize: "13px", fontWeight: 500 }}>
+                    Téléphone 2
+                    <span className="font-sans ml-2" style={{ fontSize: "11px", color: "#78756F", fontWeight: 400 }}>optionnel</span>
+                  </Label>
                   <Input type="text" placeholder="+509 XX XX XXXX" value={form.phone2} onChange={set("phone2")} className="h-9" />
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <Label className="font-sans" style={{ fontSize: "13px", fontWeight: 500 }}>Email des parents</Label>
+                <Label className="font-sans" style={{ fontSize: "13px", fontWeight: 500 }}>
+                  Email des parents
+                  <span className="font-sans ml-2" style={{ fontSize: "11px", color: "#78756F", fontWeight: 400 }}>optionnel</span>
+                </Label>
                 <Input type="email" placeholder="parents@example.com" value={form.parentsEmail} onChange={set("parentsEmail")} className="h-9" />
               </div>
+
             </div>
           </div>
 
