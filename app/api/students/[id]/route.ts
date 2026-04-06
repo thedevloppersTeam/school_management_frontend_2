@@ -3,7 +3,8 @@ import { backendFetch } from '@/lib/backend'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  return backendFetch(request, `/api/students/${params.id}`, 'GET')
+  const { id } = await params
+  return backendFetch(request, `/api/students/${id}`, 'GET')
 }
