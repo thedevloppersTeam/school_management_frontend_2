@@ -39,6 +39,16 @@ async function apiFetch<T>(url: string): Promise<T> {
   return res.json()
 }
 
+async function safeFetch<T>(url: string, fallback: T): Promise<T> {
+  try {
+    const res = await fetch(url, { credentials: 'include' })
+    if (!res.ok) return fallback
+    return res.json()
+  } catch {
+    return fallback
+  }
+}
+
 const DEFAULT_COMPORTEMENT_ITEMS: ComportementItem[] = [
   { label: "Manque d'attention",   oui: null, col: 1 },
   { label: "Manque de respect",    oui: null, col: 1 },
@@ -60,17 +70,26 @@ export async function buildBulletinData(params: {
   stepId:         string
   stepName:       string
   className:      string
+  yearId:         string   // ← nécessaire pour charger les attitudes
 }): Promise<BulletinData> {
-  const { enrollmentId, studentId, classSessionId, stepId, stepName, className } = params
+  const { enrollmentId, studentId, classSessionId, stepId, stepName, className, yearId } = params
 
-  // 1. Données en parallèle — class-subjects contient déjà rubric + sections
-  const [student, classSubjects, allGrades] = await Promise.all([
+  // 1. Données en parallèle
+  const [student, classSubjects, allGrades, behaviorRaw, attitudesRaw] = await Promise.all([
     apiFetch<any>(`/api/students/${studentId}`),
     fetchClassSubjects(classSessionId),
     apiFetch<any[]>(`/api/grades/enrollment/${enrollmentId}?stepId=${stepId}`),
+    // Behavior de l'élève pour cette étape — peut être null ou tableau vide
+    safeFetch<any>(`/api/behaviors?enrollmentId=${enrollmentId}&stepId=${stepId}`, null),
+    // Attitudes configurées pour l'année
+    safeFetch<any[]>(`/api/attitudes?academicYearId=${yearId}`, []),
   ])
 
-  // 2. Index notes : classSubjectId → { direct[], sections: Map<sectionId, score[]> }
+  // 2. Extraire le behavior (l'API retourne un objet ou un tableau d'un élément)
+  const behavior = Array.isArray(behaviorRaw) ? behaviorRaw[0] ?? null : behaviorRaw
+  const attitudes: any[] = Array.isArray(attitudesRaw) ? attitudesRaw : []
+
+  // 3. Index notes
   const gradeIndex = new Map<string, { direct: number[]; sections: Map<string, number[]> }>()
   for (const grade of allGrades) {
     const score = parseDecimal(grade.studentScore)
@@ -86,29 +105,25 @@ export async function buildBulletinData(params: {
     }
   }
 
-  // 3. Construction rubriques — tout vient de classSubjects
+  // 4. Construction rubriques
   const r1: RubriqueEntry[] = []
   const r2: RubriqueEntry[] = []
   const r3: RubriqueEntry[] = []
-
-  // Noms des rubriques (extraits du premier sujet trouvé par rubrique)
   let r1Name = 'Rubrique 1', r2Name = 'Rubrique 2', r3Name = 'Rubrique 3'
 
   for (const cs of classSubjects) {
-    const subject     = cs.subject
-    const rubricCode  = subject.rubric?.code ?? ''
-    const rubricName  = subject.rubric?.name ?? ''
-    const coeff       = cs.coefficientOverride !== null ? cs.coefficientOverride : subject.coefficient
-    const bucket      = gradeIndex.get(cs.id)
+    const subject    = cs.subject
+    const rubricCode = subject.rubric?.code ?? ''
+    const rubricName = subject.rubric?.name ?? ''
+    const coeff      = cs.coefficientOverride !== null ? cs.coefficientOverride : subject.coefficient
+    const bucket     = gradeIndex.get(cs.id)
     const entries: RubriqueEntry[] = []
 
-    // Capturer le nom de la rubrique
     if (rubricCode === 'R1' && rubricName) r1Name = rubricName
     if (rubricCode === 'R2' && rubricName) r2Name = rubricName
     if (rubricCode === 'R3' && rubricName) r3Name = rubricName
 
     if (subject.hasSections && subject.sections.length > 0) {
-      // Section MENFP : en-tête sans note
       entries.push({ name: subject.name, isParent: true })
       for (const sec of subject.sections) {
         const scores = bucket?.sections.get(sec.id) ?? []
@@ -120,13 +135,7 @@ export async function buildBulletinData(params: {
         })
       }
     } else {
-      // Matière directe
-      entries.push({
-        name:     subject.name,
-        note:     avg(bucket?.direct ?? []),
-        coeff,
-        isParent: false,
-      })
+      entries.push({ name: subject.name, note: avg(bucket?.direct ?? []), coeff, isParent: false })
     }
 
     if (rubricCode === 'R1') r1.push(...entries)
@@ -134,11 +143,41 @@ export async function buildBulletinData(params: {
     else if (rubricCode === 'R3') r3.push(...entries)
   }
 
-  // 4. Moyennes BR-001
+  // 5. Moyennes BR-001
   const moyR1    = rubriqueAvg(r1)
   const moyR2    = rubriqueAvg(r2)
   const moyR3    = rubriqueAvg(r3)
   const finalAvg = ((moyR1 ?? 0) * 0.70) + ((moyR2 ?? 0) * 0.25) + ((moyR3 ?? 0) * 0.05)
+
+  // 6. Construction bloc comportement
+  //
+  // Attitudes → ComportementItem[] répartis en 3 colonnes (col 1, 2, 3)
+  // Si aucune attitude configurée → fallback sur DEFAULT_COMPORTEMENT_ITEMS
+  let comportementItems: ComportementItem[]
+
+  if (attitudes.length > 0) {
+    comportementItems = attitudes.map((att: any, i: number) => {
+      const response = behavior?.attitudeResponses?.find((r: any) => r.attitudeId === att.id)
+      return {
+        label: att.label,
+        oui:   response != null ? response.value : null,
+        col:   ((i % 3) + 1) as 1 | 2 | 3,
+      }
+    })
+  } else {
+    comportementItems = DEFAULT_COMPORTEMENT_ITEMS
+  }
+
+  const comportement = {
+    absences:        behavior?.absences        != null ? String(behavior.absences)        : '—',
+    retards:         behavior?.retards          != null ? String(behavior.retards)          : '—',
+    devoirsNonRemis: behavior?.devoirsManques   != null ? String(behavior.devoirsManques)   : '—',
+    leconsNonSues:   '—',   // non exposé par l'API actuelle
+    items:           comportementItems,
+    pointsForts:     behavior?.pointsForts  ?? '',
+    defis:           behavior?.defis         ?? '',
+    remarque:        behavior?.remarque      ?? '',
+  }
 
   return {
     prenoms:       student?.user?.firstname ?? '',
@@ -172,11 +211,7 @@ export async function buildBulletinData(params: {
     appreciation:  getAppreciation(finalAvg),
     moyenneClasse: '—',
 
-    comportement: {
-      absences: '—', retards: '—', devoirsNonRemis: '—', leconsNonSues: '—',
-      items: DEFAULT_COMPORTEMENT_ITEMS,
-      pointsForts: '', defis: '', remarque: '',
-    },
+    comportement,
 
     etablissement: {
       nomLigne1: 'Cours Privé Mixte',

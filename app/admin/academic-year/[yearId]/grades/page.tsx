@@ -215,18 +215,12 @@ export default function GradesPage() {
             />
           </TabsContent>
 
-          {/* Comportement */}
+          {/* Comportement — W6 */}
           <TabsContent value="comportement">
             <CPMSLBehaviorGrid
-              levels={[]}
-              classrooms={[]}
-              periods={[]}
-              students={[]}
-              attitudes={[]}
-              behaviors={[]}
-              isArchived={false}
-              onSaveBehaviors={() => toast({ title: "Comportements enregistrés" })}
-              onAddAttitude={(label: string, academicYearId: string) => ({ id: `att-${Date.now()}`, label, academicYearId })}
+              yearId={yearId}
+              sessions={apiSessions}
+              steps={steps}
             />
           </TabsContent>
         </Tabs>

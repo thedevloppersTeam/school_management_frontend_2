@@ -1,415 +1,317 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { useToast } from "@/components/ui/use-toast"
+import {
+  SaveIcon, LockIcon, UsersIcon, FileTextIcon,
+  AlertTriangleIcon, CheckCircle2Icon
+} from "lucide-react"
+import type { ApiClassSession } from "@/lib/api/students"
+import type { AcademicYearStep } from "@/lib/api/dashboard"
+import type { ApiEnrollment } from "@/lib/api/grades"
+import { fetchEnrollments } from "@/lib/api/grades"
 
-import { SaveIcon, LockIcon, UsersIcon, FileTextIcon, AlertTriangleIcon, CheckCircle2Icon, XIcon, PlusIcon } from "lucide-react"
-import type { Level, Period, Student, Classroom, Attitude, StudentBehavior, AttitudeResponse } from "@/lib/data/school-data"
+// ── Types API ─────────────────────────────────────────────────────────────────
 
-interface CPMSLBehaviorGridProps {
-  levels: Level[]
-  classrooms: Classroom[]
-  periods: Period[]
-  students: Student[]
-  attitudes: Attitude[]
-  behaviors: StudentBehavior[]
-  isArchived?: boolean
-  onSaveBehaviors: (behaviors: StudentBehavior[]) => void
-  onAddAttitude: (label: string, academicYearId: string) => Attitude
+interface ApiAttitude {
+  id: string
+  label: string
+  academicYearId: string
 }
 
+interface ApiAttitudeResponse {
+  attitudeId: string
+  value: boolean
+}
+
+interface ApiBehavior {
+  id: string
+  enrollmentId: string
+  stepId: string
+  absences: number | null
+  retards: number | null
+  devoirsManques: number | null
+  pointsForts: string | null
+  defis: string | null
+  remarque: string | null
+  attitudeResponses: ApiAttitudeResponse[]
+}
+
+// ── Types internes ─────────────────────────────────────────────────────────────
+
 interface BehaviorEntry {
-  studentId: string
+  behaviorId: string | null
+  enrollmentId: string
   absences: string
   retards: string
   devoirsManques: string
-  attitudeResponses: Map<string, boolean | null>  // attitudeId -> true(Oui)/false(Non)/null(unset)
+  attitudeResponses: Map<string, boolean | null>
   pointsForts: string
   defis: string
   remarque: string
 }
 
-export function CPMSLBehaviorGrid({
-  levels,
-  classrooms,
-  periods,
-  students,
-  attitudes,
-  behaviors,
-  isArchived = false,
-  onSaveBehaviors,
-  onAddAttitude
-}: CPMSLBehaviorGridProps) {
-  const [selectedLevelId, setSelectedLevelId] = useState<string>("")
-  const [selectedClassroomId, setSelectedClassroomId] = useState<string>("")
-  const [selectedPeriodId, setSelectedPeriodId] = useState<string>("")
-  const [behaviorEntries, setBehaviorEntries] = useState<Map<string, BehaviorEntry>>(new Map())
-  const [localAttitudes, setLocalAttitudes] = useState<Attitude[]>(attitudes)
-  const [newAttitudeLabel, setNewAttitudeLabel] = useState("")
-  const [showAddAttitudeInput, setShowAddAttitudeInput] = useState(false)
-  const [currentPage, setCurrentPage] = useState(1)
+// ── Props ─────────────────────────────────────────────────────────────────────
+
+interface CPMSLBehaviorGridProps {
+  yearId: string
+  sessions: ApiClassSession[]
+  steps: AcademicYearStep[]
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function getStudentInitials(enrollment: ApiEnrollment): string {
+  const f = enrollment.student?.user?.firstname?.[0] ?? ""
+  const l = enrollment.student?.user?.lastname?.[0] ?? ""
+  return `${f}${l}`.toUpperCase()
+}
+
+function getStudentName(enrollment: ApiEnrollment): string {
+  const first = enrollment.student?.user?.firstname ?? ""
+  const last  = enrollment.student?.user?.lastname ?? ""
+  return `${first} ${last}`.trim() || (enrollment.student?.studentCode ?? "—")
+}
+
+// ── Composant ─────────────────────────────────────────────────────────────────
+
+export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGridProps) {
+  const { toast } = useToast()
+
+  const [selectedSessionId, setSelectedSessionId] = useState("")
+  const [selectedStepId,    setSelectedStepId]    = useState("")
+
+  const [attitudes,   setAttitudes]   = useState<ApiAttitude[]>([])
+  const [enrollments, setEnrollments] = useState<ApiEnrollment[]>([])
+  const [entries,     setEntries]     = useState<Map<string, BehaviorEntry>>(new Map())
+
+  const [loadingAttitudes, setLoadingAttitudes] = useState(false)
+  const [loadingBehaviors, setLoadingBehaviors] = useState(false)
+  const [saving,           setSaving]           = useState(false)
+  const [currentPage,      setCurrentPage]      = useState(1)
   const itemsPerPage = 25
 
-  const filteredClassrooms = useMemo(() => {
-    if (!selectedLevelId) return []
-    return classrooms
-      .filter(c => c.levelId === selectedLevelId)
-      .sort((a, b) => a.name.localeCompare(b.name))
-  }, [selectedLevelId, classrooms])
+  // ── Chargement attitudes ──────────────────────────────────────────────────
 
-  const selectedPeriod = periods.find(p => p.id === selectedPeriodId)
-  const isPeriodClosed = selectedPeriod?.status === 'closed'
-  const isLocked = isPeriodClosed || isArchived
+  useEffect(() => {
+    if (!yearId) return
+    setLoadingAttitudes(true)
+    fetch(`/api/attitudes?academicYearId=${yearId}`, { credentials: "include" })
+      .then(r => r.json())
+      .then(data => setAttitudes(Array.isArray(data) ? data : []))
+      .catch(() => toast({ title: "Erreur", description: "Impossible de charger les attitudes", variant: "destructive" }))
+      .finally(() => setLoadingAttitudes(false))
+  }, [yearId])
 
-  const filteredStudents = useMemo(() => {
-    if (!selectedClassroomId) return []
-    return students
-      .filter(s => s.classroomId === selectedClassroomId)
-      .sort((a, b) => `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`))
-  }, [selectedClassroomId, students])
+  // ── Chargement enrollments + behaviors ────────────────────────────────────
 
-  // Pagination
-  const totalPages = Math.ceil(filteredStudents.length / itemsPerPage)
-  const startIndex = (currentPage - 1) * itemsPerPage
-  const paginatedStudents = filteredStudents.slice(startIndex, startIndex + itemsPerPage)
+  useEffect(() => {
+    if (!selectedSessionId || !selectedStepId) return
+    setLoadingBehaviors(true)
+    Promise.all([
+      fetchEnrollments(selectedSessionId),
+      fetch(`/api/behaviors?classSessionId=${selectedSessionId}&stepId=${selectedStepId}`, { credentials: "include" })
+        .then(r => r.json())
+    ])
+      .then(([enrs, behs]) => {
+        const enrollmentList: ApiEnrollment[] = Array.isArray(enrs) ? enrs : []
+        const behaviorList: ApiBehavior[]     = Array.isArray(behs) ? behs : []
 
-  // Reset to page 1 when filters change
-  useMemo(() => setCurrentPage(1), [selectedClassroomId, selectedPeriodId])
+        setEnrollments(enrollmentList)
+        setCurrentPage(1)
 
-  // Initialize behavior entries from existing data
-  useMemo(() => {
-    if (!selectedClassroomId || !selectedPeriodId) return
-    const newEntries = new Map<string, BehaviorEntry>()
-    filteredStudents.forEach(student => {
-      const existingBehavior = behaviors.find(
-        b => b.studentId === student.id && b.periodId === selectedPeriodId && b.classroomId === selectedClassroomId
-      )
-      
-      const attitudeResponsesMap = new Map<string, boolean | null>()
-      if (existingBehavior) {
-        // Initialize from existing responses
-        existingBehavior.attitudeResponses.forEach(resp => {
-          attitudeResponsesMap.set(resp.attitudeId, resp.value)
+        const newEntries = new Map<string, BehaviorEntry>()
+        enrollmentList.forEach(enr => {
+          const existing = behaviorList.find(b => b.enrollmentId === enr.id)
+          const attMap   = new Map<string, boolean | null>()
+          attitudes.forEach(att => attMap.set(att.id, null))
+          existing?.attitudeResponses.forEach(r => attMap.set(r.attitudeId, r.value))
+
+          newEntries.set(enr.id, {
+            behaviorId:        existing?.id ?? null,
+            enrollmentId:      enr.id,
+            absences:          existing?.absences?.toString()       ?? "",
+            retards:           existing?.retards?.toString()        ?? "",
+            devoirsManques:    existing?.devoirsManques?.toString() ?? "",
+            attitudeResponses: attMap,
+            pointsForts:       existing?.pointsForts ?? "",
+            defis:             existing?.defis       ?? "",
+            remarque:          existing?.remarque    ?? "",
+          })
         })
-      }
-      // Ensure all current attitudes are in the map (with null if not set)
-      localAttitudes.forEach(att => {
-        if (!attitudeResponsesMap.has(att.id)) {
-          attitudeResponsesMap.set(att.id, null)
-        }
+        setEntries(newEntries)
       })
-      
-      if (existingBehavior) {
-        newEntries.set(student.id, {
-          studentId: student.id,
-          absences: existingBehavior.absences?.toString() || '',
-          retards: existingBehavior.retards?.toString() || '',
-          devoirsManques: existingBehavior.devoirsManques?.toString() || '',
-          attitudeResponses: attitudeResponsesMap,
-          pointsForts: existingBehavior.pointsForts || '',
-          defis: existingBehavior.defis || '',
-          remarque: existingBehavior.remarque || ''
-        })
-      } else {
-        newEntries.set(student.id, {
-          studentId: student.id,
-          absences: '',
-          retards: '',
-          devoirsManques: '',
-          attitudeResponses: attitudeResponsesMap,
-          pointsForts: '',
-          defis: '',
-          remarque: ''
-        })
-      }
-    })
-    setBehaviorEntries(newEntries)
-  }, [selectedClassroomId, selectedPeriodId, filteredStudents, behaviors, localAttitudes])
+      .catch(() => toast({ title: "Erreur", description: "Impossible de charger les comportements", variant: "destructive" }))
+      .finally(() => setLoadingBehaviors(false))
+  }, [selectedSessionId, selectedStepId])
+
+  // ── Pagination ────────────────────────────────────────────────────────────
+
+  const sortedEnrollments = useMemo(() =>
+    [...enrollments].sort((a, b) => getStudentName(a).localeCompare(getStudentName(b))),
+    [enrollments]
+  )
+
+  const totalPages    = Math.ceil(sortedEnrollments.length / itemsPerPage)
+  const paginatedEnrs = sortedEnrollments.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+
+  // ── KPIs ──────────────────────────────────────────────────────────────────
 
   const kpis = useMemo(() => {
-    if (!selectedClassroomId || !selectedPeriodId) {
-      return { totalStudents: 0, enteredBehaviors: 0, missingBehaviors: 0, progressPercentage: 0 }
-    }
-    const totalStudents = filteredStudents.length
-    let enteredBehaviors = 0
-    
-    filteredStudents.forEach(student => {
-      const entry = behaviorEntries.get(student.id)
-      if (entry) {
-        // A behavior is "saisi" if at least one field is non-null/non-empty
-        const hasAttitudeResponse = Array.from(entry.attitudeResponses.values()).some(v => v !== null)
-        const hasData = 
-          entry.absences !== '' ||
-          entry.retards !== '' ||
-          entry.devoirsManques !== '' ||
-          hasAttitudeResponse ||
-          entry.pointsForts.trim() !== '' ||
-          entry.defis.trim() !== '' ||
-          entry.remarque.trim() !== ''
-        
-        if (hasData) enteredBehaviors++
-      }
+    const total   = sortedEnrollments.length
+    let   entered = 0
+    sortedEnrollments.forEach(enr => {
+      const e = entries.get(enr.id)
+      if (!e) return
+      const hasAttitude = Array.from(e.attitudeResponses.values()).some(v => v !== null)
+      if (e.absences || e.retards || e.devoirsManques || hasAttitude || e.pointsForts || e.defis || e.remarque)
+        entered++
     })
-    
-    const missingBehaviors = totalStudents - enteredBehaviors
-    const progressPercentage = totalStudents > 0 ? Math.round((enteredBehaviors / totalStudents) * 100) : 0
-    
-    return { totalStudents, enteredBehaviors, missingBehaviors, progressPercentage }
-  }, [selectedClassroomId, selectedPeriodId, filteredStudents, behaviorEntries])
+    return { total, entered, missing: total - entered, percent: total > 0 ? Math.round((entered / total) * 100) : 0 }
+  }, [sortedEnrollments, entries])
 
-  const handleNumberChange = (studentId: string, field: 'absences' | 'retards' | 'devoirsManques', value: string) => {
-    const newEntries = new Map(behaviorEntries)
-    const entry = newEntries.get(studentId) || {
-      studentId,
-      absences: '',
-      retards: '',
-      devoirsManques: '',
-      attitudeResponses: new Map<string, boolean | null>(),
-      pointsForts: '',
-      defis: '',
-      remarque: ''
-    }
-    
-    // Validate: only allow integers >= 0, max 3 digits
-    if (value === '' || (/^\d{1,3}$/.test(value) && parseInt(value) >= 0)) {
-      entry[field] = value
-      newEntries.set(studentId, entry)
-      setBehaviorEntries(newEntries)
-    }
-  }
+  // ── Handlers ──────────────────────────────────────────────────────────────
 
-  const handleTextChange = (studentId: string, field: 'pointsForts' | 'defis' | 'remarque', value: string) => {
-    const newEntries = new Map(behaviorEntries)
-    const entry = newEntries.get(studentId) || {
-      studentId,
-      absences: '',
-      retards: '',
-      devoirsManques: '',
-      attitudeResponses: new Map<string, boolean | null>(),
-      pointsForts: '',
-      defis: '',
-      remarque: ''
-    }
-    
-    // Enforce character limits
-    const maxLengths = { pointsForts: 300, defis: 300, remarque: 500 }
-    if (value.length <= maxLengths[field]) {
-      entry[field] = value
-      newEntries.set(studentId, entry)
-      setBehaviorEntries(newEntries)
-    }
-  }
-
-  const handleAttitudeResponse = (studentId: string, attitudeId: string, value: boolean) => {
-    const newEntries = new Map(behaviorEntries)
-    const entry = newEntries.get(studentId)
-    if (!entry) return
-    
-    entry.attitudeResponses.set(attitudeId, value)
-    newEntries.set(studentId, entry)
-    setBehaviorEntries(newEntries)
-  }
-
-  const handleAddNewAttitude = () => {
-    if (!newAttitudeLabel.trim()) return
-    
-    const newAttitude = onAddAttitude(newAttitudeLabel.trim(), 'ay-2024')
-    setLocalAttitudes([...localAttitudes, newAttitude])
-    
-    // Add this attitude to all students' response maps with null value
-    const newEntries = new Map(behaviorEntries)
-    newEntries.forEach((entry) => {
-      entry.attitudeResponses.set(newAttitude.id, null)
+  function handleNumber(enrollmentId: string, field: "absences" | "retards" | "devoirsManques", value: string) {
+    if (value !== "" && !(/^\d{1,3}$/.test(value) && parseInt(value) >= 0)) return
+    setEntries(prev => {
+      const next = new Map(prev)
+      const e = next.get(enrollmentId)
+      if (e) next.set(enrollmentId, { ...e, [field]: value })
+      return next
     })
-    setBehaviorEntries(newEntries)
-    
-    setNewAttitudeLabel("")
-    setShowAddAttitudeInput(false)
   }
 
-  const handleSaveBehaviors = () => {
-    if (!selectedClassroomId || !selectedPeriodId) return
-    
-    const behaviorsToSave: StudentBehavior[] = []
-    
-    behaviorEntries.forEach((entry, studentId) => {
-      const existingBehavior = behaviors.find(
-        b => b.studentId === studentId && b.periodId === selectedPeriodId && b.classroomId === selectedClassroomId
-      )
-      
-      // Convert Map to AttitudeResponse array (only include non-null responses)
-      const attitudeResponses: AttitudeResponse[] = []
-      entry.attitudeResponses.forEach((value, attitudeId) => {
-        if (value !== null) {
-          attitudeResponses.push({ attitudeId, value })
+  function handleText(enrollmentId: string, field: "pointsForts" | "defis" | "remarque", value: string) {
+    const max = field === "remarque" ? 500 : 300
+    if (value.length > max) return
+    setEntries(prev => {
+      const next = new Map(prev)
+      const e = next.get(enrollmentId)
+      if (e) next.set(enrollmentId, { ...e, [field]: value })
+      return next
+    })
+  }
+
+  function handleAttitude(enrollmentId: string, attitudeId: string, value: boolean) {
+    setEntries(prev => {
+      const next = new Map(prev)
+      const e = next.get(enrollmentId)
+      if (!e) return next
+      const attMap = new Map(e.attitudeResponses)
+      attMap.set(attitudeId, value)
+      next.set(enrollmentId, { ...e, attitudeResponses: attMap })
+      return next
+    })
+  }
+
+  async function handleSave() {
+    if (!selectedSessionId || !selectedStepId) return
+    setSaving(true)
+    try {
+      const ops = Array.from(entries.values()).map(async e => {
+        const attitudeResponses = Array.from(e.attitudeResponses.entries())
+          .filter(([, v]) => v !== null)
+          .map(([attitudeId, value]) => ({ attitudeId, value: value as boolean }))
+
+        const body = {
+          enrollmentId:   e.enrollmentId,
+          stepId:         selectedStepId,
+          absences:       e.absences       ? parseInt(e.absences)       : null,
+          retards:        e.retards        ? parseInt(e.retards)        : null,
+          devoirsManques: e.devoirsManques ? parseInt(e.devoirsManques) : null,
+          pointsForts:    e.pointsForts    || null,
+          defis:          e.defis          || null,
+          remarque:       e.remarque       || null,
+          attitudeResponses,
+        }
+
+        if (e.behaviorId) {
+          const { enrollmentId, ...updateBody } = body
+          await fetch(`/api/behaviors/update/${e.behaviorId}`, {
+            method: "POST", credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(updateBody),
+          })
+        } else {
+          const res = await fetch("/api/behaviors/create", {
+            method: "POST", credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          })
+          if (res.ok) {
+            const created: ApiBehavior = await res.json()
+            setEntries(prev => {
+              const next  = new Map(prev)
+              const entry = next.get(e.enrollmentId)
+              if (entry) next.set(e.enrollmentId, { ...entry, behaviorId: created.id })
+              return next
+            })
+          }
         }
       })
-      
-      const behavior: StudentBehavior = {
-        id: existingBehavior?.id || `beh-${Date.now()}-${studentId}`,
-        studentId,
-        classroomId: selectedClassroomId,
-        periodId: selectedPeriodId,
-        academicYearId: 'ay-2024', // TODO: Get from context
-        absences: entry.absences ? parseInt(entry.absences) : null,
-        retards: entry.retards ? parseInt(entry.retards) : null,
-        devoirsManques: entry.devoirsManques ? parseInt(entry.devoirsManques) : null,
-        attitudeResponses,
-        pointsForts: entry.pointsForts,
-        defis: entry.defis,
-        remarque: entry.remarque,
-        createdAt: existingBehavior?.createdAt || new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      }
-      
-      behaviorsToSave.push(behavior)
-    })
-    
-    onSaveBehaviors(behaviorsToSave)
+      await Promise.all(ops)
+      toast({ title: "Comportements enregistrés" })
+    } catch {
+      toast({ title: "Erreur", description: "Erreur lors de l'enregistrement", variant: "destructive" })
+    } finally {
+      setSaving(false)
+    }
   }
 
-  // Get selected level and classroom names for display
-  const selectedLevelName = useMemo(() => {
-    const level = levels.find(l => l.id === selectedLevelId)
-    const classroom = classrooms.find(c => c.id === selectedClassroomId)
-    if (!level || !classroom) return ''
-    return `${level.name} ${classroom.name}`
-  }, [selectedLevelId, selectedClassroomId, levels, classrooms])
+  // ── Dérivés ───────────────────────────────────────────────────────────────
 
-  // Get selected period name for display
-  const selectedPeriodName = useMemo(() => {
-    const period = periods.find(p => p.id === selectedPeriodId)
-    return period?.name || ''
-  }, [selectedPeriodId, periods])
+  const selectedSession = sessions.find(s => s.id === selectedSessionId)
+  const selectedStep    = steps.find(s => s.id === selectedStepId)
+  const isLocked        = selectedStep ? !selectedStep.isCurrent : false
+  const sessionLabel    = selectedSession
+    ? `${selectedSession.class?.classType?.name ?? ""} ${selectedSession.class?.letter ?? ""}`.trim()
+    : ""
 
-  // Empty state
-  if (!selectedClassroomId || !selectedPeriodId) {
-    return (
-      <div className="space-y-6">
-        <div
-          style={{
-            backgroundColor: "#FFFFFF",
-            borderRadius: "10px",
-            border: "1px solid #E8E6E3",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
-          }}
-        >
-          <div style={{ padding: "24px", borderBottom: "1px solid #E8E6E3" }}>
-            <h3 style={{ fontFamily: "var(--font-serif)", fontSize: "15px", fontWeight: 600, color: "#3A4A57" }}>
-              Sélection de la classe et de l'étape
-            </h3>
-          </div>
-          <div style={{ padding: "24px" }}>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <Select value={selectedLevelId} onValueChange={(value) => {
-                setSelectedLevelId(value)
-                setSelectedClassroomId("")
-              }}>
-                <SelectTrigger style={{ borderColor: "#D1CECC", borderRadius: "8px" }}>
-                  <SelectValue placeholder="Sélectionner une classe" style={{ color: "#A8A5A2" }} />
-                </SelectTrigger>
-                <SelectContent>
-                  {levels.map(level => (
-                    <SelectItem key={level.id} value={level.id}>{level.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select value={selectedClassroomId} onValueChange={setSelectedClassroomId} disabled={!selectedLevelId}>
-                <SelectTrigger style={{ borderColor: "#D1CECC", borderRadius: "8px", opacity: !selectedLevelId ? 0.5 : 1, cursor: !selectedLevelId ? "not-allowed" : "pointer" }}>
-                  <SelectValue placeholder="Sélectionner une salle" style={{ color: "#A8A5A2" }} />
-                </SelectTrigger>
-                <SelectContent>
-                  {filteredClassrooms.map(classroom => (
-                    <SelectItem key={classroom.id} value={classroom.id}>{classroom.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select value={selectedPeriodId} onValueChange={setSelectedPeriodId}>
-                <SelectTrigger style={{ borderColor: "#D1CECC", borderRadius: "8px" }}>
-                  <SelectValue placeholder="Sélectionner une étape" style={{ color: "#A8A5A2" }} />
-                </SelectTrigger>
-                <SelectContent>
-                  {periods.map(period => (
-                    <SelectItem key={period.id} value={period.id}>{period.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-lg p-12 flex flex-col items-center justify-center text-center space-y-2" style={{ backgroundColor: "white", border: "1px solid #E8E6E3", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-          <p className="font-serif font-semibold" style={{ fontSize: "16px", color: "hsl(var(--muted-foreground))" }}>
-            Sélectionnez une classe, une salle et une étape
-          </p>
-          <p className="font-sans" style={{ fontSize: "13px", fontWeight: 400, color: "hsl(var(--muted-foreground))" }}>
-            pour saisir les comportements
-          </p>
-        </div>
-      </div>
-    )
-  }
+  // ── Rendu ─────────────────────────────────────────────────────────────────
 
   return (
     <div className="space-y-6">
-      {/* Selectors */}
-      <div
-        style={{
-          backgroundColor: "#FFFFFF",
-          borderRadius: "10px",
-          border: "1px solid #E8E6E3",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
-        }}
-      >
+
+      {/* Sélecteurs */}
+      <div style={{ backgroundColor: "#FFFFFF", borderRadius: "10px", border: "1px solid #E8E6E3", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
         <div style={{ padding: "24px", borderBottom: "1px solid #E8E6E3" }}>
           <h3 style={{ fontFamily: "var(--font-serif)", fontSize: "15px", fontWeight: 600, color: "#3A4A57" }}>
             Sélection de la classe et de l'étape
           </h3>
         </div>
         <div style={{ padding: "24px" }}>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Select value={selectedLevelId} onValueChange={(value) => {
-              setSelectedLevelId(value)
-              setSelectedClassroomId("")
-            }} disabled={isArchived}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Select value={selectedSessionId} onValueChange={v => { setSelectedSessionId(v); setSelectedStepId("") }}>
               <SelectTrigger style={{ borderColor: "#D1CECC", borderRadius: "8px" }}>
                 <SelectValue placeholder="Sélectionner une classe" />
               </SelectTrigger>
               <SelectContent>
-                {levels.map(level => (
-                  <SelectItem key={level.id} value={level.id}>{level.name}</SelectItem>
+                {sessions.map(s => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {`${s.class?.classType?.name ?? ""} ${s.class?.letter ?? ""}`.trim()}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
 
-            <Select value={selectedClassroomId} onValueChange={setSelectedClassroomId} disabled={isArchived || !selectedLevelId}>
-              <SelectTrigger style={{ borderColor: "#D1CECC", borderRadius: "8px", opacity: (isArchived || !selectedLevelId) ? 0.5 : 1, cursor: (isArchived || !selectedLevelId) ? "not-allowed" : "pointer" }}>
-                <SelectValue placeholder="Sélectionner une salle" />
-              </SelectTrigger>
-              <SelectContent>
-                {filteredClassrooms.map(classroom => (
-                  <SelectItem key={classroom.id} value={classroom.id}>{classroom.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={selectedPeriodId} onValueChange={setSelectedPeriodId} disabled={isArchived}>
-              <SelectTrigger style={{ borderColor: "#D1CECC", borderRadius: "8px" }}>
+            <Select value={selectedStepId} onValueChange={setSelectedStepId} disabled={!selectedSessionId}>
+              <SelectTrigger style={{ borderColor: "#D1CECC", borderRadius: "8px", opacity: !selectedSessionId ? 0.5 : 1 }}>
                 <div className="flex items-center gap-2">
                   {isLocked && <LockIcon className="h-4 w-4" style={{ color: "#C48B1A" }} />}
                   <SelectValue placeholder="Sélectionner une étape" />
                 </div>
               </SelectTrigger>
               <SelectContent>
-                {periods.map(period => (
-                  <SelectItem key={period.id} value={period.id}>{period.name}</SelectItem>
+                {steps.map(s => (
+                  <SelectItem key={s.id} value={s.id}>
+                    Étape {s.stepNumber}{s.isCurrent ? " (active)" : ""}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -417,379 +319,222 @@ export function CPMSLBehaviorGrid({
         </div>
       </div>
 
-      {/* Locked Period Banner */}
-      {isLocked && (
-        <div className="rounded-lg p-4 flex items-center gap-3" style={{ backgroundColor: "#FEF6E0", border: "1px solid #C48B1A" }}>
-          <LockIcon className="h-5 w-5" style={{ color: "#C48B1A" }} />
-          <p className="text-sm font-medium" style={{ color: "#C48B1A" }}>
-            {isPeriodClosed ? "Étape clôturée — les comportements ne peuvent plus être modifiés" : "Année archivée — les données sont en lecture seule"}
+      {/* État vide */}
+      {(!selectedSessionId || !selectedStepId) && (
+        <div className="rounded-lg p-12 flex flex-col items-center justify-center text-center space-y-2"
+          style={{ backgroundColor: "white", border: "1px solid #E8E6E3", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+          <p className="font-serif font-semibold" style={{ fontSize: "16px", color: "hsl(var(--muted-foreground))" }}>
+            Sélectionnez une classe et une étape
+          </p>
+          <p className="font-sans" style={{ fontSize: "13px", color: "hsl(var(--muted-foreground))" }}>
+            pour saisir les comportements
           </p>
         </div>
       )}
 
-      {/* KPI Bar */}
-      <div className="grid grid-cols-4 gap-4">
-        <div className="rounded-lg p-4 flex items-center gap-3" style={{ backgroundColor: "white", border: "1px solid #E8E6E3", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-          <div className="flex items-center justify-center rounded-lg" style={{ width: "48px", height: "48px", backgroundColor: "#F0F4F7" }}>
-            <UsersIcon className="h-6 w-6" style={{ color: "#5A7085" }} />
-          </div>
-          <div>
-            <p className="font-sans text-xs font-medium" style={{ color: "#78756F" }}>Total élèves</p>
-            <p className="font-sans text-2xl font-bold" style={{ color: "#2A3740" }}>{kpis.totalStudents}</p>
-          </div>
-        </div>
+      {/* Contenu principal */}
+      {selectedSessionId && selectedStepId && (
+        <>
+          {/* Bannière verrouillage */}
+          {isLocked && (
+            <div className="rounded-lg p-4 flex items-center gap-3"
+              style={{ backgroundColor: "#FEF6E0", border: "1px solid #C48B1A" }}>
+              <LockIcon className="h-5 w-5" style={{ color: "#C48B1A" }} />
+              <p className="text-sm font-medium" style={{ color: "#C48B1A" }}>
+                Étape clôturée — les comportements ne peuvent plus être modifiés
+              </p>
+            </div>
+          )}
 
-        <div className="rounded-lg p-4 flex items-center gap-3" style={{ backgroundColor: "white", border: "1px solid #E8E6E3", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-          <div className="flex items-center justify-center rounded-lg" style={{ width: "48px", height: "48px", backgroundColor: "#E8F5EC" }}>
-            <CheckCircle2Icon className="h-6 w-6" style={{ color: "#2D7D46" }} />
+          {/* KPIs */}
+          <div className="grid grid-cols-4 gap-4">
+            {[
+              { label: "Total élèves",            value: kpis.total,          icon: <UsersIcon       className="h-6 w-6" style={{ color: "#5A7085" }} />, bg: "#F0F4F7" },
+              { label: "Comportements saisis",    value: kpis.entered,        icon: <CheckCircle2Icon className="h-6 w-6" style={{ color: "#2D7D46" }} />, bg: "#E8F5EC" },
+              { label: "Comportements manquants", value: kpis.missing,        icon: <AlertTriangleIcon className="h-6 w-6" style={{ color: "#C48B1A" }} />, bg: "#FEF6E0" },
+              { label: "% complété",              value: `${kpis.percent}%`,  icon: <FileTextIcon    className="h-6 w-6" style={{ color: "#2B6CB0" }} />, bg: "#E3EFF9" },
+            ].map(({ label, value, icon, bg }) => (
+              <div key={label} className="rounded-lg p-4 flex items-center gap-3"
+                style={{ backgroundColor: "white", border: "1px solid #E8E6E3", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+                <div className="flex items-center justify-center rounded-lg" style={{ width: "48px", height: "48px", backgroundColor: bg }}>
+                  {icon}
+                </div>
+                <div>
+                  <p className="font-sans text-xs font-medium" style={{ color: "#78756F" }}>{label}</p>
+                  <p className="font-sans text-2xl font-bold" style={{ color: "#2A3740" }}>{value}</p>
+                </div>
+              </div>
+            ))}
           </div>
-          <div>
-            <p className="font-sans text-xs font-medium" style={{ color: "#78756F" }}>Comportements saisis</p>
-            <p className="font-sans text-2xl font-bold" style={{ color: "#2A3740" }}>{kpis.enteredBehaviors}</p>
-          </div>
-        </div>
 
-        <div className="rounded-lg p-4 flex items-center gap-3" style={{ backgroundColor: "white", border: "1px solid #E8E6E3", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-          <div className="flex items-center justify-center rounded-lg" style={{ width: "48px", height: "48px", backgroundColor: "#FEF6E0" }}>
-            <AlertTriangleIcon className="h-6 w-6" style={{ color: "#C48B1A" }} />
+          {/* Titre section */}
+          <div className="rounded-lg p-4" style={{ backgroundColor: "white", border: "1px solid #E8E6E3", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+            <h2 className="font-serif font-semibold" style={{ fontSize: "18px", color: "#2C4A6E" }}>
+              Étape {selectedStep?.stepNumber} — {sessionLabel}
+            </h2>
           </div>
-          <div>
-            <p className="font-sans text-xs font-medium" style={{ color: "#78756F" }}>Comportements manquants</p>
-            <p className="font-sans text-2xl font-bold" style={{ color: "#2A3740" }}>{kpis.missingBehaviors}</p>
-          </div>
-        </div>
 
-        <div className="rounded-lg p-4 flex items-center gap-3" style={{ backgroundColor: "white", border: "1px solid #E8E6E3", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-          <div className="flex items-center justify-center rounded-lg" style={{ width: "48px", height: "48px", backgroundColor: "#E3EFF9" }}>
-            <FileTextIcon className="h-6 w-6" style={{ color: "#2B6CB0" }} />
-          </div>
-          <div>
-            <p className="font-sans text-xs font-medium" style={{ color: "#78756F" }}>% complété</p>
-            <p className="font-sans text-2xl font-bold" style={{ color: "#2A3740" }}>{kpis.progressPercentage}%</p>
-          </div>
-        </div>
-      </div>
+          {/* Loading */}
+          {loadingBehaviors && (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: "#5A7085" }} />
+            </div>
+          )}
 
-      {/* Header Section */}
-      <div className="rounded-lg p-4" style={{ backgroundColor: "white", border: "1px solid #E8E6E3", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-        <h2 className="font-serif font-semibold" style={{ fontSize: "18px", color: "#2C4A6E" }}>
-          {selectedPeriodName} — {selectedLevelName}
-        </h2>
-      </div>
+          {/* Tableau */}
+          {!loadingBehaviors && (
+            <div className="rounded-lg overflow-hidden" style={{ backgroundColor: "white", border: "1px solid #E8E6E3", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr style={{ backgroundColor: "#F1F5F9", borderBottom: "2px solid #D1D5DB" }}>
+                      {["ÉLÈVE", "ABSENCES", "RETARDS", "DEVOIRS MANQUÉS", "ATTITUDES", "POINTS FORTS", "DÉFIS", "REMARQUE"].map((h, i) => (
+                        <th key={h}
+                          className={`px-4 py-3 font-sans font-bold uppercase ${i === 0 ? "text-left sticky left-0 bg-[#F1F5F9]" : i < 4 ? "text-center" : "text-left"}`}
+                          style={{ fontSize: "12px", letterSpacing: "0.06em", color: "#2C4A6E",
+                            minWidth: i === 0 ? "200px" : i < 4 ? "110px" : i === 4 ? "280px" : "250px" }}>
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedEnrs.map((enr, idx) => {
+                      const e      = entries.get(enr.id) ?? {
+                        behaviorId: null, enrollmentId: enr.id,
+                        absences: "", retards: "", devoirsManques: "",
+                        attitudeResponses: new Map(), pointsForts: "", defis: "", remarque: ""
+                      }
+                      const rowBg = idx % 2 === 0 ? "white" : "#FAFAF8"
 
-      {/* Behavior Table */}
-      <div className="rounded-lg overflow-hidden" style={{ backgroundColor: "white", border: "1px solid #E8E6E3", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr style={{ backgroundColor: "#F1F5F9", borderBottom: "2px solid #D1D5DB" }}>
-                <th className="text-left px-4 py-3 font-sans font-bold uppercase sticky left-0 bg-[#F1F5F9]" style={{ fontSize: "12px", letterSpacing: "0.06em", color: "#2C4A6E", minWidth: "200px" }}>ÉLÈVE</th>
-                <th className="text-center px-4 py-3 font-sans font-bold uppercase" style={{ fontSize: "12px", letterSpacing: "0.06em", color: "#2C4A6E", minWidth: "100px" }}>ABSENCES</th>
-                <th className="text-center px-4 py-3 font-sans font-bold uppercase" style={{ fontSize: "12px", letterSpacing: "0.06em", color: "#2C4A6E", minWidth: "100px" }}>RETARDS</th>
-                <th className="text-center px-4 py-3 font-sans font-bold uppercase" style={{ fontSize: "12px", letterSpacing: "0.06em", color: "#2C4A6E", minWidth: "140px" }}>DEVOIRS MANQUÉS</th>
-                <th className="text-left px-4 py-3 font-sans font-bold uppercase" style={{ fontSize: "12px", letterSpacing: "0.06em", color: "#2C4A6E", minWidth: "300px" }}>ATTITUDES</th>
-                <th className="text-left px-4 py-3 font-sans font-bold uppercase" style={{ fontSize: "12px", letterSpacing: "0.06em", color: "#2C4A6E", minWidth: "250px" }}>POINTS FORTS</th>
-                <th className="text-left px-4 py-3 font-sans font-bold uppercase" style={{ fontSize: "12px", letterSpacing: "0.06em", color: "#2C4A6E", minWidth: "250px" }}>DÉFIS</th>
-                <th className="text-left px-4 py-3 font-sans font-bold uppercase" style={{ fontSize: "12px", letterSpacing: "0.06em", color: "#2C4A6E", minWidth: "300px" }}>REMARQUE</th>
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedStudents.map((student, index) => {
-                const entry = behaviorEntries.get(student.id) || {
-                  studentId: student.id,
-                  absences: '',
-                  retards: '',
-                  devoirsManques: '',
-                  attitudeResponses: new Map<string, boolean | null>(),
-                  pointsForts: '',
-                  defis: '',
-                  remarque: ''
-                }
-                
-                return (
-                  <tr 
-                    key={student.id} 
-                    style={{ 
-                      borderBottom: index < paginatedStudents.length - 1 ? "1px solid #E8E6E3" : "none",
-                      backgroundColor: index % 2 === 0 ? "white" : "#FAFAF8"
-                    }}
-                  >
-                    <td className="px-4 py-3 sticky left-0" style={{ backgroundColor: index % 2 === 0 ? "white" : "#FAFAF8" }}>
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-8 w-8">
-                          <AvatarImage src={student.avatar} />
-                          <AvatarFallback style={{ backgroundColor: "#F0F4F7", color: "#5A7085" }}>
-                            {student.firstName[0]}{student.lastName[0]}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="font-sans font-semibold" style={{ fontSize: "14px", color: "#1E1A17" }}>
-                            {student.firstName} {student.lastName}
-                          </p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Input
-                        type="number"
-                        min="0"
-                        max="999"
-                        step="1"
-                        value={entry.absences}
-                        onChange={(e) => handleNumberChange(student.id, 'absences', e.target.value)}
-                        placeholder="0"
-                        disabled={isLocked}
-                        className="text-center"
-                        style={{
-                          width: "80px",
-                          borderRadius: "8px",
-                          borderColor: "#D1D5DB",
-                          margin: "0 auto"
-                        }}
-                      />
-                    </td>
-                    <td className="px-4 py-3">
-                      <Input
-                        type="number"
-                        min="0"
-                        max="999"
-                        step="1"
-                        value={entry.retards}
-                        onChange={(e) => handleNumberChange(student.id, 'retards', e.target.value)}
-                        placeholder="0"
-                        disabled={isLocked}
-                        className="text-center"
-                        style={{
-                          width: "80px",
-                          borderRadius: "8px",
-                          borderColor: "#D1D5DB",
-                          margin: "0 auto"
-                        }}
-                      />
-                    </td>
-                    <td className="px-4 py-3">
-                      <Input
-                        type="number"
-                        min="0"
-                        max="999"
-                        step="1"
-                        value={entry.devoirsManques}
-                        onChange={(e) => handleNumberChange(student.id, 'devoirsManques', e.target.value)}
-                        placeholder="0"
-                        disabled={isLocked}
-                        className="text-center"
-                        style={{
-                          width: "80px",
-                          borderRadius: "8px",
-                          borderColor: "#D1D5DB",
-                          margin: "0 auto"
-                        }}
-                      />
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="space-y-2">
-                        {localAttitudes.map(attitude => {
-                          const response = entry.attitudeResponses.get(attitude.id)
-                          return (
-                            <div key={attitude.id} className="flex items-center gap-3">
-                              <span className="text-sm font-medium" style={{ color: "#1E1A17", minWidth: "140px" }}>
-                                {attitude.label}
-                              </span>
-                              <div className="flex items-center gap-4">
-                                <label className="flex items-center gap-1.5 cursor-pointer">
-                                  <input
-                                    type="radio"
-                                    name={`attitude-${student.id}-${attitude.id}`}
-                                    checked={response === true}
-                                    onChange={() => handleAttitudeResponse(student.id, attitude.id, true)}
-                                    disabled={isLocked}
-                                    className="h-4 w-4 cursor-pointer"
-                                    style={{ accentColor: "#5A7085" }}
-                                  />
-                                  <span className="text-sm" style={{ color: "#1E1A17" }}>Oui</span>
-                                </label>
-                                <label className="flex items-center gap-1.5 cursor-pointer">
-                                  <input
-                                    type="radio"
-                                    name={`attitude-${student.id}-${attitude.id}`}
-                                    checked={response === false}
-                                    onChange={() => handleAttitudeResponse(student.id, attitude.id, false)}
-                                    disabled={isLocked}
-                                    className="h-4 w-4 cursor-pointer"
-                                    style={{ accentColor: "#5A7085" }}
-                                  />
-                                  <span className="text-sm" style={{ color: "#1E1A17" }}>Non</span>
-                                </label>
+                      return (
+                        <tr key={enr.id} style={{ borderBottom: idx < paginatedEnrs.length - 1 ? "1px solid #E8E6E3" : "none", backgroundColor: rowBg }}>
+
+                          {/* Élève */}
+                          <td className="px-4 py-3 sticky left-0" style={{ backgroundColor: rowBg }}>
+                            <div className="flex items-center gap-3">
+                              <Avatar className="h-8 w-8">
+                                <AvatarFallback style={{ backgroundColor: "#F0F4F7", color: "#5A7085" }}>
+                                  {getStudentInitials(enr)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <p className="font-sans font-semibold" style={{ fontSize: "14px", color: "#1E1A17" }}>
+                                  {getStudentName(enr)}
+                                </p>
+                                <p className="font-sans" style={{ fontSize: "11px", color: "#78756F" }}>
+                                  {enr.student?.studentCode ?? ""}
+                                </p>
                               </div>
                             </div>
-                          )
-                        })}
-                        {!isLocked && (
-                          <div className="mt-3 pt-2 border-t border-border">
-                            {showAddAttitudeInput ? (
-                              <div className="flex items-center gap-2">
-                                <Input
-                                  value={newAttitudeLabel}
-                                  onChange={(e) => setNewAttitudeLabel(e.target.value)}
-                                  placeholder="Nouvelle attitude..."
-                                  className="flex-1"
-                                  style={{ borderColor: "#D1D5DB", borderRadius: "6px", fontSize: "13px" }}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') handleAddNewAttitude()
-                                    if (e.key === 'Escape') {
-                                      setShowAddAttitudeInput(false)
-                                      setNewAttitudeLabel("")
-                                    }
-                                  }}
-                                  autoFocus
-                                />
-                                <Button
-                                  size="sm"
-                                  onClick={handleAddNewAttitude}
-                                  disabled={!newAttitudeLabel.trim()}
-                                  style={{ backgroundColor: "#5A7085", color: "white", fontSize: "13px" }}
-                                >
-                                  Créer
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => {
-                                    setShowAddAttitudeInput(false)
-                                    setNewAttitudeLabel("")
-                                  }}
-                                  style={{ fontSize: "13px" }}
-                                >
-                                  <XIcon className="h-4 w-4" />
-                                </Button>
-                              </div>
+                          </td>
+
+                          {/* Absences / Retards / Devoirs */}
+                          {(["absences", "retards", "devoirsManques"] as const).map(field => (
+                            <td key={field} className="px-4 py-3 text-center">
+                              <Input type="number" min="0" max="999" step="1"
+                                value={e[field]} placeholder="0" disabled={isLocked}
+                                onChange={ev => handleNumber(enr.id, field, ev.target.value)}
+                                className="text-center"
+                                style={{ width: "80px", borderRadius: "8px", borderColor: "#D1D5DB", margin: "0 auto" }}
+                              />
+                            </td>
+                          ))}
+
+                          {/* Attitudes — lecture seule, configurées dans Établissement → Attitudes */}
+                          <td className="px-4 py-3">
+                            {loadingAttitudes ? (
+                              <p className="text-xs" style={{ color: "#78756F" }}>Chargement...</p>
+                            ) : attitudes.length === 0 ? (
+                              <p className="text-xs italic" style={{ color: "#A8A5A2" }}>
+                                Aucune attitude — configurez-les dans Établissement → Attitudes
+                              </p>
                             ) : (
-                              <button
-                                onClick={() => setShowAddAttitudeInput(true)}
-                                className="flex items-center gap-1.5 text-sm font-medium hover:underline"
-                                style={{ color: "#5A7085" }}
-                              >
-                                <PlusIcon className="h-4 w-4" />
-                                Ajouter une attitude
-                              </button>
+                              <div className="space-y-2">
+                                {attitudes.map(att => {
+                                  const resp = e.attitudeResponses.get(att.id)
+                                  return (
+                                    <div key={att.id} className="flex items-center gap-3">
+                                      <span className="text-sm font-medium" style={{ color: "#1E1A17", minWidth: "130px" }}>
+                                        {att.label}
+                                      </span>
+                                      <div className="flex items-center gap-3">
+                                        {[true, false].map(val => (
+                                          <label key={String(val)} className="flex items-center gap-1.5 cursor-pointer">
+                                            <input type="radio"
+                                              name={`att-${enr.id}-${att.id}`}
+                                              checked={resp === val}
+                                              onChange={() => handleAttitude(enr.id, att.id, val)}
+                                              disabled={isLocked}
+                                              className="h-4 w-4 cursor-pointer"
+                                              style={{ accentColor: "#5A7085" }}
+                                            />
+                                            <span className="text-sm" style={{ color: "#1E1A17" }}>{val ? "Oui" : "Non"}</span>
+                                          </label>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                              </div>
                             )}
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Textarea
-                        value={entry.pointsForts}
-                        onChange={(e) => handleTextChange(student.id, 'pointsForts', e.target.value)}
-                        placeholder="Points forts..."
-                        disabled={isLocked}
-                        rows={2}
-                        className="resize-vertical"
-                        style={{
-                          borderRadius: "8px",
-                          borderColor: "#D1D5DB",
-                          fontSize: "13px"
-                        }}
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {entry.pointsForts.length}/300
-                      </p>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Textarea
-                        value={entry.defis}
-                        onChange={(e) => handleTextChange(student.id, 'defis', e.target.value)}
-                        placeholder="Défis..."
-                        disabled={isLocked}
-                        rows={2}
-                        className="resize-vertical"
-                        style={{
-                          borderRadius: "8px",
-                          borderColor: "#D1D5DB",
-                          fontSize: "13px"
-                        }}
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {entry.defis.length}/300
-                      </p>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Textarea
-                        value={entry.remarque}
-                        onChange={(e) => handleTextChange(student.id, 'remarque', e.target.value)}
-                        placeholder="Remarque..."
-                        disabled={isLocked}
-                        rows={2}
-                        className="resize-vertical"
-                        style={{
-                          borderRadius: "8px",
-                          borderColor: "#D1D5DB",
-                          fontSize: "13px"
-                        }}
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {entry.remarque.length}/500
-                      </p>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                          </td>
 
-      {/* Pagination */}
-      {filteredStudents.length > itemsPerPage && (
-        <div className="flex items-center justify-center">
-          <div className="flex items-center gap-4">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-              disabled={currentPage === 1}
-              style={{ borderColor: "#D1CECC", color: "#5C5955" }}
-            >
-              ← Précédent
-            </Button>
-            <span className="body-base" style={{ color: "#78756F" }}>
-              Page {currentPage} sur {totalPages}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-              disabled={currentPage === totalPages}
-              style={{ borderColor: "#D1CECC", color: "#5C5955" }}
-            >
-              Suivant →
-            </Button>
-          </div>
-        </div>
+                          {/* Textes libres */}
+                          {(["pointsForts", "defis", "remarque"] as const).map(field => (
+                            <td key={field} className="px-4 py-3">
+                              <Textarea value={e[field]}
+                                onChange={ev => handleText(enr.id, field, ev.target.value)}
+                                placeholder={field === "pointsForts" ? "Points forts..." : field === "defis" ? "Défis..." : "Remarque..."}
+                                disabled={isLocked} rows={2}
+                                className="resize-vertical"
+                                style={{ borderRadius: "8px", borderColor: "#D1D5DB", fontSize: "13px" }}
+                              />
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {e[field].length}/{field === "remarque" ? 500 : 300}
+                              </p>
+                            </td>
+                          ))}
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Pagination */}
+          {sortedEnrollments.length > itemsPerPage && (
+            <div className="flex items-center justify-center gap-4">
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1} style={{ borderColor: "#D1CECC", color: "#5C5955" }}>
+                ← Précédent
+              </Button>
+              <span className="text-sm" style={{ color: "#78756F" }}>
+                Page {currentPage} sur {totalPages}
+              </span>
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages} style={{ borderColor: "#D1CECC", color: "#5C5955" }}>
+                Suivant →
+              </Button>
+            </div>
+          )}
+
+          {/* Bouton Save */}
+          {!isLocked && (
+            <div style={{ marginTop: "24px" }}>
+              <Button size="lg" disabled={saving} onClick={handleSave}
+                style={{ backgroundColor: saving ? "#9CA3AF" : "#5A7085", color: "#FFFFFF", fontSize: "14px", fontWeight: 600, borderRadius: "8px", padding: "10px 24px", display: "flex", alignItems: "center", gap: "8px" }}>
+                {saving
+                  ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                  : <SaveIcon className="h-4 w-4" />}
+                {saving ? "Enregistrement..." : "Enregistrer le comportement"}
+              </Button>
+            </div>
+          )}
+        </>
       )}
-
-      {/* Action Buttons */}
-      <div className="flex items-center gap-3" style={{ marginTop: "24px" }}>
-        <Button
-          size="lg"
-          disabled={!selectedClassroomId || !selectedPeriodId || isLocked}
-          onClick={handleSaveBehaviors}
-          style={{
-            backgroundColor: (!selectedClassroomId || !selectedPeriodId || isLocked) ? "#9CA3AF" : "#5A7085",
-            color: "#FFFFFF",
-            fontSize: "14px",
-            fontWeight: 600,
-            borderRadius: "8px",
-            padding: "10px 24px",
-            display: "flex",
-            alignItems: "center",
-            gap: "8px"
-          }}
-        >
-          <SaveIcon className="h-4 w-4" />
-          Enregistrer le comportement
-        </Button>
-      </div>
     </div>
   )
 }

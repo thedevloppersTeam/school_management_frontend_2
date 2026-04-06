@@ -13,7 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { PlusIcon, ChevronRightIcon, ChevronDownIcon, CheckCircle2Icon, ZapIcon } from "lucide-react"
+import { PlusIcon, ChevronRightIcon, ChevronDownIcon, CheckCircle2Icon, ZapIcon, Trash2Icon } from "lucide-react"
 import React from "react"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -29,6 +29,7 @@ interface Subject { id: string; name: string; code: string; maxScore: number; co
 interface Section { id: string; name: string; code: string; maxScore: number; displayOrder: number }
 interface ClassType { id: string; name: string; code?: string; isTerminal: boolean }
 interface Class { id: string; classTypeId: string; classType?: ClassType; letter: string; maxStudents?: number }
+interface Attitude { id: string; label: string; academicYearId: string }
 
 // ── Seed ──────────────────────────────────────────────────────────────────────
 
@@ -82,13 +83,9 @@ export function saveSectionCycles(sectionId: string, cycles: string[]): void {
   localStorage.setItem(`section-cycles-${sectionId}`, JSON.stringify(cycles))
 }
 
-/**
- * Retourne true si une section est applicable au niveau de classe donné.
- * Si aucun cycle n'est configuré → applicable partout (fallback).
- */
 export function isSectionApplicable(sectionId: string, levelName: string): boolean {
   const cycles = getSectionCycles(sectionId)
-  if (cycles.length === 0) return true // pas de config → toutes les classes
+  if (cycles.length === 0) return true
   return cycles.some(cycle => (CYCLE_LEVELS[cycle] || []).includes(levelName))
 }
 
@@ -123,6 +120,15 @@ export default function SchoolSettingsPage() {
   const [loadingClasses, setLoadingClasses] = useState(false)
   const [classesLoaded, setClassesLoaded]   = useState(false)
   const [initializing, setInitializing]     = useState(false)
+
+  // ── Attitudes ─────────────────────────────────────────────────────────────
+  const [attitudes,        setAttitudes]        = useState<Attitude[]>([])
+  const [loadingAttitudes, setLoadingAttitudes] = useState(false)
+  const [attitudesLoaded,  setAttitudesLoaded]  = useState(false)
+  const [currentYearId,    setCurrentYearId]    = useState<string | null>(null)
+  const [attitudeModal,    setAttitudeModal]    = useState(false)
+  const [editingAttitude,  setEditingAttitude]  = useState<Attitude | null>(null)
+  const [attitudeLabel,    setAttitudeLabel]    = useState("")
 
   const [activeTab, setActiveTab] = useState("general")
 
@@ -191,10 +197,34 @@ export default function SchoolSettingsPage() {
     }
   }, [])
 
+  const loadAttitudes = useCallback(async (yearId: string) => {
+    setLoadingAttitudes(true)
+    try {
+      const data = await fetch(`/api/attitudes?academicYearId=${yearId}`, { credentials: 'include' })
+        .then(r => r.json())
+      setAttitudes(Array.isArray(data) ? data : [])
+    } catch (err) {
+      console.error('[settings] attitudes error:', err)
+    } finally {
+      setLoadingAttitudes(false)
+    }
+  }, [])
+
   useEffect(() => {
     if (activeTab === 'referentiel' && !referentielLoaded) { loadReferentiel(); setReferentielLoaded(true) }
     if (activeTab === 'classes'     && !classesLoaded)     { loadClasses();     setClassesLoaded(true) }
-  }, [activeTab, referentielLoaded, classesLoaded, loadReferentiel, loadClasses])
+    if (activeTab === 'attitudes'   && !attitudesLoaded) {
+      setAttitudesLoaded(true)
+      // Charger l'année active puis les attitudes
+      fetch('/api/academic-years/current', { credentials: 'include' })
+        .then(r => r.json())
+        .then(data => {
+          const yearId = data?.id ?? data?.academicYear?.id
+          if (yearId) { setCurrentYearId(yearId); loadAttitudes(yearId) }
+        })
+        .catch(err => console.error('[settings] current year error:', err))
+    }
+  }, [activeTab, referentielLoaded, classesLoaded, attitudesLoaded, loadReferentiel, loadClasses, loadAttitudes])
 
   // ── Handlers établissement ────────────────────────────────────────────────
 
@@ -328,7 +358,6 @@ export default function SchoolSettingsPage() {
           displayOrder: (parent?.sections?.length || 0) + 1
         })
       })
-      // Sauvegarder les cycles dans localStorage
       const sectionId = result?.section?.id
       if (sectionId && sectionForm.cycles.length > 0) {
         saveSectionCycles(sectionId, sectionForm.cycles)
@@ -355,6 +384,61 @@ export default function SchoolSettingsPage() {
         const sections = await apiFetch<Section[]>(`/api/subjects/${subjectId}/sections`)
         setSubjects(prev => prev.map(s => s.id === subjectId ? { ...s, sections } : s))
       } catch { /* ignorer */ }
+    }
+  }
+
+  // ── Handlers attitudes ────────────────────────────────────────────────────
+
+  const openCreateAttitude = () => {
+    setEditingAttitude(null)
+    setAttitudeLabel("")
+    setAttitudeModal(true)
+  }
+
+  const openEditAttitude = (attitude: Attitude) => {
+    setEditingAttitude(attitude)
+    setAttitudeLabel(attitude.label)
+    setAttitudeModal(true)
+  }
+
+  const handleSaveAttitude = async () => {
+    if (!attitudeLabel.trim() || !currentYearId) return
+    setSubmitting(true)
+    try {
+      if (editingAttitude) {
+        await fetch(`/api/attitudes/update/${editingAttitude.id}`, {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ label: attitudeLabel.trim() })
+        })
+        toast({ title: "Attitude modifiée" })
+      } else {
+        await fetch('/api/attitudes/create', {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ label: attitudeLabel.trim(), academicYearId: currentYearId })
+        })
+        toast({ title: "Attitude créée" })
+      }
+      setAttitudeModal(false)
+      loadAttitudes(currentYearId)
+    } catch {
+      toast({ title: "Erreur", variant: "destructive" })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleDeleteAttitude = async (attitude: Attitude) => {
+    if (!currentYearId) return
+    try {
+      await fetch(`/api/attitudes/delete/${attitude.id}`, {
+        method: 'POST', credentials: 'include'
+      })
+      toast({ title: "Attitude supprimée" })
+      loadAttitudes(currentYearId)
+    } catch {
+      toast({ title: "Erreur", variant: "destructive" })
     }
   }
 
@@ -434,9 +518,9 @@ export default function SchoolSettingsPage() {
 
       <Tabs defaultValue="general" className="w-full" onValueChange={setActiveTab}>
         <TabsList style={{ backgroundColor: "#F0F4F7", borderRadius: "8px", padding: "4px" }}>
-          {['general', 'calendar', 'referentiel', 'classes'].map((v, i) => (
+          {['general', 'calendar', 'referentiel', 'classes', 'attitudes'].map((v, i) => (
             <TabsTrigger key={v} value={v} className="data-[state=active]:bg-white data-[state=active]:shadow-sm" style={{ borderRadius: "6px" }}>
-              {['Informations générales', 'Calendrier scolaire', 'Matières & Rubriques', 'Classes'][i]}
+              {['Informations générales', 'Calendrier scolaire', 'Matières & Rubriques', 'Classes', 'Attitudes'][i]}
             </TabsTrigger>
           ))}
         </TabsList>
@@ -468,12 +552,9 @@ export default function SchoolSettingsPage() {
                     <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: '18px', fontWeight: 600, color: '#2A3740' }}>Rubriques ({rubrics.length})</h3>
                     <p style={{ fontSize: '13px', color: '#78756F', marginTop: '2px' }}>Formule BR-001 : R1 × 70% + R2 × 25% + R3 × 5%</p>
                   </div>
-                  <Button
-                    onClick={openCreateRubric}
-                    disabled={rubrics.length >= 3}
+                  <Button onClick={openCreateRubric} disabled={rubrics.length >= 3}
                     title={rubrics.length >= 3 ? "Maximum 3 rubriques (R1, R2, R3)" : undefined}
-                    style={{ backgroundColor: rubrics.length >= 3 ? '#9CA3AF' : '#2C4A6E', color: 'white', borderRadius: '8px' }}
-                  >
+                    style={{ backgroundColor: rubrics.length >= 3 ? '#9CA3AF' : '#2C4A6E', color: 'white', borderRadius: '8px' }}>
                     <PlusIcon className="mr-2 h-4 w-4" />Nouvelle rubrique
                   </Button>
                 </div>
@@ -491,26 +572,18 @@ export default function SchoolSettingsPage() {
                       </TableHeader>
                       <TableBody>
                         {rubrics.length === 0 ? (
-                          <TableRow>
-                            <TableCell colSpan={5} style={{ textAlign: 'center', color: '#78756F', padding: '32px' }}>
-                              Aucune rubrique — créez R1, R2, R3
-                            </TableCell>
-                          </TableRow>
+                          <TableRow><TableCell colSpan={5} style={{ textAlign: 'center', color: '#78756F', padding: '32px' }}>Aucune rubrique — créez R1, R2, R3</TableCell></TableRow>
                         ) : rubrics.map((rubric, i) => {
                           const colors = rubricColor(rubric.code)
                           const poids = rubric.code === 'R1' ? '70%' : rubric.code === 'R2' ? '25%' : rubric.code === 'R3' ? '5%' : '—'
                           return (
                             <TableRow key={rubric.id} style={{ borderTop: i > 0 ? '1px solid #E8E6E3' : 'none' }}>
-                              <TableCell>
-                                <Badge style={{ backgroundColor: colors.bg, color: colors.color, border: 'none', fontWeight: 700 }}>{rubric.code}</Badge>
-                              </TableCell>
+                              <TableCell><Badge style={{ backgroundColor: colors.bg, color: colors.color, border: 'none', fontWeight: 700 }}>{rubric.code}</Badge></TableCell>
                               <TableCell style={{ fontWeight: 600, color: '#1E1A17', fontSize: '14px' }}>{rubric.name}</TableCell>
                               <TableCell style={{ color: '#78756F', fontSize: '13px' }}>{rubric.description || '—'}</TableCell>
                               <TableCell style={{ fontWeight: 700, color: colors.color, fontSize: '14px' }}>{poids}</TableCell>
                               <TableCell style={{ textAlign: 'center' }}>
-                                <button onClick={() => openEditRubric(rubric)} style={{ fontSize: '13px', fontWeight: 500, color: '#5A7085', background: 'none', border: 'none', cursor: 'pointer' }}>
-                                  Modifier
-                                </button>
+                                <button onClick={() => openEditRubric(rubric)} style={{ fontSize: '13px', fontWeight: 500, color: '#5A7085', background: 'none', border: 'none', cursor: 'pointer' }}>Modifier</button>
                               </TableCell>
                             </TableRow>
                           )
@@ -526,16 +599,11 @@ export default function SchoolSettingsPage() {
                 <div style={{ padding: '20px 24px', borderBottom: '1px solid #E8E6E3', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div>
                     <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: '18px', fontWeight: 600, color: '#2A3740' }}>Matières ({subjects.length})</h3>
-                    <p style={{ fontSize: '13px', color: '#78756F', marginTop: '2px' }}>
-                      Référentiel global — les matières sont assignées aux classes dans la configuration de l&apos;année
-                    </p>
+                    <p style={{ fontSize: '13px', color: '#78756F', marginTop: '2px' }}>Référentiel global — les matières sont assignées aux classes dans la configuration de l&apos;année</p>
                   </div>
-                  <Button
-                    onClick={openCreateSubject}
-                    disabled={rubrics.length === 0}
+                  <Button onClick={openCreateSubject} disabled={rubrics.length === 0}
                     title={rubrics.length === 0 ? "Créez d'abord les rubriques" : undefined}
-                    style={{ backgroundColor: rubrics.length === 0 ? '#9CA3AF' : '#2C4A6E', color: 'white', borderRadius: '8px' }}
-                  >
+                    style={{ backgroundColor: rubrics.length === 0 ? '#9CA3AF' : '#2C4A6E', color: 'white', borderRadius: '8px' }}>
                     <PlusIcon className="mr-2 h-4 w-4" />Nouvelle matière
                   </Button>
                 </div>
@@ -555,11 +623,9 @@ export default function SchoolSettingsPage() {
                       </TableHeader>
                       <TableBody>
                         {subjects.length === 0 ? (
-                          <TableRow>
-                            <TableCell colSpan={7} style={{ textAlign: 'center', color: '#78756F', padding: '32px' }}>
-                              {rubrics.length === 0 ? "Créez d'abord les rubriques (R1, R2, R3)" : "Aucune matière — créez la première"}
-                            </TableCell>
-                          </TableRow>
+                          <TableRow><TableCell colSpan={7} style={{ textAlign: 'center', color: '#78756F', padding: '32px' }}>
+                            {rubrics.length === 0 ? "Créez d'abord les rubriques (R1, R2, R3)" : "Aucune matière — créez la première"}
+                          </TableCell></TableRow>
                         ) : subjects.map((subject, i) => {
                           const isExpanded = expandedSubjects.has(subject.id)
                           const colors = rubricColor(subject.rubric?.code)
@@ -584,13 +650,9 @@ export default function SchoolSettingsPage() {
                                 <TableCell style={{ fontSize: '14px' }}>{subject.maxScore}</TableCell>
                                 <TableCell>
                                   <div className="flex items-center justify-center gap-2">
-                                    <button onClick={() => openCreateSection(subject.id)} style={{ fontSize: '12px', fontWeight: 500, color: '#2C4A6E', background: 'none', border: 'none', cursor: 'pointer' }}>
-                                      + Section
-                                    </button>
+                                    <button onClick={() => openCreateSection(subject.id)} style={{ fontSize: '12px', fontWeight: 500, color: '#2C4A6E', background: 'none', border: 'none', cursor: 'pointer' }}>+ Section</button>
                                     <span style={{ color: '#D1CECC' }}>|</span>
-                                    <button onClick={() => openEditSubject(subject)} style={{ fontSize: '13px', fontWeight: 500, color: '#5A7085', background: 'none', border: 'none', cursor: 'pointer' }}>
-                                      Modifier
-                                    </button>
+                                    <button onClick={() => openEditSubject(subject)} style={{ fontSize: '13px', fontWeight: 500, color: '#5A7085', background: 'none', border: 'none', cursor: 'pointer' }}>Modifier</button>
                                   </div>
                                 </TableCell>
                               </TableRow>
@@ -604,16 +666,12 @@ export default function SchoolSettingsPage() {
                                     </TableCell>
                                     <TableCell style={{ fontSize: '13px', color: '#1E1A17' }}>{section.name}</TableCell>
                                     <TableCell>
-                                      {/* Cycles configurés */}
                                       <div className="flex gap-1 flex-wrap">
                                         {cycles.length > 0
                                           ? cycles.map(c => (
-                                              <span key={c} style={{ backgroundColor: '#E3EFF9', color: '#2B6CB0', padding: '1px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 500 }}>
-                                                {c}
-                                              </span>
+                                              <span key={c} style={{ backgroundColor: '#E3EFF9', color: '#2B6CB0', padding: '1px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 500 }}>{c}</span>
                                             ))
-                                          : <span style={{ color: '#A8A5A2', fontSize: '12px' }}>Tous les cycles</span>
-                                        }
+                                          : <span style={{ color: '#A8A5A2', fontSize: '12px' }}>Tous les cycles</span>}
                                       </div>
                                     </TableCell>
                                     <TableCell style={{ fontSize: '13px', color: '#78756F' }}>{section.maxScore}</TableCell>
@@ -646,8 +704,7 @@ export default function SchoolSettingsPage() {
                 </div>
                 {classTypes.length === 0 && (
                   <Button onClick={handleInitializeClasses} disabled={initializing} style={{ backgroundColor: '#2C4A6E', color: 'white', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <ZapIcon className="h-4 w-4" />
-                    {initializing ? 'Initialisation...' : 'Initialiser niveaux & classes'}
+                    <ZapIcon className="h-4 w-4" />{initializing ? 'Initialisation...' : 'Initialiser niveaux & classes'}
                   </Button>
                 )}
                 {classesInitialized && (
@@ -662,8 +719,7 @@ export default function SchoolSettingsPage() {
                     <p style={{ fontSize: '16px', fontWeight: 600, color: '#3A4A57', marginBottom: '8px' }}>Aucun niveau configuré</p>
                     <p style={{ fontSize: '13px', color: '#78756F', marginBottom: '24px' }}>Cliquez sur &quot;Initialiser niveaux &amp; classes&quot; pour créer les 13 niveaux MENFP.</p>
                     <Button onClick={handleInitializeClasses} disabled={initializing} style={{ backgroundColor: '#2C4A6E', color: 'white', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-                      <ZapIcon className="h-4 w-4" />
-                      {initializing ? 'Initialisation en cours...' : 'Initialiser niveaux & classes'}
+                      <ZapIcon className="h-4 w-4" />{initializing ? 'Initialisation en cours...' : 'Initialiser niveaux & classes'}
                     </Button>
                   </div>
                 ) : (
@@ -711,6 +767,99 @@ export default function SchoolSettingsPage() {
             </div>
           )}
         </TabsContent>
+
+        {/* ── Attitudes ── */}
+        <TabsContent value="attitudes" className="space-y-6 mt-6">
+          {loadingAttitudes ? (
+            <div className="space-y-4"><Skeleton className="h-64 w-full" /></div>
+          ) : (
+            <div style={{ backgroundColor: '#FFFFFF', borderRadius: '10px', border: '1px solid #E8E6E3', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+              <div style={{ padding: '20px 24px', borderBottom: '1px solid #E8E6E3', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: '18px', fontWeight: 600, color: '#2A3740' }}>
+                    Attitudes ({attitudes.length})
+                  </h3>
+                  <p style={{ fontSize: '13px', color: '#78756F', marginTop: '2px' }}>
+                    Caractéristiques de comportement évaluées pour l&apos;année active — Oui / Non par élève
+                  </p>
+                </div>
+                <Button
+                  onClick={openCreateAttitude}
+                  disabled={!currentYearId}
+                  title={!currentYearId ? "Aucune année active" : undefined}
+                  style={{ backgroundColor: !currentYearId ? '#9CA3AF' : '#2C4A6E', color: 'white', borderRadius: '8px' }}
+                >
+                  <PlusIcon className="mr-2 h-4 w-4" />Nouvelle attitude
+                </Button>
+              </div>
+
+              {!currentYearId && (
+                <div style={{ padding: '32px', textAlign: 'center' }}>
+                  <p style={{ fontSize: '14px', color: '#C48B1A' }}>Aucune année scolaire active. Activez une année dans la configuration.</p>
+                </div>
+              )}
+
+              {currentYearId && (
+                <div style={{ padding: '24px' }}>
+                  {attitudes.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '48px 24px', border: '1px dashed #D1CECC', borderRadius: '8px' }}>
+                      <p style={{ fontSize: '15px', fontWeight: 600, color: '#3A4A57', marginBottom: '6px' }}>Aucune attitude configurée</p>
+                      <p style={{ fontSize: '13px', color: '#78756F', marginBottom: '20px' }}>
+                        Ajoutez les attitudes à évaluer pour cette année.<br />
+                        Exemples : Respectueux(se), Ponctuel(le), Attentif(ve)
+                      </p>
+                      <Button onClick={openCreateAttitude} style={{ backgroundColor: '#2C4A6E', color: 'white', borderRadius: '8px' }}>
+                        <PlusIcon className="mr-2 h-4 w-4" />Créer la première attitude
+                      </Button>
+                    </div>
+                  ) : (
+                    <div style={{ borderRadius: '8px', border: '1px solid #E8E6E3', overflow: 'hidden' }}>
+                      <Table>
+                        <TableHeader>
+                          <TableRow style={{ backgroundColor: '#F1F5F9', borderBottom: '2px solid #D1D5DB' }}>
+                            <TableHead style={TH}>#</TableHead>
+                            <TableHead style={TH}>Libellé</TableHead>
+                            <TableHead style={{ ...TH, textAlign: 'center' }}>Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {attitudes.map((att, i) => (
+                            <TableRow key={att.id} style={{ borderTop: i > 0 ? '1px solid #E8E6E3' : 'none' }}>
+                              <TableCell style={{ width: '48px', color: '#A8A5A2', fontSize: '13px', fontWeight: 500 }}>
+                                {i + 1}
+                              </TableCell>
+                              <TableCell style={{ fontWeight: 600, color: '#1E1A17', fontSize: '14px' }}>
+                                {att.label}
+                              </TableCell>
+                              <TableCell style={{ textAlign: 'center' }}>
+                                <div className="flex items-center justify-center gap-3">
+                                  <button
+                                    onClick={() => openEditAttitude(att)}
+                                    style={{ fontSize: '13px', fontWeight: 500, color: '#5A7085', background: 'none', border: 'none', cursor: 'pointer' }}
+                                  >
+                                    Modifier
+                                  </button>
+                                  <span style={{ color: '#D1CECC' }}>|</span>
+                                  <button
+                                    onClick={() => handleDeleteAttitude(att)}
+                                    style={{ fontSize: '13px', fontWeight: 500, color: '#C43C3C', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                  >
+                                    <Trash2Icon className="h-3.5 w-3.5" />
+                                    Supprimer
+                                  </button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </TabsContent>
       </Tabs>
 
       {/* ── Modal Rubrique ── */}
@@ -726,13 +875,8 @@ export default function SchoolSettingsPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <Label style={{ fontSize: '13px', fontWeight: 500 }}>Code * <span style={{ color: '#78756F', fontWeight: 400 }}>(ex: R1)</span></Label>
-                <Input
-                  value={rubricForm.code}
-                  onChange={e => setRubricForm(f => ({ ...f, code: e.target.value.toUpperCase() }))}
-                  disabled={!!editingRubric}
-                  style={{ borderColor: '#D1CECC', backgroundColor: editingRubric ? '#F5F4F2' : 'white' }}
-                  placeholder="R1"
-                />
+                <Input value={rubricForm.code} onChange={e => setRubricForm(f => ({ ...f, code: e.target.value.toUpperCase() }))} disabled={!!editingRubric}
+                  style={{ borderColor: '#D1CECC', backgroundColor: editingRubric ? '#F5F4F2' : 'white' }} placeholder="R1" />
                 {editingRubric && <p style={{ fontSize: '11px', color: '#78756F' }}>Le code ne peut pas être modifié</p>}
               </div>
               <div className="space-y-1">
@@ -770,26 +914,12 @@ export default function SchoolSettingsPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <Label style={{ fontSize: '13px', fontWeight: 500 }}>Nom *</Label>
-                <Input
-                  value={subjectForm.name}
-                  onChange={e => {
-                    const name = e.target.value
-                    setSubjectForm(f => ({
-                      ...f, name,
-                      ...(!editingSubject && { code: generateCode(name) })
-                    }))
-                  }}
-                  style={{ borderColor: '#D1CECC' }}
-                />
+                <Input value={subjectForm.name} onChange={e => { const name = e.target.value; setSubjectForm(f => ({ ...f, name, ...(!editingSubject && { code: generateCode(name) }) })) }} style={{ borderColor: '#D1CECC' }} />
               </div>
               <div className="space-y-1">
                 <Label style={{ fontSize: '13px', fontWeight: 500 }}>Code</Label>
-                <Input
-                  value={subjectForm.code}
-                  readOnly={!editingSubject}
-                  onChange={e => editingSubject && setSubjectForm(f => ({ ...f, code: e.target.value.toUpperCase() }))}
-                  style={{ borderColor: '#D1CECC', backgroundColor: !editingSubject ? '#F5F4F2' : 'white' }}
-                />
+                <Input value={subjectForm.code} readOnly={!editingSubject} onChange={e => editingSubject && setSubjectForm(f => ({ ...f, code: e.target.value.toUpperCase() }))}
+                  style={{ borderColor: '#D1CECC', backgroundColor: !editingSubject ? '#F5F4F2' : 'white' }} />
                 {!editingSubject && <p style={{ fontSize: '11px', color: '#78756F' }}>Généré automatiquement depuis le nom</p>}
               </div>
             </div>
@@ -806,19 +936,13 @@ export default function SchoolSettingsPage() {
             <div className="space-y-1">
               <Label style={{ fontSize: '13px', fontWeight: 500 }}>Rubrique *</Label>
               <Select value={subjectForm.rubricId} onValueChange={v => setSubjectForm(f => ({ ...f, rubricId: v }))}>
-                <SelectTrigger style={{ borderColor: '#D1CECC' }}>
-                  <SelectValue placeholder="Sélectionner une rubrique" />
-                </SelectTrigger>
-                <SelectContent>
-                  {rubrics.map(r => <SelectItem key={r.id} value={r.id}>{r.code} — {r.name}</SelectItem>)}
-                </SelectContent>
+                <SelectTrigger style={{ borderColor: '#D1CECC' }}><SelectValue placeholder="Sélectionner une rubrique" /></SelectTrigger>
+                <SelectContent>{rubrics.map(r => <SelectItem key={r.id} value={r.id}>{r.code} — {r.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="flex items-center gap-3">
               <input type="checkbox" id="hasSections" checked={subjectForm.hasSections} onChange={e => setSubjectForm(f => ({ ...f, hasSections: e.target.checked }))} />
-              <Label htmlFor="hasSections" style={{ fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>
-                Cette matière a des sous-matières (sections)
-              </Label>
+              <Label htmlFor="hasSections" style={{ fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>Cette matière a des sous-matières (sections)</Label>
             </div>
           </div>
           <DialogFooter>
@@ -841,22 +965,18 @@ export default function SchoolSettingsPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <Label style={{ fontSize: '13px', fontWeight: 500 }}>Nom *</Label>
-                <Input
-                  value={sectionForm.name}
-                  onChange={e => {
-                    const name = e.target.value
-                    const clean = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z\s]/g, '').toUpperCase().trim()
-                    const words = clean.split(/\s+/).filter(Boolean)
-                    let letters = ''
-                    if (words.length === 1)      letters = words[0].slice(0, 3)
-                    else if (words.length === 2)  letters = words[0].slice(0, 2) + words[1].slice(0, 1)
-                    else                          letters = words.map((w: string) => w[0]).join('').slice(0, 3)
-                    const parent = subjects.find(s => s.id === sectionParentId)
-                    const num = String((parent?.sections?.length || 0) + 1).padStart(3, '0')
-                    setSectionForm(f => ({ ...f, name, code: letters ? `${letters}-${num}` : '' }))
-                  }}
-                  style={{ borderColor: '#D1CECC' }}
-                />
+                <Input value={sectionForm.name} onChange={e => {
+                  const name = e.target.value
+                  const clean = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z\s]/g, '').toUpperCase().trim()
+                  const words = clean.split(/\s+/).filter(Boolean)
+                  let letters = ''
+                  if (words.length === 1)      letters = words[0].slice(0, 3)
+                  else if (words.length === 2)  letters = words[0].slice(0, 2) + words[1].slice(0, 1)
+                  else                          letters = words.map((w: string) => w[0]).join('').slice(0, 3)
+                  const parent = subjects.find(s => s.id === sectionParentId)
+                  const num = String((parent?.sections?.length || 0) + 1).padStart(3, '0')
+                  setSectionForm(f => ({ ...f, name, code: letters ? `${letters}-${num}` : '' }))
+                }} style={{ borderColor: '#D1CECC' }} />
               </div>
               <div className="space-y-1">
                 <Label style={{ fontSize: '13px', fontWeight: 500 }}>Code</Label>
@@ -868,39 +988,17 @@ export default function SchoolSettingsPage() {
               <Label style={{ fontSize: '13px', fontWeight: 500 }}>Note max</Label>
               <Input type="number" value={sectionForm.maxScore} onChange={e => setSectionForm(f => ({ ...f, maxScore: e.target.value }))} style={{ borderColor: '#D1CECC' }} />
             </div>
-
-            {/* ── Cycles applicables ── */}
             <div className="space-y-2">
               <Label style={{ fontSize: '13px', fontWeight: 500 }}>
                 Cycles applicables *
-                <span style={{ color: '#78756F', fontWeight: 400, marginLeft: '6px', fontSize: '12px' }}>
-                  Dans quels cycles cette sous-matière est enseignée ?
-                </span>
+                <span style={{ color: '#78756F', fontWeight: 400, marginLeft: '6px', fontSize: '12px' }}>Dans quels cycles cette sous-matière est enseignée ?</span>
               </Label>
               <div style={{ border: '1px solid #E8E6E3', borderRadius: '8px', overflow: 'hidden' }}>
                 {CYCLES_MENFP.map((cycle, i) => (
-                  <label
-                    key={cycle.key}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '12px',
-                      padding: '10px 14px', cursor: 'pointer',
-                      borderTop: i > 0 ? '1px solid #F0EDE8' : 'none',
-                      backgroundColor: sectionForm.cycles.includes(cycle.key) ? '#F0F4F7' : 'white',
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={sectionForm.cycles.includes(cycle.key)}
-                      onChange={e => {
-                        setSectionForm(f => ({
-                          ...f,
-                          cycles: e.target.checked
-                            ? [...f.cycles, cycle.key]
-                            : f.cycles.filter(c => c !== cycle.key)
-                        }))
-                      }}
-                      style={{ width: '16px', height: '16px', accentColor: '#2C4A6E', cursor: 'pointer' }}
-                    />
+                  <label key={cycle.key} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', cursor: 'pointer', borderTop: i > 0 ? '1px solid #F0EDE8' : 'none', backgroundColor: sectionForm.cycles.includes(cycle.key) ? '#F0F4F7' : 'white' }}>
+                    <input type="checkbox" checked={sectionForm.cycles.includes(cycle.key)}
+                      onChange={e => setSectionForm(f => ({ ...f, cycles: e.target.checked ? [...f.cycles, cycle.key] : f.cycles.filter(c => c !== cycle.key) }))}
+                      style={{ width: '16px', height: '16px', accentColor: '#2C4A6E', cursor: 'pointer' }} />
                     <div>
                       <span style={{ fontSize: '13px', fontWeight: 600, color: '#1E1A17' }}>{cycle.label}</span>
                       <span style={{ fontSize: '12px', color: '#78756F', marginLeft: '8px' }}>{cycle.description}</span>
@@ -909,9 +1007,7 @@ export default function SchoolSettingsPage() {
                 ))}
               </div>
               {sectionForm.cycles.length === 0 && (
-                <p style={{ fontSize: '11px', color: '#C48B1A' }}>
-                  ⚠ Aucun cycle sélectionné — la sous-matière s&apos;appliquera à toutes les classes
-                </p>
+                <p style={{ fontSize: '11px', color: '#C48B1A' }}>⚠ Aucun cycle sélectionné — la sous-matière s&apos;appliquera à toutes les classes</p>
               )}
             </div>
           </div>
@@ -919,6 +1015,42 @@ export default function SchoolSettingsPage() {
             <Button variant="outline" onClick={() => setSectionModal(false)} style={{ borderColor: '#D1CECC' }}>Annuler</Button>
             <Button onClick={handleSaveSection} disabled={submitting || !sectionForm.name || !sectionForm.code} style={{ backgroundColor: '#2C4A6E', color: 'white' }}>
               {submitting ? 'En cours...' : 'Créer'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Modal Attitude ── */}
+      <Dialog open={attitudeModal} onOpenChange={setAttitudeModal}>
+        <DialogContent style={{ backgroundColor: 'white', borderRadius: '12px' }}>
+          <DialogHeader>
+            <DialogTitle className="font-serif" style={{ fontSize: '22px', fontWeight: 700, color: '#2A3740' }}>
+              {editingAttitude ? 'Modifier l\'attitude' : 'Nouvelle attitude'}
+            </DialogTitle>
+            <DialogDescription style={{ fontSize: '13px', color: '#78756F' }}>
+              L&apos;attitude sera évaluée Oui / Non pour chaque élève lors de la saisie du comportement.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1">
+              <Label style={{ fontSize: '13px', fontWeight: 500 }}>Libellé *</Label>
+              <Input
+                value={attitudeLabel}
+                onChange={e => setAttitudeLabel(e.target.value)}
+                placeholder="Ex: Respectueux(se), Ponctuel(le)..."
+                style={{ borderColor: '#D1CECC' }}
+                onKeyDown={e => e.key === 'Enter' && handleSaveAttitude()}
+                autoFocus
+              />
+            </div>
+            <div style={{ backgroundColor: '#F0F4F7', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', color: '#5A7085' }}>
+              Exemples d&apos;attitudes : Respectueux(se) · Ponctuel(le) · Attentif(ve) · Travailleur(se) · Perturbateur(trice)
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAttitudeModal(false)} style={{ borderColor: '#D1CECC' }}>Annuler</Button>
+            <Button onClick={handleSaveAttitude} disabled={submitting || !attitudeLabel.trim()} style={{ backgroundColor: '#2C4A6E', color: 'white' }}>
+              {submitting ? 'En cours...' : editingAttitude ? 'Enregistrer' : 'Créer'}
             </Button>
           </DialogFooter>
         </DialogContent>

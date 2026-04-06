@@ -23,6 +23,7 @@ interface BulletinPDFGeneratorProps {
   stepName:       string
   className:      string
   enrollmentId:   string
+  yearId:         string   // ← nouveau : pour charger attitudes + behavior
   onDownload?:    () => void
 }
 
@@ -38,6 +39,7 @@ export function BulletinPDFGenerator({
   stepName,
   className,
   enrollmentId,
+  yearId,
   onDownload,
 }: BulletinPDFGeneratorProps) {
   const [loading,      setLoading]      = useState(false)
@@ -51,9 +53,7 @@ export function BulletinPDFGenerator({
   const fetchBulletinData = useCallback(async () => {
     if (!open || hasFetched) return
     setLoading(true)
-
     try {
-
       const data = await buildBulletinData({
         enrollmentId,
         studentId,
@@ -61,9 +61,9 @@ export function BulletinPDFGenerator({
         stepId,
         stepName,
         className,
+        yearId,
       })
       setBulletinData(data)
-
       setHasFetched(true)
     } catch (error) {
       console.error('[BulletinPDFGenerator] fetchBulletinData:', error)
@@ -71,7 +71,7 @@ export function BulletinPDFGenerator({
     } finally {
       setLoading(false)
     }
-  }, [open, hasFetched, studentId, enrollmentId, classSessionId, stepId, studentName, className, stepName])
+  }, [open, hasFetched, studentId, enrollmentId, classSessionId, stepId, studentName, className, stepName, yearId])
 
   // ── PDF generation ─────────────────────────────────────────────────────────
 
@@ -116,13 +116,13 @@ export function BulletinPDFGenerator({
       })
       document.body.removeChild(tempContainer)
 
-      const imgData   = canvas.toDataURL('image/png')
-      const pdf       = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-      const imgWidth  = 210
+      const imgData    = canvas.toDataURL('image/png')
+      const pdf        = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+      const imgWidth   = 210
       const pageHeight = 297
-      const imgHeight = (canvas.height * imgWidth) / canvas.width
-      let heightLeft  = imgHeight
-      let position    = 0
+      const imgHeight  = (canvas.height * imgWidth) / canvas.width
+      let heightLeft   = imgHeight
+      let position     = 0
 
       pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
       heightLeft -= pageHeight
