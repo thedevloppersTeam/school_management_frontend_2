@@ -108,6 +108,14 @@ export default function GradesPage() {
     if (selectedClassSubjectId && id) loadGrades(selectedClassSubjectId, id)
   }
 
+    function buildSaveDescription(created: number, updated: number): string {
+    const parts = [
+      created > 0 ? `${created} note${created > 1 ? 's' : ''} créée${created > 1 ? 's' : ''}` : '',
+      updated > 0 ? `${updated} note${updated > 1 ? 's' : ''} mise${updated > 1 ? 's' : ''} à jour` : '',
+    ].filter(Boolean)
+    return parts.join(', ')
+  }
+
   async function handleSaveGrades(toCreate: CreateGradePayload[], toUpdate: UpdateGradePayload[]) {
     setSaving(true)
     try {
@@ -118,10 +126,7 @@ export default function GradesPage() {
 
       const created = toCreate.length
       const updated = toUpdate.length
-      const desc = [
-        created > 0 ? `${created} note${created > 1 ? 's' : ''} créée${created > 1 ? 's' : ''}` : '',
-        updated > 0 ? `${updated} note${updated > 1 ? 's' : ''} mise${updated > 1 ? 's' : ''} à jour` : '',
-      ].filter(Boolean).join(', ')
+      const desc = buildSaveDescription(created, updated)
 
       toast({ title: 'Notes enregistrées', description: desc })
       if (selectedClassSubjectId && selectedStepId) {

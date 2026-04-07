@@ -11,12 +11,13 @@ import {
   fetchSteps,
   fetchClassSessions,
   type AcademicYear,
-  type AcademicYearStep,
-  type ClassSession
+  type AcademicYearStep
 } from "@/lib/api/dashboard"
 
 // ── Types locaux (format attendu par CPMSLYearConfigTabs) ─────────────────────
 
+
+type Rubique = 'R1' | 'R2' | 'R3'
 interface Period {
   id: string
   name: string
@@ -43,7 +44,7 @@ interface SubjectParent {
   id: string
   code: string
   name: string
-  rubrique: 'R1' | 'R2' | 'R3'
+  rubrique: Rubique
   coefficient: number
 }
 
@@ -112,22 +113,27 @@ export default function AcademicYearConfigPage() {
 
       // 3. Sessions de classe → classrooms
       const sessionsData = await fetchClassSessions(yearId)
-      setClassrooms(sessionsData.map(s => ({
-        id:      s.id,
-        name:    `${s.class.classType.name} ${s.class.letter}${s.class.track ? ` — ${s.class.track.code}` : ''}`,
-        levelId: s.class.classType.id,
-        capacity: 30
-      })))
+      setClassrooms(sessionsData.map(s => {
+        const trackSuffix = s.class.track ? ` — ${s.class.track.code}` : ''
+        return {
+          id:      s.id,
+          name:    `${s.class.classType.name} ${s.class.letter}${trackSuffix}`,
+          levelId: s.class.classType.id,
+          capacity: 30
+        }
+      }))
 
       // 4. Types de classe → levels
       const typesRes = await fetch('/api/class-types', { credentials: 'include' })
       if (typesRes.ok) {
         const types = await typesRes.json()
         setLevels(types.map((t: { id: string; name: string; isTerminal: boolean }) => {
-          const category: Level['category'] =
-            t.name === 'NS3' || t.name === 'NS4' ? 'ns-filiere' :
-            t.name === 'NS1' || t.name === 'NS2' ? 'ns-tronc' :
-            'fondamental'
+          let category: Level['category'] = 'fondamental'
+          if (t.name === 'NS3' || t.name === 'NS4') {
+            category = 'ns-filiere'
+          } else if (t.name === 'NS1' || t.name === 'NS2') {
+            category = 'ns-tronc'
+          }
           return {
             id:         t.id,
             name:       t.name,
@@ -157,7 +163,7 @@ export default function AcademicYearConfigPage() {
         const subjects = await subjectsRes.json()
         const rubrics  = await rubricsRes.json()
 
-        const rubricMap: Record<string, 'R1' | 'R2' | 'R3'> = {}
+        const rubricMap: Record<string, Rubique> = {}
         rubrics.forEach((r: { id: string; code: string }) => {
           if (r.code === 'R1' || r.code === 'R2' || r.code === 'R3') {
             rubricMap[r.id] = r.code
@@ -237,7 +243,7 @@ export default function AcademicYearConfigPage() {
           endDate:     data.endDate,
         })
       })
-      if (!res.ok) throw new Error()
+            if (!res.ok) throw new Error(`Échec de la création de l'étape de l'année académique`)
       toast({ title: "Étape créée", description: `L'étape ${data.name} a été configurée.` })
       loadData()
     } catch {
@@ -250,7 +256,7 @@ export default function AcademicYearConfigPage() {
       const res = await fetch(`/api/academic-years/steps/disable/${periodId}`, {
         credentials: 'include'
       })
-      if (!res.ok) throw new Error()
+            if (!res.ok) throw new Error(`Échec de la désactivation de l'étape de l'année académique`)
       toast({ title: "Étape clôturée" })
       loadData()
     } catch {
@@ -275,7 +281,7 @@ export default function AcademicYearConfigPage() {
 
   const handleAddSubjectParent = async (data: {
     name: string; code: string
-    rubrique: 'R1' | 'R2' | 'R3'; coefficient: number
+    rubrique: Rubique; coefficient: number
   }) => {
     try {
       const rubricsRes = await fetch('/api/subject-rubrics', { credentials: 'include' })
@@ -295,7 +301,7 @@ export default function AcademicYearConfigPage() {
           rubricId:    rubric?.id || null,
         })
       })
-      if (!res.ok) throw new Error()
+      if (!res.ok) throw new Error('Échec de la création du sujet')
       toast({ title: "Matière ajoutée" })
       loadData()
     } catch {
@@ -304,7 +310,7 @@ export default function AcademicYearConfigPage() {
   }
 
   const handleEditSubjectParent = async (parentId: string, data: {
-    name: string; rubrique: 'R1' | 'R2' | 'R3'; coefficient: number
+    name: string; rubrique: Rubique; coefficient: number
   }) => {
     try {
       const rubricsRes = await fetch('/api/subject-rubrics', { credentials: 'include' })
@@ -321,7 +327,7 @@ export default function AcademicYearConfigPage() {
           rubricId:    rubric?.id || null,
         })
       })
-      if (!res.ok) throw new Error()
+      if (!res.ok) throw new Error('Échec de la mise à jour du sujet parent')
       toast({ title: "Matière modifiée" })
       loadData()
     } catch {
@@ -344,7 +350,7 @@ export default function AcademicYearConfigPage() {
           displayOrder: subjectChildren.filter(c => c.parentId === parentId).length + 1,
         })
       })
-      if (!res.ok) throw new Error()
+      if (!res.ok) throw new Error('Échec de la création de la sous-matière')
       toast({ title: "Sous-matière ajoutée" })
       loadData()
     } catch {
@@ -362,7 +368,7 @@ export default function AcademicYearConfigPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: data.name })
       })
-      if (!res.ok) throw new Error()
+      if (!res.ok) throw new Error('Échec de la mise à jour de la sous-matière')
       toast({ title: "Sous-matière modifiée" })
       loadData()
     } catch {
