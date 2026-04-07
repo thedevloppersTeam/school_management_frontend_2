@@ -57,21 +57,45 @@ interface ReportData {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+function calcMedian(values: number[]): number {
+  if (values.length === 0) return 0
+  const sorted = [...values].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 !== 0
+    ? sorted[mid]
+    : (sorted[mid - 1] + sorted[mid]) / 2
+}
+
+function fmt(value: number | null | undefined, decimals = 2): string {
+  if (value === null || value === undefined) return '—'
+  return value.toFixed(decimals)
+}
+
 async function apiFetch<T>(url: string): Promise<T> {
-  const res = await fetch(url, { credentials: 'include' })
-  if (!res.ok) throw new Error(`API ${res.status}`)
-  return res.json()
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`apiFetch ${url} → ${res.status}`)
+  return res.json() as Promise<T>
 }
 
-function fmt(v: number | null, decimals = 2): string {
-  return v !== null ? v.toFixed(decimals) : '—'
-}
-
-function calcMedian(arr: number[]): number {
-  if (arr.length === 0) return 0
-  const s = [...arr].sort((a, b) => a - b)
-  const m = Math.floor(s.length / 2)
-  return s.length % 2 === 0 ? (s[m - 1] + s[m]) / 2 : s[m]
+function calculateSectionScores(
+  sub: SubjectColumn,
+  grades: Array<{
+    classSubjectId: string
+    sectionId: string | null
+    studentScore: number | { s: number; e: number; d: number[] }
+  }>
+): number | null {
+  let total = 0
+  for (const sec of sub.sections) {
+    const g = grades.find(
+      g => g.classSubjectId === sub.classSubjectId && g.sectionId === sec.id
+    )
+    if (!g) return null
+    const score = parseDecimal(g.studentScore)
+    if (score === null) return null
+    total += score
+  }
+  return total
 }
 
 // ── Composant ─────────────────────────────────────────────────────────────────
@@ -125,8 +149,11 @@ export function CPMSLRapportsSection({
           id: string
           subjectId: string
           subject?: {
-            name?: string; code?: string; maxScore?: number
-            hasSections?: boolean; rubricId?: string
+            name?: string
+            code?: string
+            maxScore?: number
+            hasSections?: boolean
+            rubricId?: string
             rubric?: { code?: string }
             sections?: Array<{ id: string; name: string; maxScore?: number }>
           }
@@ -143,8 +170,10 @@ export function CPMSLRapportsSection({
           const rubricCode = (rubricId ? rubricMap[rubricId] : null) as 'R1' | 'R2' | 'R3' | null
           if (!rubricCode) return null
 
-          const sections = (cs.subject?.sections || []).map(sec => ({
-            id: sec.id, name: sec.name, maxScore: Number(sec.maxScore) || 10,
+          const sections = (cs.subject?.sections ?? []).map(sec => ({
+            id: sec.id,
+            name: sec.name,
+            maxScore: Number(sec.maxScore) || 10,
           }))
 
           const maxScore = sections.length > 0
@@ -152,12 +181,16 @@ export function CPMSLRapportsSection({
             : Number(cs.subject?.maxScore) || 10
 
           return {
-            classSubjectId: cs.id, subjectId: cs.subjectId,
-            name: cs.subject?.name || '—', code: cs.subject?.code || '—',
-            rubricCode, maxScore, sections,
-          } as SubjectColumn
+            classSubjectId: cs.id,
+            subjectId: cs.subjectId,
+            name: cs.subject?.name ?? '—',
+            code: cs.subject?.code ?? '—',
+            rubricCode,
+            maxScore,
+            sections,
+          } satisfies SubjectColumn
         })
-        .filter(Boolean) as SubjectColumn[]
+        .filter((s): s is SubjectColumn => s !== null)
 
       const rubricOrder: Record<string, number> = { R1: 0, R2: 1, R3: 2 }
       subjects.sort((a, b) =>
@@ -165,63 +198,65 @@ export function CPMSLRapportsSection({
         a.name.localeCompare(b.name)
       )
 
-      const rows: StudentRow[] = await Promise.all(
-        enrollments.map(async (enr) => {
-          const grades = await apiFetch<Array<{
-            classSubjectId: string
-            sectionId: string | null
-            studentScore: number | { s: number; e: number; d: number[] }
-          }>>(`/api/grades/enrollment/${enr.id}?stepId=${selectedStep}`)
+      const processEnrollment = async (enr: {
+        id: string
+        student?: { nisu?: string; user?: { firstname?: string; lastname?: string } }
+      }): Promise<StudentRow> => {
+        const grades = await apiFetch<Array<{
+          classSubjectId: string
+          sectionId: string | null
+          studentScore: number | { s: number; e: number; d: number[] }
+        }>>(`/api/grades/enrollment/${enr.id}?stepId=${selectedStep}`)
 
-          const scores: Record<string, number | null> = {}
-          subjects.forEach(sub => {
-            if (sub.sections.length === 0) {
-              const g = grades.find(g => g.classSubjectId === sub.classSubjectId && g.sectionId === null)
-              scores[sub.classSubjectId] = g ? parseDecimal(g.studentScore) : null
-            } else {
-              let total = 0, missing = false
-              for (const sec of sub.sections) {
-                const g = grades.find(g => g.classSubjectId === sub.classSubjectId && g.sectionId === sec.id)
-                if (!g) { missing = true; break }
-                const score = parseDecimal(g.studentScore)
-                if (score === null) { missing = true; break }
-                total += score
-              }
-              scores[sub.classSubjectId] = missing ? null : total
-            }
-          })
-
-          const byRubric: Record<string, number[]> = { R1: [], R2: [], R3: [] }
-          subjects.forEach(sub => {
-            const sc = scores[sub.classSubjectId]
-            if (sc !== null && sc !== undefined && byRubric[sub.rubricCode]) {
-              byRubric[sub.rubricCode].push(sub.maxScore > 0 ? (sc / sub.maxScore) * 10 : 0)
-            }
-          })
-
-          const avg = (arr: number[]) =>
-            arr.length > 0 ? arr.reduce((s, v) => s + v, 0) / arr.length : null
-
-          const avgR1 = avg(byRubric.R1)
-          const avgR2 = avg(byRubric.R2)
-          const avgR3 = avg(byRubric.R3)
-
-          let finalAverage: number | null = null
-          if (avgR1 !== null || avgR2 !== null || avgR3 !== null) {
-            finalAverage = (avgR1 ?? 0) * 0.70 + (avgR2 ?? 0) * 0.25 + (avgR3 ?? 0) * 0.05
-          }
-
-          const mention: StudentRow['mention'] =
-            finalAverage === null ? 'Incomplet' : finalAverage >= 7 ? 'Réussi' : 'Échec'
-
-          return {
-            enrollmentId: enr.id,
-            lastname:  enr.student?.user?.lastname  || '—',
-            firstname: enr.student?.user?.firstname || '—',
-            scores, finalAverage, mention, rang: 0,
+        const scores: Record<string, number | null> = {}
+        subjects.forEach(sub => {
+          if (sub.sections.length === 0) {
+            const g = grades.find(
+              g => g.classSubjectId === sub.classSubjectId && g.sectionId === null
+            )
+            scores[sub.classSubjectId] = g ? parseDecimal(g.studentScore) : null
+          } else {
+            scores[sub.classSubjectId] = calculateSectionScores(sub, grades)
           }
         })
-      )
+
+        // Grouper les scores normalisés sur 10 par rubrique
+        const byRubric: Record<'R1' | 'R2' | 'R3', number[]> = { R1: [], R2: [], R3: [] }
+        subjects.forEach(sub => {
+          const val = scores[sub.classSubjectId]
+          if (val !== null) {
+            const normalized = sub.maxScore !== 0 ? (val / sub.maxScore) * 10 : 0
+            byRubric[sub.rubricCode].push(normalized)
+          }
+        })
+
+        const avg = (arr: number[]): number | null =>
+          arr.length > 0 ? arr.reduce((s, v) => s + v, 0) / arr.length : null
+
+        const avgR1 = avg(byRubric.R1)
+        const avgR2 = avg(byRubric.R2)
+        const avgR3 = avg(byRubric.R3)
+
+        let finalAverage: number | null = null
+        if (avgR1 !== null || avgR2 !== null || avgR3 !== null) {
+          finalAverage = (avgR1 ?? 0) * 0.70 + (avgR2 ?? 0) * 0.25 + (avgR3 ?? 0) * 0.05
+        }
+
+        const mention: StudentRow['mention'] =
+          finalAverage === null ? 'Incomplet' : finalAverage >= 7 ? 'Réussi' : 'Échec'
+
+        return {
+          enrollmentId: enr.id,
+          lastname:  enr.student?.user?.lastname  ?? '—',
+          firstname: enr.student?.user?.firstname ?? '—',
+          scores,
+          finalAverage,
+          mention,
+          rang: 0,
+        }
+      }
+
+      const rows: StudentRow[] = await Promise.all(enrollments.map(processEnrollment))
 
       rows.sort((a, b) => {
         if (a.finalAverage === null && b.finalAverage === null) return 0
@@ -231,26 +266,33 @@ export function CPMSLRapportsSection({
       })
       rows.forEach((r, i) => { r.rang = i + 1 })
 
-      const validAvgs = rows.filter(r => r.finalAverage !== null).map(r => r.finalAverage!)
+      const validAvgs = rows
+        .filter(r => r.finalAverage !== null)
+        .map(r => r.finalAverage as number)
 
       const subjectAvgs: Record<string, number | null> = {}
       subjects.forEach(sub => {
-        const vals = rows.map(r => r.scores[sub.classSubjectId]).filter(v => v !== null) as number[]
-        subjectAvgs[sub.classSubjectId] = vals.length > 0
-          ? vals.reduce((s, v) => s + v, 0) / vals.length : null
+        const vals = rows
+          .map(r => r.scores[sub.classSubjectId])
+          .filter((v): v is number => v !== null)
+        subjectAvgs[sub.classSubjectId] =
+          vals.length > 0 ? vals.reduce((s, v) => s + v, 0) / vals.length : null
       })
 
-      const med  = calcMedian(validAvgs)
-      const mins = validAvgs.length ? Math.min(...validAvgs) : 0
-      const maxs = validAvgs.length ? Math.max(...validAvgs) : 0
-
       setReport({
-        subjects, rows,
-        enrolled: rows.length, evaluated: validAvgs.length,
-        passed:   rows.filter(r => r.mention === 'Réussi').length,
-        failed:   rows.filter(r => r.mention === 'Échec').length,
-        classAverage: validAvgs.length ? validAvgs.reduce((s, v) => s + v, 0) / validAvgs.length : 0,
-        median: med, min: mins, max: maxs, subjectAvgs,
+        subjects,
+        rows,
+        enrolled:     rows.length,
+        evaluated:    validAvgs.length,
+        passed:       rows.filter(r => r.mention === 'Réussi').length,
+        failed:       rows.filter(r => r.mention === 'Échec').length,
+        classAverage: validAvgs.length
+          ? validAvgs.reduce((s, v) => s + v, 0) / validAvgs.length
+          : 0,
+        median: calcMedian(validAvgs),
+        min:    validAvgs.length ? Math.min(...validAvgs) : 0,
+        max:    validAvgs.length ? Math.max(...validAvgs) : 0,
+        subjectAvgs,
       })
     } catch (e) {
       console.error('[rapports] compute:', e)
@@ -294,7 +336,7 @@ export function CPMSLRapportsSection({
 
       const sessionObj = sessions.find(s => s.id === selectedSession)
       const cn = sessionObj ? getClassSessionName(sessionObj) : 'classe'
-      const sn = steps.find(s => s.id === selectedStep)?.name || 'etape'
+      const sn = steps.find(s => s.id === selectedStep)?.name ?? 'etape'
       pdf.save(`rapport_${cn}_${sn}_${new Date().toISOString().slice(0, 10)}.pdf`)
     } catch (e) {
       console.error('[rapports] PDF:', e)
@@ -305,17 +347,28 @@ export function CPMSLRapportsSection({
 
   // ── Styles ────────────────────────────────────────────────────────────────
   const card: React.CSSProperties = {
-    backgroundColor: '#FFFFFF', borderRadius: '10px',
-    border: '1px solid #E8E6E3', boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+    backgroundColor: '#FFFFFF',
+    borderRadius: '10px',
+    border: '1px solid #E8E6E3',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
   }
   const thStyle: React.CSSProperties = {
-    padding: '8px 10px', fontSize: '11px', fontWeight: 700,
-    textTransform: 'uppercase', letterSpacing: '0.04em', color: '#2C4A6E',
-    whiteSpace: 'nowrap', borderBottom: '2px solid #D1D5DB', textAlign: 'center',
+    padding: '8px 10px',
+    fontSize: '11px',
+    fontWeight: 700,
+    textTransform: 'uppercase',
+    letterSpacing: '0.04em',
+    color: '#2C4A6E',
+    whiteSpace: 'nowrap',
+    borderBottom: '2px solid #D1D5DB',
+    textAlign: 'center',
   }
   const tdStyle: React.CSSProperties = {
-    padding: '7px 10px', fontSize: '12px', textAlign: 'center',
-    borderBottom: '1px solid #E8E6E3', color: '#1E1A17',
+    padding: '7px 10px',
+    fontSize: '12px',
+    textAlign: 'center',
+    borderBottom: '1px solid #E8E6E3',
+    color: '#1E1A17',
   }
 
   const rubriqueGroups: Record<string, SubjectColumn[]> = { R1: [], R2: [], R3: [] }
@@ -323,7 +376,7 @@ export function CPMSLRapportsSection({
 
   const sessionObj = sessions.find(s => s.id === selectedSession)
   const className  = sessionObj ? getClassSessionName(sessionObj) : ''
-  const stepName   = steps.find(s => s.id === selectedStep)?.name || ''
+  const stepName   = steps.find(s => s.id === selectedStep)?.name ?? ''
 
   if (loadingInit) return <Skeleton className="h-48 w-full" />
 
@@ -340,24 +393,32 @@ export function CPMSLRapportsSection({
         <div style={{ padding: '20px 24px' }}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label style={{ fontSize: '13px', fontWeight: 500, color: '#1E1A17', display: 'block', marginBottom: '8px' }}>Classe</label>
+              <label style={{ fontSize: '13px', fontWeight: 500, color: '#1E1A17', display: 'block', marginBottom: '8px' }}>
+                Classe
+              </label>
               <Select value={selectedSession} onValueChange={setSelectedSession}>
                 <SelectTrigger style={{ borderColor: '#D1CECC', borderRadius: '8px' }}>
                   <SelectValue placeholder="Sélectionner une classe" />
                 </SelectTrigger>
                 <SelectContent>
-                  {sessions.map(s => <SelectItem key={s.id} value={s.id}>{getClassSessionName(s)}</SelectItem>)}
+                  {sessions.map(s => (
+                    <SelectItem key={s.id} value={s.id}>{getClassSessionName(s)}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <label style={{ fontSize: '13px', fontWeight: 500, color: '#1E1A17', display: 'block', marginBottom: '8px' }}>Étape</label>
+              <label style={{ fontSize: '13px', fontWeight: 500, color: '#1E1A17', display: 'block', marginBottom: '8px' }}>
+                Étape
+              </label>
               <Select value={selectedStep} onValueChange={setSelectedStep}>
                 <SelectTrigger style={{ borderColor: '#D1CECC', borderRadius: '8px' }}>
                   <SelectValue placeholder="Sélectionner une étape" />
                 </SelectTrigger>
                 <SelectContent>
-                  {steps.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                  {steps.map(s => (
+                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -381,14 +442,21 @@ export function CPMSLRapportsSection({
               { label: 'Médiane',       value: `${report.median.toFixed(2)}/10` },
             ].map(kpi => (
               <div key={kpi.label} style={{ ...card, padding: '14px 16px' }}>
-                <p style={{ fontSize: '11px', fontWeight: 500, textTransform: 'uppercase', color: '#78756F', marginBottom: '6px' }}>{kpi.label}</p>
-                <p style={{ fontFamily: 'var(--font-serif)', fontSize: '20px', fontWeight: 700, color: '#2A3740' }}>{kpi.value}</p>
+                <p style={{ fontSize: '11px', fontWeight: 500, textTransform: 'uppercase', color: '#78756F', marginBottom: '6px' }}>
+                  {kpi.label}
+                </p>
+                <p style={{ fontFamily: 'var(--font-serif)', fontSize: '20px', fontWeight: 700, color: '#2A3740' }}>
+                  {kpi.value}
+                </p>
               </div>
             ))}
           </div>
 
           {/* Zone capturée pour PDF */}
-          <div ref={reportRef} style={{ backgroundColor: '#FFFFFF', padding: '24px', borderRadius: '10px', border: '1px solid #E8E6E3' }}>
+          <div
+            ref={reportRef}
+            style={{ backgroundColor: '#FFFFFF', padding: '24px', borderRadius: '10px', border: '1px solid #E8E6E3' }}
+          >
 
             {/* En-tête */}
             <div style={{ marginBottom: '20px', borderBottom: '2px solid #2C4A6E', paddingBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -419,8 +487,12 @@ export function CPMSLRapportsSection({
                 { label: 'Min / Max', value: `${fmt(report.min)} / ${fmt(report.max)}` },
               ].map(k => (
                 <div key={k.label} style={{ backgroundColor: '#F1F5F9', borderRadius: '6px', padding: '10px 12px', textAlign: 'center' }}>
-                  <p style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#5A7085', marginBottom: '4px' }}>{k.label}</p>
-                  <p style={{ fontSize: '18px', fontWeight: 700, color: '#2A3740' }}>{k.value}</p>
+                  <p style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#5A7085', marginBottom: '4px' }}>
+                    {k.label}
+                  </p>
+                  <p style={{ fontSize: '18px', fontWeight: 700, color: '#2A3740' }}>
+                    {k.value}
+                  </p>
                 </div>
               ))}
             </div>
@@ -431,19 +503,26 @@ export function CPMSLRapportsSection({
                 <thead>
                   {/* Ligne 1 : groupes rubriques */}
                   <tr style={{ backgroundColor: '#2C4A6E' }}>
-                    <th colSpan={3} style={{ ...thStyle, color: '#FFFFFF', backgroundColor: '#2C4A6E', textAlign: 'left', border: 'none' }}>Élève</th>
+                    <th colSpan={3} style={{ ...thStyle, color: '#FFFFFF', backgroundColor: '#2C4A6E', textAlign: 'left', border: 'none' }}>
+                      Élève
+                    </th>
                     {(['R1', 'R2', 'R3'] as const).map(r => {
                       const cols = rubriqueGroups[r]
                       if (!cols || cols.length === 0) return null
                       const bg = r === 'R1' ? '#2C4A6E' : r === 'R2' ? '#3A5F7D' : '#4A7396'
                       return (
-                        <th key={r} colSpan={cols.length}
-                          style={{ ...thStyle, color: '#FFFFFF', backgroundColor: bg, border: 'none' }}>
+                        <th
+                          key={r}
+                          colSpan={cols.length}
+                          style={{ ...thStyle, color: '#FFFFFF', backgroundColor: bg, border: 'none' }}
+                        >
                           {r} · {cols.length} matière{cols.length > 1 ? 's' : ''}
                         </th>
                       )
                     })}
-                    <th colSpan={2} style={{ ...thStyle, color: '#FFFFFF', backgroundColor: '#1E3A50', border: 'none' }}>Résultat</th>
+                    <th colSpan={2} style={{ ...thStyle, color: '#FFFFFF', backgroundColor: '#1E3A50', border: 'none' }}>
+                      Résultat
+                    </th>
                   </tr>
                   {/* Ligne 2 : colonnes */}
                   <tr style={{ backgroundColor: '#F1F5F9' }}>
@@ -454,7 +533,9 @@ export function CPMSLRapportsSection({
                       <th key={sub.classSubjectId} style={{ ...thStyle, minWidth: '55px' }}>
                         {sub.code}
                         <br />
-                        <span style={{ fontSize: '9px', fontWeight: 400, color: '#78756F' }}>/{sub.maxScore}</span>
+                        <span style={{ fontSize: '9px', fontWeight: 400, color: '#78756F' }}>
+                          /{sub.maxScore}
+                        </span>
                       </th>
                     ))}
                     <th style={{ ...thStyle, minWidth: '55px' }}>Moy./10</th>
@@ -476,12 +557,19 @@ export function CPMSLRapportsSection({
                         {fmt(row.finalAverage)}
                       </td>
                       <td style={tdStyle}>
-                        {row.mention === 'Réussi'
-                          ? <span style={{ backgroundColor: '#E8F5EC', color: '#2D7D46', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 600 }}>Réussi</span>
-                          : row.mention === 'Échec'
-                          ? <span style={{ backgroundColor: '#FDE8E8', color: '#C43C3C', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 600 }}>Échec</span>
-                          : <span style={{ backgroundColor: '#FEF6E0', color: '#C48B1A', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 600 }}>Incomplet</span>
-                        }
+                        {row.mention === 'Réussi' ? (
+                          <span style={{ backgroundColor: '#E8F5EC', color: '#2D7D46', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 600 }}>
+                            Réussi
+                          </span>
+                        ) : row.mention === 'Échec' ? (
+                          <span style={{ backgroundColor: '#FDE8E8', color: '#C43C3C', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 600 }}>
+                            Échec
+                          </span>
+                        ) : (
+                          <span style={{ backgroundColor: '#FEF6E0', color: '#C48B1A', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 600 }}>
+                            Incomplet
+                          </span>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -522,8 +610,11 @@ export function CPMSLRapportsSection({
             disabled={isArchived || generating}
             style={{
               backgroundColor: isArchived || generating ? '#9CA3AF' : '#2C4A6E',
-              color: '#FFFFFF', fontSize: '14px', fontWeight: 600,
-              borderRadius: '8px', padding: '10px 24px',
+              color: '#FFFFFF',
+              fontSize: '14px',
+              fontWeight: 600,
+              borderRadius: '8px',
+              padding: '10px 24px',
             }}
           >
             <FileTextIcon className="mr-2 h-5 w-5" />

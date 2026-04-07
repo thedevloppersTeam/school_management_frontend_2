@@ -64,7 +64,7 @@ interface CPMSLBehaviorGridProps {
   steps: AcademicYearStep[]
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────
 
 function getStudentInitials(enrollment: ApiEnrollment): string {
   const f = enrollment.student?.user?.firstname?.[0] ?? ""
@@ -76,6 +76,25 @@ function getStudentName(enrollment: ApiEnrollment): string {
   const first = enrollment.student?.user?.firstname ?? ""
   const last  = enrollment.student?.user?.lastname ?? ""
   return `${first} ${last}`.trim() || (enrollment.student?.studentCode ?? "—")
+}
+
+function createBehaviorEntry(enr: ApiEnrollment, behaviorList: ApiBehavior[], attitudes: ApiAttitude[]): BehaviorEntry {
+  const existing = behaviorList.find(b => b.enrollmentId === enr.id)
+  const attMap   = new Map<string, boolean | null>()
+  attitudes.forEach(att => attMap.set(att.id, null))
+  existing?.attitudeResponses.forEach(r => attMap.set(r.attitudeId, r.value))
+
+  return {
+    behaviorId:        existing?.id ?? null,
+    enrollmentId:      enr.id,
+    absences:          existing?.absences?.toString()       ?? "",
+    retards:           existing?.retards?.toString()        ?? "",
+    devoirsManques:    existing?.devoirsManques?.toString() ?? "",
+    attitudeResponses: attMap,
+    pointsForts:       existing?.pointsForts ?? "",
+    defis:             existing?.defis       ?? "",
+    remarque:          existing?.remarque    ?? "",
+  }
 }
 
 // ── Composant ─────────────────────────────────────────────────────────────────
@@ -127,22 +146,7 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
 
         const newEntries = new Map<string, BehaviorEntry>()
         enrollmentList.forEach(enr => {
-          const existing = behaviorList.find(b => b.enrollmentId === enr.id)
-          const attMap   = new Map<string, boolean | null>()
-          attitudes.forEach(att => attMap.set(att.id, null))
-          existing?.attitudeResponses.forEach(r => attMap.set(r.attitudeId, r.value))
-
-          newEntries.set(enr.id, {
-            behaviorId:        existing?.id ?? null,
-            enrollmentId:      enr.id,
-            absences:          existing?.absences?.toString()       ?? "",
-            retards:           existing?.retards?.toString()        ?? "",
-            devoirsManques:    existing?.devoirsManques?.toString() ?? "",
-            attitudeResponses: attMap,
-            pointsForts:       existing?.pointsForts ?? "",
-            defis:             existing?.defis       ?? "",
-            remarque:          existing?.remarque    ?? "",
-          })
+          newEntries.set(enr.id, createBehaviorEntry(enr, behaviorList, attitudes))
         })
         setEntries(newEntries)
       })
@@ -453,25 +457,26 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
                               <div className="space-y-2">
                                 {attitudes.map(att => {
                                   const resp = e.attitudeResponses.get(att.id)
+                                  const renderAttitudeOption = (val: boolean) => (
+                                    <label key={String(val)} className="flex items-center gap-1.5 cursor-pointer">
+                                      <input type="radio"
+                                        name={`att-${enr.id}-${att.id}`}
+                                        checked={resp === val}
+                                        onChange={() => handleAttitude(enr.id, att.id, val)}
+                                        disabled={isLocked}
+                                        className="h-4 w-4 cursor-pointer"
+                                        style={{ accentColor: "#5A7085" }}
+                                      />
+                                      <span className="text-sm" style={{ color: "#1E1A17" }}>{val ? "Oui" : "Non"}</span>
+                                    </label>
+                                  )
                                   return (
                                     <div key={att.id} className="flex items-center gap-3">
                                       <span className="text-sm font-medium" style={{ color: "#1E1A17", minWidth: "130px" }}>
                                         {att.label}
                                       </span>
                                       <div className="flex items-center gap-3">
-                                        {[true, false].map(val => (
-                                          <label key={String(val)} className="flex items-center gap-1.5 cursor-pointer">
-                                            <input type="radio"
-                                              name={`att-${enr.id}-${att.id}`}
-                                              checked={resp === val}
-                                              onChange={() => handleAttitude(enr.id, att.id, val)}
-                                              disabled={isLocked}
-                                              className="h-4 w-4 cursor-pointer"
-                                              style={{ accentColor: "#5A7085" }}
-                                            />
-                                            <span className="text-sm" style={{ color: "#1E1A17" }}>{val ? "Oui" : "Non"}</span>
-                                          </label>
-                                        ))}
+                                        {[true, false].map(renderAttitudeOption)}
                                       </div>
                                     </div>
                                   )
