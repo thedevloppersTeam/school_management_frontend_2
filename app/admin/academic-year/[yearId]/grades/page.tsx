@@ -109,10 +109,15 @@ export default function GradesPage() {
   }
 
     function buildSaveDescription(created: number, updated: number): string {
-    const parts = [
-      created > 0 ? `${created} note${created > 1 ? 's' : ''} créée${created > 1 ? 's' : ''}` : '',
-      updated > 0 ? `${updated} note${updated > 1 ? 's' : ''} mise${updated > 1 ? 's' : ''} à jour` : '',
-    ].filter(Boolean)
+    const parts: string[] = []
+    if (created > 0) {
+      const plural = created > 1 ? 's' : ''
+      parts.push(`${created} note${plural} créée${plural}`)
+    }
+    if (updated > 0) {
+      const plural = updated > 1 ? 's' : ''
+      parts.push(`${updated} note${plural} mise${plural} à jour`)
+    }
     return parts.join(', ')
   }
 

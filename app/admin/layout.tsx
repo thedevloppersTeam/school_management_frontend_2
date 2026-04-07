@@ -134,6 +134,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const unreadCount = notifications.filter(n => !n.isRead).length
 
+  const handleMouseEnter = (e: React.MouseEvent<HTMLAnchorElement>, isActive: boolean) => {
+    if (!isActive) e.currentTarget.style.borderLeft = "2px solid #8FA8C0"
+  }
+
+  const handleMouseLeave = (e: React.MouseEvent<HTMLAnchorElement>, isActive: boolean) => {
+    if (!isActive) e.currentTarget.style.borderLeft = "3px solid transparent"
+  }
+
   const handleLogout = async () => {
     await logout()
     router.push("/login")
@@ -180,107 +188,73 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     )
   }
 
+  const renderNavLink = (item: NavItem, mobile: boolean, paddingLeft: string) => {
+    const Icon = item.icon
+    const href = getNavHref(item.href)
+    const isActive = pathname === href || pathname.startsWith(href.split("?")[0])
+
+    const linkContent = (
+      <Link
+        key={item.href}
+        href={href}
+        onClick={() => mobile && setSidebarOpen(false)}
+        className={cn("flex items-center py-2 transition-all duration-200",
+          sidebarCollapsed && !mobile ? "justify-center" : "gap-3"
+        )}
+        style={{
+          paddingLeft: sidebarCollapsed && !mobile ? "0" : paddingLeft,
+          backgroundColor: isActive ? "rgba(255,255,255,0.08)" : "transparent",
+          color: isActive ? "#FFFFFF" : "#CBD5E1",
+          fontFamily: "var(--font-sans)", fontSize: "14px",
+          fontWeight: isActive ? 600 : (item.href ? 500 : 400),
+          borderLeft: isActive ? "3px solid #FFFFFF" : "3px solid transparent",
+          borderRadius: isActive ? "0 6px 6px 0" : "0",
+          marginLeft: "-3px",
+        }}
+        onMouseEnter={e => { if (!isActive) e.currentTarget.style.borderLeft = "2px solid #8FA8C0" }}
+        onMouseLeave={e => { if (!isActive) e.currentTarget.style.borderLeft = "3px solid transparent" }}
+      >
+        <Icon className="h-4 w-4" />
+        {(!sidebarCollapsed || mobile) && <span>{item.label}</span>}
+      </Link>
+    )
+
+    return (sidebarCollapsed && !mobile) ? (
+      <Tooltip key={item.href}>
+        <TooltipTrigger asChild>{linkContent}</TooltipTrigger>
+        <TooltipContent side="right"><p>{item.label}</p></TooltipContent>
+      </Tooltip>
+    ) : linkContent
+  }
+
+  const renderSectionHeader = (label: string, mobile: boolean) => {
+    return (!sidebarCollapsed || mobile) ? (
+      <div className="px-3 py-2" style={{
+        fontFamily: "var(--font-sans)", fontSize: "10px", fontWeight: 700,
+        textTransform: "uppercase", letterSpacing: "0.08em", color: "#8FA8C0", cursor: "default",
+      }}>
+        {label}
+      </div>
+    ) : null
+  }
+
+  const renderSectionWithChildren = (item: NavItem, index: number, mobile: boolean) => (
+    <div key={index} style={{ marginTop: index > 0 ? "24px" : "0" }}>
+      {renderSectionHeader(item.label, mobile)}
+      <div className="mt-1 space-y-1">
+        {item.children?.map(child => renderNavLink(child, mobile, "16px"))}
+      </div>
+    </div>
+  )
+
   const SidebarNav = ({ mobile = false }: { mobile?: boolean }) => (
     <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
       {navItems.map((item, index) => {
         if (item.section && item.children) {
-          return (
-            <div key={index} style={{ marginTop: index > 0 ? "24px" : "0" }}>
-              {(!sidebarCollapsed || mobile) && (
-                <div className="px-3 py-2" style={{
-                  fontFamily: "var(--font-sans)", fontSize: "10px", fontWeight: 700,
-                  textTransform: "uppercase", letterSpacing: "0.08em", color: "#8FA8C0", cursor: "default",
-                }}>
-                  {item.label}
-                </div>
-              )}
-              <div className="mt-1 space-y-1">
-                {item.children.map(child => {
-                  const ChildIcon = child.icon
-                  const childHref = getNavHref(child.href)
-                  const isActive = pathname === childHref || pathname.startsWith(childHref.split("?")[0])
-
-                  const linkContent = (
-                    <Link
-                      key={child.href}
-                      href={childHref}
-                      onClick={() => mobile && setSidebarOpen(false)}
-                      className={cn("flex items-center py-2 transition-all duration-200",
-                        sidebarCollapsed && !mobile ? "justify-center" : "gap-3"
-                      )}
-                      style={{
-                        paddingLeft: sidebarCollapsed && !mobile ? "0" : "16px",
-                        backgroundColor: isActive ? "rgba(255,255,255,0.08)" : "transparent",
-                        color: isActive ? "#FFFFFF" : "#CBD5E1",
-                        fontFamily: "var(--font-sans)", fontSize: "14px",
-                        fontWeight: isActive ? 600 : 400,
-                        borderLeft: isActive ? "3px solid #FFFFFF" : "3px solid transparent",
-                        borderRadius: isActive ? "0 6px 6px 0" : "0",
-                        marginLeft: "-3px",
-                      }}
-                      onMouseEnter={e => { if (!isActive) e.currentTarget.style.borderLeft = "2px solid #8FA8C0" }}
-                      onMouseLeave={e => { if (!isActive) e.currentTarget.style.borderLeft = "3px solid transparent" }}
-                    >
-                      <ChildIcon className="h-4 w-4" />
-                      {(!sidebarCollapsed || mobile) && <span>{child.label}</span>}
-                    </Link>
-                  )
-
-                  if (sidebarCollapsed && !mobile) {
-                    return (
-                      <Tooltip key={child.href}>
-                        <TooltipTrigger asChild>{linkContent}</TooltipTrigger>
-                        <TooltipContent side="right"><p>{child.label}</p></TooltipContent>
-                      </Tooltip>
-                    )
-                  }
-                  return linkContent
-                })}
-              </div>
-            </div>
-          )
+          return renderSectionWithChildren(item, index, mobile)
         }
-
         if (item.href) {
-          const Icon = item.icon
-          const href = getNavHref(item.href)
-          const isActive = pathname === href || pathname.startsWith(href.split("?")[0])
-
-          const linkContent = (
-            <Link
-              key={item.href}
-              href={href}
-              onClick={() => mobile && setSidebarOpen(false)}
-              className={cn("flex items-center py-2 transition-all duration-200",
-                sidebarCollapsed && !mobile ? "justify-center" : "gap-3"
-              )}
-              style={{
-                paddingLeft: sidebarCollapsed && !mobile ? "0" : "12px",
-                backgroundColor: isActive ? "rgba(255,255,255,0.08)" : "transparent",
-                color: isActive ? "#FFFFFF" : "#CBD5E1",
-                fontFamily: "var(--font-sans)", fontSize: "14px",
-                fontWeight: isActive ? 600 : 500,
-                borderLeft: isActive ? "3px solid #FFFFFF" : "3px solid transparent",
-                borderRadius: isActive ? "0 6px 6px 0" : "0",
-                marginLeft: "-3px",
-              }}
-              onMouseEnter={e => { if (!isActive) e.currentTarget.style.borderLeft = "2px solid #8FA8C0" }}
-              onMouseLeave={e => { if (!isActive) e.currentTarget.style.borderLeft = "3px solid transparent" }}
-            >
-              <Icon className="h-4 w-4" />
-              {(!sidebarCollapsed || mobile) && <span>{item.label}</span>}
-            </Link>
-          )
-
-          if (sidebarCollapsed && !mobile) {
-            return (
-              <Tooltip key={item.href}>
-                <TooltipTrigger asChild>{linkContent}</TooltipTrigger>
-                <TooltipContent side="right"><p>{item.label}</p></TooltipContent>
-              </Tooltip>
-            )
-          }
-          return linkContent
+          return renderNavLink(item, mobile, "12px")
         }
         return null
       })}

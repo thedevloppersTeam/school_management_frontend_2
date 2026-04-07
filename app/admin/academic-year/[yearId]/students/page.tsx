@@ -219,7 +219,7 @@ export default function StudentsManagementPage() {
 
   const totalPages        = Math.ceil(displayed.length / itemsPerPage)
   const paginated         = displayed.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
-  const uniqueClasses     = [...new Set(students.map(s => s.className))].sort()
+    const uniqueClasses     = [...new Set(students.map(s => s.className))].sort((a, b) => a.localeCompare(b))
 
   // ── Tri ──────────────────────────────────────────────────────────────────────
   const handleSort = (col: SortCol) => {
