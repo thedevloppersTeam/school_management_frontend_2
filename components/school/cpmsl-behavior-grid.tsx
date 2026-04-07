@@ -64,7 +64,7 @@ interface CPMSLBehaviorGridProps {
   steps: AcademicYearStep[]
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function getStudentInitials(enrollment: ApiEnrollment): string {
   const f = enrollment.student?.user?.firstname?.[0] ?? ""
@@ -78,7 +78,11 @@ function getStudentName(enrollment: ApiEnrollment): string {
   return `${first} ${last}`.trim() || (enrollment.student?.studentCode ?? "—")
 }
 
-function createBehaviorEntry(enr: ApiEnrollment, behaviorList: ApiBehavior[], attitudes: ApiAttitude[]): BehaviorEntry {
+function createBehaviorEntry(
+  enr: ApiEnrollment,
+  behaviorList: ApiBehavior[],
+  attitudes: ApiAttitude[]
+): BehaviorEntry {
   const existing = behaviorList.find(b => b.enrollmentId === enr.id)
   const attMap   = new Map<string, boolean | null>()
   attitudes.forEach(att => attMap.set(att.id, null))
@@ -353,10 +357,10 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
           {/* KPIs */}
           <div className="grid grid-cols-4 gap-4">
             {[
-              { label: "Total élèves",            value: kpis.total,          icon: <UsersIcon       className="h-6 w-6" style={{ color: "#5A7085" }} />, bg: "#F0F4F7" },
-              { label: "Comportements saisis",    value: kpis.entered,        icon: <CheckCircle2Icon className="h-6 w-6" style={{ color: "#2D7D46" }} />, bg: "#E8F5EC" },
-              { label: "Comportements manquants", value: kpis.missing,        icon: <AlertTriangleIcon className="h-6 w-6" style={{ color: "#C48B1A" }} />, bg: "#FEF6E0" },
-              { label: "% complété",              value: `${kpis.percent}%`,  icon: <FileTextIcon    className="h-6 w-6" style={{ color: "#2B6CB0" }} />, bg: "#E3EFF9" },
+              { label: "Total élèves",            value: kpis.total,         icon: <UsersIcon        className="h-6 w-6" style={{ color: "#5A7085" }} />, bg: "#F0F4F7" },
+              { label: "Comportements saisis",    value: kpis.entered,       icon: <CheckCircle2Icon  className="h-6 w-6" style={{ color: "#2D7D46" }} />, bg: "#E8F5EC" },
+              { label: "Comportements manquants", value: kpis.missing,       icon: <AlertTriangleIcon className="h-6 w-6" style={{ color: "#C48B1A" }} />, bg: "#FEF6E0" },
+              { label: "% complété",              value: `${kpis.percent}%`, icon: <FileTextIcon      className="h-6 w-6" style={{ color: "#2B6CB0" }} />, bg: "#E3EFF9" },
             ].map(({ label, value, icon, bg }) => (
               <div key={label} className="rounded-lg p-4 flex items-center gap-3"
                 style={{ backgroundColor: "white", border: "1px solid #E8E6E3", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
@@ -404,7 +408,7 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
                   </thead>
                   <tbody>
                     {paginatedEnrs.map((enr, idx) => {
-                      const e      = entries.get(enr.id) ?? {
+                      const e = entries.get(enr.id) ?? {
                         behaviorId: null, enrollmentId: enr.id,
                         absences: "", retards: "", devoirsManques: "",
                         attitudeResponses: new Map(), pointsForts: "", defis: "", remarque: ""
@@ -436,7 +440,8 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
                           {/* Absences / Retards / Devoirs */}
                           {(["absences", "retards", "devoirsManques"] as const).map(field => (
                             <td key={field} className="px-4 py-3 text-center">
-                              <Input type="number" min="0" max="999" step="1"
+                              <Input
+                                type="number" min="0" max="999" step="1"
                                 value={e[field]} placeholder="0" disabled={isLocked}
                                 onChange={ev => handleNumber(enr.id, field, ev.target.value)}
                                 className="text-center"
@@ -445,38 +450,50 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
                             </td>
                           ))}
 
-                          {/* Attitudes — lecture seule, configurées dans Établissement → Attitudes */}
+                          {/* ── Attitudes ────────────────────────────────── */}
+                          {/*
+                            FIX: the original code had the ternary inverted —
+                            it ran attitudes.map() inside the `length === 0` branch,
+                            and `renderAttitudeOption` was defined inside the map
+                            but also referenced outside it, causing a compile error.
+                            Corrected structure:
+                              loadingAttitudes  → spinner text
+                              length === 0      → "Aucune attitude configurée"
+                              else              → render each attitude row
+                          */}
                           <td className="px-4 py-3">
                             {loadingAttitudes ? (
                               <p className="text-xs" style={{ color: "#78756F" }}>Chargement...</p>
                             ) : attitudes.length === 0 ? (
                               <p className="text-xs italic" style={{ color: "#A8A5A2" }}>
-                                Aucune attitude — configurez-les dans Établissement → Attitudes
+                                Aucune attitude configurée
                               </p>
                             ) : (
-                              <div className="space-y-2">
+                              <div className="flex flex-col gap-2">
                                 {attitudes.map(att => {
                                   const resp = e.attitudeResponses.get(att.id)
-                                  const renderAttitudeOption = (val: boolean) => (
-                                    <label key={String(val)} className="flex items-center gap-1.5 cursor-pointer">
-                                      <input type="radio"
-                                        name={`att-${enr.id}-${att.id}`}
-                                        checked={resp === val}
-                                        onChange={() => handleAttitude(enr.id, att.id, val)}
-                                        disabled={isLocked}
-                                        className="h-4 w-4 cursor-pointer"
-                                        style={{ accentColor: "#5A7085" }}
-                                      />
-                                      <span className="text-sm" style={{ color: "#1E1A17" }}>{val ? "Oui" : "Non"}</span>
-                                    </label>
-                                  )
                                   return (
                                     <div key={att.id} className="flex items-center gap-3">
                                       <span className="text-sm font-medium" style={{ color: "#1E1A17", minWidth: "130px" }}>
                                         {att.label}
                                       </span>
                                       <div className="flex items-center gap-3">
-                                        {[true, false].map(renderAttitudeOption)}
+                                        {([true, false] as const).map(val => (
+                                          <label key={String(val)} className="flex items-center gap-1.5 cursor-pointer">
+                                            <input
+                                              type="radio"
+                                              name={`att-${enr.id}-${att.id}`}
+                                              checked={resp === val}
+                                              onChange={() => handleAttitude(enr.id, att.id, val)}
+                                              disabled={isLocked}
+                                              className="h-4 w-4 cursor-pointer"
+                                              style={{ accentColor: "#5A7085" }}
+                                            />
+                                            <span className="text-sm" style={{ color: "#1E1A17" }}>
+                                              {val ? "Oui" : "Non"}
+                                            </span>
+                                          </label>
+                                        ))}
                                       </div>
                                     </div>
                                   )
@@ -488,10 +505,12 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
                           {/* Textes libres */}
                           {(["pointsForts", "defis", "remarque"] as const).map(field => (
                             <td key={field} className="px-4 py-3">
-                              <Textarea value={e[field]}
+                              <Textarea
+                                value={e[field]}
                                 onChange={ev => handleText(enr.id, field, ev.target.value)}
                                 placeholder={field === "pointsForts" ? "Points forts..." : field === "defis" ? "Défis..." : "Remarque..."}
-                                disabled={isLocked} rows={2}
+                                disabled={isLocked}
+                                rows={2}
                                 className="resize-vertical"
                                 style={{ borderRadius: "8px", borderColor: "#D1D5DB", fontSize: "13px" }}
                               />
@@ -500,6 +519,7 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
                               </p>
                             </td>
                           ))}
+
                         </tr>
                       )
                     })}
@@ -512,15 +532,19 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
           {/* Pagination */}
           {sortedEnrollments.length > itemsPerPage && (
             <div className="flex items-center justify-center gap-4">
-              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                disabled={currentPage === 1} style={{ borderColor: "#D1CECC", color: "#5C5955" }}>
+              <Button variant="outline" size="sm"
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                style={{ borderColor: "#D1CECC", color: "#5C5955" }}>
                 ← Précédent
               </Button>
               <span className="text-sm" style={{ color: "#78756F" }}>
                 Page {currentPage} sur {totalPages}
               </span>
-              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages} style={{ borderColor: "#D1CECC", color: "#5C5955" }}>
+              <Button variant="outline" size="sm"
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                style={{ borderColor: "#D1CECC", color: "#5C5955" }}>
                 Suivant →
               </Button>
             </div>
@@ -538,6 +562,7 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
               </Button>
             </div>
           )}
+
         </>
       )}
     </div>
