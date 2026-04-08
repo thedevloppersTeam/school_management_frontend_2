@@ -168,8 +168,7 @@ export default function GradesPage() {
       ) : error ? (
         <div className="rounded-lg p-8 flex flex-col items-center justify-center gap-4" style={{ backgroundColor: "white", border: "1px solid #E8E6E3" }}>
           <p className="font-sans" style={{ color: "#C43C3C", fontSize: "14px" }}>{error}</p>
-          <button onClick={() => window.location.reload()} className="px-4 py-2 rounded-lg font-sans text-sm font-medium text-white" style={{ backgroundColor: "#5A7085" }}>
-            Réessayer
+          <button onClick={() => globalThis.location.reload()} className="px-4 py-2 rounded-lg font-sans text-sm font-medium text-white" style={{ backgroundColor: "#5A7085" }}>            Réessayer
           </button>
         </div>
       ) : (

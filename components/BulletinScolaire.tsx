@@ -98,12 +98,12 @@ function fmt(n: number | null): string {
 
 function RubriqueTable({
   name, poids, entries, moy,
-}: {
+}: Readonly<{
   name:    string;
   poids:   string;
   entries: RubriqueEntry[];
   moy:     number | null;
-}) {
+}>) {
   return (
     <div style={{ border: '1px solid #aaa' }}>
       {/* En-tête rubrique */}
@@ -166,7 +166,7 @@ function RubriqueTable({
   );
 }
 
-function Checkbox({ checked }: { checked: boolean | null }) {
+function Checkbox({ checked }: Readonly<{ checked: boolean | null }>) {
   return (
     <span style={{
       width: '10px', height: '10px',
@@ -181,7 +181,7 @@ function Checkbox({ checked }: { checked: boolean | null }) {
   );
 }
 
-function ComportementCol({ items }: { items: ComportementItem[] }) {
+function ComportementCol({ items }: Readonly<{ items: ComportementItem[] }>) {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '3px' }}>
@@ -210,7 +210,7 @@ function ComportementCol({ items }: { items: ComportementItem[] }) {
 
 // ── Composant principal ───────────────────────────────────────────────────────
 
-export default function BulletinScolaire({ data }: { data: BulletinData }) {
+export default function BulletinScolaire({ data }: Readonly<{ data: BulletinData }>) {
   const col1 = data.comportement.items.filter(c => c.col === 1);
   const col2 = data.comportement.items.filter(c => c.col === 2);
   const col3 = data.comportement.items.filter(c => c.col === 3);
@@ -442,11 +442,12 @@ export default function BulletinScolaire({ data }: { data: BulletinData }) {
         {/* Gauche */}
         <div>
           <div style={{ fontSize: '5.5pt', marginBottom: '6px', lineHeight: '1.7' }}>
-            <span style={{ fontWeight: 'bold' }}>Légende : </span>
-            90-100 : A+ Excellent &nbsp;|&nbsp; 85-89 : A Excellent &nbsp;|&nbsp; 78-84 : B+ Très bien &nbsp;|&nbsp; 75-77 : B Très bien &nbsp;|&nbsp; 69-74 : C+ Bien &nbsp;|&nbsp;
-            <span style={{ color: '#2c6e2e', fontWeight: 'bold' }}>60-68 : C Assez bien</span> &nbsp;|&nbsp;
-            <span style={{ color: '#cc6600', fontWeight: 'bold' }}>51-59 : D Déficient</span> &nbsp;|&nbsp;
-            <span style={{ color: '#c0392b', fontWeight: 'bold' }}>≤50 : E Échec</span><br />
+                        <span style={{ fontWeight: 'bold' }}>Légende : </span>
+            90-100 : A+ Excellent &nbsp;|&nbsp; 85-89 : A Excellent &nbsp;|&nbsp; 78-84 : B+ Très bien &nbsp;|&nbsp; 75-77 : B Très bien &nbsp;|&nbsp; 69-74 : C+ Bien &nbsp;|&nbsp;{' '}
+            <span style={{ color: '#2c6e2e', fontWeight: 'bold' }}>60-68 : C Assez bien</span>{' '}&nbsp;|&nbsp;{' '}
+                        <span style={{ color: '#cc6600', fontWeight: 'bold' }}>51-59 : D Déficient</span> &nbsp;|&nbsp;
+            <span style={{ color: '#c0392b', fontWeight: 'bold' }}>≤50 : E Échec</span>{/*
+            */}<br />
             Seuil de promotion : 7.00 / 10 &nbsp;—&nbsp; Formule : 70% R1 + 25% R2 + 5% R3
           </div>
           <div style={{ fontSize: '6pt', color: '#555', lineHeight: '1.6' }}>

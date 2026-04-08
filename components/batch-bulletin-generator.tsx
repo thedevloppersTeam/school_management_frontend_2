@@ -52,7 +52,7 @@ export function BatchBulletinGenerator({
   enrollmentIds,
   onComplete,
   onViewStudent,
-}: BatchBulletinGeneratorProps) {
+}: Readonly<BatchBulletinGeneratorProps>) {
   const [loading,      setLoading]      = useState(false)
   const [progress,     setProgress]     = useState(0)
   const [status,       setStatus]       = useState<Map<string, StudentStatus>>(new Map())
@@ -110,7 +110,7 @@ export function BatchBulletinGenerator({
         newBulletins.set(studentId, data)
         newStatus.set(studentId, {
           status:  'success',
-          average: parseFloat(data.moyenneEtape) || undefined,
+                    average: Number.parseFloat(data.moyenneEtape) || undefined,
         })
       } catch (err) {
         console.error(`[BatchGenerator] student ${studentId}:`, err)

@@ -53,17 +53,17 @@ function computeAverage(
   const a2 = avg(byRubric.R2)
   const a3 = avg(byRubric.R3)
   if (a1 === null && a2 === null && a3 === null) return null
-  return (a1 ?? 0) * 0.70 + (a2 ?? 0) * 0.25 + (a3 ?? 0) * 0.05
+  return (a1 ?? 0) * 0.7 + (a2 ?? 0) * 0.25 + (a3 ?? 0) * 0.05
 }
 
 function getAppreciation(m: number | null): string {
   if (m === null) return '—'
-  if (m >= 9.0) return 'A+'
+  if (m >= 9) return 'A+'
   if (m >= 8.5) return 'A'
   if (m >= 7.8) return 'B+'
   if (m >= 7.5) return 'B'
   if (m >= 6.9) return 'C+'
-  if (m >= 6.0) return 'C'
+  if (m >= 6) return 'C'
   if (m >= 5.1) return 'D'
   return 'E'
 }
@@ -324,8 +324,7 @@ export default function GradesViewPage() {
       {selectedSession && selectedStep && (
         loadingGrid ? (
           <div className="space-y-2">
-            {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
-          </div>
+            {[...new Array(4)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}          </div>
         ) : (
           <>
             {/* KPIs */}

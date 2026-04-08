@@ -77,8 +77,7 @@ const navItems: NavItem[] = [
   },
 ]
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname()
+export default function AdminLayout({ children }: Readonly<{ children: React.ReactNode }>) {  const pathname = usePathname()
   const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -297,8 +296,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         {/* Sidebar Mobile */}
         {sidebarOpen && (
           <div className="fixed inset-0 z-50 lg:hidden">
-            <div className="fixed inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
-            <aside className="fixed inset-y-0 left-0 w-72 z-50" style={{ backgroundColor: "#2A3740", borderRight: "1px solid #3A4A57" }}>
+            <button className="fixed inset-0 bg-black/50 border-0 p-0 cursor-default" onClick={() => setSidebarOpen(false)} />            <aside className="fixed inset-y-0 left-0 w-72 z-50" style={{ backgroundColor: "#2A3740", borderRight: "1px solid #3A4A57" }}>
               <div className="flex flex-col h-full">
                 <div className="h-16 flex items-center justify-between px-4" style={{ borderBottom: "1px solid #3A4A57" }}>
                   <div className="flex items-center gap-2">

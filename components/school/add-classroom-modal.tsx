@@ -76,7 +76,7 @@ export function AddClassroomModal({
     }
   }
 
-  const currentOpen = open !== undefined ? open : isOpen
+    const currentOpen = open ?? isOpen
 
   const isFondamentale = level.niveau === 'Fondamentale'
   const modalTitle = isFondamentale 
@@ -101,15 +101,15 @@ export function AddClassroomModal({
   const availableOptions = getAvailableOptions()
 
   // Validation
-  const isValid = name.trim() !== "" && capacity.trim() !== "" && 
-                  parseInt(capacity) >= 1 && parseInt(capacity) <= 60
+   const isValid = name.trim() !== "" && capacity.trim() !== "" && 
+                  Number.parseInt(capacity) >= 1 && Number.parseInt(capacity) <= 60
 
   const handleSubmit = () => {
     if (!isValid) return
 
     onSubmit?.({
       name: name.trim(),
-      capacity: parseInt(capacity),
+      capacity: Number.parseInt(capacity),
       description: description.trim() || undefined
     })
     

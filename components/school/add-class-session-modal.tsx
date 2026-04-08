@@ -33,7 +33,7 @@ export function AddClassSessionModal({
   tracks,
   submitting = false,
   onSubmit,
-}: AddClassSessionModalProps) {
+}: Readonly<AddClassSessionModalProps>) {
   const [letter,  setLetter]  = useState('')
   const [trackId, setTrackId] = useState('')
 

@@ -41,7 +41,7 @@ export function BulletinPDFGenerator({
   enrollmentId,
   yearId,
   onDownload,
-}: BulletinPDFGeneratorProps) {
+}: Readonly<BulletinPDFGeneratorProps>) {
   const [loading,      setLoading]      = useState(false)
   const [generating,   setGenerating]   = useState(false)
   const [bulletinData, setBulletinData] = useState<BulletinData | null>(null)
@@ -158,14 +158,14 @@ export function BulletinPDFGenerator({
     if (!clone) return
     const w = window.open('', '_blank')
     if (!w) { toast.error("Impossible d'ouvrir la fenêtre d'impression"); return }
-    w.document.write(`<!DOCTYPE html><html><head>
+    const htmlContent = `<!DOCTYPE html><html><head>
       <title>Bulletin de ${studentName} - ${stepName}</title>
       <meta charset="UTF-8">${getStylesHTML()}
       <style>*{overflow:visible!important;height:auto!important;max-height:none!important;}
       body{margin:0;padding:0;background:white;}
       @media print{@page{size:A4;margin:0;}}</style>
-    </head><body style="margin:0;padding:0;">${clone.outerHTML}</body></html>`)
-    w.document.close()
+    </head><body style="margin:0;padding:0;">${clone.outerHTML}</body></html>`
+    w.document.documentElement.innerHTML = htmlContent
     w.onload = () => setTimeout(() => { w.print(); w.close() }, 500)
   }, [studentName, stepName])
 
@@ -177,7 +177,7 @@ export function BulletinPDFGenerator({
     if (!clone) return
     const w = window.open('', '_blank')
     if (!w) { toast.error("Impossible d'ouvrir la prévisualisation"); return }
-    w.document.write(`<!DOCTYPE html><html><head>
+    const htmlContent = `<!DOCTYPE html><html><head>
       <title>Bulletin de ${studentName} - ${stepName}</title>
       <meta charset="UTF-8">${getStylesHTML()}
       <style>*{overflow:visible!important;height:auto!important;max-height:none!important;}
@@ -187,8 +187,9 @@ export function BulletinPDFGenerator({
       .pb:hover{background:#1e3a5a;}</style>
     </head><body>
       <div class="bc">${clone.outerHTML}</div>
-      <button class="pb" onclick="window.print()">🖨️ Imprimer</button>
-    </body></html>`)
+      <button class="pb" onclick="window.print()">Imprimer</button>
+    </body></html>`
+    w.document.documentElement.innerHTML = htmlContent
     w.document.close()
   }, [studentName, stepName])
 
