@@ -48,9 +48,7 @@ export function EditLevelModal({
   const hasChanges = description !== (level.description || '')
   const isFondamentale = level.niveau === 'Fondamentale'
 
-  const title = isFondamentale
-    ? `Modifier la classe ${level.name}`
-    : `Modifier la classe ${level.name}`
+  const title = `Modifier la classe ${level.name}`
 
   const handleConfirm = () => {
     if (hasChanges) {
