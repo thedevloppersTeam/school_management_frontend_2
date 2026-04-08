@@ -195,7 +195,9 @@ export function NotificationPanel({
                   backgroundColor: !notification.isRead ? "#F0F4F7" : "transparent"
                 }}
                 onClick={() => onNotificationClick?.(notification.id)}
-              >
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNotificationClick?.(notification.id); } }}
+                tabIndex={0}
+              >s
                 <div className="flex gap-3">
                   <div className="flex-shrink-0 mt-0.5">
                     {getIcon(notification.type)}
