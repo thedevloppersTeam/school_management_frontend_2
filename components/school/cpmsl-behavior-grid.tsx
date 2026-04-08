@@ -272,6 +272,37 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
     }
   }
 
+  // ── Helpers pour le rendu ────────────────────────────────────────────────
+
+  function renderAttitudeRow(att: ApiAttitude, e: BehaviorEntry, enrollmentId: string, isLocked: boolean) {
+    const resp = e.attitudeResponses.get(att.id)
+    return (
+      <div key={att.id} className="flex items-center gap-3">
+        <span className="text-sm font-medium" style={{ color: "#1E1A17", minWidth: "130px" }}>
+          {att.label}
+        </span>
+        <div className="flex items-center gap-3">
+          {([true, false] as const).map(val => (
+            <label key={String(val)} className="flex items-center gap-1.5 cursor-pointer">
+              <input
+                type="radio"
+                name={`att-${enrollmentId}-${att.id}`}
+                checked={resp === val}
+                onChange={() => handleAttitude(enrollmentId, att.id, val)}
+                disabled={isLocked}
+                className="h-4 w-4 cursor-pointer"
+                style={{ accentColor: "#5A7085" }}
+              />
+              <span className="text-sm" style={{ color: "#1E1A17" }}>
+                {val ? "Oui" : "Non"}
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   // ── Dérivés ───────────────────────────────────────────────────────────────
 
   const selectedSession = sessions.find(s => s.id === selectedSessionId)
@@ -470,34 +501,7 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
                               </p>
                             ) : (
                               <div className="flex flex-col gap-2">
-                                {attitudes.map(att => {
-                                  const resp = e.attitudeResponses.get(att.id)
-                                  return (
-                                    <div key={att.id} className="flex items-center gap-3">
-                                      <span className="text-sm font-medium" style={{ color: "#1E1A17", minWidth: "130px" }}>
-                                        {att.label}
-                                      </span>
-                                      <div className="flex items-center gap-3">
-                                        {([true, false] as const).map(val => (
-                                          <label key={String(val)} className="flex items-center gap-1.5 cursor-pointer">
-                                            <input
-                                              type="radio"
-                                              name={`att-${enr.id}-${att.id}`}
-                                              checked={resp === val}
-                                              onChange={() => handleAttitude(enr.id, att.id, val)}
-                                              disabled={isLocked}
-                                              className="h-4 w-4 cursor-pointer"
-                                              style={{ accentColor: "#5A7085" }}
-                                            />
-                                            <span className="text-sm" style={{ color: "#1E1A17" }}>
-                                              {val ? "Oui" : "Non"}
-                                            </span>
-                                          </label>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )
-                                })}
+                                {attitudes.map(att => renderAttitudeRow(att, e, enr.id, isLocked))}
                               </div>
                             )}
                           </td>
