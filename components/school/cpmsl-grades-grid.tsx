@@ -197,6 +197,7 @@ export function CPMSLGradesGrid({
   const showContent = selectedSessionId && selectedClassSubjectId && selectedStepId
 
   // ── Badge helper ──────────────────────────────────────────────────────────
+  // ── Badge helper ──────────────────────────────────────────────────────────
   function getBadge(enrollmentId: string) {
     const entry    = gradeEntries.get(enrollmentId)
     const existing = existingGrades.find(
@@ -211,6 +212,79 @@ export function CPMSLGradesGrid({
     if (existing && hasValue && !hasError) return { label: 'Enregistré',  bg: '#E0F2FE', color: '#0369A1' }
     if (!existing && hasValue && !hasError) return { label: 'Saisi',      bg: '#D1FAE5', color: '#065F46' }
     return { label: 'Non saisi', bg: '#F3F4F6', color: '#6B7280' }
+  }
+
+  // ── Table row renderer ────────────────────────────────────────────────────
+  function renderTableRow(enrollment: ApiEnrollment, index: number) {
+    const entry    = gradeEntries.get(enrollment.id)
+    const hasValue = !!entry?.value?.trim()
+    const hasError = hasValue && entry && !entry.isValid
+    const badge    = getBadge(enrollment.id)
+
+    return (
+      <tr key={enrollment.id}
+        style={{
+          borderBottom: index < paginatedEnrollments.length - 1 ? "1px solid #E8E6E3" : "none",
+          backgroundColor: index % 2 === 0 ? "white" : "#FAFAF8",
+          height: "48px",
+        }}>
+        <td className="px-6 py-3 font-sans" style={{ fontSize: "14px", fontWeight: 600, color: "#1E1A17" }}>
+          {enrollment.student.user.lastname}
+        </td>
+        <td className="px-6 py-3 font-sans" style={{ fontSize: "14px", color: "#1E1A17" }}>
+          {enrollment.student.user.firstname}
+        </td>
+        <td className="px-6 py-3 font-sans" style={{ fontSize: "13px", color: "#78756F" }}>
+          {enrollment.student.studentCode}
+        </td>
+        <td className="px-6 py-3">
+          <div className="flex flex-col items-center gap-1">
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                min="0"
+                max={String(maxScore)}
+                step="0.25"
+                value={entry?.value || ''}
+                onChange={e => handleGradeChange(enrollment.id, e.target.value)}
+                placeholder="—"
+                disabled={isLocked}
+                className="text-center"
+                style={{
+                  width: "80px",
+                  borderRadius: "8px",
+                  borderColor: hasError ? "#EF4444" : hasValue ? "#2C4A6E" : "#D1D5DB",
+                  borderWidth: "1px",
+                  color: "#1E1A17",
+                }}
+                onKeyDown={e => {
+                  if (e.key === 'Tab') {
+                    e.preventDefault()
+                    const idx = paginatedEnrollments.findIndex(en => en.id === enrollment.id)
+                    if (idx < paginatedEnrollments.length - 1) {
+                      const nextId = paginatedEnrollments[idx + 1].id
+                      const next = document.querySelector(`input[data-enrollment-id="${nextId}"]`) as HTMLInputElement
+                      next?.focus()
+                    }
+                  }
+                }}
+                data-enrollment-id={enrollment.id}
+              />
+              <span className="font-sans text-xs" style={{ color: "#78756F" }}>/ {maxScore}</span>
+            </div>
+            {hasError && entry?.error && (
+              <p className="font-sans" style={{ fontSize: "11px", color: "#EF4444" }}>{entry.error}</p>
+            )}
+          </div>
+        </td>
+        <td className="px-6 py-3 text-center">
+          <Badge variant="secondary"
+            style={{ backgroundColor: badge.bg, color: badge.color, border: "none", fontWeight: 500 }}>
+            {badge.label}
+          </Badge>
+        </td>
+      </tr>
+    )
   }
 
   return (

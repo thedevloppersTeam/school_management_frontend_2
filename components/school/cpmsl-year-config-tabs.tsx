@@ -723,8 +723,8 @@ export function CPMSLYearConfigTabs({
           open={addClassroomModalOpen} onOpenChange={setAddClassroomModalOpen}
           level={{ id: selectedLevel.id, name: selectedLevel.name, category: selectedLevel.category || 'fondamental' }}
           tracks={tracks} submitting={addClassroomSubmitting}
-          onSubmit={async data => { setAddClassroomSubmitting(true); await onAddClassroom?.(selectedLevel.id, data); setAddClassroomSubmitting(false); setAddClassroomModalOpen(false) }}
-        />
+                    onSubmit={async data => { setAddClassroomSubmitting(true); onAddClassroom?.(selectedLevel.id, data); setAddClassroomSubmitting(false); setAddClassroomModalOpen(false) }}
+      />
       )}
       {selectedClassroom && selectedLevel && (
         <>

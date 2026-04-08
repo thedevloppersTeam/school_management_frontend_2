@@ -5,7 +5,18 @@ import { fetchClassSubjects, type ApiClassSubject } from "@/lib/api/grades"
 import { parseDecimal, formatDate } from "@/lib/decimal"
 import type { BulletinData, RubriqueEntry, ComportementItem } from "@/components/BulletinScolaire"
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Types internes ────────────────────────────────────────────────────────────
+
+type GradeBucket = { direct: number[]; sections: Map<string, number[]> }
+type GradeIndex  = Map<string, GradeBucket>
+
+type RubriqueSet = {
+  r1: RubriqueEntry[]; r1Name: string
+  r2: RubriqueEntry[]; r2Name: string
+  r3: RubriqueEntry[]; r3Name: string
+}
+
+// ── Helpers math ──────────────────────────────────────────────────────────────
 
 function avg(arr: number[]): number | null {
   return arr.length > 0 ? arr.reduce((s, v) => s + v, 0) / arr.length : null
@@ -33,6 +44,8 @@ function getAppreciation(m: number): string {
   return 'E'
 }
 
+// ── Helpers fetch ─────────────────────────────────────────────────────────────
+
 async function apiFetch<T>(url: string): Promise<T> {
   const res = await fetch(url, { credentials: 'include' })
   if (!res.ok) throw new Error(`API ${res.status}: ${url}`)
@@ -49,19 +62,123 @@ async function safeFetch<T>(url: string, fallback: T): Promise<T> {
   }
 }
 
-const DEFAULT_COMPORTEMENT_ITEMS: ComportementItem[] = [
-  { label: "Manque d'attention",   oui: null, col: 1 },
-  { label: "Manque de respect",    oui: null, col: 1 },
-  { label: "Indiscipline",         oui: null, col: 1 },
-  { label: "Bavardage",            oui: null, col: 2 },
-  { label: "Agressivité",          oui: null, col: 2 },
-  { label: "Tricherie",            oui: null, col: 2 },
-  { label: "Respect uniforme",     oui: null, col: 3 },
-  { label: "Discipline générale",  oui: null, col: 3 },
-  { label: "Participation active", oui: null, col: 3 },
-]
+// ── Étape 2 : normalisation behavior / attitudes ───────────────────────────────
+
+function normalizeBehavior(raw: any): any {
+  return Array.isArray(raw) ? raw[0] ?? null : raw
+}
+
+function normalizeAttitudes(raw: any): any[] {
+  return Array.isArray(raw) ? raw : []
+}
+
+// ── Étape 3 : indexation des notes ────────────────────────────────────────────
+// Extracted to kill the 4-level nesting in the original for-loop.
+
+function addScoreToIndex(index: GradeIndex, grade: any, score: number): void {
+  if (!index.has(grade.classSubjectId)) {
+    index.set(grade.classSubjectId, { direct: [], sections: new Map() })
+  }
+  const bucket = index.get(grade.classSubjectId)!
+  if (grade.sectionId) {
+    if (!bucket.sections.has(grade.sectionId)) bucket.sections.set(grade.sectionId, [])
+    bucket.sections.get(grade.sectionId)!.push(score)
+  } else {
+    bucket.direct.push(score)
+  }
+}
+
+function buildGradeIndex(allGrades: any[]): GradeIndex {
+  const index: GradeIndex = new Map()
+  for (const grade of allGrades) {
+    const score = parseDecimal(grade.studentScore)
+    if (score !== null) addScoreToIndex(index, grade, score)  // +1 for, +1 if
+  }
+  return index
+}
+
+// ── Étape 4 : construction des rubriques ─────────────────────────────────────
+// Split into three focused helpers to eliminate nested loops + branching.
+
+function buildSubjectEntries(cs: ApiClassSubject, bucket: GradeBucket | undefined): RubriqueEntry[] {
+  const subject = cs.subject
+  const coeff   = cs.coefficientOverride !== null ? cs.coefficientOverride : subject.coefficient
+
+  if (!subject.hasSections || subject.sections.length === 0) {  // +1 if
+    return [{ name: subject.name, note: avg(bucket?.direct ?? []), coeff, isParent: false }]
+  }
+
+  const entries: RubriqueEntry[] = [{ name: subject.name, isParent: true }]
+  for (const sec of subject.sections) {                          // +1 for
+    const scores = bucket?.sections.get(sec.id) ?? []
+    entries.push({
+      name:     sec.name,
+      note:     avg(scores),
+      coeff:    Number(sec.maxScore) > 0 ? coeff / subject.sections.length : 1,
+      isParent: false,
+    })
+  }
+  return entries
+}
+
+function pushToRubrique(set: RubriqueSet, code: string, entries: RubriqueEntry[]): void {
+  if (code === 'R1') set.r1.push(...entries)       // +1 if
+  else if (code === 'R2') set.r2.push(...entries)  // +1 else-if
+  else if (code === 'R3') set.r3.push(...entries)  // +1 else-if
+}
+
+function buildRubriques(classSubjects: ApiClassSubject[], gradeIndex: GradeIndex): RubriqueSet {
+  const set: RubriqueSet = {
+    r1: [], r1Name: 'Rubrique 1',
+    r2: [], r2Name: 'Rubrique 2',
+    r3: [], r3Name: 'Rubrique 3',
+  }
+
+  for (const cs of classSubjects) {                             // +1 for
+    const { rubric } = cs.subject
+    const code = rubric?.code ?? ''
+    const name = rubric?.name ?? ''
+
+    if (code === 'R1' && name) set.r1Name = name               // +1 if
+    if (code === 'R2' && name) set.r2Name = name               // +1 if
+    if (code === 'R3' && name) set.r3Name = name               // +1 if
+
+    const entries = buildSubjectEntries(cs, gradeIndex.get(cs.id))
+    pushToRubrique(set, code, entries)
+  }
+  return set
+}
+
+// ── Étape 6 : bloc comportement ───────────────────────────────────────────────
+
+function resolveAttitudeOui(behavior: any, attitudeId: string): boolean | null {
+  const response = behavior?.attitudeResponses?.find((r: any) => r.attitudeId === attitudeId)
+  return response != null ? response.value : null
+}
+
+function buildComportementItems(attitudes: any[], behavior: any): ComportementItem[] {
+  return attitudes.map((att: any, i: number) => ({  // +1 map (implicit for)
+    label: att.label,
+    oui:   resolveAttitudeOui(behavior, att.id),
+    col:   ((i % 3) + 1) as 1 | 2 | 3,
+  }))
+}
+
+function buildComportement(behavior: any, attitudes: any[]) {
+  return {
+    absences:        behavior?.absences       != null ? String(behavior.absences)       : '—',
+    retards:         behavior?.retards         != null ? String(behavior.retards)         : '—',
+    devoirsNonRemis: behavior?.devoirsManques  != null ? String(behavior.devoirsManques)  : '—',
+    leconsNonSues:   '—',
+    items:           buildComportementItems(attitudes, behavior),
+    pointsForts:     behavior?.pointsForts ?? '',
+    defis:           behavior?.defis        ?? '',
+    remarque:        behavior?.remarque     ?? '',
+  }
+}
 
 // ── Fonction principale ───────────────────────────────────────────────────────
+// Cognitive complexity is now ≤ 5 : only the Promise.all orchestration remains.
 
 export async function buildBulletinData(params: {
   enrollmentId:   string
@@ -70,117 +187,37 @@ export async function buildBulletinData(params: {
   stepId:         string
   stepName:       string
   className:      string
-  yearId:         string   // ← nécessaire pour charger les attitudes
+  yearId:         string
 }): Promise<BulletinData> {
   const { enrollmentId, studentId, classSessionId, stepId, stepName, className, yearId } = params
 
-  // 1. Données en parallèle
+  // 1. Fetch all data in parallel
   const [student, classSubjects, allGrades, behaviorRaw, attitudesRaw] = await Promise.all([
     apiFetch<any>(`/api/students/${studentId}`),
     fetchClassSubjects(classSessionId),
     apiFetch<any[]>(`/api/grades/enrollment/${enrollmentId}?stepId=${stepId}`),
-    // Behavior de l'élève pour cette étape — peut être null ou tableau vide
     safeFetch<any>(`/api/behaviors?enrollmentId=${enrollmentId}&stepId=${stepId}`, null),
-    // Attitudes configurées pour l'année
     safeFetch<any[]>(`/api/attitudes?academicYearId=${yearId}`, []),
   ])
 
-  // 2. Extraire le behavior (l'API retourne un objet ou un tableau d'un élément)
-  const behavior = Array.isArray(behaviorRaw) ? behaviorRaw[0] ?? null : behaviorRaw
-  const attitudes: any[] = Array.isArray(attitudesRaw) ? attitudesRaw : []
+  // 2. Normalize
+  const behavior  = normalizeBehavior(behaviorRaw)
+  const attitudes = normalizeAttitudes(attitudesRaw)
 
-  // 3. Index notes
-  const gradeIndex = new Map<string, { direct: number[]; sections: Map<string, number[]> }>()
-  for (const grade of allGrades) {
-    const score = parseDecimal(grade.studentScore)
-    if (score === null) continue
-    if (!gradeIndex.has(grade.classSubjectId))
-      gradeIndex.set(grade.classSubjectId, { direct: [], sections: new Map() })
-    const bucket = gradeIndex.get(grade.classSubjectId)!
-    if (grade.sectionId) {
-      if (!bucket.sections.has(grade.sectionId)) bucket.sections.set(grade.sectionId, [])
-      bucket.sections.get(grade.sectionId)!.push(score)
-    } else {
-      bucket.direct.push(score)
-    }
-  }
+  // 3. Build grade index
+  const gradeIndex = buildGradeIndex(allGrades)
 
-  // 4. Construction rubriques
-  const r1: RubriqueEntry[] = []
-  const r2: RubriqueEntry[] = []
-  const r3: RubriqueEntry[] = []
-  let r1Name = 'Rubrique 1', r2Name = 'Rubrique 2', r3Name = 'Rubrique 3'
+  // 4. Build rubriques
+  const { r1, r1Name, r2, r2Name, r3, r3Name } = buildRubriques(classSubjects, gradeIndex)
 
-  for (const cs of classSubjects) {
-    const subject    = cs.subject
-    const rubricCode = subject.rubric?.code ?? ''
-    const rubricName = subject.rubric?.name ?? ''
-    const coeff      = cs.coefficientOverride !== null ? cs.coefficientOverride : subject.coefficient
-    const bucket     = gradeIndex.get(cs.id)
-    const entries: RubriqueEntry[] = []
-
-    if (rubricCode === 'R1' && rubricName) r1Name = rubricName
-    if (rubricCode === 'R2' && rubricName) r2Name = rubricName
-    if (rubricCode === 'R3' && rubricName) r3Name = rubricName
-
-    if (subject.hasSections && subject.sections.length > 0) {
-      entries.push({ name: subject.name, isParent: true })
-      for (const sec of subject.sections) {
-        const scores = bucket?.sections.get(sec.id) ?? []
-        entries.push({
-          name:     sec.name,
-          note:     avg(scores),
-          coeff:    Number(sec.maxScore) > 0 ? coeff / subject.sections.length : 1,
-          isParent: false,
-        })
-      }
-    } else {
-      entries.push({ name: subject.name, note: avg(bucket?.direct ?? []), coeff, isParent: false })
-    }
-
-    if (rubricCode === 'R1') r1.push(...entries)
-    else if (rubricCode === 'R2') r2.push(...entries)
-    else if (rubricCode === 'R3') r3.push(...entries)
-  }
-
-  // 5. Moyennes BR-001
+  // 5. Compute averages (BR-001 weights)
   const moyR1    = rubriqueAvg(r1)
   const moyR2    = rubriqueAvg(r2)
   const moyR3    = rubriqueAvg(r3)
   const finalAvg = ((moyR1 ?? 0) * 0.70) + ((moyR2 ?? 0) * 0.25) + ((moyR3 ?? 0) * 0.05)
 
-  // 6. Construction bloc comportement
-  //
-  // Si des attitudes sont configurées → on les utilise exclusivement.
-  // Si aucune attitude n'est configurée → section vide.
-  // On ne tombe jamais sur DEFAULT_COMPORTEMENT_ITEMS : ces items hardcodés
-  // s'affichaient même quand l'école avait ses propres attitudes configurées.
-  let comportementItems: ComportementItem[]
-
-  if (attitudes.length > 0) {
-    comportementItems = attitudes.map((att: any, i: number) => {
-      const response = behavior?.attitudeResponses?.find((r: any) => r.attitudeId === att.id)
-      return {
-        label: att.label,
-        oui:   response != null ? response.value : null,
-        col:   ((i % 3) + 1) as 1 | 2 | 3,
-      }
-    })
-  } else {
-    // Aucune attitude configurée dans Settings → section vide sur le bulletin
-    comportementItems = []
-  }
-
-  const comportement = {
-    absences:        behavior?.absences        != null ? String(behavior.absences)        : '—',
-    retards:         behavior?.retards          != null ? String(behavior.retards)          : '—',
-    devoirsNonRemis: behavior?.devoirsManques   != null ? String(behavior.devoirsManques)   : '—',
-    leconsNonSues:   '—',   // non exposé par l'API actuelle
-    items:           comportementItems,
-    pointsForts:     behavior?.pointsForts  ?? '',
-    defis:           behavior?.defis         ?? '',
-    remarque:        behavior?.remarque      ?? '',
-  }
+  // 6. Build comportement block
+  const comportement = buildComportement(behavior, attitudes)
 
   return {
     prenoms:       student?.user?.firstname ?? '',
