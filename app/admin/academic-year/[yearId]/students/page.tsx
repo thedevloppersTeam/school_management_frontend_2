@@ -226,7 +226,8 @@ export default function StudentsManagementPage() {
           return s.className.toLowerCase()
         }
         const av = val(a), bv = val(b)
-        return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
+        const comparison = av.localeCompare(bv)
+        return sortDir === 'asc' ? comparison : -comparison
       })
     }
     return result

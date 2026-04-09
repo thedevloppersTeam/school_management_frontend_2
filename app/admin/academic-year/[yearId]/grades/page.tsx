@@ -28,6 +28,16 @@ function buildSaveDescription(created: number, updated: number): string {
   return parts.join(', ')
 }
 
+async function loadGradesHelper(classSubjectId: string, stepId: string, toast: any) {
+  try {
+    const grades = await fetchGradesForClassSubjectStep(classSubjectId, stepId)
+    return grades
+  } catch (e) {
+    toast({ title: 'Erreur', description: e instanceof Error ? e.message : 'Erreur de chargement des notes' })
+    throw e
+  }
+}
+
 export default function GradesPage() {
   const params  = useParams()
   const yearId  = params.yearId as string

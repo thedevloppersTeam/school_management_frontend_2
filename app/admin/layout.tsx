@@ -168,17 +168,29 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
     )
   }
 
-    const renderNavLink = (item: NavItem, mobile: boolean, paddingLeft: string) => {
+  const getLinkStyles = (isActive: boolean, paddingLeft: string, mobile: boolean, item: NavItem) => ({
+    paddingLeft: sidebarCollapsed && !mobile ? "0" : paddingLeft,
+    backgroundColor: isActive ? "rgba(255,255,255,0.08)" : "transparent",
+    color: isActive ? "#FFFFFF" : "#CBD5E1",
+    fontFamily: "var(--font-sans)",
+    fontSize: "14px",
+    fontWeight: isActive ? 600 : (item.href ? 500 : 400),
+    borderLeft: isActive ? "3px solid #FFFFFF" : "3px solid transparent",
+    borderRadius: isActive ? "0 6px 6px 0" : "0",
+    marginLeft: "-3px",
+  })
+
+  const handleMouseEnter = (e: React.MouseEvent<HTMLAnchorElement>, isActive: boolean) => {
+    if (!isActive) e.currentTarget.style.borderLeft = "2px solid #8FA8C0"
+  }
+
+  const handleMouseLeave = (e: React.MouseEvent<HTMLAnchorElement>, isActive: boolean) => {
+    if (!isActive) e.currentTarget.style.borderLeft = "3px solid transparent"
+  }
+
+  const createLinkContent = (item: NavItem, href: string, isActive: boolean, mobile: boolean, paddingLeft: string) => {
     const Icon = item.icon
-    const href = getNavHref(item.href)
-    const isActive = pathname === href || pathname.startsWith(href.split("?")[0])
-
-    const getFontWeight = () => {
-      if (isActive) return 600
-      return item.href ? 500 : 400
-    }
-
-    const linkContent = (
+    return (
       <Link
         key={item.href}
         href={href}
@@ -186,30 +198,30 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
         className={cn("flex items-center py-2 transition-all duration-200",
           sidebarCollapsed && !mobile ? "justify-center" : "gap-3"
         )}
-        style={{
-          paddingLeft: sidebarCollapsed && !mobile ? "0" : paddingLeft,
-          backgroundColor: isActive ? "rgba(255,255,255,0.08)" : "transparent",
-          color: isActive ? "#FFFFFF" : "#CBD5E1",
-          fontFamily: "var(--font-sans)", fontSize: "14px",
-          fontWeight: getFontWeight(),
-          borderLeft: isActive ? "3px solid #FFFFFF" : "3px solid transparent",
-          borderRadius: isActive ? "0 6px 6px 0" : "0",
-          marginLeft: "-3px",
-        }}
-        onMouseEnter={e => { if (!isActive) e.currentTarget.style.borderLeft = "2px solid #8FA8C0" }}
-        onMouseLeave={e => { if (!isActive) e.currentTarget.style.borderLeft = "3px solid transparent" }}
+        style={getLinkStyles(isActive, paddingLeft, mobile)}
+        onMouseEnter={e => handleMouseEnter(e, isActive)}
+        onMouseLeave={e => handleMouseLeave(e, isActive)}
       >
         <Icon className="h-4 w-4" />
         {(!sidebarCollapsed || mobile) && <span>{item.label}</span>}
       </Link>
     )
+  }
 
-    return (sidebarCollapsed && !mobile) ? (
-      <Tooltip key={item.href}>
-        <TooltipTrigger asChild>{linkContent}</TooltipTrigger>
-        <TooltipContent side="right"><p>{item.label}</p></TooltipContent>
-      </Tooltip>
-    ) : linkContent
+  const renderNavLink = (item: NavItem, mobile: boolean, paddingLeft: string) => {
+    const href = getNavHref(item.href)
+    const isActive = pathname === href || pathname.startsWith(href.split("?")[0])
+    const linkContent = createLinkContent(item, href, isActive, mobile, paddingLeft)
+
+    if (sidebarCollapsed && !mobile) {
+      return (
+        <Tooltip key={item.href}>
+          <TooltipTrigger asChild>{linkContent}</TooltipTrigger>
+          <TooltipContent side="right"><p>{item.label}</p></TooltipContent>
+        </Tooltip>
+      )
+    }
+    return linkContent
   }
 
   const renderSectionHeader = (label: string, mobile: boolean) => {
