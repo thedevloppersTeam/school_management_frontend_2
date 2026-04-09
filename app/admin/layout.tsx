@@ -198,7 +198,7 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
         className={cn("flex items-center py-2 transition-all duration-200",
           sidebarCollapsed && !mobile ? "justify-center" : "gap-3"
         )}
-        style={getLinkStyles(isActive, paddingLeft, mobile)}
+        style={getLinkStyles(isActive, paddingLeft, mobile, item)}
         onMouseEnter={e => handleMouseEnter(e, isActive)}
         onMouseLeave={e => handleMouseLeave(e, isActive)}
       >
