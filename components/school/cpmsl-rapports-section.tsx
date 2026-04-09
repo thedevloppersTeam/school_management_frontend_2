@@ -55,13 +55,24 @@ interface ReportData {
   subjectAvgs:  Record<string, number | null>
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+type RawGrade = {
+  classSubjectId: string
+  sectionId: string | null
+  studentScore: number | { s: number; e: number; d: number[] }
+}
+
+type RawEnrollment = {
+  id: string
+  student?: { nisu?: string; user?: { firstname?: string; lastname?: string } }
+}
+
+// ── Module-level helpers ───────────────────────────────────────────────────────
 
 function calcMedian(values: number[]): number {
   if (values.length === 0) return 0
   const sorted = [...values].sort((a, b) => a - b)
   const mid = Math.floor(sorted.length / 2)
-    return sorted.length % 2 === 0
+  return sorted.length % 2 === 0
     ? (sorted[mid - 1] + sorted[mid]) / 2
     : sorted[mid]
 }
@@ -79,11 +90,7 @@ async function apiFetch<T>(url: string): Promise<T> {
 
 function calculateSectionScores(
   sub: SubjectColumn,
-  grades: Array<{
-    classSubjectId: string
-    sectionId: string | null
-    studentScore: number | { s: number; e: number; d: number[] }
-  }>
+  grades: RawGrade[]
 ): number | null {
   let total = 0
   for (const sec of sub.sections) {
@@ -96,6 +103,90 @@ function calculateSectionScores(
     total += score
   }
   return total
+}
+
+// Extracts per-subject scores for one enrollment
+function buildScores(
+  subjects: SubjectColumn[],
+  grades: RawGrade[]
+): Record<string, number | null> {
+  const scores: Record<string, number | null> = {}
+
+  for (const sub of subjects) {
+    if (sub.sections.length === 0) {
+      const g = grades.find(
+        g => g.classSubjectId === sub.classSubjectId && g.sectionId === null
+      )
+      scores[sub.classSubjectId] = g ? parseDecimal(g.studentScore) : null
+    } else {
+      scores[sub.classSubjectId] = calculateSectionScores(sub, grades)
+    }
+  }
+
+  return scores
+}
+
+// Groups normalised scores (out of 10) by rubric
+function groupByRubric(
+  subjects: SubjectColumn[],
+  scores: Record<string, number | null>
+): Record<'R1' | 'R2' | 'R3', number[]> {
+  const byRubric: Record<'R1' | 'R2' | 'R3', number[]> = { R1: [], R2: [], R3: [] }
+
+  for (const sub of subjects) {
+    const val = scores[sub.classSubjectId]
+    if (val !== null) {
+      const normalized = sub.maxScore === 0 ? 0 : (val / sub.maxScore) * 10
+      byRubric[sub.rubricCode].push(normalized)
+    }
+  }
+
+  return byRubric
+}
+
+// Computes final weighted average: 70% R1 + 25% R2 + 5% R3
+function computeFinalAverage(
+  byRubric: Record<'R1' | 'R2' | 'R3', number[]>
+): number | null {
+  const avg = (arr: number[]): number | null =>
+    arr.length > 0 ? arr.reduce((s, v) => s + v, 0) / arr.length : null
+
+  const avgR1 = avg(byRubric.R1)
+  const avgR2 = avg(byRubric.R2)
+  const avgR3 = avg(byRubric.R3)
+
+  if (avgR1 === null && avgR2 === null && avgR3 === null) return null
+
+  return (avgR1 ?? 0) * 0.7 + (avgR2 ?? 0) * 0.25 + (avgR3 ?? 0) * 0.05
+}
+
+// Module-level async function — nesting starts at 0, never exceeds level 2
+async function processEnrollment(
+  enr: RawEnrollment,
+  subjects: SubjectColumn[],
+  selectedStep: string
+): Promise<StudentRow> {
+  const grades = await apiFetch<RawGrade[]>(
+    `/api/grades/enrollment/${enr.id}?stepId=${selectedStep}`
+  )
+
+  const scores       = buildScores(subjects, grades)
+  const byRubric     = groupByRubric(subjects, scores)
+  const finalAverage = computeFinalAverage(byRubric)
+
+  const mention: StudentRow['mention'] =
+    finalAverage === null ? 'Incomplet' :
+    finalAverage >= 7     ? 'Réussi'   : 'Échec'
+
+  return {
+    enrollmentId: enr.id,
+    lastname:  enr.student?.user?.lastname  ?? '—',
+    firstname: enr.student?.user?.firstname ?? '—',
+    scores,
+    finalAverage,
+    mention,
+    rang: 0,
+  }
 }
 
 // ── Composant ─────────────────────────────────────────────────────────────────
@@ -141,10 +232,9 @@ export function CPMSLRapportsSection({
 
     try {
       const [enrollments, rawSubjects, rubrics] = await Promise.all([
-        apiFetch<Array<{
-          id: string
-          student?: { nisu?: string; user?: { firstname?: string; lastname?: string } }
-        }>>(`/api/enrollments?classSessionId=${selectedSession}&status=ACTIVE`),
+        apiFetch<RawEnrollment[]>(
+          `/api/enrollments?classSessionId=${selectedSession}&status=ACTIVE`
+        ),
         apiFetch<Array<{
           id: string
           subjectId: string
@@ -198,71 +288,10 @@ export function CPMSLRapportsSection({
         a.name.localeCompare(b.name)
       )
 
-      const processEnrollment = async (enr: {
-        id: string
-        student?: { nisu?: string; user?: { firstname?: string; lastname?: string } }
-      }): Promise<StudentRow> => {
-        const grades = await apiFetch<Array<{
-          classSubjectId: string
-          sectionId: string | null
-          studentScore: number | { s: number; e: number; d: number[] }
-        }>>(`/api/grades/enrollment/${enr.id}?stepId=${selectedStep}`)
-
-        const scores: Record<string, number | null> = {}
-        subjects.forEach(sub => {
-          if (sub.sections.length === 0) {
-            const g = grades.find(
-              g => g.classSubjectId === sub.classSubjectId && g.sectionId === null
-            )
-            scores[sub.classSubjectId] = g ? parseDecimal(g.studentScore) : null
-          } else {
-            scores[sub.classSubjectId] = calculateSectionScores(sub, grades)
-          }
-        })
-
-        // Grouper les scores normalisés sur 10 par rubrique
-        const byRubric: Record<'R1' | 'R2' | 'R3', number[]> = { R1: [], R2: [], R3: [] }
-        subjects.forEach(sub => {
-          const val = scores[sub.classSubjectId]
-          if (val !== null) {
-            const normalized = sub.maxScore === 0 ? 0 : (val / sub.maxScore) * 10
-            byRubric[sub.rubricCode].push(normalized)
-          }
-        })
-
-        const avg = (arr: number[]): number | null =>
-          arr.length > 0 ? arr.reduce((s, v) => s + v, 0) / arr.length : null
-
-        const avgR1 = avg(byRubric.R1)
-        const avgR2 = avg(byRubric.R2)
-        const avgR3 = avg(byRubric.R3)
-
-        let finalAverage: number | null = null
-        if (avgR1 !== null || avgR2 !== null || avgR3 !== null) {
-          finalAverage = (avgR1 ?? 0) * 0.7 + (avgR2 ?? 0) * 0.25 + (avgR3 ?? 0) * 0.05
-        }
-
-        let mention: StudentRow['mention']
-        if (finalAverage === null) {
-          mention = 'Incomplet'
-        } else if (finalAverage >= 7) {
-          mention = 'Réussi'
-        } else {
-          mention = 'Échec'
-        }
-
-        return {
-          enrollmentId: enr.id,
-          lastname:  enr.student?.user?.lastname  ?? '—',
-          firstname: enr.student?.user?.firstname ?? '—',
-          scores,
-          finalAverage,
-          mention,
-          rang: 0,
-        }
-      }
-
-      const rows: StudentRow[] = await Promise.all(enrollments.map(processEnrollment))
+      // Clean call site — processEnrollment is now a module-level function
+      const rows: StudentRow[] = await Promise.all(
+        enrollments.map(enr => processEnrollment(enr, subjects, selectedStep))
+      )
 
       rows.sort((a, b) => {
         if (a.finalAverage === null && b.finalAverage === null) return 0
@@ -312,7 +341,7 @@ export function CPMSLRapportsSection({
     else setReport(null)
   }, [selectedSession, selectedStep, computeReport])
 
-  // ── Génération PDF 8½×14 ─────────────────────────────────────────────────
+  // ── Génération PDF 8½×14 ──────────────────────────────────────────────────
   const generatePDF = async () => {
     if (!report || !reportRef.current) return
     setGenerating(true)
