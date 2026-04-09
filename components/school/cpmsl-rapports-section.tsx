@@ -61,9 +61,9 @@ function calcMedian(values: number[]): number {
   if (values.length === 0) return 0
   const sorted = [...values].sort((a, b) => a - b)
   const mid = Math.floor(sorted.length / 2)
-  return sorted.length % 2 !== 0
-    ? sorted[mid]
-    : (sorted[mid - 1] + sorted[mid]) / 2
+    return sorted.length % 2 === 0
+    ? (sorted[mid - 1] + sorted[mid]) / 2
+    : sorted[mid]
 }
 
 function fmt(value: number | null | undefined, decimals = 2): string {
@@ -103,7 +103,7 @@ function calculateSectionScores(
 export function CPMSLRapportsSection({
   academicYearId,
   isArchived = false,
-}: CPMSLRapportsSectionProps) {
+}: Readonly<CPMSLRapportsSectionProps>) {
   const [steps,         setSteps]         = useState<AcademicYearStep[]>([])
   const [sessions,      setSessions]      = useState<ClassSession[]>([])
   const [loadingInit,   setLoadingInit]   = useState(true)
@@ -225,7 +225,7 @@ export function CPMSLRapportsSection({
         subjects.forEach(sub => {
           const val = scores[sub.classSubjectId]
           if (val !== null) {
-            const normalized = sub.maxScore !== 0 ? (val / sub.maxScore) * 10 : 0
+            const normalized = sub.maxScore === 0 ? 0 : (val / sub.maxScore) * 10
             byRubric[sub.rubricCode].push(normalized)
           }
         })
@@ -239,11 +239,17 @@ export function CPMSLRapportsSection({
 
         let finalAverage: number | null = null
         if (avgR1 !== null || avgR2 !== null || avgR3 !== null) {
-          finalAverage = (avgR1 ?? 0) * 0.70 + (avgR2 ?? 0) * 0.25 + (avgR3 ?? 0) * 0.05
+          finalAverage = (avgR1 ?? 0) * 0.7 + (avgR2 ?? 0) * 0.25 + (avgR3 ?? 0) * 0.05
         }
 
-        const mention: StudentRow['mention'] =
-          finalAverage === null ? 'Incomplet' : finalAverage >= 7 ? 'Réussi' : 'Échec'
+        let mention: StudentRow['mention']
+        if (finalAverage === null) {
+          mention = 'Incomplet'
+        } else if (finalAverage >= 7) {
+          mention = 'Réussi'
+        } else {
+          mention = 'Échec'
+        }
 
         return {
           enrollmentId: enr.id,
@@ -345,6 +351,29 @@ export function CPMSLRapportsSection({
     }
   }
 
+  // ── Render helpers ────────────────────────────────────────────────────────
+  const renderMentionBadge = (mention: StudentRow['mention']) => {
+    if (mention === 'Réussi') {
+      return (
+        <span style={{ backgroundColor: '#E8F5EC', color: '#2D7D46', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 600 }}>
+          Réussi
+        </span>
+      )
+    }
+    if (mention === 'Échec') {
+      return (
+        <span style={{ backgroundColor: '#FDE8E8', color: '#C43C3C', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 600 }}>
+          Échec
+        </span>
+      )
+    }
+    return (
+      <span style={{ backgroundColor: '#FEF6E0', color: '#C48B1A', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 600 }}>
+        Incomplet
+      </span>
+    )
+  }
+
   // ── Styles ────────────────────────────────────────────────────────────────
   const card: React.CSSProperties = {
     backgroundColor: '#FFFFFF',
@@ -393,11 +422,11 @@ export function CPMSLRapportsSection({
         <div style={{ padding: '20px 24px' }}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label style={{ fontSize: '13px', fontWeight: 500, color: '#1E1A17', display: 'block', marginBottom: '8px' }}>
+              <label htmlFor="class-select" style={{ fontSize: '13px', fontWeight: 500, color: '#1E1A17', display: 'block', marginBottom: '8px' }}>
                 Classe
               </label>
               <Select value={selectedSession} onValueChange={setSelectedSession}>
-                <SelectTrigger style={{ borderColor: '#D1CECC', borderRadius: '8px' }}>
+                <SelectTrigger id="class-select" style={{ borderColor: '#D1CECC', borderRadius: '8px' }}>
                   <SelectValue placeholder="Sélectionner une classe" />
                 </SelectTrigger>
                 <SelectContent>
@@ -509,7 +538,14 @@ export function CPMSLRapportsSection({
                     {(['R1', 'R2', 'R3'] as const).map(r => {
                       const cols = rubriqueGroups[r]
                       if (!cols || cols.length === 0) return null
-                      const bg = r === 'R1' ? '#2C4A6E' : r === 'R2' ? '#3A5F7D' : '#4A7396'
+                      let bg: string
+                      if (r === 'R1') {
+                        bg = '#2C4A6E'
+                      } else if (r === 'R2') {
+                        bg = '#3A5F7D'
+                      } else {
+                        bg = '#4A7396'
+                      }
                       return (
                         <th
                           key={r}
@@ -557,19 +593,7 @@ export function CPMSLRapportsSection({
                         {fmt(row.finalAverage)}
                       </td>
                       <td style={tdStyle}>
-                        {row.mention === 'Réussi' ? (
-                          <span style={{ backgroundColor: '#E8F5EC', color: '#2D7D46', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 600 }}>
-                            Réussi
-                          </span>
-                        ) : row.mention === 'Échec' ? (
-                          <span style={{ backgroundColor: '#FDE8E8', color: '#C43C3C', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 600 }}>
-                            Échec
-                          </span>
-                        ) : (
-                          <span style={{ backgroundColor: '#FEF6E0', color: '#C48B1A', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 600 }}>
-                            Incomplet
-                          </span>
-                        )}
+                        {renderMentionBadge(row.mention)}
                       </td>
                     </tr>
                   ))}
