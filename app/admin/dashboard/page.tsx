@@ -80,7 +80,57 @@ export default function AdminDashboardPage() {
     loadDashboard()
   }, [])
 
+  
   const currentStep = getCurrentStep(steps)
+
+  const renderAlertContent = () => {
+    if (!activeYear) {
+      return (
+        <div
+          className="font-sans rounded-md p-3 flex items-center gap-2"
+          style={{ backgroundColor: "#FEF6E0", color: "#C48B1A", fontSize: "14px", fontWeight: 500 }}
+        >
+          <AlertTriangleIcon className="h-4 w-4 flex-shrink-0" />
+          <span>Aucune année scolaire active — configurez-en une</span>
+        </div>
+      )
+    }
+
+    if (!currentStep) {
+      return (
+        <div
+          className="font-sans rounded-md p-3 flex items-center gap-2"
+          style={{ backgroundColor: "#E3EFF9", color: "#2B6CB0", fontSize: "14px", fontWeight: 500 }}
+        >
+          <InfoIcon className="h-4 w-4 flex-shrink-0" />
+          <span>Aucune étape active — configurez les étapes de l&apos;année</span>
+        </div>
+      )
+    }
+
+    if (sessions.length === 0) {
+      return (
+        <div
+          className="font-sans rounded-md p-3 flex items-center gap-2"
+          style={{ backgroundColor: "#FEF6E0", color: "#C48B1A", fontSize: "14px", fontWeight: 500 }}
+        >
+          <AlertTriangleIcon className="h-4 w-4 flex-shrink-0" />
+          <span>Aucune classe configurée pour cette année</span>
+        </div>
+      )
+    }
+
+    return (
+      <div
+        className="font-sans rounded-md p-3 flex items-center gap-2"
+        style={{ backgroundColor: "#E8F5EC", color: "#2D7D46", fontSize: "14px", fontWeight: 500 }}
+      >
+        <span>
+          {sessions.length} classe(s) · {totalStudents} élève(s) · Étape : {currentStep.name}
+        </span>
+      </div>
+    )
+  }
 
   if (loading) {
     return (

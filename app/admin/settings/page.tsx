@@ -296,7 +296,7 @@ function useSchoolSettings() {
   const handleSaveSubject = async () => {
     setSubmitting(true)
     try {
-      const body = { name: subjectForm.name, code: subjectForm.code, maxScore: parseFloat(subjectForm.maxScore), coefficient: parseFloat(subjectForm.coefficient), hasSections: subjectForm.hasSections, rubricId: subjectForm.rubricId || null }
+      const body = { name: subjectForm.name, code: subjectForm.code, maxScore: Number.parseFloat(subjectForm.maxScore), coefficient: Number.parseFloat(subjectForm.coefficient), hasSections: subjectForm.hasSections, rubricId: subjectForm.rubricId || null }
       if (editingSubject) {
         await apiFetch(`/api/subjects/update/${editingSubject.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
         toast({ title: "Matière modifiée" })

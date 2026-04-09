@@ -14,6 +14,20 @@ import type { ApiClassSubject, ApiEnrollment, ApiGrade, CreateGradePayload } fro
 import { fetchClassSubjects, fetchEnrollments, fetchGradesForClassSubjectStep, bulkCreateGrades, updateGrade } from "@/lib/api/grades"
 import type { UpdateGradePayload } from "@/components/school/cpmsl-grades-grid"
 
+
+function buildSaveDescription(created: number, updated: number): string {
+  const parts: string[] = []
+  if (created > 0) {
+    const plural = created > 1 ? 's' : ''
+    parts.push(`${created} note${plural} créée${plural}`)
+  }
+  if (updated > 0) {
+    const plural = updated > 1 ? 's' : ''
+    parts.push(`${updated} note${plural} mise${plural} à jour`)
+  }
+  return parts.join(', ')
+}
+
 export default function GradesPage() {
   const params  = useParams()
   const yearId  = params.yearId as string
@@ -108,19 +122,6 @@ export default function GradesPage() {
     if (selectedClassSubjectId && id) loadGrades(selectedClassSubjectId, id)
   }
 
-    function buildSaveDescription(created: number, updated: number): string {
-    const parts: string[] = []
-    if (created > 0) {
-      const plural = created > 1 ? 's' : ''
-      parts.push(`${created} note${plural} créée${plural}`)
-    }
-    if (updated > 0) {
-      const plural = updated > 1 ? 's' : ''
-      parts.push(`${updated} note${plural} mise${plural} à jour`)
-    }
-    return parts.join(', ')
-  }
-
   async function handleSaveGrades(toCreate: CreateGradePayload[], toUpdate: UpdateGradePayload[]) {
     setSaving(true)
     try {
@@ -153,6 +154,92 @@ export default function GradesPage() {
   }
 
   // ── Rendu ─────────────────────────────────────────────────────────────────
+    // ── Helper function to render main content ──────────────────────────────
+  function renderMainContent() {
+    if (loadingContext) {
+      return (
+        <div className="flex items-center justify-center py-20">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: "#5A7085" }} />
+        </div>
+      )
+    }
+
+    if (error) {
+      return (
+        <div className="rounded-lg p-8 flex flex-col items-center justify-center gap-4" style={{ backgroundColor: "white", border: "1px solid #E8E6E3" }}>
+          <p className="font-sans" style={{ color: "#C43C3C", fontSize: "14px" }}>{error}</p>
+          <button onClick={() => globalThis.location.reload()} className="px-4 py-2 rounded-lg font-sans text-sm font-medium text-white" style={{ backgroundColor: "#5A7085" }}>            Réessayer
+          </button>
+        </div>
+      )
+    }
+
+    return (
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList style={{ backgroundColor: "#F0F4F7", borderRadius: "8px", padding: "4px" }}>
+          <TabsTrigger value="notes" className="label-ui data-[state=active]:bg-white data-[state=active]:shadow-sm" style={{ borderRadius: "6px" }}>
+            <span className="data-[state=active]:text-[#3A4A57] text-[#78756F]">Saisie</span>
+          </TabsTrigger>
+          <TabsTrigger value="consultation" className="label-ui data-[state=active]:bg-white data-[state=active]:shadow-sm" style={{ borderRadius: "6px" }}>
+            <span className="data-[state=active]:text-[#3A4A57] text-[#78756F]">Consultation</span>
+          </TabsTrigger>
+          <TabsTrigger value="avancement" className="label-ui data-[state=active]:bg-white data-[state=active]:shadow-sm" style={{ borderRadius: "6px" }}>
+            <span className="data-[state=active]:text-[#3A4A57] text-[#78756F]">Avancement</span>
+          </TabsTrigger>
+          <TabsTrigger value="comportement" className="label-ui data-[state=active]:bg-white data-[state=active]:shadow-sm" style={{ borderRadius: "6px" }}>
+            <span className="data-[state=active]:text-[#3A4A57] text-[#78756F]">Comportement</span>
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Saisie — W3 */}
+        <TabsContent value="notes">
+          <CPMSLGradesGrid
+            sessions={apiSessions}
+            steps={steps}
+            classSubjects={classSubjects}
+            enrollments={enrollments}
+            existingGrades={existingGrades}
+            selectedSessionId={selectedSessionId}
+            selectedClassSubjectId={selectedClassSubjectId}
+            selectedStepId={selectedStepId}
+            loadingSession={loadingSession}
+            loadingGrades={loadingGrades}
+            saving={saving}
+            onSessionChange={handleSessionChange}
+            onClassSubjectChange={handleClassSubjectChange}
+            onStepChange={handleStepChange}
+            onSaveGrades={handleSaveGrades}
+          />
+        </TabsContent>
+
+        {/* Consultation — W4 */}
+        <TabsContent value="consultation">
+          <GradesViewPage />
+        </TabsContent>
+
+        {/* Avancement */}
+        <TabsContent value="avancement">
+          <CPMSLProgressionTab
+            yearId={yearId}
+            sessions={sessions}
+            steps={steps}
+            onNavigateToSaisie={handleNavigateToSaisie}
+          />
+        </TabsContent>
+
+        {/* Comportement — W6 */}
+        <TabsContent value="comportement">
+          <CPMSLBehaviorGrid
+            yearId={yearId}
+            sessions={apiSessions}
+            steps={steps}
+          />
+        </TabsContent>
+      </Tabs>
+    )
+  }
+
+  // ── Rendu ─────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
       <div>
@@ -161,79 +248,7 @@ export default function GradesPage() {
         </h1>
       </div>
 
-      {loadingContext ? (
-        <div className="flex items-center justify-center py-20">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: "#5A7085" }} />
-        </div>
-      ) : error ? (
-        <div className="rounded-lg p-8 flex flex-col items-center justify-center gap-4" style={{ backgroundColor: "white", border: "1px solid #E8E6E3" }}>
-          <p className="font-sans" style={{ color: "#C43C3C", fontSize: "14px" }}>{error}</p>
-          <button onClick={() => globalThis.location.reload()} className="px-4 py-2 rounded-lg font-sans text-sm font-medium text-white" style={{ backgroundColor: "#5A7085" }}>            Réessayer
-          </button>
-        </div>
-      ) : (
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList style={{ backgroundColor: "#F0F4F7", borderRadius: "8px", padding: "4px" }}>
-            <TabsTrigger value="notes" className="label-ui data-[state=active]:bg-white data-[state=active]:shadow-sm" style={{ borderRadius: "6px" }}>
-              <span className="data-[state=active]:text-[#3A4A57] text-[#78756F]">Saisie</span>
-            </TabsTrigger>
-            <TabsTrigger value="consultation" className="label-ui data-[state=active]:bg-white data-[state=active]:shadow-sm" style={{ borderRadius: "6px" }}>
-              <span className="data-[state=active]:text-[#3A4A57] text-[#78756F]">Consultation</span>
-            </TabsTrigger>
-            <TabsTrigger value="avancement" className="label-ui data-[state=active]:bg-white data-[state=active]:shadow-sm" style={{ borderRadius: "6px" }}>
-              <span className="data-[state=active]:text-[#3A4A57] text-[#78756F]">Avancement</span>
-            </TabsTrigger>
-            <TabsTrigger value="comportement" className="label-ui data-[state=active]:bg-white data-[state=active]:shadow-sm" style={{ borderRadius: "6px" }}>
-              <span className="data-[state=active]:text-[#3A4A57] text-[#78756F]">Comportement</span>
-            </TabsTrigger>
-          </TabsList>
-
-          {/* Saisie — W3 */}
-          <TabsContent value="notes">
-            <CPMSLGradesGrid
-              sessions={apiSessions}
-              steps={steps}
-              classSubjects={classSubjects}
-              enrollments={enrollments}
-              existingGrades={existingGrades}
-              selectedSessionId={selectedSessionId}
-              selectedClassSubjectId={selectedClassSubjectId}
-              selectedStepId={selectedStepId}
-              loadingSession={loadingSession}
-              loadingGrades={loadingGrades}
-              saving={saving}
-              onSessionChange={handleSessionChange}
-              onClassSubjectChange={handleClassSubjectChange}
-              onStepChange={handleStepChange}
-              onSaveGrades={handleSaveGrades}
-            />
-          </TabsContent>
-
-          {/* Consultation — W4 */}
-          <TabsContent value="consultation">
-            <GradesViewPage />
-          </TabsContent>
-
-          {/* Avancement */}
-          <TabsContent value="avancement">
-            <CPMSLProgressionTab
-              yearId={yearId}
-              sessions={sessions}
-              steps={steps}
-              onNavigateToSaisie={handleNavigateToSaisie}
-            />
-          </TabsContent>
-
-          {/* Comportement — W6 */}
-          <TabsContent value="comportement">
-            <CPMSLBehaviorGrid
-              yearId={yearId}
-              sessions={apiSessions}
-              steps={steps}
-            />
-          </TabsContent>
-        </Tabs>
-      )}
+      {renderMainContent()}
     </div>
   )
 }

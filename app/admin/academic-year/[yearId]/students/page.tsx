@@ -72,6 +72,20 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
+// ── SortIcon Component ────────────────────────────────────────────────────────
+interface SortIconProps {
+  col: 'nisu' | 'name' | 'class'
+  sortCol: 'nisu' | 'name' | 'class' | null
+  sortDir: 'asc' | 'desc' | null
+}
+
+const SortIcon = ({ col, sortCol, sortDir }: SortIconProps) =>
+  sortCol === col ? (
+    sortDir === 'asc'
+      ? <ArrowUpIcon className="h-3 w-3 inline ml-1" />
+      : <ArrowDownIcon className="h-3 w-3 inline ml-1" />
+  ) : null
+
 export default function StudentsManagementPage() {
   const params = useParams()
   const yearId = params.yearId as string
@@ -145,7 +159,8 @@ export default function StudentsManagementPage() {
             }
           }>>(`/api/enrollments?classSessionId=${session.id}`)
 
-          const className = `${session.class.classType.name} ${session.class.letter}${session.class.track ? ` — ${session.class.track.code}` : ''}`
+                    const trackSuffix = session.class.track ? ` — ${session.class.track.code}` : ''
+          const className = `${session.class.classType.name} ${session.class.letter}${trackSuffix}`
 
           enrollments.forEach(enr => {
             allEnrollments.push({
@@ -205,15 +220,15 @@ export default function StudentsManagementPage() {
 
     if (sortCol && sortDir) {
       result = [...result].sort((a, b) => {
-        const val = (s: StudentRow) =>
-          sortCol === 'nisu'  ? s.nisu :
-          sortCol === 'name'  ? `${s.lastname} ${s.firstname}`.toLowerCase() :
-          s.className.toLowerCase()
+        const val = (s: StudentRow) => {
+          if (sortCol === 'nisu') return s.nisu
+          if (sortCol === 'name') return `${s.lastname} ${s.firstname}`.toLowerCase()
+          return s.className.toLowerCase()
+        }
         const av = val(a), bv = val(b)
         return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
       })
     }
-
     return result
   }, [students, showInactive, searchQuery, selectedClass, sortCol, sortDir, activeStudents])
 
@@ -232,12 +247,14 @@ export default function StudentsManagementPage() {
     }
   }
 
-  const SortIcon = ({ col }: { col: SortCol }) =>
-    sortCol === col ? (
-      sortDir === 'asc'
-        ? <ArrowUpIcon className="h-3 w-3 inline ml-1" />
-        : <ArrowDownIcon className="h-3 w-3 inline ml-1" />
-    ) : null
+  const SortIcon = ({ col }: { col: SortCol }) => {
+    if (sortCol !== col) {
+      return null
+    }
+    return sortDir === 'asc'
+      ? <ArrowUpIcon className="h-3 w-3 inline ml-1" />
+      : <ArrowDownIcon className="h-3 w-3 inline ml-1" />
+  }
 
   // ── Désactivation ─────────────────────────────────────────────────────────────
   const handleDeactivate = async () => {
@@ -651,10 +668,13 @@ export default function StudentsManagementPage() {
           currentClassName={transferringStudent.className}
           sessions={sessions
             .filter(s => s.id !== transferringStudent.classSessionId)
-            .map(s => ({
-              id: s.id,
-              label: `${s.class.classType.name} ${s.class.letter}${s.class.track ? ` — ${s.class.track.code}` : ''}`,
-            }))}
+            .map(s => {
+              const trackSuffix = s.class.track ? ` — ${s.class.track.code}` : '';
+              return {
+                id: s.id,
+                label: `${s.class.classType.name} ${s.class.letter}${trackSuffix}`,
+              };
+            })}
           submitting={transferSubmitting}
           onSubmit={handleTransfer}
         />

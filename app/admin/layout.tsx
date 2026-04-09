@@ -133,14 +133,6 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
 
   const unreadCount = notifications.filter(n => !n.isRead).length
 
-  const handleMouseEnter = (e: React.MouseEvent<HTMLAnchorElement>, isActive: boolean) => {
-    if (!isActive) e.currentTarget.style.borderLeft = "2px solid #8FA8C0"
-  }
-
-  const handleMouseLeave = (e: React.MouseEvent<HTMLAnchorElement>, isActive: boolean) => {
-    if (!isActive) e.currentTarget.style.borderLeft = "3px solid transparent"
-  }
-
   const handleLogout = async () => {
     await logout()
     router.push("/login")
@@ -153,17 +145,6 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
       return href.replace(":yearId", activeYear.id)
     }
     return href
-  }
-
-  const getStatusBadge = (status: "preparation" | "active" | "archived") => {
-    switch (status) {
-      case "active":
-        return <Badge className="bg-green-100 text-green-800 text-xs">Active</Badge>
-      case "preparation":
-        return <Badge className="bg-blue-100 text-blue-800 text-xs">En préparation</Badge>
-      case "archived":
-        return <Badge variant="outline" className="text-[#5b6d77] text-xs">Archivée</Badge>
-    }
   }
 
   if (authLoading) {
@@ -187,10 +168,15 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
     )
   }
 
-  const renderNavLink = (item: NavItem, mobile: boolean, paddingLeft: string) => {
+    const renderNavLink = (item: NavItem, mobile: boolean, paddingLeft: string) => {
     const Icon = item.icon
     const href = getNavHref(item.href)
     const isActive = pathname === href || pathname.startsWith(href.split("?")[0])
+
+    const getFontWeight = () => {
+      if (isActive) return 600
+      return item.href ? 500 : 400
+    }
 
     const linkContent = (
       <Link
@@ -205,7 +191,7 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
           backgroundColor: isActive ? "rgba(255,255,255,0.08)" : "transparent",
           color: isActive ? "#FFFFFF" : "#CBD5E1",
           fontFamily: "var(--font-sans)", fontSize: "14px",
-          fontWeight: isActive ? 600 : (item.href ? 500 : 400),
+          fontWeight: getFontWeight(),
           borderLeft: isActive ? "3px solid #FFFFFF" : "3px solid transparent",
           borderRadius: isActive ? "0 6px 6px 0" : "0",
           marginLeft: "-3px",

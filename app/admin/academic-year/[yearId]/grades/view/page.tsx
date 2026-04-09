@@ -85,7 +85,7 @@ export default function GradesViewPage() {
   const [steps,      setSteps]      = useState<AcademicYearStep[]>([])
   const [rubrics,    setRubrics]    = useState<Rubric[]>([])
   const [loadingCtx, setLoadingCtx] = useState(true)
-  const [yearName,   setYearName]   = useState("")
+
 
   const [selectedSession, setSelectedSession] = useState("")
   const [selectedStep,    setSelectedStep]    = useState("")
@@ -111,7 +111,7 @@ export default function GradesViewPage() {
         setSessions(sessionsData)
         setSteps([...stepsData].sort((a, b) => a.stepNumber - b.stepNumber))
         if (rubricsRes.ok) setRubrics(await rubricsRes.json())
-        if (yearRes.ok) { const y = await yearRes.json(); setYearName(y.name ?? "") }
+        
       } catch {
         toast({ title: "Erreur", description: "Impossible de charger le contexte", variant: "destructive" })
       } finally {
@@ -246,15 +246,19 @@ export default function GradesViewPage() {
     return { bg: '#F0F4F7', color: '#5A7085', border: '#B3C7D5' }
   }
 
-  const poids = (code: string) =>
-    code === 'R1' ? '70%' : code === 'R2' ? '25%' : code === 'R3' ? '5%' : ''
-
+    const poids = (code: string) => {
+    if (code === 'R1') return '70%'
+    if (code === 'R2') return '25%'
+    if (code === 'R3') return '5%'
+    return ''
+  }
   const fmt = (v: number | null) => v !== null ? v.toFixed(2) : '—'
 
   const noteColor = (note: number | null, max: number) => {
     if (note === null) return '#A8A5A2'
     const pct = note / max
-    return pct >= 0.7 ? '#2D7D46' : pct >= 0.5 ? '#C48B1A' : '#C43C3C'
+    if (pct >= 0.7) return '#2D7D46'
+    return pct >= 0.5 ? '#C48B1A' : '#C43C3C'
   }
 
   if (loadingCtx) {
@@ -324,7 +328,8 @@ export default function GradesViewPage() {
       {selectedSession && selectedStep && (
         loadingGrid ? (
           <div className="space-y-2">
-            {[...new Array(4)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}          </div>
+             {[...new Array(4)].map((_, i) => <Skeleton key={`skeleton-${i}`} className="h-12 w-full" />)}          
+          </div>
         ) : (
           <>
             {/* KPIs */}
@@ -415,7 +420,12 @@ export default function GradesViewPage() {
                           })
                         })}
                         {/* Moyenne */}
-                        <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, fontSize: '14px', borderLeft: '2px solid #D1D5DB', backgroundColor: '#EFF6FF', color: row.average !== null ? (row.average >= 7 ? '#2D7D46' : row.average >= 5 ? '#C48B1A' : '#C43C3C') : '#A8A5A2' }}>
+                        <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, fontSize: '14px', borderLeft: '2px solid #D1D5DB', backgroundColor: '#EFF6FF', color: (() => {
+                          if (row.average === null) return '#A8A5A2'
+                          if (row.average >= 7) return '#2D7D46'
+                          if (row.average >= 5) return '#C48B1A'
+                          return '#C43C3C'
+                        })() }}>
                           {fmt(row.average)}
                         </td>
                         {/* Statut */}
