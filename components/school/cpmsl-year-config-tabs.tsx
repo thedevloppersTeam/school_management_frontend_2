@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useToast } from "@/components/ui/use-toast"
 import * as React from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
@@ -71,9 +72,11 @@ export function CPMSLYearConfigTabs({
   onAddClassroom, onEditClassroom, onDeleteClassroom, onEditLevel, onDeleteLevel
 }: CPMSLYearConfigTabsProps) {
 
-  const [searchClass, setSearchClass]       = useState("")
-  const [searchSubject, setSearchSubject]   = useState("")
-  const [expandedLevels, setExpandedLevels] = useState<Set<string>>(new Set())
+  const { toast } = useToast()
+
+  const [searchClass, setSearchClass]           = useState("")
+  const [searchSubject, setSearchSubject]       = useState("")
+  const [expandedLevels, setExpandedLevels]     = useState<Set<string>>(new Set())
   const [expandedSubjects, setExpandedSubjects] = useState<Set<string>>(new Set(['1']))
 
   // ── Modaux périodes ───────────────────────────────────────────────────────
@@ -83,15 +86,15 @@ export function CPMSLYearConfigTabs({
   const [selectedPeriod, setSelectedPeriod]               = useState<Period | null>(null)
 
   // ── Modaux classes ────────────────────────────────────────────────────────
-  const [addClassroomModalOpen, setAddClassroomModalOpen]     = useState(false)
-  const [addClassroomSubmitting, setAddClassroomSubmitting]   = useState(false)
+  const [addClassroomModalOpen, setAddClassroomModalOpen]       = useState(false)
+  const [addClassroomSubmitting, setAddClassroomSubmitting]     = useState(false)
   const [deleteClassroomModalOpen, setDeleteClassroomModalOpen] = useState(false)
-  const [editClassroomModalOpen, setEditClassroomModalOpen]   = useState(false)
-  const [createLevelModalOpen, setCreateLevelModalOpen]       = useState(false)
-  const [editLevelModalOpen, setEditLevelModalOpen]           = useState(false)
-  const [deleteLevelModalOpen, setDeleteLevelModalOpen]       = useState(false)
-  const [selectedLevel, setSelectedLevel]                     = useState<Level | null>(null)
-  const [selectedClassroom, setSelectedClassroom]             = useState<Classroom | null>(null)
+  const [editClassroomModalOpen, setEditClassroomModalOpen]     = useState(false)
+  const [createLevelModalOpen, setCreateLevelModalOpen]         = useState(false)
+  const [editLevelModalOpen, setEditLevelModalOpen]             = useState(false)
+  const [deleteLevelModalOpen, setDeleteLevelModalOpen]         = useState(false)
+  const [selectedLevel, setSelectedLevel]                       = useState<Level | null>(null)
+  const [selectedClassroom, setSelectedClassroom]               = useState<Classroom | null>(null)
 
   // ── Modaux matières ───────────────────────────────────────────────────────
   const [createSubjectParentModalOpen, setCreateSubjectParentModalOpen] = useState(false)
@@ -107,21 +110,29 @@ export function CPMSLYearConfigTabs({
   const [selectedSessionForAssign, setSelectedSessionForAssign] = useState("")
   const [classSubjects, setClassSubjects] = useState<Array<{
     id: string; subjectId: string; subjectName: string; subjectCode: string
-    rubriqueCode?: string; coefficient: number; coefficientOverride?: number | null
+    rubriqueCode?: string; coefficient: number; coefficientOverride: number | null
   }>>([])
   const [loadingClassSubjects, setLoadingClassSubjects] = useState(false)
 
-  // ── Nouveau modal assignation avec checkboxes ─────────────────────────────
-  const [assignModalOpen, setAssignModalOpen]       = useState(false)
-  const [assignSubjectId, setAssignSubjectId]       = useState('')
+  // ── Modal assignation ─────────────────────────────────────────────────────
+  const [assignModalOpen, setAssignModalOpen]               = useState(false)
+  const [assignSubjectId, setAssignSubjectId]               = useState('')
   const [assignSelectedSessions, setAssignSelectedSessions] = useState<Set<string>>(new Set())
-  const [assignCoeffOverride, setAssignCoeffOverride] = useState('')
-  const [assignSubmitting, setAssignSubmitting]     = useState(false)
+  const [assignCoeffOverride, setAssignCoeffOverride]       = useState('')
+  const [assignSubmitting, setAssignSubmitting]             = useState(false)
+  const [assignError, setAssignError]                       = useState('')
+
+  // ── Modal edit coefficient override ──────────────────────────────────────
+  const [editCoeffModalOpen, setEditCoeffModalOpen]           = useState(false)
+  const [editCoeffClassSubject, setEditCoeffClassSubject]     = useState<{
+    id: string; subjectName: string; coefficient: number; coefficientOverride: number | null
+  } | null>(null)
+  const [editCoeffValue, setEditCoeffValue]                   = useState('')
+  const [editCoeffSubmitting, setEditCoeffSubmitting]         = useState(false)
 
   // ── Helpers ───────────────────────────────────────────────────────────────
-
-  const getClassroomsForLevel = (levelId: string) => classrooms.filter(c => c.levelId === levelId)
-  const getStudentCountForClassroom = (classroomId: string) => students.filter(s => s.classroomId === classroomId).length
+  const getClassroomsForLevel        = (levelId: string) => classrooms.filter(c => c.levelId === levelId)
+  const getStudentCountForClassroom  = (classroomId: string) => students.filter(s => s.classroomId === classroomId).length
   const getTotalStudentCountForLevel = (levelId: string) => students.filter(s => s.levelId === levelId).length
   const totalClassrooms = classrooms.length
   const r1Count = subjectParents.filter(s => s.rubrique === 'R1').length
@@ -161,25 +172,29 @@ export function CPMSLYearConfigTabs({
   const handleDeleteSubjectChild  = (c: SubjectChild)  => { setSelectedSubjectChild(c); setDeleteSubjectChildModalOpen(true) }
 
   // ── Chargement matières d'une classe ──────────────────────────────────────
-  const loadClassSubjects = async (sessionId: string) => {
-    setLoadingClassSubjects(true)
-    try {
-      const res = await fetch(`/api/class-subjects?classSessionId=${sessionId}`, { credentials: 'include' })
-      if (!res.ok) throw new Error()
-      const data = await res.json()
-      setClassSubjects(data.map((cs: any) => ({
-        id: cs.id, subjectId: cs.subjectId,
-        subjectName: cs.subject?.name || '—', subjectCode: cs.subject?.code || '—',
-        rubriqueCode: cs.subject?.rubric?.code,
-        coefficient: Number(cs.subject?.coefficient) || 1,
-        coefficientOverride: cs.coefficientOverride != null ? Number(cs.coefficientOverride) : null,
-      })))
-    } catch {
-      console.error('[affectation] erreur chargement')
-    } finally {
-      setLoadingClassSubjects(false)
-    }
+const loadClassSubjects = async (sessionId: string) => {
+  setLoadingClassSubjects(true)
+  try {
+    const res = await fetch(`/api/class-subjects?classSessionId=${sessionId}`, { credentials: 'include' })
+    if (!res.ok) throw new Error()
+    const data = await res.json()
+    setClassSubjects(data.map((cs: any) => ({
+      id:                  cs.id,
+      subjectId:           cs.subjectId,
+      subjectName:         cs.subject?.name || '—',
+      subjectCode:         cs.subject?.code || '—',
+      rubriqueCode:        cs.subject?.rubric?.code,
+      coefficient:         Number(cs.subject?.coefficient?.d?.[0] ?? cs.subject?.coefficient) || 1,
+      coefficientOverride: cs.coefficientOverride != null
+        ? Number(cs.coefficientOverride?.d?.[0] ?? cs.coefficientOverride)
+        : null,
+    })))
+  } catch {
+    console.error('[affectation] erreur chargement class-subjects')
+  } finally {
+    setLoadingClassSubjects(false)
   }
+}
 
   const handleSessionChangeForAssign = (sessionId: string) => {
     setSelectedSessionForAssign(sessionId)
@@ -187,15 +202,50 @@ export function CPMSLYearConfigTabs({
     else setClassSubjects([])
   }
 
-  // ── Ouvrir modal assignation ──────────────────────────────────────────────
+  // ── Modal edit coefficient override ──────────────────────────────────────
+const openEditCoeffModal = (cs: typeof classSubjects[0]) => {
+  setEditCoeffClassSubject({
+    id:                  cs.id,
+    subjectName:         cs.subjectName,
+    coefficient:         cs.coefficient,
+    coefficientOverride: cs.coefficientOverride ?? null,  // ← undefined → null
+  })
+  setEditCoeffValue(cs.coefficientOverride != null ? String(cs.coefficientOverride) : '')
+  setEditCoeffModalOpen(true)
+}
+
+  const handleSaveCoeffOverride = async () => {
+    if (!editCoeffClassSubject) return
+    setEditCoeffSubmitting(true)
+    try {
+      const res = await fetch(`/api/class-subjects/update/${editCoeffClassSubject.id}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          coefficientOverride: editCoeffValue !== '' ? parseFloat(editCoeffValue) : null
+        })
+      })
+      if (!res.ok) throw new Error()
+      toast({ title: "Coefficient modifié" })
+      setEditCoeffModalOpen(false)
+      if (selectedSessionForAssign) await loadClassSubjects(selectedSessionForAssign)
+    } catch {
+      toast({ title: "Erreur", description: "Impossible de modifier le coefficient", variant: "destructive" })
+    } finally {
+      setEditCoeffSubmitting(false)
+    }
+  }
+
+  // ── Modal assignation ─────────────────────────────────────────────────────
   const openAssignModal = () => {
     setAssignSubjectId('')
     setAssignSelectedSessions(new Set())
     setAssignCoeffOverride('')
+    setAssignError('')
     setAssignModalOpen(true)
   }
 
-  // ── Toggle sélection d'une classe dans le modal ───────────────────────────
   const toggleAssignSession = (sessionId: string) => {
     setAssignSelectedSessions(prev => {
       const n = new Set(prev)
@@ -212,42 +262,57 @@ export function CPMSLYearConfigTabs({
     }
   }
 
-  // ── Assigner la matière aux classes sélectionnées ─────────────────────────
-  // POST /api/class-subjects/create × N classes cochées
   const handleAssignSubjectToClasses = async () => {
     if (!assignSubjectId || assignSelectedSessions.size === 0) return
     setAssignSubmitting(true)
+    setAssignError('')
     try {
       await Promise.all(
-        Array.from(assignSelectedSessions).map(sessionId =>
-          fetch('/api/class-subjects/create', {
-            method: 'POST', credentials: 'include',
+        Array.from(assignSelectedSessions).map(async sessionId => {
+          const payload = {
+            classSessionId:      sessionId,
+            subjectId:           assignSubjectId,
+            teacherId:           null,
+            coefficientOverride: assignCoeffOverride ? parseFloat(assignCoeffOverride) : null,
+          }
+          const res = await fetch('/api/class-subjects/create', {
+            method: 'POST',
+            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              classSessionId: sessionId,
-              subjectId: assignSubjectId,
-              coefficientOverride: assignCoeffOverride ? parseFloat(assignCoeffOverride) : null,
-            })
+            body: JSON.stringify(payload),
           })
-        )
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}))
+            const msg: string = err.message || ''
+            if (res.status === 500) return
+            if (res.status === 409) return
+            throw new Error(msg || `Échec assignation (HTTP ${res.status})`)
+          }
+        })
       )
       setAssignModalOpen(false)
-      // Recharger si une classe est sélectionnée dans la vue
-      if (selectedSessionForAssign) loadClassSubjects(selectedSessionForAssign)
-    } catch {
-      console.error('[affectation] erreur assignation')
+      if (selectedSessionForAssign) await loadClassSubjects(selectedSessionForAssign)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : ''
+      console.error('[affectation] erreur:', message)
+      toast({
+        title: "Erreur assignation",
+        description: message || "Impossible d'assigner la matière.",
+        variant: "destructive",
+      })
+      setAssignError('')
     } finally {
       setAssignSubmitting(false)
     }
   }
 
-  const filteredLevels = levels.filter(l => l.name.toLowerCase().includes(searchClass.toLowerCase()))
+  const filteredLevels = levels.filter(l =>
+    l.name.toLowerCase().includes(searchClass.toLowerCase())
+  )
   const filteredSubjectParents = subjectParents.filter(s =>
     s.name.toLowerCase().includes(searchSubject.toLowerCase()) ||
     s.code.toLowerCase().includes(searchSubject.toLowerCase())
   )
-
-  // ── Matière sélectionnée dans le modal ────────────────────────────────────
   const assignSelectedSubject = subjectParents.find(s => s.id === assignSubjectId)
 
   return (
@@ -256,7 +321,7 @@ export function CPMSLYearConfigTabs({
         <div style={{ padding: '16px 24px 0 24px' }}>
           <TabsList style={{ backgroundColor: "#F0F4F7", borderRadius: "8px", padding: "4px" }}>
             <TabsTrigger value="periods" className="label-ui data-[state=active]:bg-white data-[state=active]:shadow-sm" style={{ borderRadius: "6px" }}>
-              <span className="data-[state=active]:text-[#3A4A57] text-[#78756F]">Étapes ({periods.length}/4)</span>
+              <span className="data-[state=active]:text-[#3A4A57] text-[#78756F]">Étapes ({periods.length}/5)</span>
             </TabsTrigger>
             <TabsTrigger value="classes" className="label-ui data-[state=active]:bg-white data-[state=active]:shadow-sm" style={{ borderRadius: "6px" }}>
               <span className="data-[state=active]:text-[#3A4A57] text-[#78756F]">Classes ({levels.length})</span>
@@ -270,7 +335,7 @@ export function CPMSLYearConfigTabs({
         {/* ── Onglet Étapes ── */}
         <TabsContent value="periods" className="p-6 space-y-4">
           <div className="flex items-center justify-between">
-            <span style={{ color: '#5C5955', fontSize: '13px', fontWeight: 500 }}>{periods.length} / 4 étapes configurées</span>
+            <span style={{ color: '#5C5955', fontSize: '13px', fontWeight: 500 }}>{periods.length} / 5 étapes configurées</span>
             {!isArchived && (
               <TooltipProvider>
                 <Tooltip>
@@ -300,7 +365,9 @@ export function CPMSLYearConfigTabs({
                 </tr>
               </thead>
               <tbody>
-                {periods.map((period, index) => (
+                {periods.length === 0 ? (
+                  <tr><td colSpan={3} style={{ padding: '24px', textAlign: 'center', color: '#78756F', fontSize: '14px' }}>Aucune étape — cliquez sur &quot;Nouvelle étape&quot; pour commencer</td></tr>
+                ) : periods.map((period, index) => (
                   <tr key={period.id} style={{ borderTop: index > 0 ? '1px solid #E8E6E3' : 'none', backgroundColor: '#FFFFFF' }} className="hover:bg-[#FAF8F3]">
                     <td style={{ padding: '12px 16px', color: '#1E1A17', fontSize: '14px', fontWeight: 600 }}>{period.name}</td>
                     <td style={{ padding: '12px 16px' }}>
@@ -310,9 +377,11 @@ export function CPMSLYearConfigTabs({
                       }
                     </td>
                     <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                      <button onClick={() => period.status === 'open' ? handleClosePeriod(period) : handleReopenPeriod(period)} style={{ color: '#5A7085', fontSize: '13px', fontWeight: 500 }} className="hover:underline">
-                        {period.status === 'open' ? 'Clôturer' : 'Réouvrir'}
-                      </button>
+                      {!isArchived && (
+                        <button onClick={() => period.status === 'open' ? handleClosePeriod(period) : handleReopenPeriod(period)} style={{ color: '#5A7085', fontSize: '13px', fontWeight: 500 }} className="hover:underline">
+                          {period.status === 'open' ? 'Clôturer' : 'Réouvrir'}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -324,7 +393,7 @@ export function CPMSLYearConfigTabs({
         {/* ── Onglet Classes ── */}
         <TabsContent value="classes" className="p-6 space-y-4">
           <div className="flex items-center justify-between gap-4">
-            <span style={{ color: '#5C5955', fontSize: '13px', fontWeight: 500 }}>{levels.length} classes · {totalClassrooms} salles</span>
+            <span style={{ color: '#5C5955', fontSize: '13px', fontWeight: 500 }}>{levels.length} classes · {totalClassrooms} salles / filières</span>
             <div className="relative">
               <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" style={{ color: '#A8A5A2' }} />
               <Input placeholder="Rechercher une classe..." value={searchClass} onChange={e => setSearchClass(e.target.value)} style={{ paddingLeft: '36px', border: '1px solid #D1CECC', borderRadius: '8px' }} className="focus:border-[#5A7085] focus:ring-[#5A7085]" />
@@ -348,6 +417,7 @@ export function CPMSLYearConfigTabs({
                   const isExpanded = expandedLevels.has(level.id)
                   const hasClassrooms = levelClassrooms.length > 0
                   const totalStudents = getTotalStudentCountForLevel(level.id)
+                  const isFiliere = level.category === 'ns-filiere'
                   return (
                     <React.Fragment key={`level-${level.id}`}>
                       <tr style={{ borderTop: levelIndex > 0 ? '1px solid #E8E6E3' : 'none', backgroundColor: '#FFFFFF' }} className="hover:bg-[#FAF8F3]">
@@ -361,17 +431,14 @@ export function CPMSLYearConfigTabs({
                         <td style={{ padding: '12px 16px', color: '#1E1A17', fontSize: '14px', fontWeight: 600 }}>{level.name}</td>
                         <td style={{ padding: '12px 16px', color: '#5C5955', fontSize: '14px' }}>{level.niveau}</td>
                         <td style={{ padding: '12px 16px', color: '#5C5955', fontSize: '14px' }}>
-                          {level.niveau === 'Fondamentale'
-                            ? `${levelClassrooms.length} ${levelClassrooms.length === 1 ? 'salle' : 'salles'}`
-                            : `${levelClassrooms.length} ${levelClassrooms.length === 1 ? 'filière' : 'filières'}`}
+                          {`${levelClassrooms.length} ${isFiliere ? (levelClassrooms.length === 1 ? 'filière' : 'filières') : (levelClassrooms.length === 1 ? 'salle' : 'salles')}`}
                         </td>
                         <td style={{ padding: '12px 16px', color: '#5C5955', fontSize: '14px' }}>{totalStudents} {totalStudents === 1 ? 'élève' : 'élèves'}</td>
                         <td style={{ padding: '12px 16px', textAlign: 'center' }}>
                           {!isArchived && (
                             <div className="flex items-center justify-center gap-2">
                               <button onClick={() => handleAddClassroom(level)} style={{ color: '#5A7085', fontSize: '13px', fontWeight: 500 }} className="hover:underline flex items-center gap-1">
-                                <PlusIcon className="h-3 w-3" />
-                                {level.niveau === 'Fondamentale' ? 'Ajouter salle' : 'Ajouter filière'}
+                                <PlusIcon className="h-3 w-3" />{isFiliere ? 'Ajouter filière' : 'Ajouter salle'}
                               </button>
                               <span style={{ color: '#D1CECC' }}>|</span>
                               <button onClick={() => handleEditLevel(level)} style={{ color: '#5A7085', fontSize: '13px', fontWeight: 500 }} className="hover:underline">Modifier</button>
@@ -389,9 +456,9 @@ export function CPMSLYearConfigTabs({
                             <td style={{ padding: '12px 16px 12px 32px', color: '#1E1A17', fontSize: '14px' }}>
                               <div className="flex items-center gap-2">
                                 <span style={{ color: '#A8A5A2' }}>└</span>
-                                {level.niveau === 'Fondamentale'
-                                  ? <div className="flex items-center gap-2"><span style={{ backgroundColor: '#F5F4F2', color: '#5C5955', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 500 }}>Salle</span><span>{classroom.name}</span></div>
-                                  : <div className="flex items-center gap-2"><span style={{ backgroundColor: '#EEF2FF', color: '#3B5998', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 500 }}>Filière</span><span>{classroom.name}</span></div>
+                                {isFiliere
+                                  ? <div className="flex items-center gap-2"><span style={{ backgroundColor: '#EEF2FF', color: '#3B5998', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 500 }}>Filière</span><span>{classroom.name}</span></div>
+                                  : <div className="flex items-center gap-2"><span style={{ backgroundColor: '#F5F4F2', color: '#5C5955', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 500 }}>Salle</span><span>{classroom.name}</span></div>
                                 }
                               </div>
                             </td>
@@ -445,7 +512,6 @@ export function CPMSLYearConfigTabs({
             </div>
           </div>
 
-          {/* Tableau des matières */}
           <div style={{ border: '1px solid #E8E6E3', borderRadius: '8px', overflow: 'hidden' }}>
             <table className="w-full">
               <thead>
@@ -459,7 +525,9 @@ export function CPMSLYearConfigTabs({
                 </tr>
               </thead>
               <tbody>
-                {filteredSubjectParents.map((parent, parentIndex) => {
+                {filteredSubjectParents.length === 0 ? (
+                  <tr><td colSpan={6} style={{ padding: '24px', textAlign: 'center', color: '#78756F', fontSize: '14px' }}>Aucune matière — utilisez &quot;Gérer les matières&quot; pour en ajouter</td></tr>
+                ) : filteredSubjectParents.map((parent, parentIndex) => {
                   const children = subjectChildren.filter(c => c.parentId === parent.id)
                   const isExpanded = expandedSubjects.has(parent.id)
                   const hasChildren = children.length > 0
@@ -476,21 +544,12 @@ export function CPMSLYearConfigTabs({
                         <td style={{ padding: '12px 16px', color: '#1E1A17', fontSize: '12px', fontWeight: 600, fontFamily: 'monospace', textTransform: 'uppercase' }}>{parent.code}</td>
                         <td style={{ padding: '12px 16px', color: '#1E1A17', fontSize: '14px', fontWeight: 600 }}>{parent.name}</td>
                         <td style={{ padding: '12px 16px' }}>
-                          <Badge style={{
-                            backgroundColor: parent.rubrique === 'R1' ? '#E3EFF9' : parent.rubrique === 'R2' ? '#E8F5EC' : '#FAF8F3',
-                            color: parent.rubrique === 'R1' ? '#2B6CB0' : parent.rubrique === 'R2' ? '#2D7D46' : '#B0A07A',
-                            fontSize: '12px', fontWeight: 500
-                          }}>{parent.rubrique}</Badge>
+                          <Badge style={{ backgroundColor: parent.rubrique === 'R1' ? '#E3EFF9' : parent.rubrique === 'R2' ? '#E8F5EC' : '#FAF8F3', color: parent.rubrique === 'R1' ? '#2B6CB0' : parent.rubrique === 'R2' ? '#2D7D46' : '#B0A07A', fontSize: '12px', fontWeight: 500 }}>{parent.rubrique}</Badge>
                         </td>
                         <td style={{ padding: '12px 16px', color: '#1E1A17', fontSize: '14px' }}>{parent.coefficient}</td>
                         <td style={{ padding: '12px 16px' }}>
                           <div className="flex items-center justify-center gap-2">
-                            {!isArchived && (
-                              <>
-                                <button onClick={() => handleAddSubjectChild(parent)} style={{ color: '#2C4A6E', fontSize: '13px', fontWeight: 500 }} className="hover:underline">+ Sous-matière</button>
-                                <span style={{ color: '#D1CECC' }}>|</span>
-                              </>
-                            )}
+                            {!isArchived && (<><button onClick={() => handleAddSubjectChild(parent)} style={{ color: '#2C4A6E', fontSize: '13px', fontWeight: 500 }} className="hover:underline">+ Sous-matière</button><span style={{ color: '#D1CECC' }}>|</span></>)}
                             <button onClick={() => handleEditSubjectParent(parent)} style={{ color: '#5C5955', fontSize: '13px', fontWeight: 500 }} className="hover:underline">Modifier</button>
                             <span style={{ color: '#D1CECC' }}>|</span>
                             <button onClick={() => handleDeleteSubjectParent(parent)} style={{ color: '#B91C1C', fontSize: '13px', fontWeight: 500 }} className="hover:underline">Supprimer</button>
@@ -527,33 +586,22 @@ export function CPMSLYearConfigTabs({
             <div className="flex items-center justify-between" style={{ marginBottom: '16px' }}>
               <div>
                 <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: '18px', fontWeight: 600, color: '#2A3740' }}>Affectation aux classes</h3>
-                <p style={{ fontSize: '13px', color: '#78756F', marginTop: '2px' }}>
-                  Assignez une matière à une ou plusieurs classes de cette année
-                </p>
+                <p style={{ fontSize: '13px', color: '#78756F', marginTop: '2px' }}>Assignez une matière à une ou plusieurs classes de cette année</p>
               </div>
               {!isArchived && subjectParents.length > 0 && classrooms.length > 0 && (
-                <button
-                  onClick={openAssignModal}
-                  style={{ backgroundColor: '#2C4A6E', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}
-                >
+                <button onClick={openAssignModal} style={{ backgroundColor: '#2C4A6E', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>
                   + Assigner une matière
                 </button>
               )}
             </div>
 
-            {/* Sélecteur pour voir les matières d'une classe */}
             <div style={{ marginBottom: '16px', maxWidth: '300px' }}>
-              <select
-                value={selectedSessionForAssign}
-                onChange={e => handleSessionChangeForAssign(e.target.value)}
-                style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #D1CECC', fontSize: '14px', color: '#1E1A17', backgroundColor: 'white' }}
-              >
+              <select value={selectedSessionForAssign} onChange={e => handleSessionChangeForAssign(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #D1CECC', fontSize: '14px', color: '#1E1A17', backgroundColor: 'white' }}>
                 <option value="">— Voir les matières d'une classe —</option>
                 {classrooms.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
 
-            {/* Table des matières assignées à la classe sélectionnée */}
             {selectedSessionForAssign && (
               loadingClassSubjects ? (
                 <p style={{ fontSize: '13px', color: '#78756F' }}>Chargement...</p>
@@ -562,14 +610,14 @@ export function CPMSLYearConfigTabs({
                   <table className="w-full">
                     <thead>
                       <tr style={{ backgroundColor: '#F1F5F9', borderBottom: '2px solid #D1D5DB' }}>
-                        {['Code', 'Matière', 'Rubrique', 'Coeff. global', 'Coeff. override'].map(h => (
+                        {['Code', 'Matière', 'Rubrique', 'Coeff. global', 'Coeff. override', 'Actions'].map(h => (
                           <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#2C4A6E' }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {classSubjects.length === 0 ? (
-                        <tr><td colSpan={5} style={{ padding: '24px', textAlign: 'center', color: '#78756F', fontSize: '14px' }}>Aucune matière assignée à cette classe</td></tr>
+                        <tr><td colSpan={6} style={{ padding: '24px', textAlign: 'center', color: '#78756F', fontSize: '14px' }}>Aucune matière assignée à cette classe</td></tr>
                       ) : classSubjects.map((cs, i) => (
                         <tr key={cs.id} style={{ borderTop: i > 0 ? '1px solid #E8E6E3' : 'none', backgroundColor: 'white' }} className="hover:bg-[#FAF8F3]">
                           <td style={{ padding: '12px 16px', fontFamily: 'monospace', fontSize: '12px', fontWeight: 600, color: '#1E1A17', textTransform: 'uppercase' }}>{cs.subjectCode}</td>
@@ -580,7 +628,16 @@ export function CPMSLYearConfigTabs({
                               : <span style={{ color: '#A8A5A2' }}>—</span>}
                           </td>
                           <td style={{ padding: '12px 16px', fontSize: '14px', color: '#1E1A17' }}>{cs.coefficient}</td>
-                          <td style={{ padding: '12px 16px', fontSize: '14px', color: cs.coefficientOverride ? '#2B6CB0' : '#A8A5A2' }}>{cs.coefficientOverride ?? '—'}</td>
+                          <td style={{ padding: '12px 16px', fontSize: '14px', color: cs.coefficientOverride ? '#2B6CB0' : '#A8A5A2', fontWeight: cs.coefficientOverride ? 600 : 400 }}>
+                            {cs.coefficientOverride ?? '—'}
+                          </td>
+                          <td style={{ padding: '12px 16px' }}>
+                            {!isArchived && (
+                              <button onClick={() => openEditCoeffModal(cs)} style={{ color: '#5A7085', fontSize: '13px', fontWeight: 500 }} className="hover:underline">
+                                Modifier
+                              </button>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -598,110 +655,90 @@ export function CPMSLYearConfigTabs({
         </TabsContent>
       </Tabs>
 
-      {/* ── Modal Assignation avec checkboxes ── */}
-      {assignModalOpen && (
+      {/* ── Modal Edit Coefficient Override ── */}
+      {editCoeffModalOpen && editCoeffClassSubject && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
-          <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '28px', width: '520px', maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.15)' }}>
-
-            {/* Header */}
-            <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: '20px', fontWeight: 700, color: '#2A3740', marginBottom: '20px' }}>
-              Assigner une matière aux classes
+          <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '28px', width: '400px', boxShadow: '0 20px 60px rgba(0,0,0,0.15)' }}>
+            <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: '20px', fontWeight: 700, color: '#2A3740', marginBottom: '8px' }}>
+              Modifier le coefficient
             </h3>
+            <p style={{ fontSize: '13px', color: '#78756F', marginBottom: '20px' }}>
+              {editCoeffClassSubject.subjectName}
+            </p>
 
-            {/* Sélecteur de matière */}
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ fontSize: '13px', fontWeight: 500, color: '#1E1A17', display: 'block', marginBottom: '6px' }}>
-                Matière * <span style={{ color: '#78756F', fontWeight: 400 }}>— choisir la matière à assigner</span>
-              </label>
-              <select
-                value={assignSubjectId}
-                onChange={e => setAssignSubjectId(e.target.value)}
-                style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #D1CECC', fontSize: '14px', color: '#1E1A17' }}
-              >
-                <option value="">Sélectionner une matière</option>
-                {subjectParents.map(s => (
-                  <option key={s.id} value={s.id}>{s.code} — {s.name} ({s.rubrique})</option>
-                ))}
-              </select>
+            <div style={{ backgroundColor: '#F0F4F7', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px' }}>
+              <p style={{ fontSize: '12px', color: '#78756F', marginBottom: '2px' }}>Coefficient global</p>
+              <p style={{ fontSize: '16px', fontWeight: 700, color: '#2A3740' }}>{editCoeffClassSubject.coefficient}</p>
             </div>
 
-            {/* Coefficient override */}
-            <div style={{ marginBottom: '16px' }}>
+            <div style={{ marginBottom: '20px' }}>
               <label style={{ fontSize: '13px', fontWeight: 500, color: '#1E1A17', display: 'block', marginBottom: '6px' }}>
-                Coefficient override <span style={{ color: '#78756F', fontWeight: 400 }}>(optionnel — laisser vide pour utiliser le coefficient global)</span>
+                Coefficient override <span style={{ color: '#78756F', fontWeight: 400 }}>(laisser vide = coefficient global)</span>
               </label>
               <input
                 type="number" step="0.5"
-                value={assignCoeffOverride}
-                onChange={e => setAssignCoeffOverride(e.target.value)}
-                placeholder={assignSelectedSubject ? `Coefficient global : ${assignSelectedSubject.coefficient}` : 'Ex: 3'}
+                value={editCoeffValue}
+                onChange={e => setEditCoeffValue(e.target.value)}
+                placeholder={String(editCoeffClassSubject.coefficient)}
                 style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #D1CECC', fontSize: '14px' }}
               />
             </div>
 
-            {/* Liste des classes avec checkboxes */}
-            <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <label style={{ fontSize: '13px', fontWeight: 500, color: '#1E1A17' }}>
-                Classes * <span style={{ color: '#78756F', fontWeight: 400 }}>({assignSelectedSessions.size} sélectionnée{assignSelectedSessions.size > 1 ? 's' : ''})</span>
-              </label>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+              <button onClick={() => setEditCoeffModalOpen(false)} style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #D1CECC', backgroundColor: 'white', fontSize: '13px', cursor: 'pointer', color: '#5C5955' }}>
+                Annuler
+              </button>
               <button
-                onClick={toggleSelectAll}
-                style={{ fontSize: '12px', color: '#2C4A6E', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 500 }}
+                onClick={handleSaveCoeffOverride}
+                disabled={editCoeffSubmitting}
+                style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', backgroundColor: editCoeffSubmitting ? '#9CA3AF' : '#2C4A6E', color: 'white', fontSize: '13px', fontWeight: 500, cursor: editCoeffSubmitting ? 'not-allowed' : 'pointer' }}
               >
+                {editCoeffSubmitting ? 'En cours...' : 'Enregistrer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal Assignation ── */}
+      {assignModalOpen && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
+          <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '28px', width: '520px', maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.15)' }}>
+            <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: '20px', fontWeight: 700, color: '#2A3740', marginBottom: '20px' }}>Assigner une matière aux classes</h3>
+            {assignError && (
+              <div style={{ backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', fontSize: '13px', color: '#B91C1C' }}>{assignError}</div>
+            )}
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ fontSize: '13px', fontWeight: 500, color: '#1E1A17', display: 'block', marginBottom: '6px' }}>Matière * <span style={{ color: '#78756F', fontWeight: 400 }}>— choisir la matière à assigner</span></label>
+              <select value={assignSubjectId} onChange={e => setAssignSubjectId(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #D1CECC', fontSize: '14px', color: '#1E1A17' }}>
+                <option value="">Sélectionner une matière</option>
+                {subjectParents.map(s => <option key={s.id} value={s.id}>{s.code} — {s.name} ({s.rubrique})</option>)}
+              </select>
+            </div>
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ fontSize: '13px', fontWeight: 500, color: '#1E1A17', display: 'block', marginBottom: '6px' }}>Coefficient override <span style={{ color: '#78756F', fontWeight: 400 }}>(optionnel)</span></label>
+              <input type="number" step="0.5" value={assignCoeffOverride} onChange={e => setAssignCoeffOverride(e.target.value)} placeholder={assignSelectedSubject ? `Coefficient global : ${assignSelectedSubject.coefficient}` : 'Ex: 3'} style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #D1CECC', fontSize: '14px' }} />
+            </div>
+            <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <label style={{ fontSize: '13px', fontWeight: 500, color: '#1E1A17' }}>Classes * <span style={{ color: '#78756F', fontWeight: 400 }}>({assignSelectedSessions.size} sélectionnée{assignSelectedSessions.size > 1 ? 's' : ''})</span></label>
+              <button onClick={toggleSelectAll} style={{ fontSize: '12px', color: '#2C4A6E', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 500 }}>
                 {assignSelectedSessions.size === classrooms.length ? 'Tout désélectionner' : 'Tout sélectionner'}
               </button>
             </div>
-
-            {/* Scroll list */}
             <div style={{ border: '1px solid #E8E6E3', borderRadius: '8px', overflow: 'auto', maxHeight: '240px', marginBottom: '20px' }}>
               {classrooms.length === 0 ? (
                 <p style={{ padding: '16px', textAlign: 'center', color: '#78756F', fontSize: '13px' }}>Aucune classe dans cette année</p>
               ) : classrooms.map((classroom, i) => (
-                <label
-                  key={classroom.id}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: '12px',
-                    padding: '10px 16px', cursor: 'pointer',
-                    borderTop: i > 0 ? '1px solid #F0EDE8' : 'none',
-                    backgroundColor: assignSelectedSessions.has(classroom.id) ? '#F0F4F7' : 'white',
-                  }}
-                  className="hover:bg-[#FAF8F3]"
-                >
-                  <input
-                    type="checkbox"
-                    checked={assignSelectedSessions.has(classroom.id)}
-                    onChange={() => toggleAssignSession(classroom.id)}
-                    style={{ width: '16px', height: '16px', accentColor: '#2C4A6E', cursor: 'pointer' }}
-                  />
-                  <span style={{ fontSize: '14px', fontWeight: assignSelectedSessions.has(classroom.id) ? 600 : 400, color: '#1E1A17' }}>
-                    {classroom.name}
-                  </span>
+                <label key={classroom.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 16px', cursor: 'pointer', borderTop: i > 0 ? '1px solid #F0EDE8' : 'none', backgroundColor: assignSelectedSessions.has(classroom.id) ? '#F0F4F7' : 'white' }} className="hover:bg-[#FAF8F3]">
+                  <input type="checkbox" checked={assignSelectedSessions.has(classroom.id)} onChange={() => toggleAssignSession(classroom.id)} style={{ width: '16px', height: '16px', accentColor: '#2C4A6E', cursor: 'pointer' }} />
+                  <span style={{ fontSize: '14px', fontWeight: assignSelectedSessions.has(classroom.id) ? 600 : 400, color: '#1E1A17' }}>{classroom.name}</span>
                 </label>
               ))}
             </div>
-
-            {/* Footer */}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-              <button
-                onClick={() => setAssignModalOpen(false)}
-                style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #D1CECC', backgroundColor: 'white', fontSize: '13px', cursor: 'pointer', color: '#5C5955' }}
-              >
-                Annuler
-              </button>
-              <button
-                onClick={handleAssignSubjectToClasses}
-                disabled={assignSubmitting || !assignSubjectId || assignSelectedSessions.size === 0}
-                style={{
-                  padding: '8px 16px', borderRadius: '8px', border: 'none',
-                  backgroundColor: assignSubmitting || !assignSubjectId || assignSelectedSessions.size === 0 ? '#9CA3AF' : '#2C4A6E',
-                  color: 'white', fontSize: '13px', fontWeight: 500,
-                  cursor: assignSubmitting || !assignSubjectId || assignSelectedSessions.size === 0 ? 'not-allowed' : 'pointer'
-                }}
-              >
-                {assignSubmitting
-                  ? 'Assignation...'
-                  : `Assigner à ${assignSelectedSessions.size} classe${assignSelectedSessions.size > 1 ? 's' : ''}`
-                }
+              <button onClick={() => setAssignModalOpen(false)} style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #D1CECC', backgroundColor: 'white', fontSize: '13px', cursor: 'pointer', color: '#5C5955' }}>Annuler</button>
+              <button onClick={handleAssignSubjectToClasses} disabled={assignSubmitting || !assignSubjectId || assignSelectedSessions.size === 0} style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', backgroundColor: assignSubmitting || !assignSubjectId || assignSelectedSessions.size === 0 ? '#9CA3AF' : '#2C4A6E', color: 'white', fontSize: '13px', fontWeight: 500, cursor: assignSubmitting || !assignSubjectId || assignSelectedSessions.size === 0 ? 'not-allowed' : 'pointer' }}>
+                {assignSubmitting ? 'Assignation...' : `Assigner à ${assignSelectedSessions.size} classe${assignSelectedSessions.size > 1 ? 's' : ''}`}
               </button>
             </div>
           </div>
@@ -719,16 +756,11 @@ export function CPMSLYearConfigTabs({
 
       {/* ── Modaux classes ── */}
       {selectedLevel && (
-        <AddClassSessionModal
-          open={addClassroomModalOpen} onOpenChange={setAddClassroomModalOpen}
-          level={{ id: selectedLevel.id, name: selectedLevel.name, category: selectedLevel.category || 'fondamental' }}
-          tracks={tracks} submitting={addClassroomSubmitting}
-                    onSubmit={async data => { setAddClassroomSubmitting(true); onAddClassroom?.(selectedLevel.id, data); setAddClassroomSubmitting(false); setAddClassroomModalOpen(false) }}
-      />
+        <AddClassSessionModal open={addClassroomModalOpen} onOpenChange={setAddClassroomModalOpen} level={{ id: selectedLevel.id, name: selectedLevel.name, category: selectedLevel.category || 'fondamental' }} tracks={tracks} submitting={addClassroomSubmitting} onSubmit={async data => { setAddClassroomSubmitting(true); onAddClassroom?.(selectedLevel.id, data); setAddClassroomSubmitting(false); setAddClassroomModalOpen(false) }} />
       )}
       {selectedClassroom && selectedLevel && (
         <>
-          <EditClassroomModal open={editClassroomModalOpen} onOpenChange={setEditClassroomModalOpen} classroom={selectedClassroom} level={selectedLevel} existingClassrooms={getClassroomsForLevel(selectedLevel.id)} onConfirm={data => { onEditClassroom?.(selectedClassroom.id); setEditClassroomModalOpen(false) }} />
+          <EditClassroomModal open={editClassroomModalOpen} onOpenChange={setEditClassroomModalOpen} classroom={selectedClassroom} level={selectedLevel} existingClassrooms={getClassroomsForLevel(selectedLevel.id)} onConfirm={_data => { onEditClassroom?.(selectedClassroom.id); setEditClassroomModalOpen(false) }} />
           <DeleteClassroomModal open={deleteClassroomModalOpen} onOpenChange={setDeleteClassroomModalOpen} classroom={selectedClassroom} level={selectedLevel} studentCount={getStudentCountForClassroom(selectedClassroom.id)} onConfirm={() => { onDeleteClassroom?.(selectedClassroom.id); setDeleteClassroomModalOpen(false) }} />
         </>
       )}

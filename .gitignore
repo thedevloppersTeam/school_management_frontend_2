@@ -43,3 +43,6 @@ AGENTS.md
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+cookies.txt
+.gitignore
+.gitignore

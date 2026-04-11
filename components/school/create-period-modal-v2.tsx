@@ -47,7 +47,6 @@ export function CreatePeriodModalV2({
 
   const handleOpenChange = (newOpen: boolean) => {
     if (!newOpen) {
-      // Reset form
       setName("")
       setType('normal')
       setStartDate("")
@@ -65,6 +64,7 @@ export function CreatePeriodModalV2({
   const currentOpen = open !== undefined ? open : isOpen
 
   const validateDates = (start: string, end: string) => {
+    // Validation uniquement si les DEUX dates sont fournies
     if (start && end) {
       const startDateTime = new Date(start).getTime()
       const endDateTime = new Date(end).getTime()
@@ -87,17 +87,20 @@ export function CreatePeriodModalV2({
     validateDates(startDate, value)
   }
 
+  // ── FIX 1 : dates non obligatoires (BR-DATE — contexte Haïti) ────────────
   const isFormValid = () => {
     return (
       name.trim() !== "" &&
-      startDate !== "" &&
-      endDate !== "" &&
       dateError === ""
+      // startDate et endDate sont optionnels
     )
   }
 
+  // ── FIX 2 : max 5 étapes — variable utilisée sur le bouton submit ─────────
+  const isDisabled = existingPeriodsCount >= 5
+
   const handleSubmit = () => {
-    if (isFormValid()) {
+    if (isFormValid() && !isDisabled) {
       onSubmit?.({
         name,
         type,
@@ -108,8 +111,6 @@ export function CreatePeriodModalV2({
       handleOpenChange(false)
     }
   }
-
-  const isDisabled = existingPeriodsCount >= 5
 
   return (
     <Dialog open={currentOpen} onOpenChange={handleOpenChange}>
@@ -122,7 +123,6 @@ export function CreatePeriodModalV2({
           borderRadius: '10px',
           padding: '32px'
         }}
-        
       >
         <DialogHeader>
           <DialogTitle
@@ -135,7 +135,9 @@ export function CreatePeriodModalV2({
             className="body-base"
             style={{ color: '#5C5955' }}
           >
-            Disponible uniquement si moins de 5 étapes existent
+            {isDisabled
+              ? "Maximum 5 étapes atteint — impossible d'en créer une nouvelle."
+              : `${existingPeriodsCount} / 5 étapes créées pour cette année`}
           </DialogDescription>
         </DialogHeader>
 
@@ -145,10 +147,7 @@ export function CreatePeriodModalV2({
             <Label
               htmlFor="name"
               className="label-ui"
-              style={{
-                color: '#1E1A17',
-                fontWeight: 600
-              }}
+              style={{ color: '#1E1A17', fontWeight: 600 }}
             >
               Nom de l'étape <span style={{ color: '#C84A3D' }}>*</span>
             </Label>
@@ -157,10 +156,11 @@ export function CreatePeriodModalV2({
               placeholder="5ème Étape"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              disabled={isDisabled}
               style={{
                 border: '1px solid #D1CECC',
                 borderRadius: '8px',
-                backgroundColor: '#FFFFFF'
+                backgroundColor: isDisabled ? '#F5F4F2' : '#FFFFFF'
               }}
               className="focus:border-[#2C4A6E] focus:ring-[#2C4A6E]"
             />
@@ -170,10 +170,7 @@ export function CreatePeriodModalV2({
           <div className="space-y-2">
             <Label
               className="label-ui"
-              style={{
-                color: '#1E1A17',
-                fontWeight: 600
-              }}
+              style={{ color: '#1E1A17', fontWeight: 600 }}
             >
               Type <span style={{ color: '#C84A3D' }}>*</span>
             </Label>
@@ -181,90 +178,71 @@ export function CreatePeriodModalV2({
               value={type}
               onValueChange={(value) => setType(value as 'normal' | 'blanc')}
               className="flex items-center gap-6"
+              disabled={isDisabled}
             >
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="normal" id="normal" />
-                <Label
-                  htmlFor="normal"
-                  className="body-base cursor-pointer"
-                  style={{ color: '#1E1A17', fontWeight: 400 }}
-                >
+                <Label htmlFor="normal" className="body-base cursor-pointer" style={{ color: '#1E1A17', fontWeight: 400 }}>
                   Évaluation normale
                 </Label>
               </div>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="blanc" id="blanc" />
-                <Label
-                  htmlFor="blanc"
-                  className="body-base cursor-pointer"
-                  style={{ color: '#1E1A17', fontWeight: 400 }}
-                >
+                <Label htmlFor="blanc" className="body-base cursor-pointer" style={{ color: '#1E1A17', fontWeight: 400 }}>
                   Évaluation blanc
                 </Label>
               </div>
             </RadioGroup>
           </div>
 
-          {/* Date de début */}
+          {/* Date de début — optionnelle */}
           <div className="space-y-2">
             <Label
               htmlFor="startDate"
               className="label-ui"
-              style={{
-                color: '#1E1A17',
-                fontWeight: 600
-              }}
+              style={{ color: '#1E1A17', fontWeight: 600 }}
             >
-              Date de début <span style={{ color: '#C84A3D' }}>*</span>
+              Date de début <span style={{ color: '#78756F', fontWeight: 400 }}>(optionnelle)</span>
             </Label>
             <Input
               id="startDate"
               type="date"
               value={startDate}
               onChange={(e) => handleStartDateChange(e.target.value)}
-              placeholder="jj/mm/aaaa"
+              disabled={isDisabled}
               style={{
                 border: '1px solid #D1CECC',
                 borderRadius: '8px',
-                backgroundColor: '#FFFFFF'
+                backgroundColor: isDisabled ? '#F5F4F2' : '#FFFFFF'
               }}
               className="focus:border-[#2C4A6E] focus:ring-[#2C4A6E]"
             />
           </div>
 
-          {/* Date de fin */}
+          {/* Date de fin — optionnelle */}
           <div className="space-y-2">
             <Label
               htmlFor="endDate"
               className="label-ui"
-              style={{
-                color: '#1E1A17',
-                fontWeight: 600
-              }}
+              style={{ color: '#1E1A17', fontWeight: 600 }}
             >
-              Date de fin <span style={{ color: '#C84A3D' }}>*</span>
+              Date de fin <span style={{ color: '#78756F', fontWeight: 400 }}>(optionnelle)</span>
             </Label>
             <Input
               id="endDate"
               type="date"
               value={endDate}
               onChange={(e) => handleEndDateChange(e.target.value)}
-              placeholder="jj/mm/aaaa"
+              disabled={isDisabled}
               style={{
                 border: dateError ? '1px solid #C84A3D' : '1px solid #D1CECC',
                 borderRadius: '8px',
-                backgroundColor: '#FFFFFF'
+                backgroundColor: isDisabled ? '#F5F4F2' : '#FFFFFF'
               }}
               className="focus:border-[#2C4A6E] focus:ring-[#2C4A6E]"
             />
             {dateError && (
-              <p
-                className="caption"
-                style={{
-                  color: '#C84A3D',
-                  marginTop: '4px'
-                }}
-              >
+              <p className="caption" style={{ color: '#C84A3D', marginTop: '4px' }}>
                 {dateError}
               </p>
             )}
@@ -275,10 +253,7 @@ export function CreatePeriodModalV2({
             <Label
               htmlFor="description"
               className="label-ui"
-              style={{
-                color: '#1E1A17',
-                fontWeight: 600
-              }}
+              style={{ color: '#1E1A17', fontWeight: 600 }}
             >
               Description
             </Label>
@@ -287,27 +262,20 @@ export function CreatePeriodModalV2({
               placeholder="Notes additionnelles sur cette étape..."
               value={description}
               onChange={(e) => {
-                if (e.target.value.length <= 200) {
-                  setDescription(e.target.value)
-                }
+                if (e.target.value.length <= 200) setDescription(e.target.value)
               }}
               maxLength={200}
               rows={3}
+              disabled={isDisabled}
               style={{
                 border: '1px solid #D1CECC',
                 borderRadius: '8px',
-                backgroundColor: '#FFFFFF',
+                backgroundColor: isDisabled ? '#F5F4F2' : '#FFFFFF',
                 resize: 'none'
               }}
               className="focus:border-[#2C4A6E] focus:ring-[#2C4A6E]"
             />
-            <p
-              className="caption"
-              style={{
-                color: '#78756F',
-                textAlign: 'right'
-              }}
-            >
+            <p className="caption" style={{ color: '#78756F', textAlign: 'right' }}>
               {description.length}/200 caractères
             </p>
           </div>
@@ -327,14 +295,14 @@ export function CreatePeriodModalV2({
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={!isFormValid()}
+            disabled={!isFormValid() || isDisabled}
             style={{
-              backgroundColor: isFormValid() ? '#2C4A6E' : '#E8E6E3',
-              color: isFormValid() ? '#FFFFFF' : '#A8A5A2',
+              backgroundColor: (!isFormValid() || isDisabled) ? '#E8E6E3' : '#2C4A6E',
+              color: (!isFormValid() || isDisabled) ? '#A8A5A2' : '#FFFFFF',
               borderRadius: '8px',
-              cursor: isFormValid() ? 'pointer' : 'not-allowed'
+              cursor: (!isFormValid() || isDisabled) ? 'not-allowed' : 'pointer'
             }}
-            className={isFormValid() ? 'hover:bg-[#243B56]' : ''}
+            className={(!isFormValid() || isDisabled) ? '' : 'hover:bg-[#243B56]'}
           >
             Créer l'étape
           </Button>

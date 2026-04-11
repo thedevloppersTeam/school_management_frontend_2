@@ -16,8 +16,8 @@ import {
 
 // ── Types locaux (format attendu par CPMSLYearConfigTabs) ─────────────────────
 
-
 type Rubique = 'R1' | 'R2' | 'R3'
+
 interface Period {
   id: string
   name: string
@@ -59,15 +59,10 @@ interface SubjectChild {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/**
- * Dérive le statut d'une étape depuis isCurrent.
- * Source de vérité : backend via enable/disable endpoints.
- */
 function deriveStepStatus(step: AcademicYearStep): 'open' | 'closed' {
   return step.isCurrent ? 'open' : 'closed'
 }
 
-/** Dérive le statut d'une année depuis isCurrent + dates */
 function deriveYearStatus(year: AcademicYear): 'active' | 'preparation' | 'archived' {
   if (year.isCurrent) return 'active'
   if (new Date(year.endDate) < new Date()) return 'archived'
@@ -81,7 +76,6 @@ export default function AcademicYearConfigPage() {
   const yearId  = params.yearId as string
   const { toast } = useToast()
 
-  // ── État ───────────────────────────────────────────────────────────────────
   const [year,            setYear]            = useState<AcademicYear | null>(null)
   const [periods,         setPeriods]         = useState<Period[]>([])
   const [levels,          setLevels]          = useState<Level[]>([])
@@ -92,7 +86,7 @@ export default function AcademicYearConfigPage() {
   const [loading,         setLoading]         = useState(true)
   const [notFound,        setNotFound]        = useState(false)
 
-  // ── Chargement des données ─────────────────────────────────────────────────
+  // ── Chargement ─────────────────────────────────────────────────────────────
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -103,22 +97,25 @@ export default function AcademicYearConfigPage() {
       const yearData: AcademicYear = await yearRes.json()
       setYear(yearData)
 
-      // 2. Étapes → periods (statut depuis isCurrent)
+      // 2. Étapes → periods
       const stepsData = await fetchSteps(yearId)
-      setPeriods(stepsData.map(s => ({
+        setPeriods(stepsData.map(s => ({
         id:     s.id,
         name:   s.name,
         status: deriveStepStatus(s)
       })))
 
       // 3. Sessions de classe → classrooms
+      // FIX W1-06 : NS3/NS4 utilisent la filière comme label (pas la lettre)
       const sessionsData = await fetchClassSessions(yearId)
       setClassrooms(sessionsData.map(s => {
-        const trackSuffix = s.class.track ? ` — ${s.class.track.code}` : ''
+        const name = s.class.track
+          ? `${s.class.classType.name} ${s.class.track.code}`   // NS3 LLA ✅
+          : `${s.class.classType.name} ${s.class.letter}`       // 7e A   ✅
         return {
-          id:      s.id,
-          name:    `${s.class.classType.name} ${s.class.letter}${trackSuffix}`,
-          levelId: s.class.classType.id,
+          id:       s.id,
+          name,
+          levelId:  s.class.classType.id,
           capacity: 30
         }
       }))
@@ -129,11 +126,8 @@ export default function AcademicYearConfigPage() {
         const types = await typesRes.json()
         setLevels(types.map((t: { id: string; name: string; isTerminal: boolean }) => {
           let category: Level['category'] = 'fondamental'
-          if (t.name === 'NS3' || t.name === 'NS4') {
-            category = 'ns-filiere'
-          } else if (t.name === 'NS1' || t.name === 'NS2') {
-            category = 'ns-tronc'
-          }
+          if (t.name === 'NS3' || t.name === 'NS4') category = 'ns-filiere'
+          else if (t.name === 'NS1' || t.name === 'NS2') category = 'ns-tronc'
           return {
             id:         t.id,
             name:       t.name,
@@ -155,7 +149,7 @@ export default function AcademicYearConfigPage() {
         })))
       }
 
-      // 5. Matières → subjectParents
+      // 5. Matières + rubriques → subjectParents
       const subjectsRes = await fetch('/api/subjects',        { credentials: 'include' })
       const rubricsRes  = await fetch('/api/subject-rubrics', { credentials: 'include' })
 
@@ -172,7 +166,7 @@ export default function AcademicYearConfigPage() {
 
         const parents: SubjectParent[] = subjects.map((s: {
           id: string; code: string; name: string
-          rubricId?: string; coefficient: number; hasSections: boolean
+          rubricId?: string; coefficient: number
         }) => ({
           id:          s.id,
           code:        s.code,
@@ -209,7 +203,7 @@ export default function AcademicYearConfigPage() {
                     })
                   })
                 }
-              } catch { /* ignorer les erreurs par section */ }
+              } catch { /* ignorer erreurs par section */ }
             })
         )
         setSubjectChildren(children)
@@ -237,15 +231,15 @@ export default function AcademicYearConfigPage() {
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name:        data.name,
-          stepNumber:  periods.length + 1,
-          startDate:   data.startDate,
-          endDate:     data.endDate,
+          name:       data.name,
+          stepNumber: periods.length + 1,
+          startDate:  data.startDate || undefined,
+          endDate:    data.endDate   || undefined,
         })
       })
-            if (!res.ok) throw new Error(`Échec de la création de l'étape de l'année académique`)
-      toast({ title: "Étape créée", description: `L'étape ${data.name} a été configurée.` })
-      loadData()
+      if (!res.ok) throw new Error(`Échec création étape`)
+      toast({ title: "Étape créée", description: `${data.name} configurée.` })
+      await loadData()
     } catch {
       toast({ title: "Erreur", description: "Impossible de créer l'étape", variant: "destructive" })
     }
@@ -256,32 +250,44 @@ export default function AcademicYearConfigPage() {
       const res = await fetch(`/api/academic-years/steps/disable/${periodId}`, {
         credentials: 'include'
       })
-            if (!res.ok) throw new Error(`Échec de la désactivation de l'étape de l'année académique`)
+      if (!res.ok) throw new Error(`Échec clôture`)
       toast({ title: "Étape clôturée" })
-      loadData()
+      await loadData()
     } catch {
       toast({ title: "Erreur", variant: "destructive" })
     }
   }
 
+  // FIX W1-05 : logging + await loadData + message d'erreur explicite
   const handleReopenPeriod = async (periodId: string) => {
     try {
       const res = await fetch(`/api/academic-years/steps/enable/${periodId}`, {
         credentials: 'include'
       })
-      if (!res.ok) throw new Error()
-      toast({ title: "Étape réouverte" })
-      loadData()
-    } catch {
-      toast({ title: "Erreur", variant: "destructive" })
-    }
+      const body = await res.json().catch(() => null)
+      console.log('[reopen] status:', res.status, 'body:', body)
+      if (!res.ok) throw new Error(body?.message || `Erreur ${res.status}`)
+      toast({ title: "Étape réouverte", description: "La saisie de notes est débloquée." })
+      await loadData()
+    } catch (err) {
+  const message = err instanceof Error ? err.message : ''
+  //console.error('[reopen] échec:', message)
+
+  if (message.toLowerCase().includes('current step already exists')) {
+    toast({
+      title: "Une seule étape active à la fois",
+      description: "Clôturez l'étape actuellement ouverte avant de réouvrir celle-ci.",
+    })
+  } else {
+    toast({ title: "Erreur réouverture", description: message, variant: "destructive" })
   }
+}
+}
 
   // ── Handlers — Matières ────────────────────────────────────────────────────
 
   const handleAddSubjectParent = async (data: {
-    name: string; code: string
-    rubrique: Rubique; coefficient: number
+    name: string; code: string; rubrique: Rubique; coefficient: number
   }) => {
     try {
       const rubricsRes = await fetch('/api/subject-rubrics', { credentials: 'include' })
@@ -301,9 +307,9 @@ export default function AcademicYearConfigPage() {
           rubricId:    rubric?.id || null,
         })
       })
-      if (!res.ok) throw new Error('Échec de la création du sujet')
+      if (!res.ok) throw new Error('Échec création matière')
       toast({ title: "Matière ajoutée" })
-      loadData()
+      await loadData()
     } catch {
       toast({ title: "Erreur", description: "Impossible de créer la matière", variant: "destructive" })
     }
@@ -327,9 +333,9 @@ export default function AcademicYearConfigPage() {
           rubricId:    rubric?.id || null,
         })
       })
-      if (!res.ok) throw new Error('Échec de la mise à jour du sujet parent')
+      if (!res.ok) throw new Error('Échec mise à jour matière')
       toast({ title: "Matière modifiée" })
-      loadData()
+      await loadData()
     } catch {
       toast({ title: "Erreur", description: "Impossible de modifier la matière", variant: "destructive" })
     }
@@ -350,9 +356,9 @@ export default function AcademicYearConfigPage() {
           displayOrder: subjectChildren.filter(c => c.parentId === parentId).length + 1,
         })
       })
-      if (!res.ok) throw new Error('Échec de la création de la sous-matière')
+      if (!res.ok) throw new Error('Échec création sous-matière')
       toast({ title: "Sous-matière ajoutée" })
-      loadData()
+      await loadData()
     } catch {
       toast({ title: "Erreur", description: "Impossible de créer la sous-matière", variant: "destructive" })
     }
@@ -368,9 +374,9 @@ export default function AcademicYearConfigPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: data.name })
       })
-      if (!res.ok) throw new Error('Échec de la mise à jour de la sous-matière')
+      if (!res.ok) throw new Error('Échec mise à jour sous-matière')
       toast({ title: "Sous-matière modifiée" })
-      loadData()
+      await loadData()
     } catch {
       toast({ title: "Erreur", description: "Impossible de modifier la sous-matière", variant: "destructive" })
     }
@@ -384,17 +390,16 @@ export default function AcademicYearConfigPage() {
     toast({ title: "Suppression non disponible", description: "Cette action sera disponible prochainement.", variant: "destructive" })
   }
 
-  // ── Handlers — Classes (salles) ────────────────────────────────────────────
+  // ── Handlers — Classes ─────────────────────────────────────────────────────
 
   const handleAddClassroom = async (levelId: string, data: { letter?: string; trackId?: string }) => {
     try {
       const level = levels.find(l => l.id === levelId)
       if (!level) throw new Error('Niveau introuvable')
 
-      // 1. Créer la classe (nouvelle salle)
       const classBody: Record<string, unknown> = {
         classTypeId: levelId,
-        letter:      data.letter || 'B',
+        letter:      data.letter || 'A',
         maxStudents: 30,
       }
       if (data.trackId) classBody.trackId = data.trackId
@@ -413,7 +418,6 @@ export default function AcademicYearConfigPage() {
       const classId = classData.class?.id || classData.id
       if (!classId) throw new Error('ID classe manquant')
 
-      // 2. Créer la session pour cette année
       const sessionRes = await fetch('/api/class-sessions/create', {
         method: 'POST',
         credentials: 'include',
@@ -422,13 +426,10 @@ export default function AcademicYearConfigPage() {
       })
       if (!sessionRes.ok) throw new Error('Erreur création session')
 
-      toast({
-        title: "Salle créée",
-        description: `${level.name} — Salle ${data.letter || 'B'} ajoutée pour cette année.`
-      })
-      loadData()
+      toast({ title: "Classe créée", description: `${level.name} ajoutée pour cette année.` })
+      await loadData()
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Impossible de créer la salle'
+      const message = err instanceof Error ? err.message : 'Impossible de créer la classe'
       toast({ title: "Erreur", description: message, variant: "destructive" })
       throw err
     }
