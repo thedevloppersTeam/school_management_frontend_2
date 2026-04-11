@@ -78,7 +78,13 @@ export function CPMSLGradesGrid({
     () => classSubjects.find(cs => cs.id === selectedClassSubjectId),
     [classSubjects, selectedClassSubjectId]
   )
-  const maxScore = Number(selectedClassSubject?.subject.maxScore ?? 10)
+  const maxScore = (() => {
+  const raw = selectedClassSubject?.subject.maxScore
+  if (!raw) return 10
+  if (typeof raw === 'object' && (raw as any).d) return Number((raw as any).d[0])
+  return Number(raw) || 10
+  })()
+
 
   const selectedStep = useMemo(
     () => steps.find(s => s.id === selectedStepId),
@@ -484,9 +490,9 @@ export function CPMSLGradesGrid({
         <div className="rounded-lg p-4 flex items-center gap-3"
           style={{ backgroundColor: "#FEF6E0", border: "1px solid #C48B1A" }}>
           <LockIcon className="h-5 w-5 flex-shrink-0" style={{ color: "#C48B1A" }} />
-          <p className="text-sm font-medium" style={{ color: "#C48B1A" }}>
-            Étape clôturée — les notes ne peuvent plus être modifiées
-          </p>
+<p className="text-sm font-medium" style={{ color: "#C48B1A" }}>
+  Étape clôturée — réouvrez l&apos;étape depuis la Configuration pour saisir des notes
+</p>
         </div>
       )}
 

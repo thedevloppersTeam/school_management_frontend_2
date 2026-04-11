@@ -26,6 +26,8 @@ interface GradeRow {
   rang:         number | null
 }
 
+
+
 // ── Helper BR-001 ─────────────────────────────────────────────────────────────
 
 function computeAverage(
@@ -76,7 +78,13 @@ function sessionLabel(s: ClassSession): string {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default function GradesViewPage() {
+export default function GradesViewPage({
+  initialSessionId = "",
+  initialStepId    = "",
+}: {
+  initialSessionId?: string
+  initialStepId?:    string
+}) {
   const params  = useParams()
   const yearId  = params.yearId as string
   const { toast } = useToast()
@@ -87,8 +95,8 @@ export default function GradesViewPage() {
   const [loadingCtx, setLoadingCtx] = useState(true)
 
 
-  const [selectedSession, setSelectedSession] = useState("")
-  const [selectedStep,    setSelectedStep]    = useState("")
+const [selectedSession, setSelectedSession] = useState(initialSessionId)
+const [selectedStep,    setSelectedStep]    = useState(initialStepId)
 
   const [classSubjects, setClassSubjects] = useState<ApiClassSubject[]>([])
   const isLocked = useMemo(() => {
@@ -410,7 +418,10 @@ export default function GradesViewPage() {
                           const st = rubricStyle(group.rubric.code)
                           return group.subjects.map((cs, i) => {
                             const note = row.grades[cs.id]
-                            const max  = Number(cs.subject.maxScore) || 10
+                            const raw = cs.subject.maxScore
+const max = (typeof raw === 'object' && (raw as any).d)
+  ? Number((raw as any).d[0])
+  : Number(raw) || 10
                             return (
                               <td key={cs.id}
                                 style={{ padding: '10px 8px', textAlign: 'center', fontSize: '13px', fontWeight: note !== null ? 600 : 400, color: noteColor(note ?? null, max), borderLeft: i === 0 ? `2px solid ${st.border}` : `1px solid #F0F0F0` }}>

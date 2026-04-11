@@ -102,8 +102,9 @@ function buildGradeIndex(allGrades: any[]): GradeIndex {
 
 function buildSubjectEntries(cs: ApiClassSubject, bucket: GradeBucket | undefined): RubriqueEntry[] {
   const subject = cs.subject
-  const coeff   = cs.coefficientOverride !== null ? cs.coefficientOverride : subject.coefficient
-
+  const coeff = parseDecimal(
+  cs.coefficientOverride !== null ? cs.coefficientOverride : subject.coefficient
+) ?? 1
   if (!subject.hasSections || subject.sections.length === 0) {  // +1 if
     return [{ name: subject.name, note: avg(bucket?.direct ?? []), coeff, isParent: false }]
   }
@@ -114,7 +115,9 @@ function buildSubjectEntries(cs: ApiClassSubject, bucket: GradeBucket | undefine
     entries.push({
       name:     sec.name,
       note:     avg(scores),
-      coeff:    Number(sec.maxScore) > 0 ? coeff / subject.sections.length : 1,
+      coeff: parseDecimal(sec.maxScore) !== null && parseDecimal(sec.maxScore)! > 0
+      ? coeff / subject.sections.length
+      : 1,
       isParent: false,
     })
   }
