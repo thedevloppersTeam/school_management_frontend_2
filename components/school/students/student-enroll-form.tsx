@@ -56,18 +56,6 @@ const EMPTY_FORM: FormState = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function normalize(str: string): string {
-  return str
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]/gi, "")
-    .toLowerCase()
-}
-
-function generateUsername(firstName: string, lastName: string): string {
-  return `${normalize(firstName)}.${normalize(lastName)}.${new Date().getFullYear()}`
-}
-
 async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, { credentials: "include", ...options })
   const data = await res.json()
@@ -116,7 +104,6 @@ export function StudentEnrollForm({
 
   const nisuValid = /^[A-Z0-9]{14}$/i.test(form.nisu)
 
-  // fatherName, motherName, phone1 sont obligatoires (champs requis en DB)
   const canSubmit =
     nisuValid &&
     form.firstName.trim() !== "" &&
@@ -127,57 +114,29 @@ export function StudentEnrollForm({
     form.motherName.trim() !== "" &&
     form.phone1.trim() !== ""
 
-  // ── Submit ──────────────────────────────────────────────────────────────────
+  // ── Submit — un seul appel, transaction atomique côté backend ───────────────
   const handleSubmit = async () => {
     if (!canSubmit) return
     setSubmitting(true)
     setApiError(null)
     setSuccessMsg(null)
 
-    // Username généré côté client, envoyé au backend — pas affiché à l'écran
-    const username = generateUsername(form.firstName, form.lastName)
-    const defaultPassword = form.nisu.toUpperCase()
-
     try {
-      // 1. Créer le user
-      const userRes = await apiFetch<{ user: { id: string } }>("/api/users/create", {
+      await apiFetch("/api/students/enroll", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          firstname: form.firstName.trim(),
-          lastname:  form.lastName.trim(),
-          birthDate: form.birthDate,
-          username,
-          password:  defaultPassword,
-          type:      "STUDENT",
-        }),
-      })
-
-      // 2. Créer le profil student
-      // fatherName, motherName, phone1 sont obligatoires en DB (String, pas String?)
-      const studentRes = await apiFetch<{ student: { id: string } }>("/api/students/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId:     userRes.user.id,
-          nisu:       form.nisu.toUpperCase(),
-          fatherName: form.fatherName.trim(),
-          motherName: form.motherName.trim(),
-          phone1:     form.phone1.trim(),
-          ...(form.address.trim()      && { address:      form.address.trim() }),
-          ...(form.phone2.trim()       && { phone2:       form.phone2.trim() }),
-          ...(form.parentsEmail.trim() && { parentsEmail: form.parentsEmail.trim() }),
-        }),
-      })
-
-      // 3. Inscrire dans la classe
-      await apiFetch("/api/enrollments/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          studentId:      studentRes.student.id,
+          nisu:           form.nisu.toUpperCase(),
+          firstName:      form.firstName.trim(),
+          lastName:       form.lastName.trim(),
+          birthDate:      form.birthDate,
           classSessionId: form.classSessionId,
-          notes:          "Nouvelle inscription",
+          fatherName:     form.fatherName.trim(),
+          motherName:     form.motherName.trim(),
+          phone1:         form.phone1.trim(),
+          phone2:         form.phone2.trim(),
+          address:        form.address.trim(),
+          parentsEmail:   form.parentsEmail.trim(),
         }),
       })
 
