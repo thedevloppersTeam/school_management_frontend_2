@@ -32,6 +32,7 @@ import {
   HelpCircleIcon,
   PanelLeftCloseIcon,
   PanelLeftOpenIcon,
+  ArchiveIcon
 } from "lucide-react"
 import { getMe, logout, type AuthUser } from "@/lib/data/auth-data"
 import { fetchActiveAcademicYear, type AcademicYear } from "@/lib/api/dashboard"
@@ -64,6 +65,14 @@ const navItems: NavItem[] = [
       { label: "Élèves",    href: "/admin/academic-year/:yearId/students", icon: UsersIcon },
       { label: "Notes",     href: "/admin/academic-year/:yearId/grades",   icon: ClipboardEditIcon },
       { label: "Bulletins", href: "/admin/academic-year/:yearId/reports",  icon: FileTextIcon },
+    ],
+  },
+  {
+    label: "ARCHIVES",
+    section: "archives",
+    icon: ArchiveIcon,
+    children: [
+      { label: "Bulletins archivés", href: "/admin/archives", icon: ArchiveIcon },
     ],
   },
   {

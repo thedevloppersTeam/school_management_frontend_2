@@ -1,268 +1,613 @@
-// lib/api/bulletin.ts
-// Logique partagée de construction des données bulletin (individuel + lot)
+// components/BulletinScolaire.tsx
+"use client";
 
-import { fetchClassSubjects, type ApiClassSubject } from "@/lib/api/grades"
-import { parseDecimal, formatDate } from "@/lib/decimal"
-import type { BulletinData, RubriqueEntry, ComportementItem } from "@/components/BulletinScolaire"
+import React from "react";
 
-// ── Types internes ────────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 
-type GradeBucket = { direct: number[]; sections: Map<string, number[]> }
-type GradeIndex  = Map<string, GradeBucket>
-
-type RubriqueSet = {
-  r1: RubriqueEntry[]; r1Name: string
-  r2: RubriqueEntry[]; r2Name: string
-  r3: RubriqueEntry[]; r3Name: string
+export interface RubriqueEntry {
+  name:     string;
+  note?:    number | null;  // null/undefined = entrée parent (section MENFP sans note)
+  coeff?:   number;
+  isParent: boolean;        // true = en-tête section, false = sous-matière
 }
 
-// ── Helpers math ──────────────────────────────────────────────────────────────
-
-function avg(arr: number[]): number | null {
-  return arr.length > 0 ? arr.reduce((s, v) => s + v, 0) / arr.length : null
+export interface ComportementItem {
+  label: string;
+  oui:   boolean | null;
+  col:   1 | 2 | 3;
 }
 
-function rubriqueAvg(entries: RubriqueEntry[]): number | null {
-  let total = 0, totalCoeff = 0
-  for (const e of entries) {
-    if (!e.isParent && e.note !== null && e.note !== undefined && e.coeff) {
-      total      += e.note * e.coeff
-      totalCoeff += e.coeff
-    }
-  }
-  return totalCoeff > 0 ? total / totalCoeff : null
+export interface ComportementData {
+  absences:        string;
+  retards:         string;
+  devoirsNonRemis: string;
+  leconsNonSues:   string;
+  uniforme:        string;
+  discipline:      string;
+  items:           ComportementItem[];
+  pointsForts:     string;
+  defis:           string;
+  remarque:        string;
 }
 
-function getAppreciation(m: number): string {
-  if (m >= 9.0) return 'A+'
-  if (m >= 8.5) return 'A'
-  if (m >= 7.8) return 'B+'
-  if (m >= 7.5) return 'B'
-  if (m >= 6.9) return 'C+'
-  if (m >= 6.0) return 'C'
-  if (m >= 5.1) return 'D'
-  return 'E'
+export interface EtablissementData {
+  nomLigne1: string;   // ex. "Cours Privé Mixte"
+  nomLigne2: string;   // ex. "SAINT LÉONARD"
+  adresse:   string;
+  telephone: string;
+  email:     string;
+  logoUrl:   string;   // URL depuis la DB ; vide = placeholder affiché
 }
 
-// ── Helpers fetch ─────────────────────────────────────────────────────────────
+export interface BulletinData {
+  // ── Élève ──────────────────────────────────────────────────────────────────
+  prenoms:       string;
+  nom:           string;
+  sexe:          string;
+  niveau:        string;
+  filiere:       string;
+  dateNaissance: string;
+  anneeScolaire: string;
+  periode:       string;   // ex. "Période 1 · Étape 1"
+  code:          string;
+  nisu:          string;
+  photoUrl?:     string;   // URL depuis la DB ; vide = placeholder affiché
 
-async function apiFetch<T>(url: string): Promise<T> {
-  const res = await fetch(url, { credentials: 'include' })
-  if (!res.ok) throw new Error(`API ${res.status}: ${url}`)
-  return res.json()
+  // ── Rubriques ──────────────────────────────────────────────────────────────
+  rubrique1Name:  string;
+  rubrique1Poids: string;  // ex. "70%"
+  rubrique1:      RubriqueEntry[];
+  moyR1:          number | null;
+
+  rubrique2Name:  string;
+  rubrique2Poids: string;
+  rubrique2:      RubriqueEntry[];
+  moyR2:          number | null;
+
+  rubrique3Name:  string;
+  rubrique3Poids: string;
+  rubrique3:      RubriqueEntry[];
+  moyR3:          number | null;
+
+  // ── Résultats ──────────────────────────────────────────────────────────────
+  moyenneEtape:  string;
+  appreciation:  string;
+  moyenneClasse: string;
+
+  // ── Comportement & établissement ───────────────────────────────────────────
+  comportement:  ComportementData;
+  etablissement: EtablissementData;
 }
 
-async function safeFetch<T>(url: string, fallback: T): Promise<T> {
-  try {
-    const res = await fetch(url, { credentials: 'include' })
-    if (!res.ok) return fallback
-    return res.json()
-  } catch {
-    return fallback
-  }
+// ── Helpers visuels ───────────────────────────────────────────────────────────
+
+function noteColor(note: number): string {
+  if (note <= 50)               return "#c0392b";
+  if (note >= 51 && note <= 59) return "#cc6600";
+  if (note >= 60 && note <= 68) return "#2c6e2e";
+  return "#000";
 }
 
-// ── Étape 2 : normalisation behavior / attitudes ───────────────────────────────
-
-function normalizeBehavior(raw: any): any {
-  return Array.isArray(raw) ? raw[0] ?? null : raw
+function noteBg(note: number): string {
+  if (note <= 50)               return "#fde8e8";
+  if (note >= 51 && note <= 59) return "#fef3e2";
+  if (note >= 60 && note <= 68) return "#eafaea";
+  return "transparent";
 }
 
-function normalizeAttitudes(raw: any): any[] {
-  return Array.isArray(raw) ? raw : []
+function fmt(n: number | null | undefined): string {
+  return n != null ? n.toFixed(2) : "–";
 }
 
-// ── Étape 3 : indexation des notes ────────────────────────────────────────────
-// Extracted to kill the 4-level nesting in the original for-loop.
+// ── Checkbox ──────────────────────────────────────────────────────────────────
 
-function addScoreToIndex(index: GradeIndex, grade: any, score: number): void {
-  if (!index.has(grade.classSubjectId)) {
-    index.set(grade.classSubjectId, { direct: [], sections: new Map() })
-  }
-  const bucket = index.get(grade.classSubjectId)!
-  if (grade.sectionId) {
-    if (!bucket.sections.has(grade.sectionId)) bucket.sections.set(grade.sectionId, [])
-    bucket.sections.get(grade.sectionId)!.push(score)
-  } else {
-    bucket.direct.push(score)
-  }
+function CB({ checked }: { checked: boolean | null }) {
+  return (
+    <span style={{
+      display: "inline-block",
+      width: "10px", height: "10px",
+      border: "1px solid #333",
+      background: "white",
+      position: "relative",
+      verticalAlign: "middle",
+      flexShrink: 0,
+    }}>
+      {checked === true && (
+        <span style={{
+          position: "absolute", top: "-2px", left: "0",
+          fontSize: "9pt", lineHeight: 1, color: "#000",
+        }}>✓</span>
+      )}
+    </span>
+  );
 }
 
-function buildGradeIndex(allGrades: any[]): GradeIndex {
-  const index: GradeIndex = new Map()
-  for (const grade of allGrades) {
-    const score = parseDecimal(grade.studentScore)
-    if (score !== null) addScoreToIndex(index, grade, score)  // +1 for, +1 if
-  }
-  return index
+// ── Logo placeholder ──────────────────────────────────────────────────────────
+
+function LogoPlaceholder() {
+  return (
+    <div style={{
+      display: "flex", flexDirection: "column",
+      alignItems: "center", justifyContent: "center",
+      width: "64px", height: "64px",
+      border: "1.5px dashed #aaa",
+      background: "#f5f5f5", gap: "3px",
+    }}>
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="1.5">
+        <rect x="3" y="3" width="18" height="18" rx="2"/>
+        <circle cx="8.5" cy="8.5" r="1.5"/>
+        <polyline points="21,15 16,10 5,21"/>
+      </svg>
+      <span style={{ fontSize: "5.5pt", color: "#aaa", letterSpacing: "0.5px" }}>LOGO</span>
+    </div>
+  );
 }
 
-// ── Étape 4 : construction des rubriques ─────────────────────────────────────
-// Split into three focused helpers to eliminate nested loops + branching.
+// ── Photo placeholder ─────────────────────────────────────────────────────────
 
-function buildSubjectEntries(cs: ApiClassSubject, bucket: GradeBucket | undefined): RubriqueEntry[] {
-  const subject = cs.subject
-  const coeff = parseDecimal(
-  cs.coefficientOverride !== null ? cs.coefficientOverride : subject.coefficient
-) ?? 1
-  if (!subject.hasSections || subject.sections.length === 0) {  // +1 if
-    return [{ name: subject.name, note: avg(bucket?.direct ?? []), coeff, isParent: false }]
-  }
-
-  const entries: RubriqueEntry[] = [{ name: subject.name, isParent: true }]
-  for (const sec of subject.sections) {                          // +1 for
-    const scores = bucket?.sections.get(sec.id) ?? []
-    entries.push({
-      name:     sec.name,
-      note:     avg(scores),
-      coeff: parseDecimal(sec.maxScore) !== null && parseDecimal(sec.maxScore)! > 0
-      ? coeff / subject.sections.length
-      : 1,
-      isParent: false,
-    })
-  }
-  return entries
+function PhotoPlaceholder() {
+  return (
+    <div style={{
+      display: "flex", flexDirection: "column",
+      alignItems: "center", justifyContent: "center",
+      width: "60px", height: "72px",
+      background: "#f0f0f0", gap: "4px",
+    }}>
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#bbb" strokeWidth="1.5">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+        <circle cx="12" cy="7" r="4"/>
+      </svg>
+      <span style={{ fontSize: "5.5pt", color: "#bbb", textAlign: "center", letterSpacing: "0.5px" }}>
+        PHOTO<br/>ÉLÈVE
+      </span>
+    </div>
+  );
 }
 
-function pushToRubrique(set: RubriqueSet, code: string, entries: RubriqueEntry[]): void {
-  if (code === 'R1') set.r1.push(...entries)       // +1 if
-  else if (code === 'R2') set.r2.push(...entries)  // +1 else-if
-  else if (code === 'R3') set.r3.push(...entries)  // +1 else-if
+// ── Table Rubrique ────────────────────────────────────────────────────────────
+
+function RubriqueTable({
+  name, poids, entries, moy,
+}: {
+  name:    string;
+  poids:   string;
+  entries: RubriqueEntry[];
+  moy:     number | null;
+}) {
+  return (
+    <div style={{ border: "1px solid #aaa", flex: 1 }}>
+      {/* En-tête rubrique */}
+      <div style={{
+        background: "#f0f0f0",
+        fontSize: "7.5pt",
+        fontWeight: "bold",
+        padding: "3px 5px",
+        textAlign: "left",
+        borderBottom: "1px solid #aaa",
+      }}>
+        {name}&nbsp;
+        <span style={{ fontWeight: "normal", fontSize: "7pt" }}>({poids})</span>
+      </div>
+
+      {/* Tableau matières */}
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "7pt" }}>
+        <thead>
+          <tr style={{ background: "#f7f7f7", borderBottom: "1px solid #ccc" }}>
+            <th style={{ textAlign: "left", padding: "2px 4px", fontWeight: "bold" }}>Matière</th>
+            <th style={{ textAlign: "center", padding: "2px 4px", borderLeft: "1px solid #ddd", width: "28px", fontWeight: "bold" }}>Note</th>
+            <th style={{ textAlign: "center", padding: "2px 4px", borderLeft: "1px solid #ddd", width: "28px", fontWeight: "bold" }}>Coeff.</th>
+          </tr>
+        </thead>
+        <tbody>
+          {entries.map((entry, i) =>
+            entry.isParent ? (
+              // ── Section MENFP (Mathématiques, Français...) ────────────────
+              <tr key={i} style={{ background: "#f0f0f0" }}>
+                <td colSpan={3} style={{
+                  padding: "2px 5px",
+                  fontWeight: "bold",
+                  fontSize: "7pt",
+                  borderTop: i > 0 ? "1px solid #ccc" : undefined,
+                }}>
+                  {entry.name}
+                </td>
+              </tr>
+            ) : (
+              // ── Sous-matière ──────────────────────────────────────────────
+              <tr key={i} style={{ borderBottom: "1px solid #efefef" }}>
+                <td style={{ padding: "1.5px 4px 1.5px 10px" }}>{entry.name}</td>
+                <td style={{
+                  textAlign: "center",
+                  borderLeft: "1px solid #ddd",
+                  fontWeight: entry.note != null ? "bold" : "normal",
+                  color:      entry.note != null ? noteColor(entry.note) : "#999",
+                  background: entry.note != null ? noteBg(entry.note) : "transparent",
+                  fontSize:   "7.5pt",
+                }}>
+                  {fmt(entry.note)}
+                </td>
+                <td style={{ textAlign: "center", borderLeft: "1px solid #ddd", color: "#444" }}>
+                  {entry.coeff ?? "–"}
+                </td>
+              </tr>
+            )
+          )}
+
+          {/* Ligne Moy. Rx */}
+          <tr style={{ background: "#e8e8e8", borderTop: "1.5px solid #999" }}>
+            <td style={{ textAlign: "right", padding: "2px 4px", fontWeight: "bold", fontSize: "7pt" }}>
+              Moy. {name.split(" ")[0]} {name.split(" ")[1]} / 10
+            </td>
+            <td style={{
+              textAlign: "center", borderLeft: "1px solid #ddd",
+              fontWeight: "bold", color: "#c0392b", fontSize: "7.5pt",
+            }}>
+              {fmt(moy)}
+            </td>
+            <td style={{ textAlign: "center", borderLeft: "1px solid #ddd", fontWeight: "bold", color: "#444" }}>
+              –
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
-function buildRubriques(classSubjects: ApiClassSubject[], gradeIndex: GradeIndex): RubriqueSet {
-  const set: RubriqueSet = {
-    r1: [], r1Name: 'Rubrique 1',
-    r2: [], r2Name: 'Rubrique 2',
-    r3: [], r3Name: 'Rubrique 3',
-  }
+// ── Composant principal ───────────────────────────────────────────────────────
 
-  for (const cs of classSubjects) {                             // +1 for
-    const { rubric } = cs.subject
-    const code = rubric?.code ?? ''
-    const name = rubric?.name ?? ''
+export default function BulletinScolaire({ data }: { data: BulletinData }) {
+  const { etablissement: etab, comportement: comp } = data;
 
-    if (code === 'R1' && name) set.r1Name = name               // +1 if
-    if (code === 'R2' && name) set.r2Name = name               // +1 if
-    if (code === 'R3' && name) set.r3Name = name               // +1 if
+  const col1 = comp.items.filter(c => c.col === 1);
+  const col2 = comp.items.filter(c => c.col === 2);
+  const col3 = comp.items.filter(c => c.col === 3);
 
-    const entries = buildSubjectEntries(cs, gradeIndex.get(cs.id))
-    pushToRubrique(set, code, entries)
-  }
-  return set
-}
+  // ── Styles de base ──────────────────────────────────────────────────────────
+  const S = {
+    lbl: { color: "#1a3a6e", fontWeight: "bold" } as React.CSSProperties,
+    val: { fontStyle: "italic", fontFamily: "'Times New Roman', Times, serif", fontSize: "9pt" } as React.CSSProperties,
+    mono: { fontFamily: "'Courier New', monospace", fontSize: "7.5pt" } as React.CSSProperties,
+    compRow: {
+      display: "flex", alignItems: "center",
+      justifyContent: "space-between",
+      padding: "1px 0",
+      borderBottom: "1px dotted #ddd",
+      fontSize: "7pt",
+    } as React.CSSProperties,
+    oiNon: {
+      display: "flex", gap: "3px",
+      alignItems: "center",
+      fontSize: "6.5pt",
+      whiteSpace: "nowrap",
+    } as React.CSSProperties,
+  };
 
-// ── Étape 6 : bloc comportement ───────────────────────────────────────────────
+  return (
+    <div style={{
+      fontFamily: "Arial, Helvetica, sans-serif",
+      fontSize: "8.5pt",
+      background: "white",
+      width: "210mm",
+      margin: "0 auto",
+      padding: "8mm",
+      color: "#000",
+      boxSizing: "border-box",
+      border: "1px solid #bbb",
+    }}>
 
-function resolveAttitudeOui(behavior: any, attitudeId: string): boolean | null {
-  const response = behavior?.attitudeResponses?.find((r: any) => r.attitudeId === attitudeId)
-  return response != null ? response.value : null
-}
+      {/* ══════════════════════════════════════════════════════════════
+          EN-TÊTE
+      ══════════════════════════════════════════════════════════════ */}
+      <div style={{
+        border: "1.5px solid #1a3a6e",
+        padding: "6px 8px",
+        marginBottom: "5px",
+        display: "flex",
+        alignItems: "center",
+        gap: "10px",
+      }}>
+        {/* Logo */}
+        <div style={{ width: "64px", height: "64px", flexShrink: 0 }}>
+          {etab.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={etab.logoUrl}
+              alt={`Logo ${etab.nomLigne2}`}
+              style={{ width: "64px", height: "64px", objectFit: "contain" }}
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = "none";
+                (e.target as HTMLImageElement).nextElementSibling?.removeAttribute("style");
+              }}
+            />
+          ) : (
+            <LogoPlaceholder />
+          )}
+        </div>
 
-function buildComportementItems(attitudes: any[], behavior: any): ComportementItem[] {
-  return attitudes.map((att: any, i: number) => ({  // +1 map (implicit for)
-    label: att.label,
-    oui:   resolveAttitudeOui(behavior, att.id),
-    col:   ((i % 3) + 1) as 1 | 2 | 3,
-  }))
-}
+        {/* Titre central */}
+        <div style={{ flex: 1, textAlign: "center" }}>
+          <div style={{ fontSize: "7pt", color: "#1a3a6e", fontWeight: "bold", letterSpacing: "3px", textTransform: "uppercase" }}>
+            {etab.nomLigne1}
+          </div>
+          <div style={{ fontSize: "14pt", fontWeight: "bold", color: "#1a3a6e", letterSpacing: "4px" }}>
+            {etab.nomLigne2}
+          </div>
+          <div style={{
+            fontSize: "15pt", fontWeight: "bold", color: "#000", letterSpacing: "3px",
+            borderTop: "1.5px solid #1a3a6e", borderBottom: "1.5px solid #1a3a6e",
+            margin: "4px 0", padding: "3px 0",
+          }}>
+            BULLETIN SCOLAIRE
+          </div>
+          <div style={{ fontSize: "6.5pt", color: "#555", letterSpacing: "1px" }}>
+            Année Scolaire : {data.anneeScolaire}&nbsp;·&nbsp;{data.periode}
+          </div>
+        </div>
 
-function buildComportement(behavior: any, attitudes: any[]) {
-  return {
-    absences:        behavior?.absences       != null ? String(behavior.absences)       : '—',
-    retards:         behavior?.retards         != null ? String(behavior.retards)         : '—',
-    devoirsNonRemis: behavior?.devoirsManques  != null ? String(behavior.devoirsManques)  : '—',
-    leconsNonSues:   '—',
-    items:           buildComportementItems(attitudes, behavior),
-    pointsForts:     behavior?.pointsForts ?? '',
-    defis:           behavior?.defis        ?? '',
-    remarque:        behavior?.remarque     ?? '',
-  }
-}
+        {/* Photo élève */}
+        <div style={{
+          width: "60px", height: "72px",
+          border: "1px solid #999",
+          flexShrink: 0,
+          overflow: "hidden",
+        }}>
+          {data.photoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={data.photoUrl}
+              alt="Photo élève"
+              style={{ width: "60px", height: "72px", objectFit: "cover" }}
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = "none";
+              }}
+            />
+          ) : (
+            <PhotoPlaceholder />
+          )}
+        </div>
+      </div>
 
-// ── Fonction principale ───────────────────────────────────────────────────────
-// Cognitive complexity is now ≤ 5 : only the Promise.all orchestration remains.
+      {/* ══════════════════════════════════════════════════════════════
+          INFORMATIONS ÉLÈVE
+      ══════════════════════════════════════════════════════════════ */}
+      <div style={{
+        border: "1px solid #bbb",
+        padding: "4px 8px",
+        marginBottom: "5px",
+        background: "#f9f9f9",
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr",
+        gap: "3px 24px",
+        fontSize: "8pt",
+      }}>
+        <div><span style={S.lbl}>Prénom(s) :</span> <span style={S.val}>{data.prenoms}</span></div>
+        <div><span style={S.lbl}>Niveau :</span> {data.niveau}</div>
+        <div><span style={S.lbl}>Nom :</span> <span style={{ ...S.val, textTransform: "uppercase" }}>{data.nom}</span></div>
+        <div><span style={S.lbl}>Filière :</span> {data.filiere || "–"}</div>
+        <div><span style={S.lbl}>Sexe :</span> {data.sexe}</div>
+        <div><span style={S.lbl}>Date de naissance :</span> {data.dateNaissance}</div>
+        <div><span style={S.lbl}>Code élève :</span> <span style={S.mono}>{data.code}</span></div>
+        <div><span style={S.lbl}>NISU :</span> <span style={S.mono}>{data.nisu}</span></div>
+      </div>
 
-export async function buildBulletinData(params: {
-  enrollmentId:   string
-  studentId:      string
-  classSessionId: string
-  stepId:         string
-  stepName:       string
-  className:      string
-  yearId:         string
-}): Promise<BulletinData> {
-  const { enrollmentId, studentId, classSessionId, stepId, stepName, className, yearId } = params
+      {/* ══════════════════════════════════════════════════════════════
+          3 RUBRIQUES
+      ══════════════════════════════════════════════════════════════ */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "4px", marginBottom: "5px" }}>
+        <RubriqueTable
+          name={data.rubrique1Name}
+          poids={data.rubrique1Poids}
+          entries={data.rubrique1}
+          moy={data.moyR1}
+        />
+        <RubriqueTable
+          name={data.rubrique2Name}
+          poids={data.rubrique2Poids}
+          entries={data.rubrique2}
+          moy={data.moyR2}
+        />
+        <RubriqueTable
+          name={data.rubrique3Name}
+          poids={data.rubrique3Poids}
+          entries={data.rubrique3}
+          moy={data.moyR3}
+        />
+      </div>
 
-  // 1. Fetch all data in parallel
-  const [student, classSubjects, allGrades, behaviorRaw, attitudesRaw] = await Promise.all([
-    apiFetch<any>(`/api/students/${studentId}`),
-    fetchClassSubjects(classSessionId),
-    apiFetch<any[]>(`/api/grades/enrollment/${enrollmentId}?stepId=${stepId}`),
-    safeFetch<any>(`/api/behaviors?enrollmentId=${enrollmentId}&stepId=${stepId}`, null),
-    safeFetch<any[]>(`/api/attitudes?academicYearId=${yearId}`, []),
-  ])
+      {/* ══════════════════════════════════════════════════════════════
+          MOYENNE DE L'ÉTAPE
+      ══════════════════════════════════════════════════════════════ */}
+      <div style={{
+        border: "1.5px solid #1a3a6e",
+        background: "#eef2f8",
+        padding: "5px 12px",
+        marginBottom: "5px",
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr 1fr",
+        alignItems: "center",
+        gap: "24px",
+      }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+          <span style={{ fontSize: "7pt", fontWeight: "bold", color: "#1a3a6e" }}>Moyenne de l'étape</span>
+          <span style={{ fontSize: "13pt", fontWeight: "bold", color: "#c0392b" }}>{data.moyenneEtape}</span>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+          <span style={{ fontSize: "7pt", fontWeight: "bold", color: "#1a3a6e" }}>Appréciation</span>
+          <span style={{ fontSize: "13pt", fontWeight: "bold", color: "#c0392b" }}>{data.appreciation}</span>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+          <span style={{ fontSize: "7pt", fontWeight: "bold", color: "#1a3a6e" }}>Moyenne classe sur 10</span>
+          <span style={{ fontSize: "11pt", fontWeight: "bold", color: "#444" }}>{data.moyenneClasse}</span>
+        </div>
+      </div>
 
-  // 2. Normalize
-  const behavior  = normalizeBehavior(behaviorRaw)
-  const attitudes = normalizeAttitudes(attitudesRaw)
+      {/* ══════════════════════════════════════════════════════════════
+          COMPORTEMENT
+      ══════════════════════════════════════════════════════════════ */}
+      <div style={{ border: "1px solid #aaa", padding: "4px 6px", marginBottom: "5px" }}>
+        <div style={{ fontWeight: "bold", fontSize: "8pt", textDecoration: "underline", marginBottom: "4px" }}>
+          Difficultés de comportement et / ou d'apprentissage
+        </div>
 
-  // 3. Build grade index
-  const gradeIndex = buildGradeIndex(allGrades)
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "2px 8px", fontSize: "7pt" }}>
+          {/* Colonne 1 */}
+          <div>
+            {col1.map((item, i) => (
+              <div key={i} style={S.compRow}>
+                <span style={{ flex: 1 }}>{item.label}</span>
+                <span style={S.oiNon}>
+                  OUI <CB checked={item.oui === true} />
+                  NON <CB checked={item.oui === false} />
+                </span>
+              </div>
+            ))}
+          </div>
+          {/* Colonne 2 */}
+          <div>
+            {col2.map((item, i) => (
+              <div key={i} style={S.compRow}>
+                <span style={{ flex: 1 }}>{item.label}</span>
+                <span style={S.oiNon}>
+                  OUI <CB checked={item.oui === true} />
+                  NON <CB checked={item.oui === false} />
+                </span>
+              </div>
+            ))}
+          </div>
+          {/* Colonne 3 */}
+          <div>
+            {col3.map((item, i) => (
+              <div key={i} style={S.compRow}>
+                <span style={{ flex: 1 }}>{item.label}</span>
+                <span style={S.oiNon}>
+                  OUI <CB checked={item.oui === true} />
+                  NON <CB checked={item.oui === false} />
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
 
-  // 4. Build rubriques
-  const { r1, r1Name, r2, r2Name, r3, r3Name } = buildRubriques(classSubjects, gradeIndex)
+        {/* Absences / retards */}
+        <div style={{
+          display: "grid", gridTemplateColumns: "1fr 1fr 1fr",
+          gap: "2px 8px", marginTop: "5px",
+          borderTop: "1px solid #ddd", paddingTop: "3px",
+          fontSize: "7pt",
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span>Nbre d'absences</span>
+            <span style={{ fontWeight: "bold", color: "#c0392b", minWidth: "20px" }}>{comp.absences}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span>Nbre de devoirs non remis</span>
+            <span style={{ fontWeight: "bold", color: "#c0392b", minWidth: "20px" }}>{comp.devoirsNonRemis}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span>Respect des prescrits de l'uniforme</span>
+            <span style={{ fontWeight: "bold", color: "#c0392b", minWidth: "20px" }}>{comp.uniforme}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span>Nbre de retards</span>
+            <span style={{ fontWeight: "bold", color: "#c0392b", minWidth: "20px" }}>{comp.retards}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span>Nbre de leçons non sues</span>
+            <span style={{ fontWeight: "bold", color: "#c0392b", minWidth: "20px" }}>{comp.leconsNonSues}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span>Discipline</span>
+            <span style={{ fontWeight: "bold", color: "#c0392b", minWidth: "20px" }}>{comp.discipline}</span>
+          </div>
+        </div>
+      </div>
 
-  // 5. Compute averages (BR-001 weights)
-  const moyR1    = rubriqueAvg(r1)
-  const moyR2    = rubriqueAvg(r2)
-  const moyR3    = rubriqueAvg(r3)
-  const finalAvg = ((moyR1 ?? 0) * 0.70) + ((moyR2 ?? 0) * 0.25) + ((moyR3 ?? 0) * 0.05)
+      {/* ══════════════════════════════════════════════════════════════
+          POINTS FORTS / REMARQUE
+      ══════════════════════════════════════════════════════════════ */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px", marginBottom: "5px" }}>
+        {/* Points forts / Défis */}
+        <div style={{ border: "1px solid #aaa", padding: "4px", minHeight: "45px" }}>
+          <div style={{ fontWeight: "bold", fontSize: "7.5pt", textDecoration: "underline", marginBottom: "3px" }}>
+            Points forts et / ou défis à relever
+          </div>
+          <div style={{ fontWeight: "bold", fontSize: "7.5pt", color: "#1a3a6e", marginBottom: "8px" }}>
+            Point(s) fort(s) :
+          </div>
+          <div style={{ borderBottom: "1px solid #ddd", minHeight: "16px", marginBottom: "4px" }}>
+            {comp.pointsForts}
+          </div>
+          <div style={{ fontWeight: "bold", fontSize: "7.5pt", color: "#c0392b", marginBottom: "4px" }}>
+            Défi(s) à relever :
+          </div>
+          <div style={{ borderBottom: "1px solid #ddd", minHeight: "16px" }}>
+            {comp.defis}
+          </div>
+        </div>
 
-  // 6. Build comportement block
-  const comportement = buildComportement(behavior, attitudes)
+        {/* Remarque */}
+        <div style={{ border: "1px solid #aaa", padding: "4px", minHeight: "45px" }}>
+          <div style={{ fontWeight: "bold", fontSize: "7.5pt", textDecoration: "underline", marginBottom: "3px" }}>
+            Remarque
+          </div>
+          <div style={{ fontSize: "7.5pt", minHeight: "36px" }}>
+            {comp.remarque}
+          </div>
+        </div>
+      </div>
 
-  return {
-    prenoms:       student?.user?.firstname ?? '',
-    nom:           student?.user?.lastname  ?? '',
-    sexe:          student?.user?.gender    ?? '—',
-    niveau:        className,
-    filiere:       student?.filiere         ?? '—',
-    dateNaissance: formatDate(student?.user?.birth_date ?? student?.user?.birthDate ?? ''),
-    anneeScolaire: `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`,
-    periode:       stepName,
-    code:          student?.studentCode ?? '',
-    nisu:          student?.nisu        ?? '',
-    photoUrl:      student?.user?.profilePhoto ?? undefined,
+      {/* ══════════════════════════════════════════════════════════════
+          FOOTER : Légende + Signatures
+      ══════════════════════════════════════════════════════════════ */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "1fr auto",
+        gap: "16px",
+        borderTop: "1px solid #333",
+        paddingTop: "6px",
+        alignItems: "start",
+      }}>
+        {/* Légende + Adresse établissement */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+          <div style={{ fontSize: "6.5pt", lineHeight: 1.7 }}>
+            <span style={{ fontWeight: "bold" }}>Légende : </span>
+            90-100 : A+ Excellent &nbsp;|&nbsp;
+            85-89 : A Excellent &nbsp;|&nbsp;
+            78-84 : B+ Très bien &nbsp;|&nbsp;
+            75-77 : B Très bien &nbsp;|&nbsp;
+            69-74 : C+ Bien &nbsp;|&nbsp;
+            <span style={{ color: "#2c6e2e", fontWeight: "bold" }}>60-68 : C Assez bien</span> &nbsp;|&nbsp;
+            <span style={{ color: "#cc6600", fontWeight: "bold" }}>51-59 : D Déficient</span> &nbsp;|&nbsp;
+            <span style={{ color: "#c0392b", fontWeight: "bold" }}>≤50 : E Échec</span>
+            <br />
+            <span style={{ fontWeight: "bold" }}>Seuil de promotion :</span> 7.00 / 10
+            &nbsp;—&nbsp;
+            <span style={{ fontWeight: "bold" }}>Formule :</span> 70% R1 + 25% R2 + 5% R3
+          </div>
+          <div style={{ fontSize: "6pt", color: "#555", lineHeight: 1.6 }}>
+            {etab.adresse}&nbsp;|&nbsp;Tél : {etab.telephone}&nbsp;|&nbsp;{etab.email}
+          </div>
+        </div>
 
-    rubrique1Name:  r1Name,
-    rubrique1Poids: '70%',
-    rubrique1:      r1,
-    moyR1,
+        {/* Signatures */}
+        <div style={{
+          display: "flex", flexDirection: "column",
+          justifyContent: "space-evenly",
+          gap: "20px", padding: "4px 0", minHeight: "60px",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "7pt" }}>
+            <span style={{ fontWeight: "bold", whiteSpace: "nowrap", minWidth: "130px" }}>Signature Direction :</span>
+            <span style={{ flex: 1, borderBottom: "1px solid #333", display: "block", height: "18px", minWidth: "80px" }}></span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "7pt" }}>
+            <span style={{ fontWeight: "bold", whiteSpace: "nowrap", minWidth: "130px" }}>Signature Parent :</span>
+            <span style={{ flex: 1, borderBottom: "1px solid #333", display: "block", height: "18px", minWidth: "80px" }}></span>
+          </div>
+        </div>
+      </div>
 
-    rubrique2Name:  r2Name,
-    rubrique2Poids: '25%',
-    rubrique2:      r2,
-    moyR2,
-
-    rubrique3Name:  r3Name,
-    rubrique3Poids: '5%',
-    rubrique3:      r3,
-    moyR3,
-
-    moyenneEtape:  finalAvg.toFixed(2),
-    appreciation:  getAppreciation(finalAvg),
-    moyenneClasse: '—',
-
-    comportement,
-
-    etablissement: {
-      nomLigne1: 'Cours Privé Mixte',
-      nomLigne2: 'SAINT LÉONARD',
-      adresse:   'Delmas, Angle 47 & 41 #10',
-      telephone: '2813-1205 / 2264-2081 / 4893-3367',
-      email:     'information@stleonard.ht',
-      logoUrl:   '/test.jpeg',
-    },
-  }
+    </div>
+  );
 }

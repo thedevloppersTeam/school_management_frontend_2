@@ -23,20 +23,20 @@ import {
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface EnrollmentRow {
-  enrollmentId: string
-  studentId: string
-  studentCode: string
-  nisu: string
-  firstname: string
-  lastname: string
+  enrollmentId:   string
+  studentId:      string
+  studentCode:    string
+  nisu:           string
+  firstname:      string
+  lastname:       string
   classSessionId: string
-  className: string
-  status: string
+  className:      string
+  status:         string
 }
 
 interface CPMSLBulletinsSectionProps {
   academicYearId: string
-  isArchived?: boolean
+  isArchived?:    boolean
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -51,6 +51,27 @@ async function apiFetch<T>(url: string): Promise<T> {
   return res.json()
 }
 
+// ── Helper archive silencieux ─────────────────────────────────────────────────
+
+async function archiveBulletin(params: {
+  enrollmentId:     string
+  stepId:           string
+  source:           'individual' | 'batch'
+  bulletinSnapshot: BulletinData
+  isCorrection:     boolean
+}) {
+  try {
+    await fetch('/api/bulletin-archives/create', {
+      method:      'POST',
+      credentials: 'include',
+      headers:     { 'Content-Type': 'application/json' },
+      body:        JSON.stringify(params),
+    })
+  } catch (err) {
+    console.error('[archive lot] échec silencieux:', err)
+  }
+}
+
 // ── Composant ─────────────────────────────────────────────────────────────────
 
 export function CPMSLBulletinsSection({
@@ -58,24 +79,24 @@ export function CPMSLBulletinsSection({
   isArchived = false,
 }: CPMSLBulletinsSectionProps) {
   // ── Données ──────────────────────────────────────────────────────────────────
-  const [steps, setSteps]             = useState<AcademicYearStep[]>([])
-  const [sessions, setSessions]       = useState<ClassSession[]>([])
+  const [steps,       setSteps]       = useState<AcademicYearStep[]>([])
+  const [sessions,    setSessions]    = useState<ClassSession[]>([])
   const [enrollments, setEnrollments] = useState<EnrollmentRow[]>([])
-  const [loadingInit, setLoadingInit]         = useState(true)
+  const [loadingInit,     setLoadingInit]     = useState(true)
   const [loadingStudents, setLoadingStudents] = useState(false)
 
   // ── Sélections ───────────────────────────────────────────────────────────────
-  const [selectedStep, setSelectedStep]       = useState("")
+  const [selectedStep,    setSelectedStep]    = useState("")
   const [selectedSession, setSelectedSession] = useState("")
 
   // ── PDF Generator ─────────────────────────────────────────────────────────────
-  const [pdfOpen, setPdfOpen]       = useState(false)
+  const [pdfOpen,    setPdfOpen]    = useState(false)
   const [pdfStudent, setPdfStudent] = useState<EnrollmentRow | null>(null)
 
   // ── Génération en lot ──────────────────────────────────────────────────────
   const [generatingLot, setGeneratingLot] = useState(false)
-  const [lotProgress, setLotProgress]     = useState({ current: 0, total: 0 })
-  const [lotData, setLotData]             = useState<BulletinData | null>(null)
+  const [lotProgress,   setLotProgress]   = useState({ current: 0, total: 0 })
+  const [lotData,       setLotData]       = useState<BulletinData | null>(null)
   const lotRef = useRef<HTMLDivElement>(null)
 
   // ── Chargement initial ────────────────────────────────────────────────────────
@@ -160,6 +181,7 @@ export function CPMSLBulletinsSection({
       const pdf         = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
       const stepObj     = steps.find(s => s.id === selectedStep)
       const stepName    = stepObj?.name ?? 'etape'
+      const isCorrection = !(stepObj?.isCurrent ?? true)
       const sessionObj  = sessions.find(s => s.id === selectedSession)
       const className   = sessionObj ? getClassSessionName(sessionObj) : 'classe'
 
@@ -167,7 +189,6 @@ export function CPMSLBulletinsSection({
         const student = eligible[i]
         setLotProgress({ current: i + 1, total: eligible.length })
 
-        // Construire les données bulletin avec yearId pour behavior + attitudes
         const data = await buildBulletinData({
           enrollmentId:   student.enrollmentId,
           studentId:      student.studentId,
@@ -178,7 +199,7 @@ export function CPMSLBulletinsSection({
           yearId:         academicYearId,
         })
 
-        // Afficher dans le div caché
+        // Afficher dans le div caché pour capture
         setLotData(data)
         await new Promise(r => setTimeout(r, 600))
 
@@ -206,6 +227,15 @@ export function CPMSLBulletinsSection({
           heightLeft -= pageHeight
           position   -= pageHeight
         }
+
+        // ── REQ-F-007 : archiver chaque bulletin après génération ─────────
+        await archiveBulletin({
+          enrollmentId:     student.enrollmentId,
+          stepId:           selectedStep,
+          source:           'batch',
+          bulletinSnapshot: data,
+          isCorrection,
+        })
       }
 
       pdf.save(`bulletins_lot_${className}_${stepName}_${new Date().toISOString().slice(0, 10)}.pdf`)
@@ -283,10 +313,10 @@ export function CPMSLBulletinsSection({
           {/* KPIs + bouton lot */}
           <div className="flex flex-col gap-4">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <StatCard label="Élèves"          value={enrollments.length} icon={AlertCircleIcon} iconBgColor="#F0F4F7" iconColor="#5A7085" />
-              <StatCard label="NISU valides"    value={withNisu.length}    icon={CheckCircleIcon}  iconBgColor="#E8F5EC" iconColor="#2D7D46" />
-              <StatCard label="NISU manquants"  value={withoutNisu.length} icon={AlertTriangleIcon} iconBgColor="#FEF6E0" iconColor="#C48B1A" />
-              <StatCard label="Étape"           value={selectedStepObj?.name || '—'} icon={FileTextIcon} iconBgColor="#E3EFF9" iconColor="#2B6CB0" />
+              <StatCard label="Élèves"         value={enrollments.length}        icon={AlertCircleIcon}  iconBgColor="#F0F4F7" iconColor="#5A7085" />
+              <StatCard label="NISU valides"   value={withNisu.length}           icon={CheckCircleIcon}  iconBgColor="#E8F5EC" iconColor="#2D7D46" />
+              <StatCard label="NISU manquants" value={withoutNisu.length}        icon={AlertTriangleIcon} iconBgColor="#FEF6E0" iconColor="#C48B1A" />
+              <StatCard label="Étape"          value={selectedStepObj?.name || '—'} icon={FileTextIcon}  iconBgColor="#E3EFF9" iconColor="#2B6CB0" />
             </div>
 
             <div className="flex items-center gap-4">
@@ -431,6 +461,7 @@ export function CPMSLBulletinsSection({
           className={pdfStudent.className}
           enrollmentId={pdfStudent.enrollmentId}
           yearId={academicYearId}
+          stepIsCurrent={selectedStepObj.isCurrent}
         />
       )}
     </div>

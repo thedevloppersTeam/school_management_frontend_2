@@ -3,8 +3,10 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { Loader2, Download, Eye, Printer } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Loader2, Download, Eye, Printer, AlertTriangle } from "lucide-react"
 import { toast } from "sonner"
 import html2canvas from "html2canvas"
 import jsPDF from "jspdf"
@@ -14,17 +16,42 @@ import BulletinScolaire, { type BulletinData } from "./BulletinScolaire"
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface BulletinPDFGeneratorProps {
-  open:           boolean
-  onOpenChange:   (open: boolean) => void
-  studentId:      string
-  studentName:    string
-  classSessionId: string
-  stepId:         string
-  stepName:       string
-  className:      string
-  enrollmentId:   string
-  yearId:         string   // ← nouveau : pour charger attitudes + behavior
-  onDownload?:    () => void
+  open:             boolean
+  onOpenChange:     (open: boolean) => void
+  studentId:        string
+  studentName:      string
+  classSessionId:   string
+  stepId:           string
+  stepName:         string
+  className:        string
+  enrollmentId:     string
+  yearId:           string
+  stepIsCurrent?:   boolean    // Phase 2 — détecte si correction post-clôture
+  snapshotData?:    BulletinData  // Phase 4 — régénération depuis archive
+  onDownload?:      () => void
+}
+
+// ── Helper archive ────────────────────────────────────────────────────────────
+
+async function archiveBulletin(params: {
+  enrollmentId:    string
+  stepId:          string
+  source:          'individual' | 'batch'
+  bulletinSnapshot: BulletinData
+  isCorrection:    boolean
+  auditNote?:      string
+}) {
+  try {
+    await fetch('/api/bulletin-archives/create', {
+      method:      'POST',
+      credentials: 'include',
+      headers:     { 'Content-Type': 'application/json' },
+      body:        JSON.stringify(params),
+    })
+  } catch (err) {
+    // Silencieux — l'archivage ne bloque jamais la génération
+    console.error('[archive] échec silencieux:', err)
+  }
 }
 
 // ── Composant ─────────────────────────────────────────────────────────────────
@@ -40,6 +67,8 @@ export function BulletinPDFGenerator({
   className,
   enrollmentId,
   yearId,
+  stepIsCurrent = true,
+  snapshotData,
   onDownload,
 }: Readonly<BulletinPDFGeneratorProps>) {
   const [loading,      setLoading]      = useState(false)
@@ -48,10 +77,26 @@ export function BulletinPDFGenerator({
   const [hasFetched,   setHasFetched]   = useState(false)
   const bulletinRef = useRef<HTMLDivElement>(null)
 
+  // ── REQ-F-010 : modal audit note pour correction post-clôture ─────────────
+  const [auditModalOpen,  setAuditModalOpen]  = useState(false)
+  const [auditNote,       setAuditNote]       = useState("")
+  const [auditSubmitting, setAuditSubmitting] = useState(false)
+
+  // isCorrection = vrai si l'étape n'est plus active (clôturée puis réouverte)
+  const isCorrection = !stepIsCurrent
+
   // ── Construction des données ────────────────────────────────────────────────
 
   const fetchBulletinData = useCallback(async () => {
     if (!open || hasFetched) return
+
+    // Phase 4 — si un snapshot est fourni, on l'utilise directement
+    if (snapshotData) {
+      setBulletinData(snapshotData)
+      setHasFetched(true)
+      return
+    }
+
     setLoading(true)
     try {
       const data = await buildBulletinData({
@@ -71,7 +116,7 @@ export function BulletinPDFGenerator({
     } finally {
       setLoading(false)
     }
-  }, [open, hasFetched, studentId, enrollmentId, classSessionId, stepId, studentName, className, stepName, yearId])
+  }, [open, hasFetched, studentId, enrollmentId, classSessionId, stepId, studentName, className, stepName, yearId, snapshotData])
 
   // ── PDF generation ─────────────────────────────────────────────────────────
 
@@ -91,8 +136,10 @@ export function BulletinPDFGenerator({
     return clone
   }
 
-  const generatePDFFromHTML = async () => {
-    if (!bulletinRef.current) { toast.error("Le bulletin n'est pas encore chargé"); return }
+  // ── Génération effective + archivage ──────────────────────────────────────
+
+  const doGeneratePDF = async (note?: string) => {
+    if (!bulletinRef.current || !bulletinData) return
     setGenerating(true)
     try {
       const tempContainer = document.createElement('div')
@@ -133,8 +180,20 @@ export function BulletinPDFGenerator({
         heightLeft -= pageHeight
       }
 
-      pdf.save(`bulletin_${bulletinData?.nom ?? studentName}_${stepName}.pdf`)
+      pdf.save(`bulletin_${bulletinData.nom ?? studentName}_${stepName}.pdf`)
       toast.success("Bulletin téléchargé avec succès")
+
+      // ── REQ-F-007 : archiver après génération ─────────────────────────
+      // Silencieux — ne bloque jamais le téléchargement
+      await archiveBulletin({
+        enrollmentId,
+        stepId,
+        source:           'individual',
+        bulletinSnapshot: bulletinData,
+        isCorrection,
+        auditNote:        note,
+      })
+
       if (onDownload) onDownload()
     } catch (error) {
       console.error('[BulletinPDFGenerator] generatePDF:', error)
@@ -142,6 +201,32 @@ export function BulletinPDFGenerator({
     } finally {
       setGenerating(false)
     }
+  }
+
+  // ── Point d'entrée génération — détecte correction ────────────────────────
+
+  const generatePDFFromHTML = async () => {
+    if (!bulletinRef.current) { toast.error("Le bulletin n'est pas encore chargé"); return }
+
+    // REQ-F-010 : si correction post-clôture → demander la raison avant de générer
+    if (isCorrection) {
+      setAuditNote("")
+      setAuditModalOpen(true)
+      return
+    }
+
+    await doGeneratePDF()
+  }
+
+  // ── Confirmation correction ───────────────────────────────────────────────
+
+  const handleConfirmCorrection = async () => {
+    if (!auditNote.trim()) return
+    setAuditSubmitting(true)
+    setAuditModalOpen(false)
+    await doGeneratePDF(auditNote.trim())
+    setAuditSubmitting(false)
+    setAuditNote("")
   }
 
   // ── Impression ─────────────────────────────────────────────────────────────
@@ -207,56 +292,115 @@ export function BulletinPDFGenerator({
   // ── Rendu ──────────────────────────────────────────────────────────────────
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-5xl h-[90vh] flex flex-col overflow-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center justify-between">
-            <span>Bulletin de {studentName}</span>
-            <span className="text-sm font-normal text-muted-foreground">{className} — {stepName}</span>
-          </DialogTitle>
-          <DialogDescription>Consultez et générez le bulletin de l&apos;élève</DialogDescription>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
+        <DialogContent className="max-w-5xl h-[90vh] flex flex-col overflow-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between">
+              <span>Bulletin de {studentName}</span>
+              <span className="text-sm font-normal text-muted-foreground">{className} — {stepName}</span>
+            </DialogTitle>
+            <DialogDescription>Consultez et générez le bulletin de l&apos;élève</DialogDescription>
+          </DialogHeader>
 
-        <div className="flex-1 min-h-0 overflow-auto">
-          {loading ? (
-            <div className="flex items-center justify-center h-full">
-              <Loader2 className="h-8 w-8 animate-spin" />
-            </div>
-          ) : bulletinData ? (
-            <div ref={bulletinRef} style={{ backgroundColor: 'white', borderRadius: '8px' }}>
-              <BulletinScolaire data={bulletinData} />
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full text-center">
-              <p className="text-muted-foreground">Aucune donnée disponible</p>
+          {/* Bannière correction post-clôture */}
+          {isCorrection && (
+            <div className="flex items-center gap-3 rounded-lg p-3"
+              style={{ backgroundColor: '#FEF6E0', border: '1px solid #C48B1A' }}>
+              <AlertTriangle className="h-4 w-4 flex-shrink-0" style={{ color: '#C48B1A' }} />
+              <p className="text-sm font-medium" style={{ color: '#C48B1A' }}>
+                Étape clôturée — ce bulletin sera enregistré comme correction (v2+)
+              </p>
             </div>
           )}
-        </div>
 
-        <div className="flex justify-between items-center pt-4 border-t">
-          <div className="flex gap-2">
-            {bulletinData && !generating && (
-              <>
-                <Button onClick={generatePDFFromHTML} style={{ backgroundColor: '#2C4A6E', color: 'white' }} disabled={generating}>
-                  <Download className="mr-2 h-4 w-4" /> Télécharger PDF
-                </Button>
-                <Button variant="outline" onClick={handlePreview} disabled={generating}>
-                  <Eye className="mr-2 h-4 w-4" /> Prévisualiser
-                </Button>
-                <Button variant="outline" onClick={handlePrint} disabled={generating}>
-                  <Printer className="mr-2 h-4 w-4" /> Imprimer
-                </Button>
-              </>
-            )}
-            {generating && (
-              <Button disabled>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Génération en cours...
-              </Button>
+          <div className="flex-1 min-h-0 overflow-auto">
+            {loading ? (
+              <div className="flex items-center justify-center h-full">
+                <Loader2 className="h-8 w-8 animate-spin" />
+              </div>
+            ) : bulletinData ? (
+              <div ref={bulletinRef} style={{ backgroundColor: 'white', borderRadius: '8px' }}>
+                <BulletinScolaire data={bulletinData} />
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full text-center">
+                <p className="text-muted-foreground">Aucune donnée disponible</p>
+              </div>
             )}
           </div>
-          <Button variant="outline" onClick={() => handleOpenChange(false)}>Fermer</Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+
+          <div className="flex justify-between items-center pt-4 border-t">
+            <div className="flex gap-2">
+              {bulletinData && !generating && (
+                <>
+                  <Button onClick={generatePDFFromHTML} style={{ backgroundColor: '#2C4A6E', color: 'white' }} disabled={generating}>
+                    <Download className="mr-2 h-4 w-4" /> Télécharger PDF
+                  </Button>
+                  <Button variant="outline" onClick={handlePreview} disabled={generating}>
+                    <Eye className="mr-2 h-4 w-4" /> Prévisualiser
+                  </Button>
+                  <Button variant="outline" onClick={handlePrint} disabled={generating}>
+                    <Printer className="mr-2 h-4 w-4" /> Imprimer
+                  </Button>
+                </>
+              )}
+              {generating && (
+                <Button disabled>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Génération en cours...
+                </Button>
+              )}
+            </div>
+            <Button variant="outline" onClick={() => handleOpenChange(false)}>Fermer</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Modal audit note — REQ-F-010 ────────────────────────────────── */}
+      <Dialog open={auditModalOpen} onOpenChange={setAuditModalOpen}>
+        <DialogContent style={{ backgroundColor: 'white', borderRadius: '12px', maxWidth: '480px' }}>
+          <DialogHeader>
+            <DialogTitle className="font-serif" style={{ fontSize: '20px', fontWeight: 700, color: '#2A3740' }}>
+              Correction post-clôture
+            </DialogTitle>
+            <DialogDescription>
+              Une version précédente de ce bulletin existe déjà. Ceci créera une nouvelle version.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="rounded-lg p-3" style={{ backgroundColor: '#FEF6E0', border: '1px solid #C48B1A', fontSize: '13px', color: '#92400E' }}>
+              La version précédente sera conservée dans l&apos;historique.
+            </div>
+            <div className="space-y-2">
+              <Label className="font-sans" style={{ fontSize: '13px', fontWeight: 500 }}>
+                Raison de la correction <span className="text-destructive">*</span>
+              </Label>
+              <Textarea
+                placeholder="Ex: Erreur de saisie en Mathématiques, note corrigée de 6.5 à 7.0"
+                value={auditNote}
+                onChange={e => setAuditNote(e.target.value)}
+                rows={3}
+                style={{ borderColor: '#D1CECC', fontSize: '13px' }}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAuditModalOpen(false)}>
+              Annuler
+            </Button>
+            <Button
+              onClick={handleConfirmCorrection}
+              disabled={!auditNote.trim() || auditSubmitting}
+              style={{ backgroundColor: !auditNote.trim() ? '#9CA3AF' : '#2C4A6E', color: 'white' }}
+            >
+              {auditSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Confirmer et générer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
