@@ -84,12 +84,14 @@ export function CPMSLCalendarManagement({ holidays, events, onAddHoliday, onEdit
 
   const getEventTypeBadge = (type: SchoolEvent['type']) => {
     const styles = {
-      ceremony: { label: 'Cérémonie', bg: '#F0EBDF', color: '#7A6E50' },
-      meeting: { label: 'Réunion', bg: '#E3EFF9', color: '#2B6CB0' },
-      trip: { label: 'Sortie', bg: '#E8F5EC', color: '#2D7D46' },
-      other: { label: 'Autre', bg: '#F5F4F2', color: '#5C5955' }
-    }
-    const style = styles[type]
+  ceremony: { label: 'Cérémonie', bg: '#E3EFF9', color: '#2B6CB0' },
+  meeting:  { label: 'Réunion',   bg: '#FEF6E0', color: '#C48B1A' },
+  trip:     { label: 'Sortie',    bg: '#E8F5EC', color: '#2D7D46' },
+  other:    { label: 'Autre',     bg: '#F5F4F2', color: '#5C5955' },
+  exam:     { label: 'Examen',    bg: '#FDE8E8', color: '#C43C3C' },
+  holiday:  { label: 'Congé',     bg: '#F0F4F7', color: '#5A7085' },
+}
+    const style = styles[type as keyof typeof styles] ?? styles.other
     return <Badge className="border-0" style={{ backgroundColor: style.bg, color: style.color, fontSize: "11px", fontFamily: "var(--font-sans)", fontWeight: 500, borderRadius: "6px" }}>{style.label}</Badge>
   }
 

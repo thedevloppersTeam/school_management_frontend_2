@@ -5,11 +5,12 @@ import { backendFetch } from '@/lib/backend'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { enrollmentId: string; stepId: string } }
+  { params }: { params: Promise<{ enrollmentId: string; stepId: string }> }
 ) {
+  const { enrollmentId, stepId } = await params
   return backendFetch(
     request,
-    `/api/bulletin-archives/${params.enrollmentId}/${params.stepId}`,
+    `/api/bulletin-archives/${enrollmentId}/${stepId}`,
     'GET'
   )
 }

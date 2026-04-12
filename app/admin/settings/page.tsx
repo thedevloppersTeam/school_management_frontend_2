@@ -22,7 +22,7 @@ import { PlusIcon, ChevronRightIcon, ChevronDownIcon, CheckCircle2Icon, ZapIcon,
 
 interface SchoolInfo  { name: string; motto?: string; foundedYear?: number; logo?: string; address?: string; phone?: string; email?: string }
 interface Holiday     { id: string; name: string; date: string }
-interface SchoolEvent { id: string; title: string; date: string; type: 'exam'|'holiday'|'meeting'|'other'; academicYearId: string }
+interface SchoolEvent { id: string; title: string; date: string; type: 'exam'|'holiday'|'meeting'|'other'|'ceremony'; academicYearId: string }
 interface Rubric      { id: string; name: string; code: string; description?: string }
 interface Section     { id: string; name: string; code: string; maxScore: number; displayOrder: number }
 interface Subject     { id: string; name: string; code: string; maxScore: number; coefficient: number; hasSections: boolean; rubricId?: string; rubric?: Rubric; sections?: Section[] }
