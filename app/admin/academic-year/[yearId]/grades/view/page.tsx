@@ -4,8 +4,11 @@ import { useState, useEffect, useCallback, useMemo } from "react"
 import { useParams } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
+import { LockIcon } from "lucide-react"
 import { fetchClassSessions, fetchSteps, type AcademicYearStep, type ClassSession } from "@/lib/api/dashboard"
 import { fetchClassSubjects, fetchEnrollments, type ApiClassSubject, type ApiEnrollment } from "@/lib/api/grades"
 import { parseDecimal } from "@/lib/decimal"
@@ -277,16 +280,14 @@ const [selectedStep,    setSelectedStep]    = useState(initialStepId)
     <div className="space-y-6">
 
       {/* Sélecteurs */}
-      <div style={{ backgroundColor: 'white', borderRadius: '10px', border: '1px solid #E8E6E3', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
-        <div style={{ padding: '20px 24px', borderBottom: '1px solid #E8E6E3' }}>
-          <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: '15px', fontWeight: 600, color: '#3A4A57' }}>
-            Sélection
-          </h3>
-        </div>
-        <div style={{ padding: '24px' }}>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4" style={{ maxWidth: '480px' }}>
+      <Card className="border bg-card shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-semibold">Sélection</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid max-w-lg grid-cols-1 gap-4 sm:grid-cols-2">
             <Select value={selectedSession} onValueChange={setSelectedSession}>
-              <SelectTrigger style={{ borderColor: '#D1CECC', borderRadius: '8px' }}>
+              <SelectTrigger>
                 <SelectValue placeholder="Sélectionner une classe" />
               </SelectTrigger>
               <SelectContent>
@@ -297,7 +298,7 @@ const [selectedStep,    setSelectedStep]    = useState(initialStepId)
             </Select>
 
             <Select value={selectedStep} onValueChange={setSelectedStep}>
-              <SelectTrigger style={{ borderColor: '#D1CECC', borderRadius: '8px' }}>
+              <SelectTrigger>
                 <SelectValue placeholder="Sélectionner une étape" />
               </SelectTrigger>
               <SelectContent>
@@ -307,29 +308,27 @@ const [selectedStep,    setSelectedStep]    = useState(initialStepId)
               </SelectContent>
             </Select>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Bannière étape clôturée */}
       {selectedStep && isLocked && (
-        <div className="rounded-lg p-4 flex items-center gap-3"
-          style={{ backgroundColor: '#FEF6E0', border: '1px solid #C48B1A' }}>
-          <svg className="h-5 w-5 flex-shrink-0" style={{ color: '#C48B1A' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-          </svg>
-          <p className="text-sm font-medium" style={{ color: '#C48B1A' }}>
-            Étape clôturée — consultation en lecture seule
-          </p>
-        </div>
+        <Alert className="border-amber-200 bg-amber-50 text-amber-900">
+          <LockIcon className="h-4 w-4 !text-amber-600" />
+          <AlertTitle>Étape clôturée</AlertTitle>
+          <AlertDescription>Consultation en lecture seule</AlertDescription>
+        </Alert>
       )}
 
       {/* État vide */}
       {(!selectedSession || !selectedStep) && (
-        <div style={{ backgroundColor: 'white', borderRadius: '10px', border: '1px solid #E8E6E3', padding: '48px 24px', textAlign: 'center' }}>
-          <p style={{ fontSize: '15px', fontWeight: 500, color: '#78756F' }}>
-            Sélectionnez une classe et une étape pour voir les notes
-          </p>
-        </div>
+        <Card className="border bg-card py-12 text-center shadow-sm">
+          <CardContent>
+            <p className="text-sm font-medium text-muted-foreground">
+              Sélectionnez une classe et une étape pour voir les notes
+            </p>
+          </CardContent>
+        </Card>
       )}
 
       {/* Contenu */}
@@ -341,27 +340,31 @@ const [selectedStep,    setSelectedStep]    = useState(initialStepId)
         ) : (
           <>
             {/* KPIs */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
               {[
-                { label: 'Élèves inscrits',  value: gradeRows.length,                                          bg: '#F0F4F7', color: '#2A3740' },
-                { label: 'Notes complètes',  value: completeCount,                                             bg: '#E8F5EC', color: '#2D7D46' },
-                { label: 'Notes manquantes', value: incompleteCount,                                           bg: '#FEF6E0', color: '#C48B1A' },
-                { label: 'Moyenne classe',   value: classAverage !== null ? classAverage.toFixed(2) : '—',    bg: '#E3EFF9', color: '#2B6CB0' },
+                { label: 'Élèves inscrits',  value: gradeRows.length },
+                { label: 'Notes complètes',  value: completeCount },
+                { label: 'Notes manquantes', value: incompleteCount },
+                { label: 'Moyenne classe',   value: classAverage !== null ? classAverage.toFixed(2) : '—' },
               ].map(kpi => (
-                <div key={kpi.label} style={{ backgroundColor: 'white', borderRadius: '10px', border: '1px solid #E8E6E3', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', padding: '16px 20px' }}>
-                  <p style={{ fontSize: '12px', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#78756F', marginBottom: '6px' }}>{kpi.label}</p>
-                  <p style={{ fontFamily: 'var(--font-serif)', fontSize: '26px', fontWeight: 700, color: kpi.color }}>{kpi.value}</p>
-                </div>
+                <Card key={kpi.label} className="border bg-card shadow-sm">
+                  <CardContent className="p-4">
+                    <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{kpi.label}</p>
+                    <p className="mt-1 text-2xl font-bold tracking-tight text-foreground">{kpi.value}</p>
+                  </CardContent>
+                </Card>
               ))}
             </div>
 
             {/* Tableau */}
             {gradeRows.length === 0 ? (
-              <div style={{ backgroundColor: 'white', borderRadius: '10px', border: '1px solid #E8E6E3', padding: '48px 24px', textAlign: 'center' }}>
-                <p style={{ fontSize: '15px', fontWeight: 500, color: '#78756F' }}>Aucun élève inscrit dans cette classe</p>
-              </div>
+              <Card className="border bg-card py-12 text-center shadow-sm">
+                <CardContent>
+                  <p className="text-sm font-medium text-muted-foreground">Aucun élève inscrit dans cette classe</p>
+                </CardContent>
+              </Card>
             ) : (
-              <div style={{ backgroundColor: 'white', borderRadius: '10px', border: '1px solid #E8E6E3', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', overflowX: 'auto' }}>
+              <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
                 <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: `${360 + classSubjects.length * 80}px` }}>
                   <thead>
                     {/* Ligne 1 — Rubriques */}

@@ -1,10 +1,17 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,13 +21,41 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb"
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar"
+import {
   LayoutDashboardIcon,
   CalendarIcon,
   LogOutIcon,
-  MenuIcon,
-  XIcon,
   BellIcon,
-  ChevronDownIcon,
+  ChevronRightIcon,
+  ChevronsUpDownIcon,
   UsersIcon,
   ClipboardEditIcon,
   FileTextIcon,
@@ -30,78 +65,104 @@ import {
   UserIcon,
   LockIcon,
   HelpCircleIcon,
-  PanelLeftCloseIcon,
-  PanelLeftOpenIcon,
-  ArchiveIcon
+  ArchiveIcon,
+  CheckIcon,
 } from "lucide-react"
 import { getMe, logout, type AuthUser } from "@/lib/data/auth-data"
 import { fetchActiveAcademicYear, type AcademicYear } from "@/lib/api/dashboard"
-import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import { NotificationPanel } from "@/components/school/notification-panel"
+import { ProfileDialog } from "@/components/school/profile-dialog"
 import { Toaster } from "@/components/ui/toaster"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
 
-interface NavItem {
+/* ─────────────────────────── Nav config ─────────────────────────── */
+
+interface NavChild {
   label: string
-  href?: string
+  href: string
   icon: React.ElementType
-  section?: string
-  children?: NavItem[]
 }
+
+interface NavGroup {
+  label: string
+  icon: React.ElementType
+  children: NavChild[]
+}
+
+interface NavLink {
+  label: string
+  href: string
+  icon: React.ElementType
+}
+
+type NavItem = NavLink | NavGroup
 
 const navItems: NavItem[] = [
   { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboardIcon },
   {
-    label: "GESTION SCOLAIRE",
-    section: "gestion",
+    label: "Gestion Scolaire",
     icon: SchoolIcon,
     children: [
-      { label: "Élèves",    href: "/admin/academic-year/:yearId/students", icon: UsersIcon },
-      { label: "Notes",     href: "/admin/academic-year/:yearId/grades",   icon: ClipboardEditIcon },
-      { label: "Bulletins", href: "/admin/academic-year/:yearId/reports",  icon: FileTextIcon },
+      { label: "Élèves", href: "/admin/academic-year/:yearId/students", icon: UsersIcon },
+      { label: "Notes", href: "/admin/academic-year/:yearId/grades", icon: ClipboardEditIcon },
+      { label: "Bulletins", href: "/admin/academic-year/:yearId/reports", icon: FileTextIcon },
     ],
   },
   {
-    label: "ARCHIVES",
-    section: "archives",
+    label: "Archives",
     icon: ArchiveIcon,
     children: [
       { label: "Bulletins archivés", href: "/admin/archives", icon: ArchiveIcon },
     ],
   },
   {
-    label: "PARAMÉTRAGE",
-    section: "params",
+    label: "Paramétrage",
     icon: SettingsIcon,
     children: [
-      { label: "Établissement",    href: "/admin/settings",        icon: BuildingIcon },
-      { label: "Années Scolaires", href: "/admin/academic-years",  icon: CalendarIcon },
+      { label: "Établissement", href: "/admin/settings", icon: BuildingIcon },
+      { label: "Années Scolaires", href: "/admin/academic-years", icon: CalendarIcon },
     ],
   },
 ]
 
-export default function AdminLayout({ children }: Readonly<{ children: React.ReactNode }>) {  const pathname = usePathname()
+function isNavGroup(item: NavItem): item is NavGroup {
+  return "children" in item
+}
+
+/* ────────────────────── Breadcrumb helper ────────────────────── */
+
+const breadcrumbMap: Record<string, string> = {
+  "/admin/dashboard": "Dashboard",
+  "/admin/academic-years": "Années Scolaires",
+  "/admin/settings": "Établissement",
+  "/admin/archives": "Bulletins archivés",
+}
+
+function getBreadcrumbLabel(pathname: string): string {
+  if (breadcrumbMap[pathname]) return breadcrumbMap[pathname]
+  if (pathname.includes("/students")) return "Élèves"
+  if (pathname.includes("/grades")) return "Notes"
+  if (pathname.includes("/reports")) return "Bulletins"
+  if (pathname.includes("/config")) return "Configuration"
+  return "Page"
+}
+
+/* ─────────────────────────── Layout ─────────────────────────── */
+
+export default function AdminLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const pathname = usePathname()
   const router = useRouter()
-  const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [notificationPanelOpen, setNotificationPanelOpen] = useState(false)
-  const notificationRef = useRef<HTMLDivElement>(null)
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null)
   const [authLoading, setAuthLoading] = useState(true)
   const [activeYear, setActiveYear] = useState<AcademicYear | null>(null)
   const [yearLoading, setYearLoading] = useState(true)
+  const [profileOpen, setProfileOpen] = useState(false)
 
-  // ── Auth guard ────────────────────────────────────────────────────────────
+  // ── Auth guard ──
   useEffect(() => {
-    getMe().then(user => {
+    getMe().then((user) => {
       if (!user) {
-        router.push('/login')
+        router.push("/login")
       } else {
         setCurrentUser(user)
         setAuthLoading(false)
@@ -109,46 +170,35 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
     })
   }, [router])
 
-  // ── Année active ──────────────────────────────────────────────────────────
+  // ── Année active ──
   useEffect(() => {
     fetchActiveAcademicYear()
-      .then(year => setActiveYear(year))
+      .then((year) => setActiveYear(year))
       .catch(() => setActiveYear(null))
       .finally(() => setYearLoading(false))
   }, [])
 
+  // ── Notifications (demo) ──
   const [notifications, setNotifications] = useState([
-    { id: "1", type: "warning"  as const, title: "7ème AF — Aucune note saisie",    subtitle: "2ème Étape en cours",   timestamp: "il y a 2h",  isRead: false },
-    { id: "2", type: "warning"  as const, title: "3 élèves sans photo",             subtitle: "Classe 9ème AF",         timestamp: "il y a 5h",  isRead: false },
-    { id: "3", type: "success"  as const, title: "Étape 1 clôturée — 6ème AF",      subtitle: "Bulletins disponibles", timestamp: "hier 14h32", isRead: true  },
-    { id: "4", type: "success"  as const, title: "Bulletin généré — Martine Simon", subtitle: "6ème AF · Étape 1",     timestamp: "hier 11h15", isRead: true  },
+    { id: "1", type: "warning" as const, title: "7ème AF — Aucune note saisie", subtitle: "2ème Étape en cours", timestamp: "il y a 2h", isRead: false },
+    { id: "2", type: "warning" as const, title: "3 élèves sans photo", subtitle: "Classe 9ème AF", timestamp: "il y a 5h", isRead: false },
+    { id: "3", type: "success" as const, title: "Étape 1 clôturée — 6ème AF", subtitle: "Bulletins disponibles", timestamp: "hier 14h32", isRead: true },
+    { id: "4", type: "success" as const, title: "Bulletin généré — Martine Simon", subtitle: "6ème AF · Étape 1", timestamp: "hier 11h15", isRead: true },
   ])
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
-        setNotificationPanelOpen(false)
-      }
-    }
-    if (notificationPanelOpen) document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [notificationPanelOpen])
-
   const handleMarkAllRead = () =>
-    setNotifications(n => n.map(x => ({ ...x, isRead: true })))
+    setNotifications((n) => n.map((x) => ({ ...x, isRead: true })))
 
   const handleNotificationClick = (id: string) =>
-    setNotifications(n => n.map(x => x.id === id ? { ...x, isRead: true } : x))
+    setNotifications((n) => n.map((x) => (x.id === id ? { ...x, isRead: true } : x)))
 
-  const unreadCount = notifications.filter(n => !n.isRead).length
+  const unreadCount = notifications.filter((n) => !n.isRead).length
 
-  const handleLogout = async () => {
-    await logout()
-    router.push("/login")
+  const handleLogout = () => {
+    window.location.href = "/api/auth/logout"
   }
 
-  const getNavHref = (href?: string) => {
-    if (!href) return "#"
+  const getNavHref = (href: string) => {
     if (href.includes(":yearId")) {
       if (yearLoading || !activeYear?.id) return "#"
       return href.replace(":yearId", activeYear.id)
@@ -156,277 +206,312 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
     return href
   }
 
+  const isChildActive = (children: NavChild[]) =>
+    children.some((c) => {
+      const href = getNavHref(c.href)
+      return pathname === href || pathname.startsWith(href.split("?")[0])
+    })
+
+  const initials = `${currentUser?.firstname?.[0] ?? ""}${currentUser?.lastname?.[0] ?? ""}`
+
   if (authLoading) {
     return (
-      <div style={{
-        minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
-        backgroundColor: "#FAFAF8"
-      }}>
-        <div style={{ textAlign: "center" }}>
-          <div style={{
-            width: "32px", height: "32px", border: "3px solid #E8E6E3",
-            borderTopColor: "#5A7085", borderRadius: "50%",
-            animation: "spin 0.8s linear infinite", margin: "0 auto 12px"
-          }} />
-          <p className="font-sans" style={{ fontSize: "13px", color: "#78756F" }}>
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-muted border-t-primary" />
+          <p className="text-sm text-muted-foreground">
             Vérification de la session...
           </p>
         </div>
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     )
   }
-
-  const getLinkStyles = (isActive: boolean, paddingLeft: string, mobile: boolean, item: NavItem) => ({
-    paddingLeft: sidebarCollapsed && !mobile ? "0" : paddingLeft,
-    backgroundColor: isActive ? "rgba(255,255,255,0.08)" : "transparent",
-    color: isActive ? "#FFFFFF" : "#CBD5E1",
-    fontFamily: "var(--font-sans)",
-    fontSize: "14px",
-    fontWeight: isActive ? 600 : (item.href ? 500 : 400),
-    borderLeft: isActive ? "3px solid #FFFFFF" : "3px solid transparent",
-    borderRadius: isActive ? "0 6px 6px 0" : "0",
-    marginLeft: "-3px",
-  })
-
-  const handleMouseEnter = (e: React.MouseEvent<HTMLAnchorElement>, isActive: boolean) => {
-    if (!isActive) e.currentTarget.style.borderLeft = "2px solid #8FA8C0"
-  }
-
-  const handleMouseLeave = (e: React.MouseEvent<HTMLAnchorElement>, isActive: boolean) => {
-    if (!isActive) e.currentTarget.style.borderLeft = "3px solid transparent"
-  }
-
-  const createLinkContent = (item: NavItem, href: string, isActive: boolean, mobile: boolean, paddingLeft: string) => {
-    const Icon = item.icon
-    return (
-      <Link
-        key={item.href}
-        href={href}
-        onClick={() => mobile && setSidebarOpen(false)}
-        className={cn("flex items-center py-2 transition-all duration-200",
-          sidebarCollapsed && !mobile ? "justify-center" : "gap-3"
-        )}
-        style={getLinkStyles(isActive, paddingLeft, mobile, item)}
-        onMouseEnter={e => handleMouseEnter(e, isActive)}
-        onMouseLeave={e => handleMouseLeave(e, isActive)}
-      >
-        <Icon className="h-4 w-4" />
-        {(!sidebarCollapsed || mobile) && <span>{item.label}</span>}
-      </Link>
-    )
-  }
-
-  const renderNavLink = (item: NavItem, mobile: boolean, paddingLeft: string) => {
-    const href = getNavHref(item.href)
-    const isActive = pathname === href || pathname.startsWith(href.split("?")[0])
-    const linkContent = createLinkContent(item, href, isActive, mobile, paddingLeft)
-
-    if (sidebarCollapsed && !mobile) {
-      return (
-        <Tooltip key={item.href}>
-          <TooltipTrigger asChild>{linkContent}</TooltipTrigger>
-          <TooltipContent side="right"><p>{item.label}</p></TooltipContent>
-        </Tooltip>
-      )
-    }
-    return linkContent
-  }
-
-  const renderSectionHeader = (label: string, mobile: boolean) => {
-    return (!sidebarCollapsed || mobile) ? (
-      <div className="px-3 py-2" style={{
-        fontFamily: "var(--font-sans)", fontSize: "10px", fontWeight: 700,
-        textTransform: "uppercase", letterSpacing: "0.08em", color: "#8FA8C0", cursor: "default",
-      }}>
-        {label}
-      </div>
-    ) : null
-  }
-
-  const renderSectionWithChildren = (item: NavItem, index: number, mobile: boolean) => (
-    <div key={index} style={{ marginTop: index > 0 ? "24px" : "0" }}>
-      {renderSectionHeader(item.label, mobile)}
-      <div className="mt-1 space-y-1">
-        {item.children?.map(child => renderNavLink(child, mobile, "16px"))}
-      </div>
-    </div>
-  )
-
-  const SidebarNav = ({ mobile = false }: { mobile?: boolean }) => (
-    <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-      {navItems.map((item, index) => {
-        if (item.section && item.children) {
-          return renderSectionWithChildren(item, index, mobile)
-        }
-        if (item.href) {
-          return renderNavLink(item, mobile, "12px")
-        }
-        return null
-      })}
-    </nav>
-  )
 
   return (
-    <TooltipProvider>
-      <div className="min-h-screen overflow-x-hidden" style={{ backgroundColor: "#FAFAF8" }}>
-
-        {/* Sidebar Desktop */}
-        <aside
-          className="hidden lg:fixed lg:inset-y-0 lg:flex lg:flex-col overflow-hidden transition-all duration-300"
-          style={{ width: sidebarCollapsed ? "64px" : "256px" }}
-        >
-          <div className="flex flex-col h-full" style={{ backgroundColor: "#2A3740" }}>
-            <div className="h-16 flex items-center justify-between px-3" style={{ borderBottom: "1px solid #3A4A57" }}>
-              <div className="flex items-center gap-2 min-w-0 overflow-hidden">
-                <div className="w-8 h-8 flex-shrink-0 rounded-lg flex items-center justify-center" style={{ backgroundColor: "#5A7085" }}>
-                  <span className="text-sm font-bold" style={{ color: "#C3B594" }}>SL</span>
-                </div>
-                {!sidebarCollapsed && (
-                  <span className="font-sans font-bold truncate" style={{ color: "#D9E3EA", fontSize: "16px" }}>CPMSL</span>
-                )}
-              </div>
-              <button
-                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                className="flex-shrink-0 flex items-center justify-center w-7 h-7 rounded-md transition-colors hover:bg-white/10"
-                style={{ color: "#8FA8C0" }}
+    <SidebarProvider>
+      <Sidebar collapsible="icon">
+        {/* ── Sidebar Header ── */}
+        <SidebarHeader className="border-b border-sidebar-border">
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                size="lg"
+                className="cursor-default hover:bg-transparent"
               >
-                {sidebarCollapsed
-                  ? <PanelLeftOpenIcon className="h-4 w-4" />
-                  : <PanelLeftCloseIcon className="h-4 w-4" />}
-              </button>
-            </div>
-            <SidebarNav />
-          </div>
-        </aside>
-
-        {/* Sidebar Mobile */}
-        {sidebarOpen && (
-          <div className="fixed inset-0 z-50 lg:hidden">
-            <button className="fixed inset-0 bg-black/50 border-0 p-0 cursor-default" onClick={() => setSidebarOpen(false)} />            <aside className="fixed inset-y-0 left-0 w-72 z-50" style={{ backgroundColor: "#2A3740", borderRight: "1px solid #3A4A57" }}>
-              <div className="flex flex-col h-full">
-                <div className="h-16 flex items-center justify-between px-4" style={{ borderBottom: "1px solid #3A4A57" }}>
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: "#5A7085" }}>
-                      <span className="text-sm font-bold" style={{ color: "#C3B594" }}>SL</span>
-                    </div>
-                    <span className="font-sans font-bold" style={{ color: "#D9E3EA", fontSize: "16px" }}>CPMSL</span>
-                  </div>
-                  <Button variant="ghost" size="sm" onClick={() => setSidebarOpen(false)} className="h-8 w-8 p-0">
-                    <XIcon className="h-5 w-5" />
-                  </Button>
+                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-gradient-to-br from-sidebar-primary to-sidebar-primary/70 text-sm font-bold text-sidebar-primary-foreground">
+                  SL
                 </div>
-                <SidebarNav mobile />
-              </div>
-            </aside>
-          </div>
-        )}
-
-        {/* Main Content */}
-        <div className="w-full transition-all duration-300" style={{ paddingLeft: sidebarCollapsed ? "64px" : "256px" }}>
-          {/* Header */}
-          <header className="sticky top-0 z-40 h-16" style={{ backgroundColor: "white", borderBottom: "1px solid #E8E6E3" }}>
-            <div className="flex items-center justify-between h-full px-4 gap-4">
-              <div className="flex items-center gap-3">
-                <Button variant="ghost" size="sm" onClick={() => setSidebarOpen(true)} className="lg:hidden h-9 w-9 p-0">
-                  <MenuIcon className="h-5 w-5" />
-                </Button>
-                <h1 className="heading-3 text-[#1f1a18]">CPMSL</h1>
-              </div>
-
-              <div className="flex-1" />
-
-              <div className="flex items-center gap-2">
-
-                {/* Année scolaire active */}
-                <div className="hidden md:flex items-center px-3 py-1.5 rounded-md"
-                  style={{ backgroundColor: "#F0F4F7", fontSize: "13px", color: "#3A4A57", fontWeight: 500 }}>
-                  {yearLoading ? "..." : (activeYear?.name ?? "—")}
+                <div className="grid flex-1 text-left text-sm leading-tight">
+                  <span className="truncate font-semibold text-sidebar-foreground">
+                    CPMSL
+                  </span>
+                  <span className="truncate text-xs text-sidebar-foreground/50">
+                    Établissement scolaire
+                  </span>
                 </div>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarHeader>
 
-                {/* Notifications */}
-                <div className="relative" ref={notificationRef}>
-                  <Button
-                    variant="ghost" size="sm"
-                    className="relative h-9 w-9 p-0"
-                    onClick={() => setNotificationPanelOpen(!notificationPanelOpen)}
+        {/* ── Sidebar Nav ── */}
+        <SidebarContent>
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-sidebar-foreground/40">
+              Navigation
+            </SidebarGroupLabel>
+            <SidebarMenu>
+              {navItems.map((item) => {
+                if (!isNavGroup(item)) {
+                  const href = getNavHref(item.href)
+                  const isActive = pathname === href || pathname.startsWith(href.split("?")[0])
+                  const Icon = item.icon
+                  return (
+                    <SidebarMenuItem key={item.href}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={isActive}
+                        tooltip={item.label}
+                        className={cn(
+                          "transition-colors",
+                          isActive && "bg-sidebar-accent font-semibold text-sidebar-accent-foreground"
+                        )}
+                      >
+                        <Link href={href}>
+                          <Icon className="h-4 w-4" />
+                          <span>{item.label}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  )
+                }
+
+                const Icon = item.icon
+                const groupActive = isChildActive(item.children)
+                return (
+                  <Collapsible
+                    key={item.label}
+                    asChild
+                    defaultOpen={groupActive}
+                    className="group/collapsible"
                   >
-                    <BellIcon className="h-5 w-5 text-[#5b6d77]" />
-                    {unreadCount > 0 && (
-                      <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full" />
-                    )}
-                  </Button>
-                  {notificationPanelOpen && (
-                    <NotificationPanel
-                      notifications={notifications}
-                      onMarkAllRead={handleMarkAllRead}
-                      onNotificationClick={handleNotificationClick}
-                    />
-                  )}
-                </div>
+                    <SidebarMenuItem>
+                      <CollapsibleTrigger asChild>
+                        <SidebarMenuButton tooltip={item.label} className="transition-colors">
+                          <Icon className="h-4 w-4" />
+                          <span>{item.label}</span>
+                          <ChevronRightIcon className="ml-auto size-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90 text-sidebar-foreground/40" />
+                        </SidebarMenuButton>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <SidebarMenuSub>
+                          {item.children.map((child) => {
+                            const childHref = getNavHref(child.href)
+                            const childActive =
+                              pathname === childHref || pathname.startsWith(childHref.split("?")[0])
+                            const ChildIcon = child.icon
+                            return (
+                              <SidebarMenuSubItem key={child.href}>
+                                <SidebarMenuSubButton
+                                  asChild
+                                  isActive={childActive}
+                                  className={cn(
+                                    "transition-colors",
+                                    childActive && "bg-sidebar-accent font-semibold text-sidebar-accent-foreground"
+                                  )}
+                                >
+                                  <Link href={childHref}>
+                                    <ChildIcon className="h-3.5 w-3.5" />
+                                    <span>{child.label}</span>
+                                  </Link>
+                                </SidebarMenuSubButton>
+                              </SidebarMenuSubItem>
+                            )
+                          })}
+                        </SidebarMenuSub>
+                      </CollapsibleContent>
+                    </SidebarMenuItem>
+                  </Collapsible>
+                )
+              })}
+            </SidebarMenu>
+          </SidebarGroup>
+        </SidebarContent>
 
-                {/* User Dropdown */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="flex items-center gap-2 h-9">
-                      <span className="hidden sm:inline body-base font-medium text-[#1f1a18]">
+        {/* ── Sidebar Footer (User) ── */}
+        <SidebarFooter className="border-t border-sidebar-border">
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <SidebarMenuButton
+                    size="lg"
+                    className="transition-colors data-[state=open]:bg-sidebar-accent"
+                  >
+                    <Avatar className="h-8 w-8 rounded-lg">
+                      <AvatarFallback className="rounded-lg bg-sidebar-primary text-xs font-semibold text-sidebar-primary-foreground">
+                        {initials}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="grid flex-1 text-left text-sm leading-tight">
+                      <span className="truncate font-semibold text-sidebar-foreground">
                         {currentUser?.firstname} {currentUser?.lastname}
                       </span>
-                      <Avatar className="h-7 w-7">
-                        <AvatarFallback className="text-xs">
-                          {currentUser?.firstname?.[0]}{currentUser?.lastname?.[0]}
-                        </AvatarFallback>
-                      </Avatar>
-                      <ChevronDownIcon className="h-4 w-4 text-[#5b6d77]" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-64">
-                    <DropdownMenuLabel>
-                      <div>
-                        <p style={{ fontFamily: "var(--font-sans)", fontSize: "14px", fontWeight: 600, color: "#1E1A17" }}>
-                          {currentUser?.firstname} {currentUser?.lastname}
-                        </p>
-                        <p style={{ fontFamily: "var(--font-sans)", fontSize: "12px", color: "#78756F" }}>
-                          Administrateur
-                        </p>
-                      </div>
-                    </DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem style={{ fontFamily: "var(--font-sans)", fontSize: "14px", padding: "8px 16px" }}>
-                      <UserIcon className="mr-2 h-4 w-4" /> Profil / Mon compte
-                    </DropdownMenuItem>
-                    <DropdownMenuItem style={{ fontFamily: "var(--font-sans)", fontSize: "14px", padding: "8px 16px" }}>
-                      <LockIcon className="mr-2 h-4 w-4" /> Changer mot de passe
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem style={{ fontFamily: "var(--font-sans)", fontSize: "14px", padding: "8px 16px" }}>
-                      <SettingsIcon className="mr-2 h-4 w-4" /> Paramètres système
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem style={{ fontFamily: "var(--font-sans)", fontSize: "14px", padding: "8px 16px" }}>
-                      <HelpCircleIcon className="mr-2 h-4 w-4" /> Aide / Support
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={handleLogout}
-                      style={{ fontFamily: "var(--font-sans)", fontSize: "14px", padding: "8px 16px", color: "#B91C1C" }}
-                    >
-                      <LogOutIcon className="mr-2 h-4 w-4" /> Déconnexion
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            </div>
-          </header>
+                      <span className="truncate text-xs text-sidebar-foreground/50">
+                        Administrateur
+                      </span>
+                    </div>
+                    <ChevronsUpDownIcon className="ml-auto size-4 text-sidebar-foreground/40" />
+                  </SidebarMenuButton>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56" align="end" side="top" sideOffset={4}>
+                  <DropdownMenuLabel>
+                    <div>
+                      <p className="text-sm font-semibold">
+                        {currentUser?.firstname} {currentUser?.lastname}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Administrateur</p>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setProfileOpen(true)}>
+                    <UserIcon className="mr-2 h-4 w-4" /> Profil / Mon compte
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setProfileOpen(true)}>
+                    <LockIcon className="mr-2 h-4 w-4" /> Changer mot de passe
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => router.push("/admin/settings")}>
+                    <SettingsIcon className="mr-2 h-4 w-4" /> Paramètres système
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={handleLogout}
+                    className="!text-destructive focus:!bg-destructive/10"
+                  >
+                    <LogOutIcon className="mr-2 h-4 w-4" /> Déconnexion
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarFooter>
+      </Sidebar>
 
-          {/* Page Content */}
-          <main className="p-4 sm:p-6 lg:p-8 lg:pt-6 max-w-full">
-            {children}
-          </main>
-        </div>
+      {/* ── Main content area ── */}
+      <div className="flex flex-1 flex-col overflow-hidden bg-background">
+        {/* Header bar */}
+        <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <SidebarTrigger className="-ml-1" />
+          <Separator orientation="vertical" className="mr-1 h-5" />
 
-        <Toaster />
+          {/* Breadcrumb */}
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <BreadcrumbLink asChild>
+                  <Link href="/admin/dashboard">Accueil</Link>
+                </BreadcrumbLink>
+              </BreadcrumbItem>
+              {pathname !== "/admin/dashboard" && (
+                <>
+                  <BreadcrumbSeparator />
+                  <BreadcrumbItem>
+                    <BreadcrumbPage>{getBreadcrumbLabel(pathname)}</BreadcrumbPage>
+                  </BreadcrumbItem>
+                </>
+              )}
+            </BreadcrumbList>
+          </Breadcrumb>
+
+          <div className="flex-1" />
+
+          {/* Active year badge */}
+          <Badge
+            variant="outline"
+            className="hidden gap-1.5 text-xs font-medium md:inline-flex"
+          >
+            <span
+              className={cn(
+                "h-1.5 w-1.5 rounded-full",
+                activeYear ? "bg-emerald-500" : "bg-muted-foreground"
+              )}
+            />
+            {yearLoading ? "..." : activeYear?.name ?? "Aucune année"}
+          </Badge>
+
+          {/* Notifications */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" size="icon" className="relative h-8 w-8">
+                <BellIcon className="h-4 w-4 text-muted-foreground" />
+                {unreadCount > 0 && (
+                  <span className="absolute right-1 top-1 flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-destructive opacity-75" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-destructive" />
+                  </span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-[380px] p-0" sideOffset={8}>
+              <NotificationPanel
+                notifications={notifications}
+                onMarkAllRead={handleMarkAllRead}
+                onNotificationClick={handleNotificationClick}
+              />
+            </PopoverContent>
+          </Popover>
+
+          {/* User dropdown (header) */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="flex items-center gap-2 pl-2 pr-1 h-8">
+                <span className="hidden text-sm font-medium sm:inline">
+                  {currentUser?.firstname}
+                </span>
+                <Avatar className="h-7 w-7">
+                  <AvatarFallback className="text-[10px] font-semibold">
+                    {initials}
+                  </AvatarFallback>
+                </Avatar>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                Mon compte
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setProfileOpen(true)}>
+                <UserIcon className="mr-2 h-4 w-4" /> Profil
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={handleLogout}
+                className="!text-destructive focus:!bg-destructive/10"
+              >
+                <LogOutIcon className="mr-2 h-4 w-4" /> Déconnexion
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </header>
+
+        {/* Page content */}
+        <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8 lg:pt-6">
+          {children}
+        </main>
       </div>
-    </TooltipProvider>
+
+      {/* Profile dialog */}
+      {currentUser && (
+        <ProfileDialog
+          open={profileOpen}
+          onOpenChange={setProfileOpen}
+          user={currentUser}
+          onProfileUpdated={(updated) => setCurrentUser(updated)}
+        />
+      )}
+
+      <Toaster />
+    </SidebarProvider>
   )
 }

@@ -4,8 +4,10 @@ import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { BulletinPDFGenerator } from "@/components/bulletin-pdf-generator"
@@ -174,26 +176,23 @@ export default function ArchivesPage() {
 
       {/* Header */}
       <div>
-        <h1 className="font-serif" style={{ fontSize: '36px', fontWeight: 700, letterSpacing: '-0.03em', color: '#2A3740' }}>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">
           Archives
         </h1>
-        <p className="font-sans" style={{ fontSize: '13px', color: '#78756F' }}>
+        <p className="mt-1 text-sm text-muted-foreground">
           Historique de tous les bulletins générés — {activeYear?.name}
         </p>
       </div>
 
       {/* Filtres */}
-      <div style={{ backgroundColor: 'white', borderRadius: '10px', border: '1px solid #E8E6E3', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
-        <div style={{ padding: '20px 24px', borderBottom: '1px solid #E8E6E3' }}>
-          <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: '15px', fontWeight: 600, color: '#3A4A57' }}>
-            Filtres
-          </h3>
-        </div>
-        <div style={{ padding: '24px' }}>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-
+      <Card className="border bg-card shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-semibold">Filtres</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <Select value={filterSession || 'all'} onValueChange={v => setFilterSession(v === 'all' ? '' : v)}>
-              <SelectTrigger style={{ borderColor: '#D1CECC', borderRadius: '8px' }}>
+              <SelectTrigger>
                 <SelectValue placeholder="Toutes les classes" />
               </SelectTrigger>
               <SelectContent>
@@ -205,7 +204,7 @@ export default function ArchivesPage() {
             </Select>
 
             <Select value={filterStep || 'all'} onValueChange={v => setFilterStep(v === 'all' ? '' : v)}>
-              <SelectTrigger style={{ borderColor: '#D1CECC', borderRadius: '8px' }}>
+              <SelectTrigger>
                 <SelectValue placeholder="Toutes les étapes" />
               </SelectTrigger>
               <SelectContent>
@@ -217,18 +216,17 @@ export default function ArchivesPage() {
             </Select>
 
             <div className="relative">
-              <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" style={{ color: '#A8A5A2' }} />
+              <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Rechercher par NISU..."
                 value={filterNisu}
                 onChange={e => setFilterNisu(e.target.value)}
                 className="pl-9"
-                style={{ borderColor: '#D1CECC' }}
               />
             </div>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Table */}
       {loadingList ? (
@@ -236,82 +234,83 @@ export default function ArchivesPage() {
           {[1,2,3].map(i => <Skeleton key={i} className="h-14 w-full" />)}
         </div>
       ) : archives.length === 0 ? (
-        <div style={{ backgroundColor: 'white', borderRadius: '10px', border: '1px solid #E8E6E3', padding: '48px 24px', textAlign: 'center' }}>
-          <ArchiveIcon style={{ width: '48px', height: '48px', color: '#B3C7D5', margin: '0 auto 16px' }} />
-          <p style={{ fontSize: '15px', fontWeight: 500, color: '#78756F' }}>
-            Aucun bulletin archivé
-          </p>
-        </div>
+        <Card className="border bg-card py-16 text-center shadow-sm">
+          <CardContent className="flex flex-col items-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+              <ArchiveIcon className="h-7 w-7 text-muted-foreground" />
+            </div>
+            <p className="mt-4 text-sm font-medium text-muted-foreground">
+              Aucun bulletin archivé
+            </p>
+          </CardContent>
+        </Card>
       ) : (
-        <div style={{ backgroundColor: 'white', borderRadius: '10px', border: '1px solid #E8E6E3', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ backgroundColor: '#F1F5F9', borderBottom: '2px solid #D1D5DB' }}>
-                {['Élève', 'NISU', 'Classe', 'Étape', 'Version', 'Statut', 'Généré par', 'Date', 'Actions'].map(h => (
-                  <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#2C4A6E' }}>
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {archives.map((archive, i) => {
+        <Card className="border bg-card shadow-sm">
+          <CardContent className="overflow-x-auto p-0">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  {['Élève', 'NISU', 'Classe', 'Étape', 'Version', 'Statut', 'Généré par', 'Date', 'Actions'].map(h => (
+                    <TableHead key={h} className="font-semibold">
+                      {h}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+              {archives.map((archive) => {
                 const badge = statusBadge(archive.status, archive.isActive)
                 return (
-                  <tr key={archive.id} style={{ borderBottom: i < archives.length - 1 ? '1px solid #E8E6E3' : 'none', backgroundColor: i % 2 === 0 ? 'white' : '#FAFAF8' }}>
-                    <td style={{ padding: '12px 16px', fontSize: '14px', fontWeight: 600, color: '#1E1A17' }}>
+                  <TableRow key={archive.id}>
+                    <TableCell className="font-medium">
                       {archive.studentName}
-                    </td>
-                    <td style={{ padding: '12px 16px', fontFamily: 'monospace', fontSize: '12px', color: '#5A7085' }}>
+                    </TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">
                       {archive.nisu}
-                    </td>
-                    <td style={{ padding: '12px 16px', fontSize: '13px', color: '#5A7085' }}>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
                       {archive.className}
-                    </td>
-                    <td style={{ padding: '12px 16px', fontSize: '13px', color: '#5A7085' }}>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
                       {archive.stepName}
-                    </td>
-                    <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                      <span style={{ fontWeight: 700, fontSize: '13px', color: '#2C4A6E' }}>v{archive.version}</span>
-                    </td>
-                    <td style={{ padding: '12px 16px' }}>
-                      <Badge style={{ backgroundColor: badge.bg, color: badge.color, border: 'none', fontSize: '11px' }}>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <span className="text-sm font-bold text-foreground">v{archive.version}</span>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary" className={
+                        badge.label === 'Généré' ? 'bg-emerald-100 text-emerald-700' :
+                        badge.label === 'Correction' ? 'bg-amber-100 text-amber-700' :
+                        ''
+                      }>
                         {badge.label}
                       </Badge>
-                    </td>
-                    <td style={{ padding: '12px 16px', fontSize: '13px', color: '#5A7085' }}>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
                       {archive.generatedByUser.firstname} {archive.generatedByUser.lastname}
-                    </td>
-                    <td style={{ padding: '12px 16px', fontSize: '12px', color: '#78756F' }}>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
                       {formatDate(archive.generatedAt)}
-                    </td>
-                    <td style={{ padding: '12px 16px' }}>
+                    </TableCell>
+                    <TableCell>
                       <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => openVersions(archive)}
-                          style={{ fontSize: '12px', fontWeight: 500, color: '#2B6CB0', background: 'none', border: 'none', cursor: 'pointer' }}
-                        >
+                        <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => openVersions(archive)}>
                           Historique
-                        </button>
+                        </Button>
                         {archive.bulletinSnapshot && (
-                          <>
-                            <span style={{ color: '#D1CECC' }}>|</span>
-                            <button
-                              onClick={() => openPdfFromSnapshot(archive)}
-                              style={{ fontSize: '12px', fontWeight: 500, color: '#2D7D46', background: 'none', border: 'none', cursor: 'pointer' }}
-                            >
-                              Voir
-                            </button>
-                          </>
+                          <Button variant="link" size="sm" className="h-auto p-0 text-xs text-emerald-600" onClick={() => openPdfFromSnapshot(archive)}>
+                            Voir
+                          </Button>
                         )}
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 )
               })}
-            </tbody>
-          </table>
-        </div>
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       )}
 
       {/* Panel versions */}

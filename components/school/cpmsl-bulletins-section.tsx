@@ -313,10 +313,10 @@ export function CPMSLBulletinsSection({
           {/* KPIs + bouton lot */}
           <div className="flex flex-col gap-4">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <StatCard label="Élèves"         value={enrollments.length}        icon={AlertCircleIcon}  iconBgColor="#F0F4F7" iconColor="#5A7085" />
-              <StatCard label="NISU valides"   value={withNisu.length}           icon={CheckCircleIcon}  iconBgColor="#E8F5EC" iconColor="#2D7D46" />
-              <StatCard label="NISU manquants" value={withoutNisu.length}        icon={AlertTriangleIcon} iconBgColor="#FEF6E0" iconColor="#C48B1A" />
-              <StatCard label="Étape"          value={selectedStepObj?.name || '—'} icon={FileTextIcon}  iconBgColor="#E3EFF9" iconColor="#2B6CB0" />
+              <StatCard label="Élèves"         value={enrollments.length}        icon={AlertCircleIcon}  iconClassName="text-blue-600" iconBgClassName="bg-blue-50" />
+              <StatCard label="NISU valides"   value={withNisu.length}           icon={CheckCircleIcon}  iconClassName="text-emerald-600" iconBgClassName="bg-emerald-50" />
+              <StatCard label="NISU manquants" value={withoutNisu.length}        icon={AlertTriangleIcon} iconClassName="text-amber-600" iconBgClassName="bg-amber-50" />
+              <StatCard label="Étape"          value={selectedStepObj?.name || '—'} icon={FileTextIcon}  iconClassName="text-violet-600" iconBgClassName="bg-violet-50" />
             </div>
 
             <div className="flex items-center gap-4">

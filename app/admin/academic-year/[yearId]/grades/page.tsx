@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { useParams } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
+import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CPMSLGradesGrid } from "@/components/school/cpmsl-grades-grid"
 import { CPMSLBehaviorGrid } from "@/components/school/cpmsl-behavior-grid"
@@ -159,36 +160,29 @@ export default function GradesPage() {
     if (loadingContext) {
       return (
         <div className="flex items-center justify-center py-20">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: "#5A7085" }} />
+          <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-muted border-t-primary" />
         </div>
       )
     }
 
     if (error) {
       return (
-        <div className="rounded-lg p-8 flex flex-col items-center justify-center gap-4" style={{ backgroundColor: "white", border: "1px solid #E8E6E3" }}>
-          <p className="font-sans" style={{ color: "#C43C3C", fontSize: "14px" }}>{error}</p>
-          <button onClick={() => globalThis.location.reload()} className="px-4 py-2 rounded-lg font-sans text-sm font-medium text-white" style={{ backgroundColor: "#5A7085" }}>            Réessayer
-          </button>
+        <div className="flex flex-col items-center justify-center gap-4 rounded-xl border bg-card p-8 shadow-sm">
+          <p className="text-sm text-destructive">{error}</p>
+          <Button onClick={() => globalThis.location.reload()} size="sm">
+            Réessayer
+          </Button>
         </div>
       )
     }
 
     return (
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList style={{ backgroundColor: "#F0F4F7", borderRadius: "8px", padding: "4px" }}>
-          <TabsTrigger value="notes" className="label-ui data-[state=active]:bg-white data-[state=active]:shadow-sm" style={{ borderRadius: "6px" }}>
-            <span className="data-[state=active]:text-[#3A4A57] text-[#78756F]">Saisie</span>
-          </TabsTrigger>
-          <TabsTrigger value="consultation" className="label-ui data-[state=active]:bg-white data-[state=active]:shadow-sm" style={{ borderRadius: "6px" }}>
-            <span className="data-[state=active]:text-[#3A4A57] text-[#78756F]">Consultation</span>
-          </TabsTrigger>
-          <TabsTrigger value="avancement" className="label-ui data-[state=active]:bg-white data-[state=active]:shadow-sm" style={{ borderRadius: "6px" }}>
-            <span className="data-[state=active]:text-[#3A4A57] text-[#78756F]">Avancement</span>
-          </TabsTrigger>
-          <TabsTrigger value="comportement" className="label-ui data-[state=active]:bg-white data-[state=active]:shadow-sm" style={{ borderRadius: "6px" }}>
-            <span className="data-[state=active]:text-[#3A4A57] text-[#78756F]">Comportement</span>
-          </TabsTrigger>
+        <TabsList>
+          <TabsTrigger value="notes">Saisie</TabsTrigger>
+          <TabsTrigger value="consultation">Consultation</TabsTrigger>
+          <TabsTrigger value="avancement">Avancement</TabsTrigger>
+          <TabsTrigger value="comportement">Comportement</TabsTrigger>
         </TabsList>
 
         {/* Saisie — W3 */}
@@ -246,7 +240,7 @@ export default function GradesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 style={{ fontFamily: "var(--font-serif)", fontSize: "36px", fontWeight: 700, letterSpacing: "-0.03em", color: "#2A3740" }}>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">
           Notes
         </h1>
       </div>

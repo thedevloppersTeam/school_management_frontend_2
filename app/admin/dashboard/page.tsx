@@ -11,7 +11,10 @@ import {
   FileTextIcon,
   UserPlusIcon,
   AlertTriangleIcon,
-  InfoIcon
+  InfoIcon,
+  CheckCircle2Icon,
+  ArrowRightIcon,
+  TrendingUpIcon,
 } from "lucide-react"
 import {
   fetchActiveAcademicYear,
@@ -22,12 +25,30 @@ import {
   getClassSessionName,
   type AcademicYear,
   type AcademicYearStep,
-  type ClassSession
+  type ClassSession,
 } from "@/lib/api/dashboard"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { StatCard } from "@/components/school/stat-card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Badge } from "@/components/ui/badge"
+import { Progress } from "@/components/ui/progress"
+import { Separator } from "@/components/ui/separator"
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 interface SessionStat {
   sessionId: string
@@ -60,7 +81,6 @@ export default function AdminDashboardPage() {
         setSteps(stepsData)
         setSessions(sessionsData)
 
-        // Compter les élèves par session en parallèle
         const counts = await Promise.all(
           sessionsData.map(async (s) => ({
             sessionId: s.id,
@@ -80,292 +100,350 @@ export default function AdminDashboardPage() {
     loadDashboard()
   }, [])
 
-  
   const currentStep = getCurrentStep(steps)
-
-  const renderAlertContent = () => {
-    if (!activeYear) {
-      return (
-        <div
-          className="font-sans rounded-md p-3 flex items-center gap-2"
-          style={{ backgroundColor: "#FEF6E0", color: "#C48B1A", fontSize: "14px", fontWeight: 500 }}
-        >
-          <AlertTriangleIcon className="h-4 w-4 flex-shrink-0" />
-          <span>Aucune année scolaire active — configurez-en une</span>
-        </div>
-      )
-    }
-
-    if (!currentStep) {
-      return (
-        <div
-          className="font-sans rounded-md p-3 flex items-center gap-2"
-          style={{ backgroundColor: "#E3EFF9", color: "#2B6CB0", fontSize: "14px", fontWeight: 500 }}
-        >
-          <InfoIcon className="h-4 w-4 flex-shrink-0" />
-          <span>Aucune étape active — configurez les étapes de l&apos;année</span>
-        </div>
-      )
-    }
-
-    if (sessions.length === 0) {
-      return (
-        <div
-          className="font-sans rounded-md p-3 flex items-center gap-2"
-          style={{ backgroundColor: "#FEF6E0", color: "#C48B1A", fontSize: "14px", fontWeight: 500 }}
-        >
-          <AlertTriangleIcon className="h-4 w-4 flex-shrink-0" />
-          <span>Aucune classe configurée pour cette année</span>
-        </div>
-      )
-    }
-
-    return (
-      <div
-        className="font-sans rounded-md p-3 flex items-center gap-2"
-        style={{ backgroundColor: "#E8F5EC", color: "#2D7D46", fontSize: "14px", fontWeight: 500 }}
-      >
-        <span>
-          {sessions.length} classe(s) · {totalStudents} élève(s) · Étape : {currentStep.name}
-        </span>
-      </div>
-    )
-  }
+  const currentStepIndex = currentStep ? steps.findIndex((s) => s.id === currentStep.id) : -1
+  const stepProgress = steps.length > 0 ? ((currentStepIndex + 1) / steps.length) * 100 : 0
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <Skeleton className="h-10 w-64" />
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-28" />)}
+      <div className="space-y-8">
+        <div className="space-y-1">
+          <Skeleton className="h-9 w-72" />
+          <Skeleton className="h-5 w-48" />
         </div>
-        <Skeleton className="h-64" />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-[104px] rounded-xl" />
+          ))}
+        </div>
+        <Skeleton className="h-16 rounded-xl" />
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <Skeleton className="h-64 rounded-xl lg:col-span-1" />
+          <Skeleton className="h-64 rounded-xl lg:col-span-2" />
+        </div>
       </div>
     )
   }
 
+  const quickActions = [
+    {
+      label: "Saisir des notes",
+      description: currentStep?.name ?? "Aucune étape",
+      icon: ClipboardEditIcon,
+      href: `/admin/academic-year/${activeYear?.id}/grades`,
+      disabled: !activeYear,
+    },
+    {
+      label: "Générer bulletins",
+      description: currentStep?.name ?? "Aucune étape",
+      icon: FileTextIcon,
+      href: `/admin/academic-year/${activeYear?.id}/reports`,
+      disabled: !activeYear,
+    },
+    {
+      label: "Inscrire un élève",
+      description: "Nouvelle inscription",
+      icon: UserPlusIcon,
+      href: `/admin/academic-year/${activeYear?.id}/students`,
+      disabled: !activeYear,
+    },
+  ]
+
   return (
-    <div className="space-y-6">
-      <h1
-        className="font-serif"
-        style={{ fontSize: "36px", fontWeight: 700, lineHeight: 1.15, letterSpacing: "-0.03em", color: "#2A3740" }}
-      >
-        Tableau de bord
-      </h1>
+    <TooltipProvider>
+      <div className="space-y-8">
+        {/* ── Header ── */}
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">
+            Tableau de bord
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Vue d&apos;ensemble de votre établissement
+            {activeYear && (
+              <>
+                {" "}&middot;{" "}
+                <Badge variant="secondary" className="ml-1 align-middle">
+                  {activeYear.name}
+                </Badge>
+              </>
+            )}
+          </p>
+        </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          label="Année active"
-          value={activeYear?.name || "Aucune année active"}
-          icon={CalendarIcon}
-          iconBgColor="#F0F4F7"
-          iconColor="#5A7085"
-        />
-        <StatCard
-          label="Élèves inscrits"
-          value={totalStudents}
-          icon={UsersIcon}
-          iconBgColor="#E8F5EC"
-          iconColor="#2D7D46"
-        />
-        <StatCard
-          label="Classes"
-          value={sessions.length}
-          icon={SchoolIcon}
-          iconBgColor="#FAF8F3"
-          iconColor="#B0A07A"
-        />
-        <StatCard
-          label="Étape en cours"
-          value={currentStep?.name || "Aucune étape active"}
-          icon={BarChart3Icon}
-          iconBgColor="#E3EFF9"
-          iconColor="#2B6CB0"
-        />
-      </div>
+        {/* ── KPI Cards ── */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            label="Année active"
+            value={activeYear?.name || "—"}
+            icon={CalendarIcon}
+            iconClassName="text-blue-600"
+            iconBgClassName="bg-blue-50"
+          />
+          <StatCard
+            label="Élèves inscrits"
+            value={totalStudents}
+            icon={UsersIcon}
+            iconClassName="text-emerald-600"
+            iconBgClassName="bg-emerald-50"
+          />
+          <StatCard
+            label="Classes"
+            value={sessions.length}
+            icon={SchoolIcon}
+            iconClassName="text-amber-600"
+            iconBgClassName="bg-amber-50"
+          />
+          <StatCard
+            label="Étape en cours"
+            value={currentStep?.name || "—"}
+            icon={BarChart3Icon}
+            iconClassName="text-violet-600"
+            iconBgClassName="bg-violet-50"
+          />
+        </div>
 
-      {/* Actions rapides + Alertes */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card
-          className="border border-[#E8E6E3] rounded-[10px] shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
-          style={{ backgroundColor: "white" }}
-        >
-          <CardHeader>
-            <CardTitle
-              className="font-serif"
-              style={{ fontSize: "20px", fontWeight: 600, color: "#3A4A57" }}
-            >
-              Actions rapides
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <Button
-              variant="outline"
-              className="w-full justify-start text-left h-auto py-3 px-4 rounded-lg border"
-              style={{ backgroundColor: "#F0F4F7", color: "#5A7085", borderColor: "#D9E3EA" }}
-              onClick={() => router.push(`/admin/academic-year/${activeYear?.id}/grades`)}
-              disabled={!activeYear}
-            >
-              <ClipboardEditIcon className="mr-3 h-5 w-5" />
-              <span className="font-sans" style={{ fontSize: "14px", fontWeight: 500 }}>
-                Saisir des notes — {currentStep?.name || "Aucune étape"}
-              </span>
-            </Button>
-            <Button
-              variant="outline"
-              className="w-full justify-start text-left h-auto py-3 px-4 rounded-lg border"
-              style={{ backgroundColor: "#F0F4F7", color: "#5A7085", borderColor: "#D9E3EA" }}
-              onClick={() => router.push(`/admin/academic-year/${activeYear?.id}/reports`)}
-              disabled={!activeYear}
-            >
-              <FileTextIcon className="mr-3 h-5 w-5" />
-              <span className="font-sans" style={{ fontSize: "14px", fontWeight: 500 }}>
-                Générer bulletins — {currentStep?.name || "Aucune étape"}
-              </span>
-            </Button>
-            <Button
-              variant="outline"
-              className="w-full justify-start text-left h-auto py-3 px-4 rounded-lg border"
-              style={{ backgroundColor: "#F0F4F7", color: "#5A7085", borderColor: "#D9E3EA" }}
-              onClick={() => router.push(`/admin/academic-year/${activeYear?.id}/students`)}
-              disabled={!activeYear}
-            >
-              <UserPlusIcon className="mr-3 h-5 w-5" />
-              <span className="font-sans" style={{ fontSize: "14px", fontWeight: 500 }}>
-                Inscrire un nouvel élève
-              </span>
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card
-          className="border border-[#E8E6E3] rounded-[10px] shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
-          style={{ backgroundColor: "white" }}
-        >
-          <CardHeader>
-            <CardTitle
-              className="font-serif"
-              style={{ fontSize: "20px", fontWeight: 600, color: "#3A4A57" }}
-            >
-              Alertes
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {!activeYear ? (
-              <div
-                className="font-sans rounded-md p-3 flex items-center gap-2"
-                style={{ backgroundColor: "#FEF6E0", color: "#C48B1A", fontSize: "14px", fontWeight: 500 }}
-              >
-                <AlertTriangleIcon className="h-4 w-4 flex-shrink-0" />
-                <span>Aucune année scolaire active — configurez-en une</span>
+        {/* ── Step Progress ── */}
+        {steps.length > 0 && (
+          <Card className="border bg-card shadow-sm">
+            <CardContent className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:gap-6">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-50">
+                  <TrendingUpIcon className="h-4 w-4 text-violet-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    Progression de l&apos;année
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {currentStep
+                      ? `${currentStep.name} — étape ${currentStepIndex + 1} sur ${steps.length}`
+                      : "Aucune étape active"}
+                  </p>
+                </div>
               </div>
-            ) : !currentStep ? (
-              <div
-                className="font-sans rounded-md p-3 flex items-center gap-2"
-                style={{ backgroundColor: "#E3EFF9", color: "#2B6CB0", fontSize: "14px", fontWeight: 500 }}
-              >
-                <InfoIcon className="h-4 w-4 flex-shrink-0" />
-                <span>Aucune étape active — configurez les étapes de l&apos;année</span>
-              </div>
-            ) : sessions.length === 0 ? (
-              <div
-                className="font-sans rounded-md p-3 flex items-center gap-2"
-                style={{ backgroundColor: "#FEF6E0", color: "#C48B1A", fontSize: "14px", fontWeight: 500 }}
-              >
-                <AlertTriangleIcon className="h-4 w-4 flex-shrink-0" />
-                <span>Aucune classe configurée pour cette année</span>
-              </div>
-            ) : (
-              <div
-                className="font-sans rounded-md p-3 flex items-center gap-2"
-                style={{ backgroundColor: "#E8F5EC", color: "#2D7D46", fontSize: "14px", fontWeight: 500 }}
-              >
-                <span>
-                  {sessions.length} classe(s) · {totalStudents} élève(s) · Étape : {currentStep.name}
+              <div className="flex flex-1 items-center gap-3">
+                <Progress
+                  value={stepProgress}
+                  className="h-2.5 flex-1 bg-violet-100 [&>div]:bg-violet-500"
+                />
+                <span className="text-sm font-semibold text-violet-600 tabular-nums">
+                  {Math.round(stepProgress)}%
                 </span>
               </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+            </CardContent>
+          </Card>
+        )}
 
-      {/* Aperçu des classes */}
-      {sessions.length === 0 ? (
-        <Card
-          className="border border-[#E8E6E3] rounded-[10px] shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
-          style={{ backgroundColor: "white" }}
-        >
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <SchoolIcon className="h-12 w-12 mb-4" style={{ color: "#A8A39C" }} />
-            <h3 className="font-serif mb-2" style={{ fontSize: "20px", fontWeight: 600, color: "#3A4A57" }}>
-              Aucune donnée disponible
-            </h3>
-            <p className="font-sans mb-6 text-center" style={{ fontSize: "14px", color: "#78756F" }}>
-              Configurez l&apos;année scolaire pour voir les statistiques des classes.
-            </p>
-            <Button
-              onClick={() => router.push('/admin/academic-years')}
-              style={{ backgroundColor: "#5A7085", color: "white" }}
-            >
-              Configurer l&apos;année
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card
-          className="border border-[#E8E6E3] rounded-[10px] shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
-          style={{ backgroundColor: "white" }}
-        >
-          <CardHeader>
-            <CardTitle
-              className="font-serif"
-              style={{ fontSize: "20px", fontWeight: 600, color: "#3A4A57" }}
-            >
-              Aperçu des classes — {activeYear?.name}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr style={{ backgroundColor: "#F1F5F9", borderBottom: "2px solid #D1D5DB" }}>
-                    <th style={{ padding: "10px 16px", textAlign: "left", fontSize: "12px", fontWeight: 700, color: "#2C4A6E", textTransform: "uppercase", letterSpacing: "0.06em" }}>Classe</th>
-                    <th style={{ padding: "10px 16px", textAlign: "left", fontSize: "12px", fontWeight: 700, color: "#2C4A6E", textTransform: "uppercase", letterSpacing: "0.06em" }}>Élèves</th>
-                    <th style={{ padding: "10px 16px", textAlign: "left", fontSize: "12px", fontWeight: 700, color: "#2C4A6E", textTransform: "uppercase", letterSpacing: "0.06em" }}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sessionStats.map((stat, i) => (
-                    <tr
-                      key={stat.sessionId}
-                      style={{ borderTop: i > 0 ? "1px solid #E8E6E3" : "none", backgroundColor: "white" }}
-                      className="hover:bg-[#FAF8F3]"
-                    >
-                      <td style={{ padding: "12px 16px", fontSize: "14px", fontWeight: 600, color: "#1E1A17" }}>
-                        {stat.className}
-                      </td>
-                      <td style={{ padding: "12px 16px", fontSize: "14px", color: "#5C5955" }}>
-                        {stat.studentCount} élève(s)
-                      </td>
-                      <td style={{ padding: "12px 16px" }}>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => router.push(`/admin/academic-year/${activeYear?.id}/grades`)}
-                          style={{ fontSize: "13px", color: "#5A7085" }}
-                        >
-                          Saisir notes
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-    </div>
+        {/* ── Alerts ── */}
+        {!activeYear && (
+          <Alert className="border-amber-200 bg-amber-50 text-amber-900">
+            <AlertTriangleIcon className="h-4 w-4 !text-amber-600" />
+            <AlertTitle>Aucune année scolaire active</AlertTitle>
+            <AlertDescription>
+              Configurez une année scolaire pour commencer à utiliser le système.
+              <Button
+                variant="link"
+                size="sm"
+                className="ml-1 h-auto p-0 text-amber-700 underline"
+                onClick={() => router.push("/admin/academic-years")}
+              >
+                Configurer maintenant
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+        {activeYear && !currentStep && (
+          <Alert className="border-blue-200 bg-blue-50 text-blue-900">
+            <InfoIcon className="h-4 w-4 !text-blue-600" />
+            <AlertTitle>Aucune étape active</AlertTitle>
+            <AlertDescription>
+              Configurez les étapes de l&apos;année pour activer la saisie des notes.
+            </AlertDescription>
+          </Alert>
+        )}
+        {activeYear && currentStep && sessions.length === 0 && (
+          <Alert className="border-amber-200 bg-amber-50 text-amber-900">
+            <AlertTriangleIcon className="h-4 w-4 !text-amber-600" />
+            <AlertTitle>Aucune classe configurée</AlertTitle>
+            <AlertDescription>
+              Ajoutez des classes pour cette année scolaire.
+            </AlertDescription>
+          </Alert>
+        )}
+        {activeYear && currentStep && sessions.length > 0 && (
+          <Alert className="border-emerald-200 bg-emerald-50 text-emerald-900">
+            <CheckCircle2Icon className="h-4 w-4 !text-emerald-600" />
+            <AlertTitle>Système opérationnel</AlertTitle>
+            <AlertDescription>
+              {sessions.length} classe(s) &middot; {totalStudents} élève(s) &middot; Étape :{" "}
+              {currentStep.name}
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* ── Quick Actions + Class Overview ── */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          {/* Quick Actions */}
+          <Card className="border bg-card shadow-sm lg:col-span-1">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold">
+                Actions rapides
+              </CardTitle>
+              <CardDescription>Accédez aux fonctions courantes</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {quickActions.map((action) => {
+                const ActionIcon = action.icon
+                return (
+                  <button
+                    key={action.label}
+                    onClick={() => router.push(action.href)}
+                    disabled={action.disabled}
+                    className="group flex w-full items-center gap-3 rounded-lg border border-transparent bg-muted/50 p-3 text-left transition-all hover:border-border hover:bg-muted hover:shadow-sm disabled:pointer-events-none disabled:opacity-50"
+                  >
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-background shadow-sm ring-1 ring-border">
+                      <ActionIcon className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-foreground">
+                        {action.label}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {action.description}
+                      </p>
+                    </div>
+                    <ArrowRightIcon className="h-4 w-4 shrink-0 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5 group-hover:text-muted-foreground" />
+                  </button>
+                )
+              })}
+            </CardContent>
+          </Card>
+
+          {/* Class Overview */}
+          <Card className="border bg-card shadow-sm lg:col-span-2">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base font-semibold">
+                    Aperçu des classes
+                  </CardTitle>
+                  <CardDescription>
+                    {activeYear
+                      ? `Répartition des élèves — ${activeYear.name}`
+                      : "Aucune donnée disponible"}
+                  </CardDescription>
+                </div>
+                {sessions.length > 0 && (
+                  <Badge variant="outline" className="tabular-nums">
+                    {sessions.length} classe(s)
+                  </Badge>
+                )}
+              </div>
+            </CardHeader>
+            <Separator />
+            <CardContent className="p-0">
+              {sessions.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+                    <SchoolIcon className="h-7 w-7 text-muted-foreground" />
+                  </div>
+                  <h3 className="mt-4 text-sm font-semibold text-foreground">
+                    Aucune donnée disponible
+                  </h3>
+                  <p className="mt-1 max-w-[280px] text-center text-sm text-muted-foreground">
+                    Configurez l&apos;année scolaire pour voir les statistiques
+                    des classes.
+                  </p>
+                  <Button
+                    size="sm"
+                    className="mt-5"
+                    onClick={() => router.push("/admin/academic-years")}
+                  >
+                    Configurer l&apos;année
+                  </Button>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="pl-6 font-semibold">
+                        Classe
+                      </TableHead>
+                      <TableHead className="font-semibold">Effectif</TableHead>
+                      <TableHead className="hidden font-semibold sm:table-cell">
+                        Répartition
+                      </TableHead>
+                      <TableHead className="pr-6 text-right font-semibold">
+                        Actions
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {sessionStats.map((stat) => {
+                      const pct =
+                        totalStudents > 0
+                          ? Math.round(
+                              (stat.studentCount / totalStudents) * 100
+                            )
+                          : 0
+                      return (
+                        <TableRow key={stat.sessionId}>
+                          <TableCell className="pl-6 font-medium">
+                            {stat.className}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <span className="tabular-nums">
+                                {stat.studentCount}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                élève(s)
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="hidden sm:table-cell">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="flex items-center gap-2">
+                                  <Progress
+                                    value={pct}
+                                    className="h-2 w-24 bg-muted [&>div]:bg-primary"
+                                  />
+                                  <span className="text-xs tabular-nums text-muted-foreground">
+                                    {pct}%
+                                  </span>
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {stat.studentCount} sur {totalStudents} élèves
+                              </TooltipContent>
+                            </Tooltip>
+                          </TableCell>
+                          <TableCell className="pr-6 text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 text-xs"
+                              onClick={() =>
+                                router.push(
+                                  `/admin/academic-year/${activeYear?.id}/grades`
+                                )
+                              }
+                            >
+                              Saisir notes
+                              <ArrowRightIcon className="ml-1 h-3 w-3" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </TooltipProvider>
   )
 }

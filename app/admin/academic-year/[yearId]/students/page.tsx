@@ -366,10 +366,10 @@ export default function StudentsManagementPage() {
 
       {/* Header */}
       <div>
-        <h1 className="font-serif" style={{ fontSize: '36px', fontWeight: 700, letterSpacing: '-0.03em', color: C.primary[800] }}>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">
           Élèves
         </h1>
-        <p className="font-sans" style={{ fontSize: '13px', color: C.neutral[500] }}>
+        <p className="mt-1 text-sm text-muted-foreground">
           Année {year?.name}
         </p>
       </div>
@@ -377,48 +377,47 @@ export default function StudentsManagementPage() {
       {isArchived && year && <ArchivedYearBanner yearName={year.name} />}
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         {[
           { label: "Total actifs",     value: activeStudents.length },
           { label: "Désactivés",       value: inactiveStudents.length },
           { label: "Sans photo",       value: withoutPhoto.length },
           { label: "NISU invalide",    value: withInvalidNisu.length },
         ].map(kpi => (
-          <Card key={kpi.label} style={{ backgroundColor: 'white', border: `1px solid ${C.neutral[200]}`, borderRadius: '10px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
-            <CardHeader className="pb-3">
-              <p className="font-sans" style={{ fontSize: '12px', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em', color: C.neutral[500], marginBottom: '4px' }}>
+          <Card key={kpi.label} className="border bg-card shadow-sm">
+            <CardContent className="p-4">
+              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 {kpi.label}
               </p>
-              <p className="font-serif" style={{ fontSize: '28px', fontWeight: 700, color: C.primary[800] }}>
+              <p className="mt-1 text-2xl font-bold tracking-tight text-foreground">
                 {kpi.value}
               </p>
-            </CardHeader>
+            </CardContent>
           </Card>
         ))}
       </div>
 
       {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
         <div className="flex items-center gap-2">
           <Switch id="show-inactive" checked={showInactive} onCheckedChange={setShowInactive} disabled={isArchived} />
-          <Label htmlFor="show-inactive" className="font-sans" style={{ fontSize: '13px', color: C.neutral[600] }}>
+          <Label htmlFor="show-inactive" className="text-sm text-muted-foreground">
             Voir désactivés ({inactiveStudents.length})
           </Label>
         </div>
 
         <div className="relative flex-1">
-          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" style={{ color: C.neutral[400] }} />
+          <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Rechercher par nom ou NISU..."
             value={searchQuery}
             onChange={e => { setSearchQuery(e.target.value); setCurrentPage(1) }}
             className="pl-9"
-            style={{ borderColor: C.neutral[300] }}
           />
         </div>
 
         <Select value={selectedClass} onValueChange={v => { setSelectedClass(v); setCurrentPage(1) }}>
-          <SelectTrigger className="w-full sm:w-[200px]" style={{ borderColor: C.neutral[300] }}>
+          <SelectTrigger className="w-full sm:w-[200px]">
             <SelectValue placeholder="Toutes les classes" />
           </SelectTrigger>
           <SelectContent>
@@ -434,7 +433,7 @@ export default function StudentsManagementPage() {
             academicYearId={yearId}
             onSuccess={() => { setEnrollOpen(false); loadStudents() }}
             trigger={
-              <Button style={{ backgroundColor: C.primary[500], color: 'white' }} onClick={() => setEnrollOpen(true)}>
+              <Button onClick={() => setEnrollOpen(true)}>
                 <PlusIcon className="mr-2 h-4 w-4" />
                 Inscrire un élève
               </Button>
@@ -445,23 +444,25 @@ export default function StudentsManagementPage() {
 
       {/* Table */}
       {displayed.length === 0 ? (
-        <Card style={{ backgroundColor: 'white', border: `1px solid ${C.neutral[200]}`, borderRadius: '10px' }}>
+        <Card className="border bg-card shadow-sm">
           <CardContent className="flex flex-col items-center justify-center py-16">
-            <UserIcon style={{ width: '48px', height: '48px', color: C.primary[200], marginBottom: '16px' }} />
-            <h3 className="font-serif" style={{ fontSize: '20px', fontWeight: 600, color: C.primary[800], marginBottom: '8px' }}>
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+              <UserIcon className="h-7 w-7 text-muted-foreground" />
+            </div>
+            <h3 className="mt-4 text-sm font-semibold text-foreground">
               {searchQuery || selectedClass !== 'all' ? "Aucun élève trouvé" : "Aucun élève inscrit"}
             </h3>
-            <p className="font-sans" style={{ fontSize: '14px', color: C.neutral[500] }}>
+            <p className="mt-1 text-sm text-muted-foreground">
               {searchQuery || selectedClass !== 'all' ? "Modifiez vos critères de recherche" : "Commencez par inscrire le premier élève"}
             </p>
           </CardContent>
         </Card>
       ) : (
-        <Card style={{ backgroundColor: 'white', border: `1px solid ${C.neutral[200]}`, borderRadius: '10px' }}>
-          <CardContent className="p-0 overflow-x-auto">
+        <Card className="border bg-card shadow-sm">
+          <CardContent className="overflow-x-auto p-0">
             <Table>
               <TableHeader>
-                <TableRow style={{ backgroundColor: C.primary[50], borderBottom: `1px solid ${C.neutral[200]}` }}>
+                <TableRow className="hover:bg-transparent">
                   {[
                     { label: 'Photo', col: null },
                     { label: 'Code', col: null },
@@ -474,8 +475,7 @@ export default function StudentsManagementPage() {
                   ].map(({ label, col }) => (
                     <TableHead
                       key={label}
-                      className="font-sans"
-                      style={{ fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: C.primary[600], cursor: col ? 'pointer' : 'default' }}
+                      className={col ? "cursor-pointer select-none font-semibold" : "font-semibold"}
                       onClick={() => col && handleSort(col)}
                     >
                       {label}{col && <SortIcon col={col} />}

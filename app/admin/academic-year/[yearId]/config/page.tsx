@@ -461,17 +461,20 @@ export default function AcademicYearConfigPage() {
 
   if (loading) {
     return (
-      <div className="space-y-4 p-4 sm:p-6">
-        <Skeleton className="h-4 w-32" />
-        <Skeleton className="h-10 w-80" />
-        <Skeleton className="h-[500px] w-full" />
+      <div className="space-y-8">
+        <div className="space-y-1">
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-9 w-80" />
+          <Skeleton className="h-5 w-64" />
+        </div>
+        <Skeleton className="h-[500px] w-full rounded-xl" />
       </div>
     )
   }
 
   if (notFound || !year) {
     return (
-      <div style={{ padding: '32px', color: '#C43C3C', fontSize: '16px' }}>
+      <div className="p-8 text-destructive">
         Année académique introuvable.
       </div>
     )
@@ -480,26 +483,20 @@ export default function AcademicYearConfigPage() {
   const isArchived = deriveYearStatus(year) === 'archived'
 
   return (
-    <div style={{ backgroundColor: '#FAFAF8', minHeight: '100vh' }}>
-      <div className="space-y-4 p-4 sm:p-6">
-
+    <div className="space-y-6">
         <div>
           <Link
             href="/admin/academic-years"
-            className="inline-flex items-center gap-2 hover:opacity-70 transition-opacity"
-            style={{ color: '#5A7085', fontSize: '14px', fontWeight: 500, marginBottom: '16px' }}
+            className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
             <ArrowLeftIcon className="h-4 w-4" />
             Années Scolaires
           </Link>
 
-          <h1
-            className="font-serif font-bold"
-            style={{ fontSize: '36px', fontWeight: 700, lineHeight: '1.15', letterSpacing: '-0.03em', color: '#2A3740' }}
-          >
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">
             Configuration — {year.name}
           </h1>
-          <p className="font-sans text-muted-foreground mt-1" style={{ fontSize: '13px', fontWeight: 400 }}>
+          <p className="mt-1 text-sm text-muted-foreground">
             Configurez les étapes, classes et matières de l&apos;année
           </p>
         </div>
@@ -531,7 +528,6 @@ export default function AcademicYearConfigPage() {
           onEditLevel={handleEditLevel}
           onDeleteLevel={handleDeleteLevel}
         />
-      </div>
     </div>
   )
 }

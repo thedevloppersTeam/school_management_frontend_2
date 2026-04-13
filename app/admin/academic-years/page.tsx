@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/use-toast"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
 import { CPMSLYearCard } from "@/components/school/cpmsl-year-card"
 import { CreateAcademicYearModalV2 } from "@/components/school/create-academic-year-modal-v2"
-import { PlusIcon, AlertTriangleIcon } from "lucide-react"
+import { PlusIcon, AlertTriangleIcon, SchoolIcon } from "lucide-react"
 import {
   fetchAllAcademicYears,
   fetchSteps,
@@ -39,7 +40,6 @@ function deriveStatus(year: AcademicYear): 'active' | 'preparation' | 'archived'
 }
 
 // ── Calcul des dates des étapes ───────────────────────────────────────────────
-// Divise l'année en N tranches égales
 
 function computeStepDates(
   yearStart: string,
@@ -154,11 +154,9 @@ export default function AcademicYearsPage() {
   }) => {
     setCreating(true)
     try {
-      // Dates réelles de l'année
       const yearStart = data.startDate || new Date(new Date().getFullYear(), 8, 1).toISOString()
       const yearEnd   = data.endDate   || new Date(new Date().getFullYear() + 1, 5, 30).toISOString()
 
-      // ── Étape 1 : Créer l'année ──────────────────────────────────────────
       const res = await fetch('/api/academic-years/create', {
         method: 'POST',
         credentials: 'include',
@@ -175,7 +173,6 @@ export default function AcademicYearsPage() {
       const { year } = await res.json()
       const newYearId = year.id
 
-      // ── Étape 2 : Créer les étapes avec dates réparties ──────────────────
       const stepCount = data.numberOfPeriods || 4
       const stepNames = ['1ère Étape', '2ème Étape', '3ème Étape', '4ème Étape', '5ème Étape']
         .slice(0, stepCount)
@@ -198,7 +195,6 @@ export default function AcademicYearsPage() {
         )
       )
 
-      // ── Étape 3 : Créer les sessions pour toutes les classes existantes ──
       const classesRes = await fetch('/api/classes/', { credentials: 'include' })
       if (classesRes.ok) {
         const classes: Array<{ id: string }> = await classesRes.json()
@@ -220,7 +216,6 @@ export default function AcademicYearsPage() {
         }
       }
 
-      // ── Étape 4 (optionnelle) : Copie de structure ───────────────────────
       if (data.copyFromYearId && newYearId) {
         const sessionsRes = await fetch(
           `/api/class-sessions?academicYearId=${data.copyFromYearId}`,
@@ -238,7 +233,6 @@ export default function AcademicYearsPage() {
           const sourceSubjects: Array<{ subjectId: string; coefficientOverride: number | null }> =
             await subjectsRes.json()
 
-          // Trouver la session déjà créée pour cette classe
           const existingSessionRes = await fetch(
             `/api/class-sessions?academicYearId=${newYearId}&classId=${sourceSession.classId}`,
             { credentials: 'include' }
@@ -268,9 +262,7 @@ export default function AcademicYearsPage() {
       } else {
         toast({
           title: "Année créée",
-          description: `${data.name} créée avec ${stepCount} étapes et ${
-            classesRes.ok ? (await classesRes.json().catch(() => [])).length : 0
-          } classes.`
+          description: `${data.name} créée avec ${stepCount} étapes.`
         })
       }
 
@@ -298,26 +290,25 @@ export default function AcademicYearsPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <Skeleton className="h-10 w-64" />
-        {[1, 2, 3].map(i => <Skeleton key={i} className="h-24 w-full" />)}
+      <div className="space-y-8">
+        <div className="space-y-1">
+          <Skeleton className="h-9 w-64" />
+          <Skeleton className="h-5 w-48" />
+        </div>
+        {[1, 2, 3].map(i => <Skeleton key={i} className="h-24 w-full rounded-xl" />)}
       </div>
     )
   }
 
   return (
     <div className="space-y-6">
-
-      {/* En-tête */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1
-            className="font-serif font-bold"
-            style={{ fontSize: '36px', fontWeight: 700, lineHeight: '1.15', letterSpacing: '-0.03em', color: '#2A3740' }}
-          >
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">
             Années Scolaires
           </h1>
-          <p className="font-sans text-muted-foreground mt-1" style={{ fontSize: '13px' }}>
+          <p className="mt-1 text-sm text-muted-foreground">
             Gérez les années académiques de votre établissement
           </p>
         </div>
@@ -328,12 +319,7 @@ export default function AcademicYearsPage() {
           hasActiveYear={hasActiveYear}
           onSubmit={handleCreateYear}
           trigger={
-            <Button
-              variant="outline"
-              className="gap-2"
-              disabled={creating}
-              style={{ backgroundColor: 'white', borderColor: '#2C4A6E', color: '#2C4A6E' }}
-            >
+            <Button variant="outline" className="gap-2" disabled={creating}>
               <PlusIcon className="h-4 w-4" />
               {creating ? 'Création...' : 'Nouvelle année'}
             </Button>
@@ -341,35 +327,28 @@ export default function AcademicYearsPage() {
         />
       </div>
 
-      {/* Avertissement si année active existe */}
+      {/* Warning if active year exists */}
       {hasActiveYear && (
-        <div
-          className="flex items-start gap-3 rounded-lg p-4"
-          style={{ backgroundColor: '#FEF6E0', border: '1px solid #C48B1A' }}
-        >
-          <AlertTriangleIcon className="h-5 w-5 mt-0.5 shrink-0" style={{ color: '#C48B1A' }} />
-          <div>
-            <p className="font-sans font-medium" style={{ fontSize: '13px', color: '#7A5214' }}>
-              Année active : <strong>{activeYear!.name}</strong>
-            </p>
-            <p className="font-sans mt-0.5" style={{ fontSize: '12px', color: '#9A6824' }}>
-              Pour changer d'année active, activez une année en préparation — l'année courante sera automatiquement désactivée.
-            </p>
-          </div>
-        </div>
+        <Alert className="border-amber-200 bg-amber-50 text-amber-900">
+          <AlertTriangleIcon className="h-4 w-4 !text-amber-600" />
+          <AlertTitle>Année active : {activeYear!.name}</AlertTitle>
+          <AlertDescription>
+            Pour changer d&apos;année active, activez une année en préparation — l&apos;année courante sera automatiquement désactivée.
+          </AlertDescription>
+        </Alert>
       )}
 
-      {/* Liste des cards */}
+      {/* Year cards list */}
       <div className="space-y-3">
         {yearCards.length === 0 ? (
-          <div
-            className="rounded-xl p-12 flex flex-col items-center justify-center text-center"
-            style={{ backgroundColor: 'white', border: '1px solid #E8E6E3' }}
-          >
-            <p className="font-serif" style={{ fontSize: '20px', fontWeight: 600, color: '#3A4A57', marginBottom: '8px' }}>
+          <div className="flex flex-col items-center justify-center rounded-xl border bg-card py-16 shadow-sm">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+              <SchoolIcon className="h-7 w-7 text-muted-foreground" />
+            </div>
+            <h3 className="mt-4 text-sm font-semibold text-foreground">
               Aucune année scolaire
-            </p>
-            <p className="font-sans" style={{ fontSize: '14px', color: '#78756F' }}>
+            </h3>
+            <p className="mt-1 text-sm text-muted-foreground">
               Créez votre première année pour commencer
             </p>
           </div>
