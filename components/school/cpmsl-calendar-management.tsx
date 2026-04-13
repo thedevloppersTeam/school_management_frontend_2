@@ -10,7 +10,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { PlusIcon } from "lucide-react"
-import type { Holiday, SchoolEvent } from "@/lib/data/school-data"
+//import type { Holiday, SchoolEvent } from "@/lib/data/school-data"
+// APRÈS
+interface Holiday {
+  id:   string
+  name: string
+  date: string
+}
+
+interface SchoolEvent {
+  id:             string
+  title:          string
+  date:           string
+  type:           'exam' | 'holiday' | 'meeting' | 'other' | 'ceremony' | 'trip'
+  academicYearId: string
+}
 
 interface CPMSLCalendarManagementProps {
   holidays: Holiday[]
