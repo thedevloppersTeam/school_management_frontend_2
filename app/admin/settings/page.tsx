@@ -95,7 +95,7 @@ function saveSectionCycles(sectionId: string, cycles: string[]): void {
 
 // complexity: 0
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`/api/proxy?path=${encodeURIComponent(path)}`, { credentials: 'include', ...options })
+  const res = await fetch(path, { credentials: 'include', ...options })
   if (!res.ok) throw new Error(`API error ${res.status}`)
   return res.json()
 }

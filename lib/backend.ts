@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { env } from './env'
 
 export async function backendFetch(
   request: NextRequest,
   path: string,
   method: string
 ): Promise<NextResponse> {
-  const base = process.env.BACKEND_URL ?? ''
-  const targetUrl = new URL(path, base)
+  const targetUrl = new URL(path, env.BACKEND_URL)
 
   // Forward query parameters from the incoming request
   request.nextUrl.searchParams.forEach((value, key) => {
@@ -21,7 +21,7 @@ export async function backendFetch(
   if (method !== 'GET' && method !== 'HEAD') {
     try {
       const json = await request.json()
-      if (process.env.NODE_ENV === 'development') {
+      if (env.NODE_ENV === 'development') {
         console.log(`[backendFetch] ${method} ${path}`, json)
       }
       body = JSON.stringify(json)
