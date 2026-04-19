@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { env } from './env'
 
+/**
+ * Timeout max pour les requêtes backend.
+ * Au-delà, on renvoie 504 Gateway Timeout pour éviter de bloquer
+ * les workers Next.js indéfiniment (FF3).
+ */
+const BACKEND_TIMEOUT_MS = 15_000
+
 export async function backendFetch(
   request: NextRequest,
   path: string,
@@ -31,7 +38,38 @@ export async function backendFetch(
     }
   }
 
-  const backendRes = await fetch(targetUrl.toString(), { method, headers, body })
-  const data = await backendRes.json().catch(() => null)
-  return NextResponse.json(data, { status: backendRes.status })
+  // FF3 — Timeout pour éviter le DoS par requêtes lentes
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), BACKEND_TIMEOUT_MS)
+
+  try {
+    const backendRes = await fetch(targetUrl.toString(), {
+      method,
+      headers,
+      body,
+      // FF2 — Ne pas suivre les redirections (anti-SSRF via 302)
+      redirect: 'manual',
+      signal: controller.signal,
+    })
+
+    const data = await backendRes.json().catch(() => null)
+    return NextResponse.json(data, { status: backendRes.status })
+  } catch (error: any) {
+    // FF3 — Timeout atteint
+    if (error.name === 'AbortError') {
+      console.error(`[backendFetch] Timeout ${method} ${path}`)
+      return NextResponse.json(
+        { message: 'Backend timeout' },
+        { status: 504 }
+      )
+    }
+    // Autres erreurs réseau
+    console.error(`[backendFetch] Error ${method} ${path}:`, error.message)
+    return NextResponse.json(
+      { message: 'Backend unreachable' },
+      { status: 503 }
+    )
+  } finally {
+    clearTimeout(timeoutId)
+  }
 }

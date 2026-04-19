@@ -1,6 +1,6 @@
 // app/admin/settings/school/page.tsx
 "use client"
-
+import { clientFetch as apiFetch } from '@/lib/client-fetch'
 import React, { useState, useEffect, useCallback } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/components/ui/use-toast"
@@ -94,11 +94,6 @@ function saveSectionCycles(sectionId: string, cycles: string[]): void {
 }
 
 // complexity: 0
-async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(path, { credentials: 'include', ...options })
-  if (!res.ok) throw new Error(`API error ${res.status}`)
-  return res.json()
-}
 
 // complexity: 3
 function rubricColor(code?: string) {
