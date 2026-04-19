@@ -1,0 +1,302 @@
+{
+  "info": {
+    "name": "CPMSL — Seed 100 Students",
+    "_postman_id": "seed-100-students",
+    "description": "1) Run \"Login\" once.\n2) Run \"Fetch Class Sessions\" once.\n3) Use Collection Runner on \"Enroll Random Student\" with 100 iterations.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://apicpmsl.stelloud.cloud",
+      "type": "string"
+    },
+    {
+      "key": "username",
+      "value": "admin",
+      "type": "string"
+    },
+    {
+      "key": "password",
+      "value": "Admin@123",
+      "type": "string"
+    },
+    {
+      "key": "academic_year_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "class_session_ids",
+      "value": "[]",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Setup",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('Login successful', () => pm.response.to.have.status(200));",
+                  "    console.log('Logged in as:', res.session?.firstname, res.session?.lastname);",
+                  "} else {",
+                  "    pm.test('Login failed: ' + (res.message || 'unknown'), () => { throw new Error(res.message) });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"username\": \"{{username}}\",\n    \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/users/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "login"]
+            }
+          }
+        },
+        {
+          "name": "Fetch Class Sessions (active year)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// First fetch the active academic year",
+                  "pm.sendRequest({",
+                  "    url: pm.collectionVariables.get('base_url') + '/api/academic-years/current',",
+                  "    method: 'GET',",
+                  "    header: { 'Cookie': pm.request.headers.get('Cookie') || '' }",
+                  "}, (err, res) => {",
+                  "    if (err) { console.error('Failed to fetch active year:', err); return; }",
+                  "    const year = res.json();",
+                  "    if (year && year.id) {",
+                  "        pm.collectionVariables.set('academic_year_id', year.id);",
+                  "        console.log('Active year:', year.name, '(' + year.id + ')');",
+                  "    } else {",
+                  "        console.error('No active year found. Set academic_year_id manually.');",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const sessions = pm.response.json();",
+                  "pm.test('Got class sessions', () => {",
+                  "    pm.expect(sessions).to.be.an('array');",
+                  "    pm.expect(sessions.length).to.be.above(0);",
+                  "});",
+                  "",
+                  "const ids = sessions.map(s => s.id);",
+                  "pm.collectionVariables.set('class_session_ids', JSON.stringify(ids));",
+                  "",
+                  "const labels = sessions.map(s => {",
+                  "    const ct = s.class.classType.name;",
+                  "    const letter = s.class.letter;",
+                  "    const track = s.class.track ? ' ' + s.class.track.code : '';",
+                  "    return ct + ' ' + letter + track;",
+                  "});",
+                  "console.log('Found ' + ids.length + ' class sessions:', labels.join(', '));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/class-sessions?academicYearId={{academic_year_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "class-sessions"],
+              "query": [
+                { "key": "academicYearId", "value": "{{academic_year_id}}" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Enroll Random Student (run 100x)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "// ── Haitian name pools ──────────────────────────────────────────────",
+              "const firstNamesMale = [",
+              "    'Jean', 'Pierre', 'Marc', 'Joseph', 'Jacques', 'Emmanuel', 'Samuel',",
+              "    'David', 'Daniel', 'Paul', 'Frantz', 'Wilner', 'Eddy', 'Robenson',",
+              "    'Wyclef', 'Stanley', 'Junior', 'Ricardo', 'Mackenson', 'Dieudonne',",
+              "    'Herve', 'Patrick', 'Reginald', 'Woody', 'Steeve', 'Kervens',",
+              "    'Jhon', 'Anderson', 'Widley', 'Roodley', 'Luckson', 'Peterson',",
+              "    'Gardy', 'Estime', 'Wisly', 'Kensley', 'Stevenson', 'Carlens',",
+              "    'Marckenson', 'Enock', 'Judeson', 'Jameson', 'Rodney', 'Evens',",
+              "    'Johnley', 'Kerby', 'Richardo', 'Carlo', 'Fabien', 'Vladimir'",
+              "];",
+              "",
+              "const firstNamesFemale = [",
+              "    'Marie', 'Rose', 'Fabiola', 'Martine', 'Guerline', 'Sophia',",
+              "    'Mirlande', 'Naomie', 'Esther', 'Ruth', 'Loudmia', 'Ketia',",
+              "    'Natacha', 'Wendy', 'Sandra', 'Cassandra', 'Judith', 'Magdala',",
+              "    'Darline', 'Islande', 'Sherly', 'Stacy', 'Manouchka', 'Geraldine',",
+              "    'Beatrice', 'Mirna', 'Johanne', 'Nadia', 'Carine', 'Bernadette',",
+              "    'Claudia', 'Yolande', 'Rosemonde', 'Pascale', 'Nadege', 'Vanessa',",
+              "    'Daphney', 'Lovely', 'Tamara', 'Roseline', 'Carmelle', 'Evelyne',",
+              "    'Ketly', 'Mireille', 'Ginette', 'Marlene', 'Stephanie', 'Edwige'",
+              "];",
+              "",
+              "const lastNames = [",
+              "    'JEAN-BAPTISTE', 'PIERRE', 'LOUIS', 'CHARLES', 'JOSEPH', 'SIMON',",
+              "    'FRANCOIS', 'AUGUSTIN', 'DESROSIERS', 'SAINTIL', 'BELIZAIRE',",
+              "    'DORCELY', 'TOUSSAINT', 'PIERRE-LOUIS', 'JEAN-LOUIS', 'SAINT-FLEUR',",
+              "    'BEAUVOIR', 'DUVAL', 'ETIENNE', 'MOÏSE', 'HYPPOLITE', 'CIVIL',",
+              "    'ARISTIDE', 'BAPTISTE', 'PHILIPPE', 'GABRIEL', 'NELSON', 'GUERRIER',",
+              "    'MARCELIN', 'THERMIDOR', 'JEAN-CHARLES', 'PROPHETE', 'PAUL',",
+              "    'CELESTIN', 'JACQUES', 'LAMOUR', 'RAYMOND', 'ALEXANDRE', 'DORMEUS',",
+              "    'FLEURIME', 'BONHOMME', 'DIEUJUSTE', 'NICOLAS', 'JEAN-PIERRE',",
+              "    'DORLUS', 'RENARD', 'SAINT-LOUIS', 'EXANTUS', 'SEVERE', 'PETIT-HOMME'",
+              "];",
+              "",
+              "// ── Random helpers ──────────────────────────────────────────────────",
+              "function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }",
+              "",
+              "function randomNisu() {",
+              "    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';",
+              "    let s = '';",
+              "    for (let i = 0; i < 14; i++) s += chars[Math.floor(Math.random() * chars.length)];",
+              "    return s;",
+              "}",
+              "",
+              "function randomDate(minYear, maxYear) {",
+              "    const y = minYear + Math.floor(Math.random() * (maxYear - minYear + 1));",
+              "    const m = String(1 + Math.floor(Math.random() * 12)).padStart(2, '0');",
+              "    const d = String(1 + Math.floor(Math.random() * 28)).padStart(2, '0');",
+              "    return y + '-' + m + '-' + d;",
+              "}",
+              "",
+              "function randomPhone() {",
+              "    const prefixes = ['36', '37', '38', '39', '40', '41', '42', '43', '44', '46', '47', '48'];",
+              "    const p = pick(prefixes);",
+              "    let num = '';",
+              "    for (let i = 0; i < 6; i++) num += Math.floor(Math.random() * 10);",
+              "    return '+509 ' + p + num;",
+              "}",
+              "",
+              "// ── Generate student ────────────────────────────────────────────────",
+              "const isFemale = Math.random() < 0.5;",
+              "const firstName = isFemale ? pick(firstNamesFemale) : pick(firstNamesMale);",
+              "const lastName = pick(lastNames);",
+              "const fatherFirst = pick(firstNamesMale);",
+              "const motherFirst = pick(firstNamesFemale);",
+              "const motherLast = pick(lastNames);",
+              "",
+              "// Pick random class session",
+              "const sessionIds = JSON.parse(pm.collectionVariables.get('class_session_ids') || '[]');",
+              "if (sessionIds.length === 0) {",
+              "    throw new Error('No class_session_ids found. Run \"Fetch Class Sessions\" first.');",
+              "}",
+              "const classSessionId = pick(sessionIds);",
+              "",
+              "// ── Set body ────────────────────────────────────────────────────────",
+              "const student = {",
+              "    nisu: randomNisu(),",
+              "    firstName: firstName,",
+              "    lastName: lastName,",
+              "    birthDate: randomDate(2008, 2018),",
+              "    classSessionId: classSessionId,",
+              "    fatherName: fatherFirst + ' ' + lastName,",
+              "    motherName: motherFirst + ' ' + motherLast,",
+              "    phone1: randomPhone(),",
+              "    phone2: Math.random() < 0.4 ? randomPhone() : '',",
+              "    address: pick([",
+              "        'Rue Capois, Port-au-Prince',",
+              "        'Avenue John Brown, Pétion-Ville',",
+              "        'Boulevard Harry Truman, Cité Soleil',",
+              "        'Rue des Miracles, Cap-Haïtien',",
+              "        'Route de Delmas 33',",
+              "        'Route de Frères, Pétion-Ville',",
+              "        'Rue Monseigneur Guilloux',",
+              "        'Avenue Panaméricaine, Tabarre',",
+              "        'Carrefour-Feuilles',",
+              "        'Bois Verna, Port-au-Prince',",
+              "        'Route Nationale 1, Cabaret',",
+              "        'Rue Lamarre, Jérémie',",
+              "        'Rue Bonne Foi, Port-au-Prince',",
+              "        'Turgeau, Port-au-Prince',",
+              "        'Bourdon, Port-au-Prince'",
+              "    ]),",
+              "    parentsEmail: Math.random() < 0.3 ? (firstName.toLowerCase() + '.' + lastName.toLowerCase().replace(/[^a-z]/g, '') + '@gmail.com') : ''",
+              "};",
+              "",
+              "pm.variables.set('student_body', JSON.stringify(student));",
+              "",
+              "const iteration = pm.info.iteration + 1;",
+              "console.log('#' + iteration + ' → ' + student.firstName + ' ' + student.lastName + ' (NISU: ' + student.nisu + ', class: ' + classSessionId.substring(0,8) + '...)');"
+            ],
+            "type": "text/javascript"
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const iteration = pm.info.iteration + 1;",
+              "",
+              "if (pm.response.code === 200 || pm.response.code === 201) {",
+              "    pm.test('#' + iteration + ' — Student enrolled', () => {",
+              "        pm.response.to.have.status(pm.response.code);",
+              "    });",
+              "} else {",
+              "    const body = pm.response.json();",
+              "    const msg = body.message || body.error || JSON.stringify(body);",
+              "    console.warn('#' + iteration + ' — Failed (' + pm.response.code + '): ' + msg);",
+              "    // Don't fail the test so the runner continues",
+              "    pm.test('#' + iteration + ' — Failed: ' + msg, () => {",
+              "        pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+              "    });",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{{student_body}}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/students/enroll",
+          "host": ["{{base_url}}"],
+          "path": ["api", "students", "enroll"]
+        }
+      }
+    }
+  ]
+}

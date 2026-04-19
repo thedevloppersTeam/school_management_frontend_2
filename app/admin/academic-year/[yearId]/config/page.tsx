@@ -247,42 +247,55 @@ export default function AcademicYearConfigPage() {
 
   const handleClosePeriod = async (periodId: string) => {
     try {
-      const res = await fetch(`/api/academic-years/steps/disable/${periodId}`, {
-        credentials: 'include'
+      const res = await fetch('/api/academic-years/steps/disable', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: periodId,
+          academicYearId: yearId,
+        }),
       })
-      if (!res.ok) throw new Error(`Échec clôture`)
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body?.message || 'Échec clôture')
+      }
       toast({ title: "Étape clôturée" })
       await loadData()
-    } catch {
-      toast({ title: "Erreur", variant: "destructive" })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erreur'
+      toast({ title: "Erreur", description: message, variant: "destructive" })
     }
   }
 
-  // FIX W1-05 : logging + await loadData + message d'erreur explicite
-  const handleReopenPeriod = async (periodId: string) => {
+  const handleReopenPeriod = async (periodId: string, reason?: string) => {
     try {
-      const res = await fetch(`/api/academic-years/steps/enable/${periodId}`, {
-        credentials: 'include'
+      const res = await fetch('/api/academic-years/steps/enable', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: periodId,
+          academicYearId: yearId,
+          reason: reason || '',
+        }),
       })
       const body = await res.json().catch(() => null)
-      console.log('[reopen] status:', res.status, 'body:', body)
       if (!res.ok) throw new Error(body?.message || `Erreur ${res.status}`)
       toast({ title: "Étape réouverte", description: "La saisie de notes est débloquée." })
       await loadData()
     } catch (err) {
-  const message = err instanceof Error ? err.message : ''
-  //console.error('[reopen] échec:', message)
-
-  if (message.toLowerCase().includes('current step already exists')) {
-    toast({
-      title: "Une seule étape active à la fois",
-      description: "Clôturez l'étape actuellement ouverte avant de réouvrir celle-ci.",
-    })
-  } else {
-    toast({ title: "Erreur réouverture", description: message, variant: "destructive" })
+      const message = err instanceof Error ? err.message : ''
+      if (message.toLowerCase().includes('current step already exists')) {
+        toast({
+          title: "Une seule étape active à la fois",
+          description: "Clôturez l'étape actuellement ouverte avant de réouvrir celle-ci.",
+        })
+      } else {
+        toast({ title: "Erreur réouverture", description: message, variant: "destructive" })
+      }
+    }
   }
-}
-}
 
   // ── Handlers — Matières ────────────────────────────────────────────────────
 

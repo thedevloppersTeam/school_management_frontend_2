@@ -1,11 +1,37 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
-import { CheckCircleIcon, AlertCircleIcon, ClockIcon } from "lucide-react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import { Progress } from "@/components/ui/progress"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { StatCard } from "@/components/school/stat-card"
+import {
+  CheckCircleIcon,
+  AlertCircleIcon,
+  ClockIcon,
+  SearchIcon,
+  ArrowRightIcon,
+  InboxIcon,
+  TrendingUpIcon,
+  CheckCircle2Icon,
+  CircleDashedIcon,
+} from "lucide-react"
 import type { AcademicYearStep, ClassSession } from "@/lib/api/dashboard"
 import { fetchClassSubjects, fetchEnrollments } from "@/lib/api/grades"
+import { cn } from "@/lib/utils"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -50,6 +76,7 @@ export function CPMSLProgressionTab({
   const [selectedStep, setSelectedStep]         = useState("")
   const [classProgress, setClassProgress]       = useState<ClassProgress[]>([])
   const [loading, setLoading]                   = useState(false)
+  const [searchQuery, setSearchQuery]           = useState("")
 
   // ── Chargement ───────────────────────────────────────────────────────────────
   const loadProgress = useCallback(async (stepId: string) => {
@@ -151,30 +178,62 @@ export function CPMSLProgressionTab({
   const inProgress    = classProgress.filter(c => c.status === 'in-progress').length
   const notStarted    = classProgress.filter(c => c.status === 'not-started').length
 
-  // ── Couleur barre ─────────────────────────────────────────────────────────────
-  const barColor = (pct: number) =>
-    pct === 100 ? '#2D7D46' : pct > 0 ? '#2B6CB0' : '#D1CECC'
+  // ── Semantic progress color class ─────────────────────────────────────────
+  const progressTextClass = (pct: number) =>
+    pct === 100 ? 'text-emerald-600' : pct > 0 ? 'text-blue-600' : 'text-muted-foreground'
 
-  const statusBadge = (status: ClassProgress['status']) => {
-    if (status === 'complete')    return { bg: '#E8F5EC', color: '#2D7D46',  icon: <CheckCircleIcon className="h-3.5 w-3.5" />, label: 'Complet' }
-    if (status === 'in-progress') return { bg: '#E3EFF9', color: '#2B6CB0',  icon: <ClockIcon className="h-3.5 w-3.5" />,         label: 'En cours' }
-    return                               { bg: '#F5F4F2', color: '#78756F',  icon: <AlertCircleIcon className="h-3.5 w-3.5" />,  label: 'Non commencé' }
+  const progressBarClass = (pct: number) =>
+    pct === 100
+      ? '[&>div]:bg-emerald-500'
+      : pct > 0
+        ? '[&>div]:bg-blue-500'
+        : '[&>div]:bg-muted-foreground/30'
+
+  const renderStatusBadge = (status: ClassProgress['status']) => {
+    if (status === 'complete') {
+      return (
+        <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
+          <CheckCircleIcon className="mr-1 h-3 w-3" />
+          Complet
+        </Badge>
+      )
+    }
+    if (status === 'in-progress') {
+      return (
+        <Badge className="border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-50">
+          <ClockIcon className="mr-1 h-3 w-3" />
+          En cours
+        </Badge>
+      )
+    }
+    return (
+      <Badge variant="secondary">
+        <AlertCircleIcon className="mr-1 h-3 w-3" />
+        Non commencé
+      </Badge>
+    )
   }
 
-  // ── Rendu ─────────────────────────────────────────────────────────────────────
+  // ── Filtered classes (search) ─────────────────────────────────────────────
+  const filteredProgress = useMemo(() => {
+    if (!searchQuery.trim()) return classProgress
+    const q = searchQuery.toLowerCase()
+    return classProgress.filter(c => c.className.toLowerCase().includes(q))
+  }, [classProgress, searchQuery])
+
+  // ── Rendu ─────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
-
       {/* Sélecteur étape */}
-      <div style={{ backgroundColor: 'white', borderRadius: '10px', border: '1px solid #E8E6E3', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
-        <div style={{ padding: '20px 24px', borderBottom: '1px solid #E8E6E3' }}>
-          <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: '15px', fontWeight: 600, color: '#3A4A57' }}>
-            Sélectionner une étape
-          </h3>
-        </div>
-        <div style={{ padding: '24px' }}>
+      <Card className="border bg-card shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-semibold">Sélection d&apos;une étape</CardTitle>
+          <CardDescription>Voir l&apos;avancement de la saisie pour une étape donnée</CardDescription>
+        </CardHeader>
+        <Separator />
+        <CardContent className="p-4">
           <Select value={selectedStep} onValueChange={setSelectedStep}>
-            <SelectTrigger style={{ borderColor: '#D1CECC', borderRadius: '8px', maxWidth: '280px' }}>
+            <SelectTrigger className="max-w-sm">
               <SelectValue placeholder="Choisir une étape" />
             </SelectTrigger>
             <SelectContent>
@@ -183,25 +242,34 @@ export function CPMSLProgressionTab({
               ))}
             </SelectContent>
           </Select>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Empty state */}
       {!selectedStep && (
-        <div style={{ backgroundColor: 'white', borderRadius: '10px', border: '1px solid #E8E6E3', padding: '48px 24px', textAlign: 'center' }}>
-          <p style={{ fontSize: '15px', fontWeight: 500, color: '#78756F' }}>
-            Sélectionnez une étape pour voir l&apos;avancement de la saisie
-          </p>
-        </div>
+        <Card className="border bg-card shadow-sm">
+          <CardContent className="flex flex-col items-center justify-center py-16">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+              <InboxIcon className="h-7 w-7 text-muted-foreground" />
+            </div>
+            <h3 className="mt-4 text-sm font-semibold text-foreground">
+              Aucune étape sélectionnée
+            </h3>
+            <p className="mt-1 max-w-[320px] text-center text-sm text-muted-foreground">
+              Sélectionnez une étape pour voir l&apos;avancement de la saisie des notes par classe.
+            </p>
+          </CardContent>
+        </Card>
       )}
 
       {/* Loading */}
       {selectedStep && loading && (
-        <div className="space-y-3">
-          <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-16 w-full" />
-          <Skeleton className="h-16 w-full" />
-          <Skeleton className="h-16 w-full" />
+        <div className="space-y-4">
+          <Skeleton className="h-32 w-full rounded-xl" />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-[104px] rounded-xl" />)}
+          </div>
+          <Skeleton className="h-96 w-full rounded-xl" />
         </div>
       )}
 
@@ -209,114 +277,157 @@ export function CPMSLProgressionTab({
       {selectedStep && !loading && classProgress.length > 0 && (
         <>
           {/* Barre globale */}
-          <div style={{ backgroundColor: 'white', borderRadius: '10px', border: '1px solid #E8E6E3', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', padding: '24px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-              <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: '18px', fontWeight: 600, color: '#2A3740' }}>
-                Avancement global — {steps.find(s => s.id === selectedStep)?.name}
-              </h3>
-              <span style={{ fontFamily: 'var(--font-serif)', fontSize: '28px', fontWeight: 700, color: globalPct === 100 ? '#2D7D46' : '#2C4A6E' }}>
-                {globalPct}%
-              </span>
-            </div>
-            {/* Barre de progression */}
-            <div style={{ backgroundColor: '#F0F4F7', borderRadius: '8px', height: '16px', overflow: 'hidden', marginBottom: '8px' }}>
-              <div style={{ width: `${globalPct}%`, height: '100%', backgroundColor: barColor(globalPct), borderRadius: '8px', transition: 'width 0.5s ease' }} />
-            </div>
-            <p style={{ fontSize: '13px', color: '#78756F' }}>
-              {totalEntered} / {totalExpected} notes saisies
-            </p>
-          </div>
+          <Card className="border bg-card shadow-sm">
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-50">
+                    <TrendingUpIcon className="h-5 w-5 text-violet-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">
+                      Avancement global — {steps.find(s => s.id === selectedStep)?.name}
+                    </p>
+                    <p className="text-xs text-muted-foreground tabular-nums">
+                      {totalEntered} / {totalExpected} notes saisies
+                    </p>
+                  </div>
+                </div>
+                <span className={cn("text-3xl font-bold tabular-nums", progressTextClass(globalPct))}>
+                  {globalPct}%
+                </span>
+              </div>
+              <Progress
+                value={globalPct}
+                className={cn("mt-4 h-3", progressBarClass(globalPct))}
+              />
+            </CardContent>
+          </Card>
 
           {/* KPIs */}
-          <div className="grid grid-cols-3 gap-4">
-            {[
-              { label: 'Classes complètes',     value: complete,    color: '#2D7D46', bg: '#E8F5EC' },
-              { label: 'Classes en cours',       value: inProgress,  color: '#2B6CB0', bg: '#E3EFF9' },
-              { label: 'Classes non commencées', value: notStarted,  color: '#78756F', bg: '#F5F4F2' },
-            ].map(kpi => (
-              <div key={kpi.label} style={{ backgroundColor: 'white', borderRadius: '10px', border: '1px solid #E8E6E3', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', padding: '16px 20px' }}>
-                <p style={{ fontSize: '12px', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#78756F', marginBottom: '6px' }}>
-                  {kpi.label}
-                </p>
-                <p style={{ fontFamily: 'var(--font-serif)', fontSize: '32px', fontWeight: 700, color: kpi.color }}>
-                  {kpi.value}
-                  <span style={{ fontSize: '14px', fontWeight: 400, color: '#78756F', marginLeft: '6px' }}>
-                    / {classProgress.length}
-                  </span>
-                </p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <StatCard
+              label="Classes complètes"
+              value={`${complete} / ${classProgress.length}`}
+              icon={CheckCircle2Icon}
+              iconClassName="text-emerald-600"
+              iconBgClassName="bg-emerald-50"
+            />
+            <StatCard
+              label="Classes en cours"
+              value={`${inProgress} / ${classProgress.length}`}
+              icon={ClockIcon}
+              iconClassName="text-blue-600"
+              iconBgClassName="bg-blue-50"
+            />
+            <StatCard
+              label="Classes non commencées"
+              value={`${notStarted} / ${classProgress.length}`}
+              icon={CircleDashedIcon}
+              iconClassName="text-slate-600"
+              iconBgClassName="bg-slate-100"
+            />
+          </div>
+
+          {/* Table par classe */}
+          <Card className="border bg-card shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <CardTitle className="text-base font-semibold">Détail par classe</CardTitle>
+                  <CardDescription>
+                    {filteredProgress.length} classe{filteredProgress.length > 1 ? 's' : ''}
+                    {searchQuery && ` — recherche : "${searchQuery}"`}
+                  </CardDescription>
+                </div>
               </div>
-            ))}
-          </div>
+            </CardHeader>
 
-          {/* Tableau par classe */}
-          <div style={{ backgroundColor: 'white', borderRadius: '10px', border: '1px solid #E8E6E3', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
-            <div style={{ padding: '20px 24px', borderBottom: '1px solid #E8E6E3' }}>
-              <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: '16px', fontWeight: 600, color: '#2A3740' }}>
-                Détail par classe
-              </h3>
+            <Separator />
+
+            {/* Search toolbar */}
+            <div className="p-4">
+              <div className="relative max-w-md">
+                <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Rechercher une classe..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
             </div>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ backgroundColor: '#F1F5F9', borderBottom: '2px solid #D1D5DB' }}>
-                  {['Classe', 'Progression', '%', 'Notes', 'Statut', 'Action'].map(h => (
-                    <th key={h} style={{ padding: '10px 16px', textAlign: h === 'Progression' ? 'left' : 'center', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#2C4A6E' }}>
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {classProgress.map((cp, i) => {
-                  const badge = statusBadge(cp.status)
-                  return (
-                    <tr key={cp.sessionId} style={{ borderTop: i > 0 ? '1px solid #E8E6E3' : 'none', backgroundColor: i % 2 === 0 ? 'white' : '#FAFAF8' }} className="hover:bg-[#F5F4F2]">
-                      {/* Classe */}
-                      <td style={{ padding: '12px 16px', fontSize: '14px', fontWeight: 600, color: '#1E1A17', minWidth: '160px' }}>
-                        {cp.className}
-                      </td>
 
-                      {/* Barre */}
-                      <td style={{ padding: '12px 16px', minWidth: '200px' }}>
-                        <div style={{ backgroundColor: '#F0F4F7', borderRadius: '6px', height: '10px', overflow: 'hidden' }}>
-                          <div style={{ width: `${cp.pct}%`, height: '100%', backgroundColor: barColor(cp.pct), borderRadius: '6px', transition: 'width 0.4s ease' }} />
-                        </div>
-                      </td>
+            <Separator />
 
-                      {/* % */}
-                      <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: '14px', fontWeight: 700, color: barColor(cp.pct) }}>
-                        {cp.pct}%
-                      </td>
-
-                      {/* Notes */}
-                      <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: '13px', color: '#78756F' }}>
-                        {cp.totalEntered} / {cp.totalExpected}
-                      </td>
-
-                      {/* Statut */}
-                      <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: badge.bg, color: badge.color, padding: '3px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 500 }}>
-                          {badge.icon}
-                          {badge.label}
-                        </span>
-                      </td>
-
-                      {/* Action */}
-                      <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                        {cp.status !== 'complete' && onNavigateToSaisie && (
-                          <button
-                            onClick={() => onNavigateToSaisie(cp.sessionId, selectedStep)}
-                            style={{ fontSize: '12px', fontWeight: 500, color: '#2C4A6E', background: 'none', border: '1px solid #B3C7D5', borderRadius: '6px', padding: '4px 10px', cursor: 'pointer' }}
-                          >
-                            Saisir →
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+            <CardContent className="p-0">
+              {filteredProgress.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+                    <InboxIcon className="h-7 w-7 text-muted-foreground" />
+                  </div>
+                  <h3 className="mt-4 text-sm font-semibold text-foreground">
+                    Aucune classe trouvée
+                  </h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Modifiez vos critères de recherche.
+                  </p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="pl-6 font-semibold">Classe</TableHead>
+                      <TableHead className="min-w-[220px] font-semibold">Progression</TableHead>
+                      <TableHead className="font-semibold">%</TableHead>
+                      <TableHead className="font-semibold">Notes</TableHead>
+                      <TableHead className="font-semibold">Statut</TableHead>
+                      <TableHead className="pr-6 text-right font-semibold">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredProgress.map(cp => (
+                      <TableRow key={cp.sessionId}>
+                        <TableCell className="pl-6 font-medium text-foreground">
+                          {cp.className}
+                        </TableCell>
+                        <TableCell>
+                          <Progress
+                            value={cp.pct}
+                            className={cn("h-2 w-full max-w-[220px]", progressBarClass(cp.pct))}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <span className={cn("text-sm font-bold tabular-nums", progressTextClass(cp.pct))}>
+                            {cp.pct}%
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-sm tabular-nums text-muted-foreground">
+                          {cp.totalEntered} / {cp.totalExpected}
+                        </TableCell>
+                        <TableCell>
+                          {renderStatusBadge(cp.status)}
+                        </TableCell>
+                        <TableCell className="pr-6 text-right">
+                          {cp.status !== 'complete' && onNavigateToSaisie && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 text-xs"
+                              onClick={() => onNavigateToSaisie(cp.sessionId, selectedStep)}
+                            >
+                              Saisir
+                              <ArrowRightIcon className="ml-1 h-3 w-3" />
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
         </>
       )}
     </div>

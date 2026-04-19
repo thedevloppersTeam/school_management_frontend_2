@@ -1,6 +1,7 @@
 "use client"
 
 import { SchoolLogo } from "@/components/school/school-logo"
+import { Toaster } from "@/components/ui/toaster"
 import { CheckIcon } from "lucide-react"
 
 interface AuthLayoutProps {
@@ -9,6 +10,7 @@ interface AuthLayoutProps {
 
 export default function LoginLayout({ children }: AuthLayoutProps) {
   return (
+    <>
     <div
       className="min-h-screen flex items-center justify-center overflow-x-hidden"
       style={{
@@ -180,5 +182,7 @@ export default function LoginLayout({ children }: AuthLayoutProps) {
         </div>
       </div>
     </div>
+    <Toaster />
+    </>
   )
 }

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { useParams } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CPMSLGradesGrid } from "@/components/school/cpmsl-grades-grid"
 import { CPMSLBehaviorGrid } from "@/components/school/cpmsl-behavior-grid"
@@ -14,7 +15,6 @@ import type { AcademicYearStep, ClassSession } from "@/lib/api/dashboard"
 import type { ApiClassSubject, ApiEnrollment, ApiGrade, CreateGradePayload } from "@/lib/api/grades"
 import { fetchClassSubjects, fetchEnrollments, fetchGradesForClassSubjectStep, bulkCreateGrades, updateGrade } from "@/lib/api/grades"
 import type { UpdateGradePayload } from "@/components/school/cpmsl-grades-grid"
-
 
 function buildSaveDescription(created: number, updated: number): string {
   const parts: string[] = []
@@ -37,6 +37,7 @@ export default function GradesPage() {
   // ── Contexte partagé ──────────────────────────────────────────────────────
   const [sessions,    setSessions]    = useState<ClassSession[]>([])
   const [steps,       setSteps]       = useState<AcademicYearStep[]>([])
+  const [yearName,    setYearName]    = useState<string>("")
 
   // ── Onglet Saisie (W3) ────────────────────────────────────────────────────
   const [apiSessions,            setApiSessions]            = useState<ApiClassSession[]>([])
@@ -60,9 +61,10 @@ export default function GradesPage() {
       setLoadingContext(true)
       setError(null)
       try {
-        const [sessionsRes, stepsRes] = await Promise.all([
+        const [sessionsRes, stepsRes, yearRes] = await Promise.all([
           fetch(`/api/class-sessions?academicYearId=${yearId}`, { credentials: 'include' }),
           fetch(`/api/academic-years/${yearId}/steps`, { credentials: 'include' }),
+          fetch(`/api/academic-years/${yearId}`, { credentials: 'include' }),
         ])
         if (!sessionsRes.ok || !stepsRes.ok) throw new Error('Erreur de chargement du contexte')
         const [sessionsData, stepsData] = await Promise.all([
@@ -72,6 +74,10 @@ export default function GradesPage() {
         setSessions(sessionsData)
         setApiSessions(sessionsData)
         setSteps([...stepsData].sort((a, b) => a.stepNumber - b.stepNumber))
+        if (yearRes.ok) {
+          const yearData = await yearRes.json()
+          setYearName(yearData?.name ?? "")
+        }
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Erreur inconnue')
       } finally {
@@ -209,9 +215,9 @@ export default function GradesPage() {
         {/* Consultation — W4 */}
         <TabsContent value="consultation">
           <GradesViewPage
-  initialSessionId={selectedSessionId}
-  initialStepId={selectedStepId}
-/>
+            initialSessionId={selectedSessionId}
+            initialStepId={selectedStepId}
+          />
         </TabsContent>
 
         {/* Avancement */}
@@ -238,11 +244,20 @@ export default function GradesPage() {
 
   // ── Rendu ─────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">
-          Notes
-        </h1>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">Notes</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Saisie, consultation, avancement et comportement
+          {yearName && (
+            <>
+              {" "}&middot;{" "}
+              <Badge variant="secondary" className="ml-1 align-middle">
+                {yearName}
+              </Badge>
+            </>
+          )}
+        </p>
       </div>
 
       {renderMainContent()}

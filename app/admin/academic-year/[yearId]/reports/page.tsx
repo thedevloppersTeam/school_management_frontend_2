@@ -2,6 +2,7 @@
 
 import { useParams } from "next/navigation"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ArchivedYearBanner } from "@/components/school/archived-year-banner"
 import { CPMSLBulletinsSection } from "@/components/school/cpmsl-bulletins-section"
@@ -27,13 +28,19 @@ export default function ReportsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">
-          Bulletins
-        </h1>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">Bulletins</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Année {academicYear?.name}
+          Génération des bulletins et rapports statistiques
+          {academicYear?.name && (
+            <>
+              {" "}&middot;{" "}
+              <Badge variant="secondary" className="ml-1 align-middle">
+                {academicYear.name}
+              </Badge>
+            </>
+          )}
         </p>
       </div>
 
