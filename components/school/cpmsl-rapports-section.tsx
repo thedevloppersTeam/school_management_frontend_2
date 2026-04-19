@@ -1,5 +1,6 @@
 "use client"
 
+import { clientFetch as apiFetch } from '@/lib/client-fetch'
 import { useState, useEffect, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -82,11 +83,6 @@ function fmt(value: number | null | undefined, decimals = 2): string {
   return value.toFixed(decimals)
 }
 
-async function apiFetch<T>(url: string): Promise<T> {
-  const res = await fetch(url)
-  if (!res.ok) throw new Error(`apiFetch ${url} → ${res.status}`)
-  return res.json() as Promise<T>
-}
 
 function calculateSectionScores(
   sub: SubjectColumn,

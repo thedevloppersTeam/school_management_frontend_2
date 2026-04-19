@@ -93,7 +93,6 @@ function saveSectionCycles(sectionId: string, cycles: string[]): void {
   localStorage.setItem(`section-cycles-${sectionId}`, JSON.stringify(cycles))
 }
 
-// complexity: 0
 
 // complexity: 3
 function rubricColor(code?: string) {

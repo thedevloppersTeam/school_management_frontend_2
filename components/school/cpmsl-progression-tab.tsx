@@ -1,5 +1,6 @@
 "use client"
 
+import { clientFetch as apiFetch } from '@/lib/client-fetch'
 import { useState, useEffect, useCallback } from "react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -33,11 +34,6 @@ function sessionLabel(s: ClassSession): string {
   return track ? `${base} — ${track.code}` : base
 }
 
-async function apiFetch<T>(url: string): Promise<T> {
-  const res = await fetch(url, { credentials: 'include' })
-  if (!res.ok) throw new Error(`API error ${res.status}`)
-  return res.json()
-}
 
 // ── Composant ─────────────────────────────────────────────────────────────────
 

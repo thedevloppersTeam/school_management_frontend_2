@@ -1,5 +1,5 @@
 "use client"
-
+import { clientFetch as apiFetch } from '@/lib/client-fetch'
 import { useState, useEffect, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -45,11 +45,6 @@ function isNisuValid(nisu: string): boolean {
   return !!nisu && /^[A-Z0-9]{14}$/.test(nisu.trim())
 }
 
-async function apiFetch<T>(url: string): Promise<T> {
-  const res = await fetch(url, { credentials: 'include' })
-  if (!res.ok) throw new Error(`API error ${res.status}`)
-  return res.json()
-}
 
 // ── Helper archive silencieux ─────────────────────────────────────────────────
 

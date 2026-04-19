@@ -1,5 +1,6 @@
 "use client"
 
+import { clientFetch as apiFetch } from '@/lib/client-fetch'
 import { useEffect, useState, useMemo, useCallback } from "react"
 import { useParams } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
@@ -64,11 +65,6 @@ function deriveYearStatus(year: AcademicYear): 'active' | 'preparation' | 'archi
   return 'preparation'
 }
 
-async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(url, { credentials: 'include', ...options })
-  if (!res.ok) throw new Error(`API error ${res.status}`)
-  return res.json()
-}
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 

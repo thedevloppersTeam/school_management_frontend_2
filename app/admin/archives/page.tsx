@@ -1,5 +1,6 @@
 "use client"
 
+import { clientFetch as apiFetch } from '@/lib/client-fetch'
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
@@ -40,12 +41,6 @@ interface ArchiveRow {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-async function apiFetch<T>(url: string): Promise<T> {
-  const res = await fetch(url, { credentials: 'include' })
-  if (!res.ok) throw new Error(`API error ${res.status}`)
-  return res.json()
-}
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('fr-FR', {
