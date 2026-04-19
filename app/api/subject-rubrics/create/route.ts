@@ -1,14 +1,14 @@
 /**
- * POST /api/subjects/create
- * Proxy → POST https://apicpmsl.stelloud.cloud/api/subjects/create
+ * POST /api/subject-rubrics/create
+ * Proxy → POST https://apicpmsl.stelloud.cloud/api/subject-rubrics/create
  *
- * Crée une nouvelle matière dans le référentiel global.
- * Body : { name, code, maxScore, coefficient, hasSections, rubricId }
+ * Crée une nouvelle rubrique (R1, R2, R3 — max 3 par établissement).
+ * Body : { name, code, description? }
  * Rôles autorisés : SYSTEM_ADMIN, ADMIN
  */
 import { NextRequest } from 'next/server'
 import { backendFetch } from '@/lib/backend'
 
 export async function POST(request: NextRequest) {
-  return backendFetch(request, '/api/subjects/create', 'POST')
+  return backendFetch(request, '/api/subject-rubrics/create', 'POST')
 }

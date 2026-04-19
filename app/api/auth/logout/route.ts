@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { env } from '@/lib/env'
 
 export async function POST(request: NextRequest) {
   const cookie = request.headers.get('cookie') ?? ''
 
-  const backendRes = await fetch(`${process.env.BACKEND_URL}/api/users/logout`, {
+  const backendRes = await fetch(`${env.BACKEND_URL}/api/users/logout`, {
     method: 'POST',
     headers: { cookie },
   })
