@@ -960,14 +960,14 @@ export default function SchoolSettingsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 style={{ fontFamily: 'var(--font-serif)', fontSize: '36px', lineHeight: 1.15, letterSpacing: '-0.03em', fontWeight: 700, color: "#2A3740" }}>Établissement</h1>
-        <p style={{ fontFamily: 'var(--font-sans)', fontSize: '13px', color: 'hsl(var(--muted-foreground))', marginTop: "4px" }}>Paramètres et référentiel de votre établissement</p>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">Établissement</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Paramètres et référentiel de votre établissement</p>
       </div>
 
       <Tabs defaultValue="general" className="w-full" onValueChange={s.setActiveTab}>
-        <TabsList style={{ backgroundColor: "#F0F4F7", borderRadius: "8px", padding: "4px" }}>
+        <TabsList>
           {Object.entries(TAB_LABELS).map(([value, label]) => (
-            <TabsTrigger key={value} value={value} className="data-[state=active]:bg-white data-[state=active]:shadow-sm" style={{ borderRadius: "6px" }}>{label}</TabsTrigger>
+            <TabsTrigger key={value} value={value}>{label}</TabsTrigger>
           ))}
         </TabsList>
 

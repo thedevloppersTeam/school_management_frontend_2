@@ -5,10 +5,31 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { SaveIcon, LockIcon } from "lucide-react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination"
+import { SaveIcon, LockIcon, SearchIcon, InboxIcon } from "lucide-react"
 import type { ApiClassSession } from "@/lib/api/students"
 import type { AcademicYearStep } from "@/lib/api/dashboard"
 import type { ApiClassSubject, ApiEnrollment, ApiGrade, CreateGradePayload } from "@/lib/api/grades"
+import { cn } from "@/lib/utils"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -72,7 +93,56 @@ export function CPMSLGradesGrid({
 }: CPMSLGradesGridProps) {
   const [gradeEntries, setGradeEntries] = useState<Map<string, GradeEntry>>(new Map())
   const [currentPage,  setCurrentPage]  = useState(1)
-  const itemsPerPage = 25
+  const [searchQuery,  setSearchQuery]  = useState("")
+  const [itemsPerPage, setItemsPerPage] = useState(15)
+  const PAGE_SIZE_OPTIONS = [15, 25, 50, 100]
+
+  // ── Classe / Salle split ────────────────────────────────────────────────
+  const [selectedClassTypeId, setSelectedClassTypeId] = useState("")
+  const [selectedLetter, setSelectedLetter]           = useState("")
+
+  const classTypes = useMemo(() => {
+    const map = new Map<string, { id: string; name: string }>()
+    sessions.forEach(s => {
+      const ct = s.class.classType
+      if (!map.has(ct.id)) map.set(ct.id, { id: ct.id, name: ct.name })
+    })
+    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name))
+  }, [sessions])
+
+  const availableLetters = useMemo(() => {
+    if (!selectedClassTypeId) return []
+    return sessions
+      .filter(s => s.class.classType.id === selectedClassTypeId)
+      .map(s => ({
+        sessionId: s.id,
+        letter: s.class.letter,
+        track: s.class.track,
+        label: s.class.track ? `${s.class.letter} — ${s.class.track.code}` : s.class.letter,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label))
+  }, [sessions, selectedClassTypeId])
+
+  // Sync selectedClassTypeId/selectedLetter from selectedSessionId (e.g. when navigating from Avancement)
+  useEffect(() => {
+    if (!selectedSessionId) return
+    const session = sessions.find(s => s.id === selectedSessionId)
+    if (session) {
+      setSelectedClassTypeId(session.class.classType.id)
+      setSelectedLetter(session.id)
+    }
+  }, [selectedSessionId, sessions])
+
+  function handleClassTypeChange(classTypeId: string) {
+    setSelectedClassTypeId(classTypeId)
+    setSelectedLetter("")
+    // Don't call onSessionChange yet — wait for letter selection
+  }
+
+  function handleLetterChange(sessionId: string) {
+    setSelectedLetter(sessionId)
+    onSessionChange(sessionId)
+  }
 
   const selectedClassSubject = useMemo(
     () => classSubjects.find(cs => cs.id === selectedClassSubjectId),
@@ -123,7 +193,7 @@ export function CPMSLGradesGrid({
 
   useEffect(() => { setCurrentPage(1) }, [selectedSessionId, selectedClassSubjectId, selectedStepId])
 
-  // ── Tri alphabétique ──────────────────────────────────────────────────────
+  // ── Tri alphabétique + recherche ──────────────────────────────────────────
 
   const sortedEnrollments = useMemo(
     () =>
@@ -135,11 +205,35 @@ export function CPMSLGradesGrid({
     [enrollments]
   )
 
-  const totalPages           = Math.ceil(sortedEnrollments.length / itemsPerPage)
-  const paginatedEnrollments = sortedEnrollments.slice(
+  const filteredEnrollments = useMemo(() => {
+    if (!searchQuery.trim()) return sortedEnrollments
+    const q = searchQuery.toLowerCase()
+    return sortedEnrollments.filter(e => {
+      const first = e.student.user.firstname?.toLowerCase() ?? ""
+      const last  = e.student.user.lastname?.toLowerCase()  ?? ""
+      const code  = e.student.studentCode?.toLowerCase()    ?? ""
+      return first.includes(q) || last.includes(q) || code.includes(q)
+    })
+  }, [sortedEnrollments, searchQuery])
+
+  const totalPages           = Math.max(1, Math.ceil(filteredEnrollments.length / itemsPerPage))
+  const paginatedEnrollments = filteredEnrollments.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   )
+
+  // Pagination window helper
+  const paginationWindow = useMemo(() => {
+    if (totalPages <= 5) return Array.from({ length: totalPages }, (_, i) => i + 1)
+    if (currentPage <= 3) return [1, 2, 3, 4, 'ellipsis-right', totalPages]
+    if (currentPage >= totalPages - 2) {
+      return [1, 'ellipsis-left', totalPages - 3, totalPages - 2, totalPages - 1, totalPages]
+    }
+    return [1, 'ellipsis-left', currentPage - 1, currentPage, currentPage + 1, 'ellipsis-right', totalPages]
+  }, [currentPage, totalPages])
+
+  // Reset page when search changes
+  useEffect(() => { setCurrentPage(1) }, [searchQuery])
 
   // ── Validation BR-002 : multiples de 0.25 ────────────────────────────────
 
@@ -212,7 +306,8 @@ export function CPMSLGradesGrid({
 
   // ── Badge helper ──────────────────────────────────────────────────────────
 
-  function getBadge(enrollmentId: string) {
+  type BadgeKind = 'modified' | 'saved' | 'entered' | 'empty'
+  function getBadgeKind(enrollmentId: string): BadgeKind {
     const entry    = gradeEntries.get(enrollmentId)
     const existing = existingGrades.find(
       g => g.enrollmentId === enrollmentId &&
@@ -224,280 +319,391 @@ export function CPMSLGradesGrid({
     const hasError   = hasValue && entry && !entry.isValid
     const isModified = existing && hasValue && !hasError && parseFloat(entry!.value) !== Number(existing.studentScore)
 
-    if (isModified)                         return { label: 'Modifié',    bg: '#FEF6E0', color: '#854F0B' }
-    if (existing && !hasValue)              return { label: 'Enregistré', bg: '#E0F2FE', color: '#0369A1' }
-    if (existing && hasValue && !hasError)  return { label: 'Enregistré', bg: '#E0F2FE', color: '#0369A1' }
-    if (!existing && hasValue && !hasError) return { label: 'Saisi',      bg: '#D1FAE5', color: '#065F46' }
-    return { label: 'Non saisi', bg: '#F3F4F6', color: '#6B7280' }
+    if (isModified) return 'modified'
+    if (existing)   return 'saved'
+    if (hasValue && !hasError) return 'entered'
+    return 'empty'
   }
 
-  // ── Spinner partagé ───────────────────────────────────────────────────────
-
-  function renderSpinner() {
-    return (
-      <div className="flex items-center justify-center py-16 rounded-lg"
-        style={{ backgroundColor: "white", border: "1px solid #E8E6E3", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: "#5A7085" }} />
-      </div>
-    )
-  }
-
-  // ── Bouton Save ───────────────────────────────────────────────────────────
-  // Extracted: kills 3 ternaries that were nested 3 levels deep in the render.
-
-  function renderSaveButton() {
-    const isDisabled = !selectedClassSubjectId || !selectedStepId || hasErrors || saving  // +1 ||
-    const bgColor    = isDisabled ? "#9CA3AF" : "#5A7085"
-
-    return (
-      <div className="flex items-center gap-3" style={{ marginTop: "24px" }}>
-        <Button size="lg" disabled={isDisabled} onClick={handleSaveGrades}
-          style={{ backgroundColor: bgColor, color: "#FFFFFF", fontSize: "14px", fontWeight: 600,
-            borderRadius: "8px", padding: "10px 24px", display: "flex", alignItems: "center", gap: "8px" }}>
-          {saving                                                      // +1 ternary
-            ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
-            : <SaveIcon className="h-4 w-4" />}
-          {saving ? 'Enregistrement...' : 'Enregistrer les notes'}    {/* +1 ternary */}
-        </Button>
-      </div>
-    )
+  function renderBadge(enrollmentId: string) {
+    const kind = getBadgeKind(enrollmentId)
+    switch (kind) {
+      case 'modified':
+        return <Badge className="border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-50">Modifié</Badge>
+      case 'saved':
+        return <Badge className="border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-50">Enregistré</Badge>
+      case 'entered':
+        return <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">Saisi</Badge>
+      default:
+        return <Badge variant="secondary">Non saisi</Badge>
+    }
   }
 
   // ── Table row ─────────────────────────────────────────────────────────────
 
-  function renderTableRow(enrollment: ApiEnrollment, index: number) {
+  function renderTableRow(enrollment: ApiEnrollment) {
     const entry    = gradeEntries.get(enrollment.id)
     const hasValue = !!entry?.value?.trim()
-    const hasError = hasValue && entry && !entry.isValid     // +1 &&
-    const badge    = getBadge(enrollment.id)
+    const hasError = hasValue && entry && !entry.isValid
 
     return (
-      <tr key={enrollment.id}
-        style={{
-          borderBottom:    index < paginatedEnrollments.length - 1 ? "1px solid #E8E6E3" : "none",  // +1
-          backgroundColor: index % 2 === 0 ? "white" : "#FAFAF8",                                   // +1
-          height: "48px",
-        }}>
-        <td className="px-6 py-3 font-sans" style={{ fontSize: "14px", fontWeight: 600, color: "#1E1A17" }}>
+      <TableRow key={enrollment.id}>
+        <TableCell className="pl-6 font-medium text-foreground">
           {enrollment.student.user.lastname}
-        </td>
-        <td className="px-6 py-3 font-sans" style={{ fontSize: "14px", color: "#1E1A17" }}>
+        </TableCell>
+        <TableCell className="text-foreground">
           {enrollment.student.user.firstname}
-        </td>
-        <td className="px-6 py-3 font-sans" style={{ fontSize: "13px", color: "#78756F" }}>
-          {enrollment.student.studentCode}
-        </td>
-        <td className="px-6 py-3">
+        </TableCell>
+        <TableCell>
+          <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
+            {enrollment.student.studentCode}
+          </code>
+        </TableCell>
+        <TableCell>
           <div className="flex flex-col items-center gap-1">
             <div className="flex items-center gap-2">
               <Input
                 type="number" min="0" max={String(maxScore)} step="0.25"
                 value={entry?.value || ''} placeholder="—" disabled={isLocked}
                 onChange={e => handleGradeChange(enrollment.id, e.target.value)}
-                className="text-center"
-                style={{
-                  width: "80px", borderRadius: "8px",
-                  borderColor: hasError ? "#EF4444" : hasValue ? "#2C4A6E" : "#D1D5DB",  // +1 nested ternary
-                  borderWidth: "1px", color: "#1E1A17",
-                }}
+                className={cn(
+                  "w-20 text-center tabular-nums",
+                  hasError && "border-destructive focus-visible:ring-destructive"
+                )}
                 onKeyDown={e => {
-                  if (e.key !== 'Tab') return                                // +1 early-return guard
+                  if (e.key !== 'Tab') return
                   e.preventDefault()
-                  const idx    = paginatedEnrollments.findIndex(en => en.id === enrollment.id)
-                  if (idx >= paginatedEnrollments.length - 1) return         // +1
+                  const idx = paginatedEnrollments.findIndex(en => en.id === enrollment.id)
+                  if (idx >= paginatedEnrollments.length - 1) return
                   const nextId = paginatedEnrollments[idx + 1].id
-                  const next   = document.querySelector(`input[data-enrollment-id="${nextId}"]`) as HTMLInputElement
+                  const next = document.querySelector(`input[data-enrollment-id="${nextId}"]`) as HTMLInputElement
                   next?.focus()
                 }}
                 data-enrollment-id={enrollment.id}
               />
-              <span className="font-sans text-xs" style={{ color: "#78756F" }}>/ {maxScore}</span>
+              <span className="text-xs text-muted-foreground">/ {maxScore}</span>
             </div>
-            {hasError && entry?.error && (                                    // +1 &&
-              <p className="font-sans" style={{ fontSize: "11px", color: "#EF4444" }}>{entry.error}</p>
+            {hasError && entry?.error && (
+              <p className="text-[11px] text-destructive">{entry.error}</p>
             )}
           </div>
-        </td>
-        <td className="px-6 py-3 text-center">
-          <Badge variant="secondary"
-            style={{ backgroundColor: badge.bg, color: badge.color, border: "none", fontWeight: 500 }}>
-            {badge.label}
-          </Badge>
-        </td>
-      </tr>
+        </TableCell>
+        <TableCell className="pr-6 text-center">
+          {renderBadge(enrollment.id)}
+        </TableCell>
+      </TableRow>
     )
   }
 
-  // ── Section notes (table + pagination + save) ─────────────────────────────
-  // Extracted: kills the loadingGrades ternary that was nested 2 levels deep.
+  // ── Pagination footer ─────────────────────────────────────────────────────
 
-  function renderGradesSection() {
-    if (loadingGrades) return renderSpinner()    // +1 if
-
+  function renderPaginationFooter() {
+    if (filteredEnrollments.length <= 15) return null
     return (
       <>
-        {/* Tableau */}
-        <div className="rounded-lg overflow-hidden"
-          style={{ backgroundColor: "white", border: "1px solid #E8E6E3", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px]">
-              <thead>
-                <tr style={{ backgroundColor: "#F1F5F9", borderBottom: "2px solid #D1D5DB" }}>
-                  {["NOM", "PRÉNOM", "CODE", `NOTE / ${maxScore}`, "STATUT"].map((h, i) => (
-                    <th key={h}
-                      className={`px-6 py-3 font-sans font-bold uppercase ${i >= 3 ? "text-center" : "text-left"}`}  // +1 ternary
-                      style={{ fontSize: "12px", letterSpacing: "0.06em", color: "#2C4A6E",
-                        width: i === 0 ? "20%" : i === 1 ? "20%" : i === 2 ? "15%" : i === 3 ? "25%" : "20%" }}>    {/* +1 nested ternaries */}
-                      {h}
-                    </th>
+        <Separator />
+        <div className="flex flex-col items-center justify-between gap-3 px-4 py-3 sm:flex-row">
+          <div className="flex items-center gap-3">
+            <p className="text-xs text-muted-foreground">
+              Page <span className="font-medium text-foreground tabular-nums">{currentPage}</span>{" "}
+              sur <span className="font-medium text-foreground tabular-nums">{totalPages}</span>
+              {" "}&middot; {filteredEnrollments.length} élève(s)
+            </p>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Afficher</span>
+              <Select
+                value={String(itemsPerPage)}
+                onValueChange={v => { setItemsPerPage(Number(v)); setCurrentPage(1) }}
+              >
+                <SelectTrigger className="h-8 w-[72px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAGE_SIZE_OPTIONS.map(size => (
+                    <SelectItem key={size} value={String(size)}>
+                      {size}
+                    </SelectItem>
                   ))}
-                </tr>
-              </thead>
-              <tbody>
-                {paginatedEnrollments.map((enrollment, index) => renderTableRow(enrollment, index))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Pagination */}
-        {sortedEnrollments.length > itemsPerPage && (                       // +1 &&
-          <div className="flex items-center justify-center">
-            <div className="flex items-center gap-4">
-              <Button variant="outline" size="sm"
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                style={{ borderColor: "#D1CECC", color: "#5C5955" }}>
-                ← Précédent
-              </Button>
-              <span className="body-base" style={{ color: "#78756F" }}>
-                Page {currentPage} sur {totalPages}
-              </span>
-              <Button variant="outline" size="sm"
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-                style={{ borderColor: "#D1CECC", color: "#5C5955" }}>
-                Suivant →
-              </Button>
+                </SelectContent>
+              </Select>
             </div>
           </div>
-        )}
 
-        {/* Bouton Save */}
-        {!isLocked && renderSaveButton()}                                    {/* +1 && */}
+          {totalPages > 1 && (
+            <Pagination className="mx-0 w-auto justify-end">
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    href="#"
+                    onClick={e => { e.preventDefault(); if (currentPage > 1) setCurrentPage(p => p - 1) }}
+                    className={cn(currentPage === 1 && "pointer-events-none opacity-50")}
+                  />
+                </PaginationItem>
+                {paginationWindow.map((p, idx) => {
+                  if (typeof p === 'string') {
+                    return (
+                      <PaginationItem key={`${p}-${idx}`}>
+                        <PaginationEllipsis />
+                      </PaginationItem>
+                    )
+                  }
+                  return (
+                    <PaginationItem key={p}>
+                      <PaginationLink
+                        href="#"
+                        isActive={currentPage === p}
+                        onClick={e => { e.preventDefault(); setCurrentPage(p) }}
+                      >
+                        {p}
+                      </PaginationLink>
+                    </PaginationItem>
+                  )
+                })}
+                <PaginationItem>
+                  <PaginationNext
+                    href="#"
+                    onClick={e => { e.preventDefault(); if (currentPage < totalPages) setCurrentPage(p => p + 1) }}
+                    className={cn(currentPage === totalPages && "pointer-events-none opacity-50")}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          )}
+        </div>
       </>
     )
   }
 
-  // ── Contenu principal ─────────────────────────────────────────────────────
-  // Extracted: kills the loadingSession / !showContent ternary chain that was
-  // the root of the nesting problem. Early returns flatten the flow.
-
-  function renderMainContent() {
-    if (loadingSession) return renderSpinner()   // +1
-    if (!showContent)   return (                 // +1
-      <div className="rounded-lg p-12 flex flex-col items-center justify-center text-center space-y-2"
-        style={{ backgroundColor: "white", border: "1px solid #E8E6E3", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-        <p className="font-serif font-semibold" style={{ fontSize: "16px", color: "hsl(var(--muted-foreground))" }}>
-          Choisissez une classe, une étape et une matière
-        </p>
-        <p className="font-sans" style={{ fontSize: "13px", color: "hsl(var(--muted-foreground))" }}>
-          pour commencer la saisie des notes
-        </p>
-      </div>
+  // ── Spinner shared ────────────────────────────────────────────────────────
+  function renderSpinner() {
+    return (
+      <Card className="border bg-card shadow-sm">
+        <CardContent className="flex items-center justify-center py-16">
+          <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-muted border-t-primary" />
+        </CardContent>
+      </Card>
     )
+  }
+
+  // ── Grades table section ──────────────────────────────────────────────────
+  function renderGradesSection() {
+    if (loadingGrades) return renderSpinner()
 
     return (
-      <>
-        {/* Header */}
-        <div className="rounded-lg p-4 flex items-center justify-between"
-          style={{ backgroundColor: "white", border: "1px solid #E8E6E3", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-          <h2 className="font-serif font-semibold" style={{ fontSize: "18px", color: "#2C4A6E" }}>
-            {headerLabel}
-          </h2>
-          <div className="font-sans text-sm" style={{ color: "#5A7085" }}>
-            {enteredCount} / {sortedEnrollments.length} notes saisies
+      <Card className="border bg-card shadow-sm">
+        <CardHeader className="pb-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle className="text-base font-semibold">Saisie des notes</CardTitle>
+              <CardDescription>
+                {headerLabel} &middot; {enteredCount} / {sortedEnrollments.length} notes saisies
+              </CardDescription>
+            </div>
+            {isLocked && (
+              <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">
+                <LockIcon className="mr-1 h-3 w-3 !text-amber-600" /> Clôturée
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
+
+        <Separator />
+
+        {/* Search toolbar */}
+        <div className="p-4">
+          <div className="relative max-w-md">
+            <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Rechercher par nom ou code..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
           </div>
         </div>
 
-        {renderGradesSection()}
-      </>
+        <Separator />
+
+        <CardContent className="p-0">
+          {filteredEnrollments.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+                <InboxIcon className="h-7 w-7 text-muted-foreground" />
+              </div>
+              <h3 className="mt-4 text-sm font-semibold text-foreground">
+                Aucun élève trouvé
+              </h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {searchQuery ? "Modifiez vos critères de recherche." : "Aucun élève inscrit dans cette classe."}
+              </p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="pl-6 font-semibold">Nom</TableHead>
+                  <TableHead className="font-semibold">Prénom</TableHead>
+                  <TableHead className="font-semibold">Code</TableHead>
+                  <TableHead className="text-center font-semibold">Note / {maxScore}</TableHead>
+                  <TableHead className="pr-6 text-center font-semibold">Statut</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paginatedEnrollments.map(enrollment => renderTableRow(enrollment))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+
+        {renderPaginationFooter()}
+
+        {/* Save button */}
+        {!isLocked && filteredEnrollments.length > 0 && (
+          <>
+            <Separator />
+            <div className="flex justify-end p-4">
+              <Button
+                onClick={handleSaveGrades}
+                disabled={!selectedClassSubjectId || !selectedStepId || hasErrors || saving}
+              >
+                {saving ? (
+                  <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                ) : (
+                  <SaveIcon className="mr-2 h-4 w-4" />
+                )}
+                {saving ? "Enregistrement..." : "Enregistrer les notes"}
+              </Button>
+            </div>
+          </>
+        )}
+      </Card>
     )
+  }
+
+  // ── Main content ──────────────────────────────────────────────────────────
+  function renderMainContent() {
+    if (loadingSession) return renderSpinner()
+    if (!showContent) {
+      return (
+        <Card className="border bg-card shadow-sm">
+          <CardContent className="flex flex-col items-center justify-center py-16">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+              <InboxIcon className="h-7 w-7 text-muted-foreground" />
+            </div>
+            <h3 className="mt-4 text-sm font-semibold text-foreground">
+              Aucune sélection
+            </h3>
+            <p className="mt-1 max-w-[320px] text-center text-sm text-muted-foreground">
+              Choisissez une classe, une étape et une matière pour commencer la saisie des notes.
+            </p>
+          </CardContent>
+        </Card>
+      )
+    }
+    return renderGradesSection()
   }
 
   // ── Rendu ─────────────────────────────────────────────────────────────────
 
   return (
     <div className="space-y-6">
-
       {/* Sélecteurs */}
-      <div style={{ backgroundColor: "#FFFFFF", borderRadius: "10px", border: "1px solid #E8E6E3", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-        <div style={{ padding: "24px", borderBottom: "1px solid #E8E6E3" }}>
-          <h3 style={{ fontFamily: "var(--font-serif)", fontSize: "15px", fontWeight: 600, color: "#3A4A57" }}>
-            Sélection de la classe et de l&apos;étape
-          </h3>
-        </div>
-        <div style={{ padding: "24px" }}>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Select value={selectedSessionId} onValueChange={onSessionChange}>
-              <SelectTrigger style={{ borderColor: "#D1CECC", borderRadius: "8px" }}>
-                <SelectValue placeholder="Sélectionner une classe" />
-              </SelectTrigger>
-              <SelectContent>
-                {sessions.map(s => (
-                  <SelectItem key={s.id} value={s.id}>{sessionLabel(s)}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+      <Card className="border bg-card shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-semibold">Sélection</CardTitle>
+          <CardDescription>Classe, salle, étape et matière pour la saisie</CardDescription>
+        </CardHeader>
+        <Separator />
+        <CardContent className="p-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {/* Classe */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Classe</label>
+              <Select value={selectedClassTypeId} onValueChange={handleClassTypeChange}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Sélectionner une classe" />
+                </SelectTrigger>
+                <SelectContent>
+                  {classTypes.map(ct => (
+                    <SelectItem key={ct.id} value={ct.id}>{ct.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-            <Select value={selectedStepId} onValueChange={onStepChange}>
-              <SelectTrigger style={{ borderColor: "#D1CECC", borderRadius: "8px" }}>
-                <div className="flex items-center gap-2">
-                  {isLocked && <LockIcon className="h-4 w-4" style={{ color: "#C48B1A" }} />}  {/* +1 && */}
-                  <SelectValue placeholder="Sélectionner une étape" />
-                </div>
-              </SelectTrigger>
-              <SelectContent>
-                {steps.map(s => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.name}{s.isCurrent ? " (active)" : ""}  {/* +1 ternary */}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {/* Salle */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Salle</label>
+              <Select
+                value={selectedLetter}
+                onValueChange={handleLetterChange}
+                disabled={!selectedClassTypeId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={!selectedClassTypeId ? "Choisir une classe d'abord" : "Sélectionner une salle"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableLetters.map(l => (
+                    <SelectItem key={l.sessionId} value={l.sessionId}>{l.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-            <Select
-              value={selectedClassSubjectId}
-              onValueChange={onClassSubjectChange}
-              disabled={!selectedSessionId || loadingSession}
-            >
-              <SelectTrigger style={{ borderColor: "#D1CECC", borderRadius: "8px",
-                opacity: !selectedSessionId || loadingSession ? 0.5 : 1 }}>  {/* +1 ternary */}
-                <SelectValue placeholder={loadingSession ? "Chargement..." : "Sélectionner une matière"} />  {/* +1 ternary */}
-              </SelectTrigger>
-              <SelectContent>
-                {classSubjects.map(cs => (
-                  <SelectItem key={cs.id} value={cs.id}>{cs.subject.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {/* Étape */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Étape</label>
+              <Select value={selectedStepId} onValueChange={onStepChange}>
+                <SelectTrigger>
+                  <div className="flex items-center gap-2">
+                    {isLocked && <LockIcon className="h-4 w-4 text-amber-600" />}
+                    <SelectValue placeholder="Sélectionner une étape" />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  {steps.map(s => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}{s.isCurrent ? " (active)" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Matière */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Matière</label>
+              <Select
+                value={selectedClassSubjectId}
+                onValueChange={onClassSubjectChange}
+                disabled={!selectedSessionId || loadingSession}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={loadingSession ? "Chargement..." : "Sélectionner une matière"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {classSubjects.map(cs => (
+                    <SelectItem key={cs.id} value={cs.id}>{cs.subject.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Bannière étape clôturée */}
-      {showContent && isLocked && (                                           // +1 &&
-        <div className="rounded-lg p-4 flex items-center gap-3"
-          style={{ backgroundColor: "#FEF6E0", border: "1px solid #C48B1A" }}>
-          <LockIcon className="h-5 w-5 flex-shrink-0" style={{ color: "#C48B1A" }} />
-<p className="text-sm font-medium" style={{ color: "#C48B1A" }}>
-  Étape clôturée — réouvrez l&apos;étape depuis la Configuration pour saisir des notes
-</p>
-        </div>
+      {showContent && isLocked && (
+        <Alert className="border-amber-200 bg-amber-50 text-amber-900">
+          <LockIcon className="h-4 w-4 !text-amber-600" />
+          <AlertTitle>Étape clôturée</AlertTitle>
+          <AlertDescription>
+            Réouvrez l&apos;étape depuis la Configuration pour saisir des notes.
+          </AlertDescription>
+        </Alert>
       )}
 
       {renderMainContent()}
-
     </div>
   )
 }

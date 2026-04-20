@@ -2,6 +2,8 @@
 
 import { useParams } from "next/navigation"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
 import { ArchivedYearBanner } from "@/components/school/archived-year-banner"
 import { CPMSLBulletinsSection } from "@/components/school/cpmsl-bulletins-section"
 import { CPMSLRapportsSection } from "@/components/school/cpmsl-rapports-section"
@@ -14,34 +16,40 @@ export default function ReportsPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <div className="h-12 w-48 bg-gray-200 rounded animate-pulse" />
-        <div className="h-32 bg-gray-100 rounded-lg animate-pulse" />
+      <div className="space-y-8">
+        <div className="space-y-1">
+          <Skeleton className="h-9 w-48" />
+          <Skeleton className="h-5 w-32" />
+        </div>
+        <Skeleton className="h-10 w-64 rounded-lg" />
+        <Skeleton className="h-64 rounded-xl" />
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
-        <h1 style={{ fontFamily: "var(--font-serif)", fontSize: "36px", fontWeight: 700, letterSpacing: "-0.03em", color: "#2A3740" }}>
-          Bulletins
-        </h1>
-        <p style={{ fontSize: "13px", fontWeight: 400, color: "hsl(var(--muted-foreground))" }}>
-          Année {academicYear?.name}
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">Bulletins</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Génération des bulletins et rapports statistiques
+          {academicYear?.name && (
+            <>
+              {" "}&middot;{" "}
+              <Badge variant="secondary" className="ml-1 align-middle">
+                {academicYear.name}
+              </Badge>
+            </>
+          )}
         </p>
       </div>
 
       {isArchived && <ArchivedYearBanner yearName={academicYear?.name || ''} />}
 
       <Tabs defaultValue="bulletins" className="space-y-6">
-        <TabsList style={{ backgroundColor: "#F0F4F7", borderRadius: "8px", padding: "4px" }}>
-          <TabsTrigger value="bulletins" className="data-[state=active]:bg-white data-[state=active]:shadow-sm" style={{ borderRadius: "6px" }}>
-            Bulletins
-          </TabsTrigger>
-          <TabsTrigger value="rapports" className="data-[state=active]:bg-white data-[state=active]:shadow-sm" style={{ borderRadius: "6px" }}>
-            Rapports
-          </TabsTrigger>
+        <TabsList>
+          <TabsTrigger value="bulletins">Bulletins</TabsTrigger>
+          <TabsTrigger value="rapports">Rapports</TabsTrigger>
         </TabsList>
 
         <TabsContent value="bulletins">

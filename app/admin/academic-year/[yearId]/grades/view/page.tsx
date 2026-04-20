@@ -4,11 +4,33 @@ import { useState, useEffect, useCallback, useMemo } from "react"
 import { useParams } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Separator } from "@/components/ui/separator"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { StatCard } from "@/components/school/stat-card"
+import {
+  LockIcon,
+  UsersIcon,
+  CheckCircle2Icon,
+  AlertCircleIcon,
+  TrendingUpIcon,
+  InboxIcon,
+} from "lucide-react"
 import { fetchClassSessions, fetchSteps, type AcademicYearStep, type ClassSession } from "@/lib/api/dashboard"
 import { fetchClassSubjects, fetchEnrollments, type ApiClassSubject, type ApiEnrollment } from "@/lib/api/grades"
 import { parseDecimal } from "@/lib/decimal"
+import { cn } from "@/lib/utils"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -25,8 +47,6 @@ interface GradeRow {
   isComplete:   boolean
   rang:         number | null
 }
-
-
 
 // ── Helper BR-001 ─────────────────────────────────────────────────────────────
 
@@ -94,9 +114,8 @@ export default function GradesViewPage({
   const [rubrics,    setRubrics]    = useState<Rubric[]>([])
   const [loadingCtx, setLoadingCtx] = useState(true)
 
-
-const [selectedSession, setSelectedSession] = useState(initialSessionId)
-const [selectedStep,    setSelectedStep]    = useState(initialStepId)
+  const [selectedSession, setSelectedSession] = useState(initialSessionId)
+  const [selectedStep,    setSelectedStep]    = useState(initialStepId)
 
   const [classSubjects, setClassSubjects] = useState<ApiClassSubject[]>([])
   const isLocked = useMemo(() => {
@@ -247,14 +266,36 @@ const [selectedStep,    setSelectedStep]    = useState(initialStepId)
   const incompleteCount = gradeRows.length - completeCount
 
   // ── Helpers UI ────────────────────────────────────────────────────────────
-  const rubricStyle = (code: string) => {
-    if (code === 'R1') return { bg: '#E3EFF9', color: '#2B6CB0', border: '#93C5FD' }
-    if (code === 'R2') return { bg: '#E8F5EC', color: '#2D7D46', border: '#86EFAC' }
-    if (code === 'R3') return { bg: '#FAF8F3', color: '#B0A07A', border: '#D9C98A' }
-    return { bg: '#F0F4F7', color: '#5A7085', border: '#B3C7D5' }
+  const rubricClasses = (code: string) => {
+    switch (code) {
+      case 'R1':
+        return {
+          header: 'bg-blue-50 text-blue-700',
+          col:    'text-blue-700',
+          border: 'border-l-blue-200',
+        }
+      case 'R2':
+        return {
+          header: 'bg-emerald-50 text-emerald-700',
+          col:    'text-emerald-700',
+          border: 'border-l-emerald-200',
+        }
+      case 'R3':
+        return {
+          header: 'bg-amber-50 text-amber-700',
+          col:    'text-amber-700',
+          border: 'border-l-amber-200',
+        }
+      default:
+        return {
+          header: 'bg-muted text-muted-foreground',
+          col:    'text-muted-foreground',
+          border: 'border-l-border',
+        }
+    }
   }
 
-    const poids = (code: string) => {
+  const poids = (code: string) => {
     if (code === 'R1') return '70%'
     if (code === 'R2') return '25%'
     if (code === 'R3') return '5%'
@@ -262,31 +303,45 @@ const [selectedStep,    setSelectedStep]    = useState(initialStepId)
   }
   const fmt = (v: number | null) => v !== null ? v.toFixed(2) : '—'
 
-  const noteColor = (note: number | null, max: number) => {
-    if (note === null) return '#A8A5A2'
+  const noteColorClass = (note: number | null, max: number) => {
+    if (note === null) return 'text-muted-foreground'
     const pct = note / max
-    if (pct >= 0.7) return '#2D7D46'
-    return pct >= 0.5 ? '#C48B1A' : '#C43C3C'
+    if (pct >= 0.7) return 'text-emerald-600'
+    return pct >= 0.5 ? 'text-amber-600' : 'text-destructive'
+  }
+
+  const averageColorClass = (avg: number | null) => {
+    if (avg === null) return 'text-muted-foreground'
+    if (avg >= 7) return 'text-emerald-600'
+    if (avg >= 5) return 'text-amber-600'
+    return 'text-destructive'
   }
 
   if (loadingCtx) {
-    return <div className="space-y-4"><Skeleton className="h-10 w-64" /><Skeleton className="h-96 w-full" /></div>
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-24 w-full rounded-xl" />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-[104px] rounded-xl" />)}
+        </div>
+        <Skeleton className="h-96 w-full rounded-xl" />
+      </div>
+    )
   }
 
   return (
     <div className="space-y-6">
-
-      {/* Sélecteurs */}
-      <div style={{ backgroundColor: 'white', borderRadius: '10px', border: '1px solid #E8E6E3', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
-        <div style={{ padding: '20px 24px', borderBottom: '1px solid #E8E6E3' }}>
-          <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: '15px', fontWeight: 600, color: '#3A4A57' }}>
-            Sélection
-          </h3>
-        </div>
-        <div style={{ padding: '24px' }}>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4" style={{ maxWidth: '480px' }}>
+      {/* ── Sélecteurs ── */}
+      <Card className="border bg-card shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-semibold">Consultation des notes</CardTitle>
+          <CardDescription>Sélectionnez une classe et une étape pour afficher la grille</CardDescription>
+        </CardHeader>
+        <Separator />
+        <CardContent className="p-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:max-w-2xl">
             <Select value={selectedSession} onValueChange={setSelectedSession}>
-              <SelectTrigger style={{ borderColor: '#D1CECC', borderRadius: '8px' }}>
+              <SelectTrigger>
                 <SelectValue placeholder="Sélectionner une classe" />
               </SelectTrigger>
               <SelectContent>
@@ -297,7 +352,7 @@ const [selectedStep,    setSelectedStep]    = useState(initialStepId)
             </Select>
 
             <Select value={selectedStep} onValueChange={setSelectedStep}>
-              <SelectTrigger style={{ borderColor: '#D1CECC', borderRadius: '8px' }}>
+              <SelectTrigger>
                 <SelectValue placeholder="Sélectionner une étape" />
               </SelectTrigger>
               <SelectContent>
@@ -307,181 +362,290 @@ const [selectedStep,    setSelectedStep]    = useState(initialStepId)
               </SelectContent>
             </Select>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
-      {/* Bannière étape clôturée */}
+      {/* ── Bannière étape clôturée ── */}
       {selectedStep && isLocked && (
-        <div className="rounded-lg p-4 flex items-center gap-3"
-          style={{ backgroundColor: '#FEF6E0', border: '1px solid #C48B1A' }}>
-          <svg className="h-5 w-5 flex-shrink-0" style={{ color: '#C48B1A' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-          </svg>
-          <p className="text-sm font-medium" style={{ color: '#C48B1A' }}>
-            Étape clôturée — consultation en lecture seule
-          </p>
-        </div>
+        <Alert className="border-amber-200 bg-amber-50 text-amber-900">
+          <LockIcon className="h-4 w-4 !text-amber-600" />
+          <AlertTitle>Étape clôturée</AlertTitle>
+          <AlertDescription>Consultation en lecture seule</AlertDescription>
+        </Alert>
       )}
 
-      {/* État vide */}
+      {/* ── État vide ── */}
       {(!selectedSession || !selectedStep) && (
-        <div style={{ backgroundColor: 'white', borderRadius: '10px', border: '1px solid #E8E6E3', padding: '48px 24px', textAlign: 'center' }}>
-          <p style={{ fontSize: '15px', fontWeight: 500, color: '#78756F' }}>
-            Sélectionnez une classe et une étape pour voir les notes
-          </p>
-        </div>
+        <Card className="border bg-card shadow-sm">
+          <CardContent className="flex flex-col items-center justify-center py-16">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+              <InboxIcon className="h-7 w-7 text-muted-foreground" />
+            </div>
+            <h3 className="mt-4 text-sm font-semibold text-foreground">
+              Aucune sélection
+            </h3>
+            <p className="mt-1 max-w-[320px] text-center text-sm text-muted-foreground">
+              Sélectionnez une classe et une étape pour voir les notes des élèves.
+            </p>
+          </CardContent>
+        </Card>
       )}
 
-      {/* Contenu */}
+      {/* ── Contenu ── */}
       {selectedSession && selectedStep && (
         loadingGrid ? (
-          <div className="space-y-2">
-             {[...new Array(4)].map((_, i) => <Skeleton key={`skeleton-${i}`} className="h-12 w-full" />)}          
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-[104px] rounded-xl" />)}
+            </div>
+            <Skeleton className="h-96 w-full rounded-xl" />
           </div>
         ) : (
           <>
-            {/* KPIs */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {[
-                { label: 'Élèves inscrits',  value: gradeRows.length,                                          bg: '#F0F4F7', color: '#2A3740' },
-                { label: 'Notes complètes',  value: completeCount,                                             bg: '#E8F5EC', color: '#2D7D46' },
-                { label: 'Notes manquantes', value: incompleteCount,                                           bg: '#FEF6E0', color: '#C48B1A' },
-                { label: 'Moyenne classe',   value: classAverage !== null ? classAverage.toFixed(2) : '—',    bg: '#E3EFF9', color: '#2B6CB0' },
-              ].map(kpi => (
-                <div key={kpi.label} style={{ backgroundColor: 'white', borderRadius: '10px', border: '1px solid #E8E6E3', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', padding: '16px 20px' }}>
-                  <p style={{ fontSize: '12px', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#78756F', marginBottom: '6px' }}>{kpi.label}</p>
-                  <p style={{ fontFamily: 'var(--font-serif)', fontSize: '26px', fontWeight: 700, color: kpi.color }}>{kpi.value}</p>
-                </div>
-              ))}
+            {/* KPI Cards */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <StatCard
+                label="Élèves inscrits"
+                value={gradeRows.length}
+                icon={UsersIcon}
+                iconClassName="text-blue-600"
+                iconBgClassName="bg-blue-50"
+              />
+              <StatCard
+                label="Notes complètes"
+                value={completeCount}
+                icon={CheckCircle2Icon}
+                iconClassName="text-emerald-600"
+                iconBgClassName="bg-emerald-50"
+              />
+              <StatCard
+                label="Notes manquantes"
+                value={incompleteCount}
+                icon={AlertCircleIcon}
+                iconClassName="text-amber-600"
+                iconBgClassName="bg-amber-50"
+              />
+              <StatCard
+                label="Moyenne classe"
+                value={classAverage !== null ? classAverage.toFixed(2) : '—'}
+                icon={TrendingUpIcon}
+                iconClassName="text-violet-600"
+                iconBgClassName="bg-violet-50"
+              />
             </div>
 
-            {/* Tableau */}
+            {/* Grille des notes */}
             {gradeRows.length === 0 ? (
-              <div style={{ backgroundColor: 'white', borderRadius: '10px', border: '1px solid #E8E6E3', padding: '48px 24px', textAlign: 'center' }}>
-                <p style={{ fontSize: '15px', fontWeight: 500, color: '#78756F' }}>Aucun élève inscrit dans cette classe</p>
-              </div>
+              <Card className="border bg-card shadow-sm">
+                <CardContent className="flex flex-col items-center justify-center py-16">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+                    <UsersIcon className="h-7 w-7 text-muted-foreground" />
+                  </div>
+                  <h3 className="mt-4 text-sm font-semibold text-foreground">
+                    Aucun élève inscrit
+                  </h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Aucun élève n'est inscrit dans cette classe.
+                  </p>
+                </CardContent>
+              </Card>
             ) : (
-              <div style={{ backgroundColor: 'white', borderRadius: '10px', border: '1px solid #E8E6E3', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: `${360 + classSubjects.length * 80}px` }}>
-                  <thead>
-                    {/* Ligne 1 — Rubriques */}
-                    <tr style={{ backgroundColor: '#F1F5F9' }}>
-                      <th rowSpan={2} style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#2C4A6E', borderBottom: '2px solid #D1D5DB', borderRight: '2px solid #D1D5DB', minWidth: '200px', verticalAlign: 'middle' }}>
-                        Élève
-                      </th>
-                      {rubricGroups.map(group => {
-                        const st = rubricStyle(group.rubric.code)
-                        return (
-                          <th key={group.rubric.id} colSpan={group.subjects.length}
-                            style={{ padding: '8px 12px', textAlign: 'center', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: st.color, backgroundColor: st.bg, borderBottom: `1px solid ${st.border}`, borderLeft: `2px solid ${st.border}` }}>
-                            {group.rubric.code} {poids(group.rubric.code)}
-                          </th>
-                        )
-                      })}
-                      <th rowSpan={2} style={{ padding: '12px 8px', textAlign: 'center', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', color: '#2A3740', borderBottom: '2px solid #D1D5DB', borderLeft: '2px solid #D1D5DB', minWidth: '80px', verticalAlign: 'middle', backgroundColor: '#EFF6FF' }}>
-                        Moy.
-                      </th>
-                      <th rowSpan={2} style={{ padding: '12px 8px', textAlign: 'center', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', color: '#2A3740', borderBottom: '2px solid #D1D5DB', borderLeft: '1px solid #E8E6E3', minWidth: '90px', verticalAlign: 'middle' }}>
-                        Statut
-                      </th>
-                      <th rowSpan={2} style={{ padding: '12px 8px', textAlign: 'center', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', color: '#2A3740', borderBottom: '2px solid #D1D5DB', borderLeft: '1px solid #E8E6E3', minWidth: '60px', verticalAlign: 'middle' }}>
-                        Rang
-                      </th>
-                      <th rowSpan={2} style={{ padding: '12px 8px', textAlign: 'center', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', color: '#2A3740', borderBottom: '2px solid #D1D5DB', borderLeft: '1px solid #E8E6E3', minWidth: '90px', verticalAlign: 'middle' }}>
-                        Appréciation
-                      </th>
-                    </tr>
-                    {/* Ligne 2 — Codes matières */}
-                    <tr style={{ backgroundColor: '#F8FAFC' }}>
-                      {rubricGroups.map(group => {
-                        const st = rubricStyle(group.rubric.code)
-                        return group.subjects.map((cs, i) => (
-                          <th key={cs.id}
-                            style={{ padding: '8px 10px', textAlign: 'center', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: st.color, borderBottom: '2px solid #D1D5DB', borderLeft: i === 0 ? `2px solid ${st.border}` : `1px solid ${st.border}`, minWidth: '72px' }}
-                            title={cs.subject.name}>
-                            {cs.subject.code}
-                          </th>
-                        ))
-                      })}
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    {gradeRows.map((row, ri) => (
-                      <tr key={row.enrollmentId}
-                        style={{ borderBottom: ri < gradeRows.length - 1 ? '1px solid #E8E6E3' : 'none', backgroundColor: ri % 2 === 0 ? 'white' : '#FAFAF8' }}>
-                        <td style={{ padding: '10px 16px', borderRight: '2px solid #E8E6E3' }}>
-                          <div style={{ fontSize: '14px', fontWeight: 600, color: '#1E1A17' }}>{row.lastname}</div>
-                          <div style={{ fontSize: '12px', color: '#78756F' }}>{row.firstname}</div>
-                        </td>
-                        {rubricGroups.map(group => {
-                          const st = rubricStyle(group.rubric.code)
-                          return group.subjects.map((cs, i) => {
-                            const note = row.grades[cs.id]
-                            const raw = cs.subject.maxScore
-const max = (typeof raw === 'object' && (raw as any).d)
-  ? Number((raw as any).d[0])
-  : Number(raw) || 10
+              <Card className="border bg-card shadow-sm">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <CardTitle className="text-base font-semibold">Grille des notes</CardTitle>
+                      <CardDescription>
+                        {gradeRows.length} élève{gradeRows.length > 1 ? 's' : ''} · {classSubjects.length} matière{classSubjects.length > 1 ? 's' : ''}
+                      </CardDescription>
+                    </div>
+                    {isLocked && (
+                      <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">
+                        <LockIcon className="mr-1 h-3 w-3" /> Clôturée
+                      </Badge>
+                    )}
+                  </div>
+                </CardHeader>
+                <Separator />
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <Table className="min-w-full" style={{ minWidth: `${360 + classSubjects.length * 80}px` }}>
+                      <TableHeader>
+                        {/* Ligne 1 — Rubriques */}
+                        <TableRow className="bg-muted/60 hover:bg-muted/60">
+                          <TableHead
+                            rowSpan={2}
+                            className="w-[200px] border-r-2 border-border pl-6 align-middle text-xs font-semibold uppercase tracking-wider text-foreground"
+                          >
+                            Élève
+                          </TableHead>
+                          {rubricGroups.map(group => {
+                            const rc = rubricClasses(group.rubric.code)
                             return (
-                              <td key={cs.id}
-                                style={{ padding: '10px 8px', textAlign: 'center', fontSize: '13px', fontWeight: note !== null ? 600 : 400, color: noteColor(note ?? null, max), borderLeft: i === 0 ? `2px solid ${st.border}` : `1px solid #F0F0F0` }}>
-                                {note !== null && note !== undefined ? note.toFixed(1) : '—'}
-                              </td>
+                              <TableHead
+                                key={group.rubric.id}
+                                colSpan={group.subjects.length}
+                                className={cn(
+                                  "border-l-2 text-center align-middle text-xs font-semibold uppercase tracking-wide",
+                                  rc.header,
+                                  rc.border
+                                )}
+                              >
+                                {group.rubric.code} {poids(group.rubric.code)}
+                              </TableHead>
                             )
-                          })
-                        })}
-                        {/* Moyenne */}
-                        <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, fontSize: '14px', borderLeft: '2px solid #D1D5DB', backgroundColor: '#EFF6FF', color: (() => {
-                          if (row.average === null) return '#A8A5A2'
-                          if (row.average >= 7) return '#2D7D46'
-                          if (row.average >= 5) return '#C48B1A'
-                          return '#C43C3C'
-                        })() }}>
-                          {fmt(row.average)}
-                        </td>
-                        {/* Statut */}
-                        <td style={{ padding: '10px 8px', textAlign: 'center', borderLeft: '1px solid #E8E6E3' }}>
-                          <Badge style={{ backgroundColor: row.isComplete ? '#E8F5EC' : '#FEF6E0', color: row.isComplete ? '#2D7D46' : '#C48B1A', border: 'none', fontSize: '11px', fontWeight: 500 }}>
-                            {row.isComplete ? 'Complet' : 'Incomplet'}
-                          </Badge>
-                        </td>
-                        {/* Rang */}
-                        <td style={{ padding: '10px 8px', textAlign: 'center', fontSize: '13px', fontWeight: 700, color: '#5A7085', borderLeft: '1px solid #E8E6E3' }}>
-                          {row.rang !== null ? `${row.rang}e` : '—'}
-                        </td>
-                        {/* Appréciation */}
-                        <td style={{ padding: '10px 8px', textAlign: 'center', borderLeft: '1px solid #E8E6E3' }}>
-                          <Badge style={{ backgroundColor: row.average !== null ? '#E3EFF9' : '#F0F4F7', color: row.average !== null ? '#2B6CB0' : '#A8A5A2', border: 'none', fontSize: '11px', fontWeight: 700 }}>
-                            {getAppreciation(row.average)}
-                          </Badge>
-                        </td>
-                      </tr>
-                    ))}
+                          })}
+                          <TableHead
+                            rowSpan={2}
+                            className="min-w-[80px] border-l-2 border-border bg-primary/5 text-center align-middle text-xs font-semibold uppercase tracking-wider text-foreground"
+                          >
+                            Moy.
+                          </TableHead>
+                          <TableHead
+                            rowSpan={2}
+                            className="min-w-[90px] border-l border-border text-center align-middle text-xs font-semibold uppercase tracking-wider text-foreground"
+                          >
+                            Statut
+                          </TableHead>
+                          <TableHead
+                            rowSpan={2}
+                            className="min-w-[60px] border-l border-border text-center align-middle text-xs font-semibold uppercase tracking-wider text-foreground"
+                          >
+                            Rang
+                          </TableHead>
+                          <TableHead
+                            rowSpan={2}
+                            className="min-w-[90px] border-l border-border text-center align-middle text-xs font-semibold uppercase tracking-wider text-foreground"
+                          >
+                            Appréciation
+                          </TableHead>
+                        </TableRow>
+                        {/* Ligne 2 — Codes matières */}
+                        <TableRow className="bg-muted/30 hover:bg-muted/30">
+                          {rubricGroups.map(group => {
+                            const rc = rubricClasses(group.rubric.code)
+                            return group.subjects.map((cs, i) => (
+                              <TableHead
+                                key={cs.id}
+                                title={cs.subject.name}
+                                className={cn(
+                                  "min-w-[72px] text-center text-[11px] font-semibold uppercase tracking-wide",
+                                  rc.col,
+                                  i === 0 ? `border-l-2 ${rc.border}` : `border-l ${rc.border}`
+                                )}
+                              >
+                                {cs.subject.code}
+                              </TableHead>
+                            ))
+                          })}
+                        </TableRow>
+                      </TableHeader>
 
-                    {/* Ligne moyenne classe */}
-                    <tr style={{ backgroundColor: '#F1F5F9', borderTop: '2px solid #D1D5DB' }}>
-                      <td style={{ padding: '10px 16px', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', color: '#2C4A6E', borderRight: '2px solid #D1D5DB', letterSpacing: '0.04em' }}>
-                        Moy. classe
-                      </td>
-                      {rubricGroups.map(group => {
-                        const st = rubricStyle(group.rubric.code)
-                        return group.subjects.map((cs, i) => (
-                          <td key={cs.id}
-                            style={{ padding: '10px 8px', textAlign: 'center', fontSize: '13px', fontWeight: 700, color: st.color, borderLeft: i === 0 ? `2px solid ${st.border}` : `1px solid #E8E6E3` }}>
-                            {fmt(columnAverages[cs.id])}
-                          </td>
-                        ))
-                      })}
-                      <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: '14px', fontWeight: 700, color: '#2B6CB0', borderLeft: '2px solid #D1D5DB', backgroundColor: '#DBEAFE' }}>
-                        {fmt(classAverage)}
-                      </td>
-                      <td style={{ borderLeft: '1px solid #E8E6E3' }} />
-                      <td style={{ borderLeft: '1px solid #E8E6E3' }} />
-                      <td style={{ borderLeft: '1px solid #E8E6E3' }} />
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+                      <TableBody>
+                        {gradeRows.map((row, ri) => (
+                          <TableRow
+                            key={row.enrollmentId}
+                            className={cn(ri % 2 === 1 && "bg-muted/20")}
+                          >
+                            <TableCell className="border-r-2 border-border pl-6">
+                              <div className="text-sm font-semibold text-foreground">{row.lastname}</div>
+                              <div className="text-xs text-muted-foreground">{row.firstname}</div>
+                            </TableCell>
+                            {rubricGroups.map(group => {
+                              const rc = rubricClasses(group.rubric.code)
+                              return group.subjects.map((cs, i) => {
+                                const note = row.grades[cs.id]
+                                const raw = cs.subject.maxScore
+                                const max =
+                                  (typeof raw === 'object' && (raw as unknown as { d?: unknown[] })?.d)
+                                    ? Number((raw as unknown as { d: unknown[] }).d[0])
+                                    : Number(raw) || 10
+                                return (
+                                  <TableCell
+                                    key={cs.id}
+                                    className={cn(
+                                      "text-center text-sm tabular-nums",
+                                      note !== null && note !== undefined ? "font-semibold" : "font-normal",
+                                      noteColorClass(note ?? null, max),
+                                      i === 0 ? `border-l-2 ${rc.border}` : "border-l border-border/50"
+                                    )}
+                                  >
+                                    {note !== null && note !== undefined ? note.toFixed(1) : '—'}
+                                  </TableCell>
+                                )
+                              })
+                            })}
+                            {/* Moyenne */}
+                            <TableCell
+                              className={cn(
+                                "border-l-2 border-border bg-primary/5 text-center text-sm font-bold tabular-nums",
+                                averageColorClass(row.average)
+                              )}
+                            >
+                              {fmt(row.average)}
+                            </TableCell>
+                            {/* Statut */}
+                            <TableCell className="border-l border-border text-center">
+                              {row.isComplete ? (
+                                <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
+                                  Complet
+                                </Badge>
+                              ) : (
+                                <Badge className="border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-50">
+                                  Incomplet
+                                </Badge>
+                              )}
+                            </TableCell>
+                            {/* Rang */}
+                            <TableCell className="border-l border-border text-center text-sm font-bold tabular-nums text-foreground">
+                              {row.rang !== null ? `${row.rang}e` : '—'}
+                            </TableCell>
+                            {/* Appréciation */}
+                            <TableCell className="border-l border-border text-center">
+                              <Badge
+                                variant={row.average !== null ? "secondary" : "outline"}
+                                className="font-bold tabular-nums"
+                              >
+                                {getAppreciation(row.average)}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+
+                      <TableFooter>
+                        {/* Ligne moyenne classe */}
+                        <TableRow className="bg-muted/60 hover:bg-muted/60">
+                          <TableCell className="border-r-2 border-border pl-6 text-xs font-bold uppercase tracking-wider text-foreground">
+                            Moy. classe
+                          </TableCell>
+                          {rubricGroups.map(group => {
+                            const rc = rubricClasses(group.rubric.code)
+                            return group.subjects.map((cs, i) => (
+                              <TableCell
+                                key={cs.id}
+                                className={cn(
+                                  "text-center text-sm font-bold tabular-nums",
+                                  rc.col,
+                                  i === 0 ? `border-l-2 ${rc.border}` : "border-l border-border/50"
+                                )}
+                              >
+                                {fmt(columnAverages[cs.id])}
+                              </TableCell>
+                            ))
+                          })}
+                          <TableCell className="border-l-2 border-border bg-primary/10 text-center text-sm font-bold tabular-nums text-primary">
+                            {fmt(classAverage)}
+                          </TableCell>
+                          <TableCell className="border-l border-border" />
+                          <TableCell className="border-l border-border" />
+                          <TableCell className="border-l border-border" />
+                        </TableRow>
+                      </TableFooter>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
             )}
           </>
         )
