@@ -6,6 +6,7 @@
  */
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+import { clientFetch as apiFetch } from '@/lib/client-fetch'
 
 export interface AcademicYear {
   id: string
@@ -44,14 +45,6 @@ export interface Enrollment {
   studentId: string
   classSessionId: string
   status: 'ACTIVE' | 'TRANSFERRED' | 'DROPPED' | 'GRADUATED'
-}
-
-// ── Helper ────────────────────────────────────────────────────────────────────
-
-async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(url, { credentials: 'include', ...options })
-  if (!res.ok) throw new Error(`API error ${res.status} — ${url}`)
-  return res.json()
 }
 
 // ── Fonctions ─────────────────────────────────────────────────────────────────
