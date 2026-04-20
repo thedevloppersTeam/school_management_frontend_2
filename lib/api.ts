@@ -1,7 +1,11 @@
+// APRÈS
+// All API calls use relative URLs through Next.js route handlers
+// (architecture migrée — plus de rewrites /school-api/*)
+
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from "axios";
 
-// All API calls use relative URLs through Next.js proxy
-// /school-api/* -> https://apicpmsl.stelloud.cloud/api/*
+import { env } from "./env";
+
 const api: AxiosInstance = axios.create({
   baseURL: "",
   timeout: 30000,
@@ -13,7 +17,7 @@ const api: AxiosInstance = axios.create({
 
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    if (process.env.NODE_ENV === "development") {
+    if (env.NODE_ENV === "development") {
       console.log(`[API] ${config.method?.toUpperCase()} ${config.url}`);
     }
     return config;

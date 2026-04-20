@@ -3,7 +3,7 @@
  * Proxy → POST https://apicpmsl.stelloud.cloud/api/subjects/update/:id
  *
  * Modifie une matière existante.
- * Body : { name?, maxScore?, coefficient?, hasSections?, rubricId?, description? }
+ * Body : { name?, code?, maxScore?, coefficient?, hasSections?, rubricId? }
  * Rôles autorisés : SYSTEM_ADMIN, ADMIN
  */
 import { NextRequest } from 'next/server'
@@ -14,5 +14,5 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  return backendFetch(request, `/api/subjects/sections/update/${id}`, 'POST')
+  return backendFetch(request, `/api/subjects/update/${id}`, 'POST')
 }

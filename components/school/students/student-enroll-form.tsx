@@ -1,5 +1,5 @@
 "use client"
-
+import { clientFetch as apiFetch } from '@/lib/client-fetch'
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -56,12 +56,6 @@ const EMPTY_FORM: FormState = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(url, { credentials: "include", ...options })
-  const data = await res.json()
-  if (!res.ok) throw new Error(data.message ?? `Erreur ${res.status}`)
-  return data
-}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 

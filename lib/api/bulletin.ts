@@ -1,7 +1,7 @@
 // lib/api/bulletin.ts
 // Logique partagée de construction des données bulletin (individuel + lot)
 // IMPORTANT : ce fichier ne contient aucun JSX — extension .ts correcte
-
+import { clientFetch as apiFetch } from '@/lib/client-fetch'
 import { fetchClassSubjects, type ApiClassSubject } from "@/lib/api/grades"
 import { parseDecimal, formatDate } from "@/lib/decimal"
 import type { BulletinData, RubriqueEntry, ComportementItem } from "@/components/BulletinScolaire"
@@ -43,14 +43,6 @@ function getAppreciation(m: number): string {
   if (m >= 6.0) return 'C'
   if (m >= 5.1) return 'D'
   return 'E'
-}
-
-// ── Helpers fetch ─────────────────────────────────────────────────────────────
-
-async function apiFetch<T>(url: string): Promise<T> {
-  const res = await fetch(url, { credentials: 'include' })
-  if (!res.ok) throw new Error(`API ${res.status}: ${url}`)
-  return res.json()
 }
 
 async function safeFetch<T>(url: string, fallback: T): Promise<T> {

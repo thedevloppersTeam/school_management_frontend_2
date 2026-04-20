@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { env } from '@/lib/env'
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
 
-  const backendRes = await fetch(`${process.env.BACKEND_URL}/api/users/login`, {
+  const backendRes = await fetch(`${env.BACKEND_URL}/api/users/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
