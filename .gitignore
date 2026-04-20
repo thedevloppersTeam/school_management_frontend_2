@@ -36,9 +36,7 @@ yarn-error.log*
 # vercel
 .vercel
 
-
-CLAUDE.md
-AGENTS.md
+*.md
 
 # typescript
 *.tsbuildinfo
@@ -46,3 +44,10 @@ next-env.d.ts
 cookies.txt
 .gitignore
 .gitignore
+
+.claude/
+tests/
+playwright.config.ts
+playwright-report/
+test-results/
+postman/

@@ -6,21 +6,63 @@ import { useParams } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Separator } from "@/components/ui/separator"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
-import { PlusIcon, SearchIcon, UserIcon, ArrowUpIcon, ArrowDownIcon } from "lucide-react"
+import {
+  PlusIcon,
+  SearchIcon,
+  UserIcon,
+  UsersIcon,
+  UserXIcon,
+  ImageOffIcon,
+  BadgeAlertIcon,
+  ArrowUpIcon,
+  ArrowDownIcon,
+  MoreHorizontalIcon,
+  PencilIcon,
+  ArrowRightLeftIcon,
+  UserRoundXIcon,
+  UserRoundCheckIcon,
+} from "lucide-react"
 import { ArchivedYearBanner } from "@/components/school/archived-year-banner"
 import { StudentEnrollForm } from "@/components/school/students/student-enroll-form"
 import { EditStudentModal } from "@/components/school/edit-student-modal"
 import { TransferEnrollmentModal } from "@/components/school/transfer-enrollment-modal"
+import { StatCard } from "@/components/school/stat-card"
 import { fetchClassSessions, type AcademicYear, type ClassSession } from "@/lib/api/dashboard"
+import { cn } from "@/lib/utils"
 
 // ── Types locaux ──────────────────────────────────────────────────────────────
 
@@ -43,16 +85,6 @@ interface StudentRow {
   parentsEmail?: string
 }
 
-// ── Palette CPMSL ─────────────────────────────────────────────────────────────
-
-const C = {
-  primary:  { 50: '#F0F4F7', 200: '#B3C7D5', 500: '#5A7085', 600: '#4A5D6E', 800: '#2A3740' },
-  neutral:  { 200: '#E8E6E3', 300: '#D1CECC', 400: '#A8A5A2', 500: '#78756F', 600: '#5C5955', 900: '#1E1A17' },
-  success:  { main: '#2D7D46', light: '#E8F5EC' },
-  warning:  { main: '#C48B1A', light: '#FEF6E0' },
-  error:    { main: '#C43C3C', light: '#FDE8E8' },
-}
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function isNisuValid(nisu: string): boolean {
@@ -66,21 +98,32 @@ function deriveYearStatus(year: AcademicYear): 'active' | 'preparation' | 'archi
 }
 
 
-// ── Page ──────────────────────────────────────────────────────────────────────
-
-// ── SortIcon Component ────────────────────────────────────────────────────────
-interface SortIconProps {
-  col: 'nisu' | 'name' | 'class'
-  sortCol: 'nisu' | 'name' | 'class' | null
-  sortDir: 'asc' | 'desc' | null
+function StatusBadge({ status }: { status: StudentRow['status'] }) {
+  switch (status) {
+    case 'ACTIVE':
+      return (
+        <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
+          Actif
+        </Badge>
+      )
+    case 'DROPPED':
+      return <Badge variant="secondary">Désactivé</Badge>
+    case 'TRANSFERRED':
+      return (
+        <Badge className="border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-50">
+          Transféré
+        </Badge>
+      )
+    case 'GRADUATED':
+      return (
+        <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
+          Diplômé
+        </Badge>
+      )
+  }
 }
 
-const SortIcon = ({ col, sortCol, sortDir }: SortIconProps) =>
-  sortCol === col ? (
-    sortDir === 'asc'
-      ? <ArrowUpIcon className="h-3 w-3 inline ml-1" />
-      : <ArrowDownIcon className="h-3 w-3 inline ml-1" />
-  ) : null
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function StudentsManagementPage() {
   const params = useParams()
@@ -99,7 +142,8 @@ export default function StudentsManagementPage() {
   const [searchQuery, setSearchQuery]   = useState("")
   const [selectedClass, setSelectedClass] = useState("all")
   const [currentPage, setCurrentPage]   = useState(1)
-  const itemsPerPage = 25
+  const [itemsPerPage, setItemsPerPage] = useState(15)
+  const PAGE_SIZE_OPTIONS = [15, 25, 50, 100]
 
   // Désactivation
   const [deactivatingId, setDeactivatingId] = useState<string | null>(null)
@@ -345,138 +389,194 @@ export default function StudentsManagementPage() {
   // ── Rendu ─────────────────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="space-y-6">
-        <Skeleton className="h-10 w-48" />
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[1,2,3,4].map(i => <Skeleton key={i} className="h-24" />)}
+      <div className="space-y-8">
+        <div className="space-y-1">
+          <Skeleton className="h-9 w-48" />
+          <Skeleton className="h-5 w-64" />
         </div>
-        <Skeleton className="h-64" />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {[1, 2, 3, 4].map(i => (
+            <Skeleton key={i} className="h-[104px] rounded-xl" />
+          ))}
+        </div>
+        <Skeleton className="h-96 rounded-xl" />
       </div>
     )
   }
 
   const isArchived = year ? deriveYearStatus(year) === 'archived' : false
 
-  return (
-    <div className="space-y-6">
+  // Pagination window (up to 5 numbered pages with ellipsis)
+  const paginationWindow = (() => {
+    if (totalPages <= 5) return Array.from({ length: totalPages }, (_, i) => i + 1)
+    if (currentPage <= 3) return [1, 2, 3, 4, 'ellipsis-right', totalPages]
+    if (currentPage >= totalPages - 2) {
+      return [1, 'ellipsis-left', totalPages - 3, totalPages - 2, totalPages - 1, totalPages]
+    }
+    return [1, 'ellipsis-left', currentPage - 1, currentPage, currentPage + 1, 'ellipsis-right', totalPages]
+  })()
 
-      {/* Header */}
+  return (
+    <div className="space-y-8">
+      {/* ── Header ── */}
       <div>
-        <h1 className="font-serif" style={{ fontSize: '36px', fontWeight: 700, letterSpacing: '-0.03em', color: C.primary[800] }}>
-          Élèves
-        </h1>
-        <p className="font-sans" style={{ fontSize: '13px', color: C.neutral[500] }}>
-          Année {year?.name}
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">Élèves</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Gérez les inscriptions
+          {year && (
+            <>
+              {" "}&middot;{" "}
+              <Badge variant="secondary" className="ml-1 align-middle">
+                {year.name}
+              </Badge>
+            </>
+          )}
         </p>
       </div>
 
       {isArchived && year && <ArchivedYearBanner yearName={year.name} />}
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { label: "Total actifs",     value: activeStudents.length },
-          { label: "Désactivés",       value: inactiveStudents.length },
-          { label: "Sans photo",       value: withoutPhoto.length },
-          { label: "NISU invalide",    value: withInvalidNisu.length },
-        ].map(kpi => (
-          <Card key={kpi.label} style={{ backgroundColor: 'white', border: `1px solid ${C.neutral[200]}`, borderRadius: '10px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
-            <CardHeader className="pb-3">
-              <p className="font-sans" style={{ fontSize: '12px', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em', color: C.neutral[500], marginBottom: '4px' }}>
-                {kpi.label}
-              </p>
-              <p className="font-serif" style={{ fontSize: '28px', fontWeight: 700, color: C.primary[800] }}>
-                {kpi.value}
-              </p>
-            </CardHeader>
-          </Card>
-        ))}
+      {/* ── KPI Cards ── */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          label="Total actifs"
+          value={activeStudents.length}
+          icon={UsersIcon}
+          iconClassName="text-emerald-600"
+          iconBgClassName="bg-emerald-50"
+        />
+        <StatCard
+          label="Désactivés"
+          value={inactiveStudents.length}
+          icon={UserXIcon}
+          iconClassName="text-slate-600"
+          iconBgClassName="bg-slate-100"
+        />
+        <StatCard
+          label="Sans photo"
+          value={withoutPhoto.length}
+          icon={ImageOffIcon}
+          iconClassName="text-amber-600"
+          iconBgClassName="bg-amber-50"
+        />
+        <StatCard
+          label="NISU invalide"
+          value={withInvalidNisu.length}
+          icon={BadgeAlertIcon}
+          iconClassName="text-rose-600"
+          iconBgClassName="bg-rose-50"
+        />
       </div>
 
-      {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-        <div className="flex items-center gap-2">
-          <Switch id="show-inactive" checked={showInactive} onCheckedChange={setShowInactive} disabled={isArchived} />
-          <Label htmlFor="show-inactive" className="font-sans" style={{ fontSize: '13px', color: C.neutral[600] }}>
-            Voir désactivés ({inactiveStudents.length})
-          </Label>
+      {/* ── Table Card ── */}
+      <Card className="border bg-card shadow-sm">
+        <CardHeader className="pb-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle className="text-base font-semibold">Liste des élèves</CardTitle>
+              <CardDescription>
+                {displayed.length} élève{displayed.length > 1 ? 's' : ''}
+                {selectedClass !== 'all' && ` — ${selectedClass}`}
+                {searchQuery && ` — recherche : "${searchQuery}"`}
+              </CardDescription>
+            </div>
+            {!isArchived && (
+              <StudentEnrollForm
+                open={enrollOpen}
+                onOpenChange={setEnrollOpen}
+                academicYearId={yearId}
+                onSuccess={() => { setEnrollOpen(false); loadStudents() }}
+                trigger={
+                  <Button size="sm" onClick={() => setEnrollOpen(true)}>
+                    <PlusIcon className="mr-2 h-4 w-4" />
+                    Inscrire un élève
+                  </Button>
+                }
+              />
+            )}
+          </div>
+        </CardHeader>
+
+        <Separator />
+
+        {/* Toolbar */}
+        <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
+          <div className="relative flex-1">
+            <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Rechercher par nom ou NISU..."
+              value={searchQuery}
+              onChange={e => { setSearchQuery(e.target.value); setCurrentPage(1) }}
+              className="pl-9"
+            />
+          </div>
+
+          <Select value={selectedClass} onValueChange={v => { setSelectedClass(v); setCurrentPage(1) }}>
+            <SelectTrigger className="w-full sm:w-[220px]">
+              <SelectValue placeholder="Toutes les classes" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Toutes les classes</SelectItem>
+              {uniqueClasses.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            </SelectContent>
+          </Select>
+
+          <div className="flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 sm:py-1.5">
+            <Switch
+              id="show-inactive"
+              checked={showInactive}
+              onCheckedChange={setShowInactive}
+              disabled={isArchived}
+            />
+            <Label htmlFor="show-inactive" className="cursor-pointer text-sm text-muted-foreground">
+              Désactivés ({inactiveStudents.length})
+            </Label>
+          </div>
         </div>
 
-        <div className="relative flex-1">
-          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" style={{ color: C.neutral[400] }} />
-          <Input
-            placeholder="Rechercher par nom ou NISU..."
-            value={searchQuery}
-            onChange={e => { setSearchQuery(e.target.value); setCurrentPage(1) }}
-            className="pl-9"
-            style={{ borderColor: C.neutral[300] }}
-          />
-        </div>
+        <Separator />
 
-        <Select value={selectedClass} onValueChange={v => { setSelectedClass(v); setCurrentPage(1) }}>
-          <SelectTrigger className="w-full sm:w-[200px]" style={{ borderColor: C.neutral[300] }}>
-            <SelectValue placeholder="Toutes les classes" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Toutes les classes</SelectItem>
-            {uniqueClasses.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-          </SelectContent>
-        </Select>
-
-        {!isArchived && (
-          <StudentEnrollForm
-            open={enrollOpen}
-            onOpenChange={setEnrollOpen}
-            academicYearId={yearId}
-            onSuccess={() => { setEnrollOpen(false); loadStudents() }}
-            trigger={
-              <Button style={{ backgroundColor: C.primary[500], color: 'white' }} onClick={() => setEnrollOpen(true)}>
-                <PlusIcon className="mr-2 h-4 w-4" />
-                Inscrire un élève
-              </Button>
-            }
-          />
-        )}
-      </div>
-
-      {/* Table */}
-      {displayed.length === 0 ? (
-        <Card style={{ backgroundColor: 'white', border: `1px solid ${C.neutral[200]}`, borderRadius: '10px' }}>
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <UserIcon style={{ width: '48px', height: '48px', color: C.primary[200], marginBottom: '16px' }} />
-            <h3 className="font-serif" style={{ fontSize: '20px', fontWeight: 600, color: C.primary[800], marginBottom: '8px' }}>
-              {searchQuery || selectedClass !== 'all' ? "Aucun élève trouvé" : "Aucun élève inscrit"}
-            </h3>
-            <p className="font-sans" style={{ fontSize: '14px', color: C.neutral[500] }}>
-              {searchQuery || selectedClass !== 'all' ? "Modifiez vos critères de recherche" : "Commencez par inscrire le premier élève"}
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card style={{ backgroundColor: 'white', border: `1px solid ${C.neutral[200]}`, borderRadius: '10px' }}>
-          <CardContent className="p-0 overflow-x-auto">
+        <CardContent className="p-0">
+          {displayed.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+                <UserIcon className="h-7 w-7 text-muted-foreground" />
+              </div>
+              <h3 className="mt-4 text-sm font-semibold text-foreground">
+                {searchQuery || selectedClass !== 'all' ? "Aucun élève trouvé" : "Aucun élève inscrit"}
+              </h3>
+              <p className="mt-1 max-w-[320px] text-center text-sm text-muted-foreground">
+                {searchQuery || selectedClass !== 'all'
+                  ? "Modifiez vos critères de recherche."
+                  : "Commencez par inscrire le premier élève pour cette année."}
+              </p>
+            </div>
+          ) : (
             <Table>
               <TableHeader>
-                <TableRow style={{ backgroundColor: C.primary[50], borderBottom: `1px solid ${C.neutral[200]}` }}>
-                  {[
-                    { label: 'Photo', col: null },
-                    { label: 'Code', col: null },
-                    { label: 'NISU', col: 'nisu' as SortCol },
-                    { label: 'Nom', col: 'name' as SortCol },
-                    { label: 'Prénom', col: null },
-                    { label: 'Classe', col: 'class' as SortCol },
-                    { label: 'Statut', col: null },
-                    { label: 'Actions', col: null },
-                  ].map(({ label, col }) => (
-                    <TableHead
-                      key={label}
-                      className="font-sans"
-                      style={{ fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: C.primary[600], cursor: col ? 'pointer' : 'default' }}
-                      onClick={() => col && handleSort(col)}
-                    >
-                      {label}{col && <SortIcon col={col} />}
-                    </TableHead>
-                  ))}
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="w-[60px] pl-6 font-semibold">Élève</TableHead>
+                  <TableHead className="hidden font-semibold md:table-cell">Code</TableHead>
+                  <TableHead
+                    className="cursor-pointer select-none font-semibold"
+                    onClick={() => handleSort('nisu')}
+                  >
+                    NISU <SortIcon col="nisu" />
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer select-none font-semibold"
+                    onClick={() => handleSort('name')}
+                  >
+                    Nom complet <SortIcon col="name" />
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer select-none font-semibold"
+                    onClick={() => handleSort('class')}
+                  >
+                    Classe <SortIcon col="class" />
+                  </TableHead>
+                  <TableHead className="font-semibold">Statut</TableHead>
+                  <TableHead className="pr-6 text-right font-semibold">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -487,91 +587,92 @@ export default function StudentsManagementPage() {
                   return (
                     <TableRow
                       key={student.enrollmentId}
-                      style={{ borderBottom: `1px solid ${C.neutral[200]}`, opacity: isInactive ? 0.6 : 1 }}
+                      className={cn(isInactive && "opacity-60")}
                     >
-                      <TableCell>
+                      <TableCell className="pl-6">
                         <Avatar className="h-9 w-9">
                           <AvatarImage src={student.profilePhoto} />
-                          <AvatarFallback style={{ backgroundColor: C.neutral[200] }}>
-                            <UserIcon style={{ width: '18px', height: '18px', color: C.neutral[400] }} />
+                          <AvatarFallback className="bg-muted text-muted-foreground">
+                            <UserIcon className="h-4 w-4" />
                           </AvatarFallback>
                         </Avatar>
                       </TableCell>
-                      <TableCell>
-                        <span style={{ fontFamily: 'monospace', fontSize: '12px', color: C.neutral[600] }}>
+                      <TableCell className="hidden md:table-cell">
+                        <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
                           {student.studentCode}
-                        </span>
+                        </code>
                       </TableCell>
                       <TableCell>
-                        <div className="flex flex-col gap-0.5">
-                          <span style={{ color: nisuInvalid ? C.error.main : C.neutral[900], fontWeight: nisuInvalid ? 500 : 400 }}>
+                        <div className="flex flex-col">
+                          <span
+                            className={cn(
+                              "tabular-nums",
+                              nisuInvalid ? "font-medium text-destructive" : "text-foreground"
+                            )}
+                          >
                             {student.nisu || '—'}
                           </span>
                           {nisuInvalid && (
-                            <span style={{ fontSize: '11px', color: C.error.main }}>
-                              12-13 chiffres requis
+                            <span className="text-[11px] text-destructive">
+                              12-13 caractères requis
                             </span>
                           )}
                         </div>
                       </TableCell>
-                      <TableCell className="font-sans" style={{ fontSize: '14px', fontWeight: 600, color: C.neutral[900] }}>
-                        {student.lastname}
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span className="font-medium text-foreground">{student.lastname}</span>
+                          <span className="text-xs text-muted-foreground">{student.firstname}</span>
+                        </div>
                       </TableCell>
-                      <TableCell className="font-sans" style={{ fontSize: '14px', color: C.neutral[900] }}>
-                        {student.firstname}
-                      </TableCell>
-                      <TableCell className="font-sans" style={{ fontSize: '14px', color: C.neutral[600] }}>
+                      <TableCell className="text-muted-foreground">
                         {student.className}
                       </TableCell>
                       <TableCell>
-                        {student.status === 'ACTIVE' && (
-                          <Badge style={{ backgroundColor: C.success.light, color: C.success.main, border: 'none' }}>Actif</Badge>
-                        )}
-                        {student.status === 'DROPPED' && (
-                          <Badge style={{ backgroundColor: C.neutral[200], color: C.neutral[500], border: 'none' }}>Désactivé</Badge>
-                        )}
-                        {student.status === 'TRANSFERRED' && (
-                          <Badge style={{ backgroundColor: '#E3EFF9', color: '#2B6CB0', border: 'none' }}>Transféré</Badge>
-                        )}
-                        {student.status === 'GRADUATED' && (
-                          <Badge style={{ backgroundColor: C.success.light, color: C.success.main, border: 'none' }}>Diplômé</Badge>
-                        )}
+                        <StatusBadge status={student.status} />
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="pr-6 text-right">
                         {!isArchived && (
-                          <div className="flex items-center gap-3">
-                            {isInactive ? (
-                              <button
-                                onClick={() => handleReactivate(student.enrollmentId)}
-                                style={{ fontSize: '13px', fontWeight: 500, color: C.success.main, background: 'none', border: 'none', cursor: 'pointer' }}
-                              >
-                                Réactiver
-                              </button>
-                            ) : (
-                              <>
-                                <button
-                                  onClick={() => setEditingStudent(student)}
-                                  style={{ fontSize: '13px', fontWeight: 500, color: C.primary[600], background: 'none', border: 'none', cursor: 'pointer' }}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <MoreHorizontalIcon className="h-4 w-4" />
+                                <span className="sr-only">Ouvrir le menu</span>
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48">
+                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                              <DropdownMenuSeparator />
+                              {isInactive ? (
+                                <DropdownMenuItem
+                                  onClick={() => handleReactivate(student.enrollmentId)}
+                                  className="text-emerald-600 focus:text-emerald-600"
                                 >
-                                  Modifier
-                                </button>
-                                <span style={{ color: C.neutral[300] }}>|</span>
-                                <button
-                                  onClick={() => setTransferringStudent(student)}
-                                  style={{ fontSize: '13px', fontWeight: 500, color: '#2B6CB0', background: 'none', border: 'none', cursor: 'pointer' }}
-                                >
-                                  Transférer
-                                </button>
-                                <span style={{ color: C.neutral[300] }}>|</span>
-                                <button
-                                  onClick={() => { setDeactivatingId(student.enrollmentId); setDeactivationReason('') }}
-                                  style={{ fontSize: '13px', fontWeight: 500, color: '#B91C1C', background: 'none', border: 'none', cursor: 'pointer' }}
-                                >
-                                  Désactiver
-                                </button>
-                              </>
-                            )}
-                          </div>
+                                  <UserRoundCheckIcon className="mr-2 h-4 w-4" />
+                                  Réactiver
+                                </DropdownMenuItem>
+                              ) : (
+                                <>
+                                  <DropdownMenuItem onClick={() => setEditingStudent(student)}>
+                                    <PencilIcon className="mr-2 h-4 w-4" />
+                                    Modifier
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => setTransferringStudent(student)}>
+                                    <ArrowRightLeftIcon className="mr-2 h-4 w-4" />
+                                    Transférer
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    onClick={() => { setDeactivatingId(student.enrollmentId); setDeactivationReason('') }}
+                                    className="text-destructive focus:text-destructive"
+                                  >
+                                    <UserRoundXIcon className="mr-2 h-4 w-4" />
+                                    Désactiver
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         )}
                       </TableCell>
                     </TableRow>
@@ -579,58 +680,121 @@ export default function StudentsManagementPage() {
                 })}
               </TableBody>
             </Table>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </CardContent>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-4">
-          <Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} style={{ borderColor: C.neutral[300] }}>
-            ← Précédent
-          </Button>
-          <span className="font-sans" style={{ fontSize: '13px', color: C.neutral[500] }}>
-            Page {currentPage} / {totalPages}
-          </span>
-          <Button variant="outline" size="sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)} style={{ borderColor: C.neutral[300] }}>
-            Suivant →
-          </Button>
-        </div>
-      )}
+        {/* Pagination footer — affiché uniquement si > 15 résultats */}
+        {displayed.length > 15 && (
+          <>
+            <Separator />
+            <div className="flex flex-col items-center justify-between gap-3 px-4 py-3 sm:flex-row">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Afficher</span>
+                  <Select
+                    value={String(itemsPerPage)}
+                    onValueChange={v => { setItemsPerPage(Number(v)); setCurrentPage(1) }}
+                  >
+                    <SelectTrigger className="h-8 w-[72px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PAGE_SIZE_OPTIONS.map(size => (
+                        <SelectItem key={size} value={String(size)}>
+                          {size}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Page <span className="font-medium text-foreground tabular-nums">{currentPage}</span>{" "}
+                  sur <span className="font-medium text-foreground tabular-nums">{totalPages}</span>
+                  {" "}&middot; {displayed.length} résultat(s)
+                </p>
+              </div>
 
-      {/* Modal désactivation */}
+              {totalPages > 1 && (
+                <Pagination className="mx-0 w-auto justify-end">
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious
+                        href="#"
+                        onClick={e => {
+                          e.preventDefault()
+                          if (currentPage > 1) setCurrentPage(p => p - 1)
+                        }}
+                        className={cn(currentPage === 1 && "pointer-events-none opacity-50")}
+                      />
+                    </PaginationItem>
+                    {paginationWindow.map((p, idx) => {
+                      if (typeof p === 'string') {
+                        return (
+                          <PaginationItem key={`${p}-${idx}`}>
+                            <PaginationEllipsis />
+                          </PaginationItem>
+                        )
+                      }
+                      return (
+                        <PaginationItem key={p}>
+                          <PaginationLink
+                            href="#"
+                            isActive={currentPage === p}
+                            onClick={e => {
+                              e.preventDefault()
+                              setCurrentPage(p)
+                            }}
+                          >
+                            {p}
+                          </PaginationLink>
+                        </PaginationItem>
+                      )
+                    })}
+                    <PaginationItem>
+                      <PaginationNext
+                        href="#"
+                        onClick={e => {
+                          e.preventDefault()
+                          if (currentPage < totalPages) setCurrentPage(p => p + 1)
+                        }}
+                        className={cn(currentPage === totalPages && "pointer-events-none opacity-50")}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              )}
+            </div>
+          </>
+        )}
+      </Card>
+
+      {/* ── Modal désactivation ── */}
       <Dialog open={!!deactivatingId} onOpenChange={open => !open && setDeactivatingId(null)}>
-        <DialogContent style={{ backgroundColor: 'white', borderRadius: '12px' }}>
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle className="font-serif" style={{ fontSize: '24px', fontWeight: 700, color: C.primary[800] }}>
-              Désactiver cet élève
-            </DialogTitle>
+            <DialogTitle>Désactiver cet élève</DialogTitle>
+            <DialogDescription>
+              L'élève ne sera plus visible dans les listes actives. Cette action est réversible —
+              vous pouvez réactiver l'élève à tout moment.
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div style={{ backgroundColor: C.warning.light, border: `1px solid ${C.warning.main}`, borderRadius: '8px', padding: '12px 16px', fontSize: '13px', color: '#92400E' }}>
-              L'élève ne sera plus visible dans les listes actives.
-            </div>
-            <div style={{ backgroundColor: C.success.light, border: `1px solid ${C.success.main}`, borderRadius: '8px', padding: '12px 16px', fontSize: '13px', color: '#166534' }}>
-              Action réversible — vous pouvez réactiver l'élève à tout moment.
-            </div>
-            <div className="space-y-2">
-              <Label className="font-sans" style={{ fontSize: '13px', fontWeight: 500 }}>
-                Raison (optionnelle)
-              </Label>
-              <Input
-                placeholder="Ex: Déménagement, transfert..."
-                value={deactivationReason}
-                onChange={e => setDeactivationReason(e.target.value)}
-                style={{ borderColor: C.neutral[300] }}
-              />
-            </div>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="deactivation-reason" className="text-sm font-medium">
+              Raison (optionnelle)
+            </Label>
+            <Input
+              id="deactivation-reason"
+              placeholder="Ex: Déménagement, transfert..."
+              value={deactivationReason}
+              onChange={e => setDeactivationReason(e.target.value)}
+            />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeactivatingId(null)} style={{ borderColor: C.neutral[300] }}>
+            <Button variant="outline" onClick={() => setDeactivatingId(null)}>
               Annuler
             </Button>
-            <Button onClick={handleDeactivate} disabled={deactivating} style={{ backgroundColor: '#B91C1C', color: 'white' }}>
-              {deactivating ? 'En cours...' : 'Confirmer'}
+            <Button variant="destructive" onClick={handleDeactivate} disabled={deactivating}>
+              {deactivating ? 'En cours...' : 'Confirmer la désactivation'}
             </Button>
           </DialogFooter>
         </DialogContent>

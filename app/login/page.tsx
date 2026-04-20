@@ -4,18 +4,18 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { EyeIcon, EyeOffIcon, LoaderIcon } from "lucide-react"
 import { getRoleRoute, type UserType } from "@/lib/data/auth-data"
+import { useToast } from "@/components/ui/use-toast"
 
 export default function LoginPage() {
   const router = useRouter()
+  const { toast } = useToast()
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
-  const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError("")
     setIsLoading(true)
 
     try {
@@ -29,14 +29,22 @@ export default function LoginPage() {
       const data = await res.json()
 
       if (!res.ok) {
-        setError(data.message ?? "Identifiants incorrects")
+        toast({
+          variant: "destructive",
+          title: "Échec de connexion",
+          description: data.message ?? "Identifiants incorrects. Veuillez réessayer.",
+        })
         return
       }
 
       const route = getRoleRoute(data.session?.type as UserType)
       router.push(route)
     } catch {
-      setError("Une erreur est survenue. Veuillez réessayer.")
+      toast({
+        variant: "destructive",
+        title: "Erreur",
+        description: "Une erreur est survenue. Veuillez réessayer.",
+      })
     } finally {
       setIsLoading(false)
     }
@@ -193,15 +201,6 @@ export default function LoginPage() {
                 )}
               </button>
             </div>
-          </div>
-
-          {/* Zone d'erreur */}
-          <div style={{ height: '44px', marginBottom: '16px' }}>
-            {error && (
-              <span className="font-sans" style={{ color: '#C43C3C', fontSize: '13px', fontWeight: 400 }}>
-                {error}
-              </span>
-            )}
           </div>
 
           {/* Bouton Se connecter */}

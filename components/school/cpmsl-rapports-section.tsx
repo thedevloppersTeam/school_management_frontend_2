@@ -5,7 +5,19 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { FileTextIcon } from "lucide-react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import { StatCard } from "@/components/school/stat-card"
+import {
+  FileTextIcon,
+  UsersIcon,
+  CheckCircle2Icon,
+  XCircleIcon,
+  TrendingUpIcon,
+  PercentIcon,
+  InboxIcon,
+  GaugeIcon,
+} from "lucide-react"
 import {
   fetchSteps,
   fetchClassSessions,
@@ -366,9 +378,9 @@ export function CPMSLRapportsSection({
       }
 
       const sessionObj = sessions.find(s => s.id === selectedSession)
-      const cn = sessionObj ? getClassSessionName(sessionObj) : 'classe'
+      const pdfClassName = sessionObj ? getClassSessionName(sessionObj) : 'classe'
       const sn = steps.find(s => s.id === selectedStep)?.name ?? 'etape'
-      pdf.save(`rapport_${cn}_${sn}_${new Date().toISOString().slice(0, 10)}.pdf`)
+      pdf.save(`rapport_${pdfClassName}_${sn}_${new Date().toISOString().slice(0, 10)}.pdf`)
     } catch (e) {
       console.error('[rapports] PDF:', e)
     } finally {
@@ -400,12 +412,6 @@ export function CPMSLRapportsSection({
   }
 
   // ── Styles ────────────────────────────────────────────────────────────────
-  const card: React.CSSProperties = {
-    backgroundColor: '#FFFFFF',
-    borderRadius: '10px',
-    border: '1px solid #E8E6E3',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-  }
   const thStyle: React.CSSProperties = {
     padding: '8px 10px',
     fontSize: '11px',
@@ -438,72 +444,97 @@ export function CPMSLRapportsSection({
     <div className="space-y-6">
 
       {/* Sélecteurs */}
-      <div style={card}>
-        <div style={{ padding: '20px 24px', borderBottom: '1px solid #E8E6E3' }}>
-          <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: '15px', fontWeight: 600, color: '#3A4A57' }}>
-            Rapport statistique de classe
-          </h3>
-        </div>
-        <div style={{ padding: '20px 24px' }}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="class-select" style={{ fontSize: '13px', fontWeight: 500, color: '#1E1A17', display: 'block', marginBottom: '8px' }}>
-                Classe
-              </label>
-              <Select value={selectedSession} onValueChange={setSelectedSession}>
-                <SelectTrigger id="class-select" style={{ borderColor: '#D1CECC', borderRadius: '8px' }}>
-                  <SelectValue placeholder="Sélectionner une classe" />
-                </SelectTrigger>
-                <SelectContent>
-                  {sessions.map(s => (
-                    <SelectItem key={s.id} value={s.id}>{getClassSessionName(s)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label style={{ fontSize: '13px', fontWeight: 500, color: '#1E1A17', display: 'block', marginBottom: '8px' }}>
-                Étape
-              </label>
-              <Select value={selectedStep} onValueChange={setSelectedStep}>
-                <SelectTrigger style={{ borderColor: '#D1CECC', borderRadius: '8px' }}>
-                  <SelectValue placeholder="Sélectionner une étape" />
-                </SelectTrigger>
-                <SelectContent>
-                  {steps.map(s => (
-                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+      <Card className="border bg-card shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-semibold">Rapport statistique de classe</CardTitle>
+          <CardDescription>Sélectionnez une classe et une étape pour générer le rapport</CardDescription>
+        </CardHeader>
+        <Separator />
+        <CardContent className="p-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Select value={selectedSession} onValueChange={setSelectedSession}>
+              <SelectTrigger id="class-select">
+                <SelectValue placeholder="Sélectionner une classe" />
+              </SelectTrigger>
+              <SelectContent>
+                {sessions.map(s => (
+                  <SelectItem key={s.id} value={s.id}>{getClassSessionName(s)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={selectedStep} onValueChange={setSelectedStep}>
+              <SelectTrigger>
+                <SelectValue placeholder="Sélectionner une étape" />
+              </SelectTrigger>
+              <SelectContent>
+                {steps.map(s => (
+                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {loadingReport && <Skeleton className="h-64 w-full" />}
 
       {report && !loadingReport && (
         <>
           {/* KPIs aperçu */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-            {[
-              { label: 'Inscrits',      value: report.enrolled },
-              { label: 'Évalués',       value: report.evaluated },
-              { label: 'Réussites',     value: report.passed },
-              { label: 'Échecs',        value: report.failed },
-              { label: 'Taux réussite', value: `${report.evaluated ? Math.round((report.passed / report.evaluated) * 100) : 0}%` },
-              { label: 'Moy. classe',   value: `${report.classAverage.toFixed(2)}/10` },
-              { label: 'Médiane',       value: `${report.median.toFixed(2)}/10` },
-            ].map(kpi => (
-              <div key={kpi.label} style={{ ...card, padding: '14px 16px' }}>
-                <p style={{ fontSize: '11px', fontWeight: 500, textTransform: 'uppercase', color: '#78756F', marginBottom: '6px' }}>
-                  {kpi.label}
-                </p>
-                <p style={{ fontFamily: 'var(--font-serif)', fontSize: '20px', fontWeight: 700, color: '#2A3740' }}>
-                  {kpi.value}
-                </p>
-              </div>
-            ))}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <StatCard
+              label="Inscrits"
+              value={report.enrolled}
+              icon={UsersIcon}
+              iconClassName="text-blue-600"
+              iconBgClassName="bg-blue-50"
+            />
+            <StatCard
+              label="Réussites"
+              value={`${report.passed} / ${report.evaluated}`}
+              icon={CheckCircle2Icon}
+              iconClassName="text-emerald-600"
+              iconBgClassName="bg-emerald-50"
+            />
+            <StatCard
+              label="Échecs"
+              value={report.failed}
+              icon={XCircleIcon}
+              iconClassName="text-rose-600"
+              iconBgClassName="bg-rose-50"
+            />
+            <StatCard
+              label="Taux de réussite"
+              value={`${report.evaluated ? Math.round((report.passed / report.evaluated) * 100) : 0}%`}
+              icon={PercentIcon}
+              iconClassName="text-violet-600"
+              iconBgClassName="bg-violet-50"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <StatCard
+              label="Moyenne classe"
+              value={`${report.classAverage.toFixed(2)} / 10`}
+              icon={TrendingUpIcon}
+              iconClassName="text-amber-600"
+              iconBgClassName="bg-amber-50"
+            />
+            <StatCard
+              label="Médiane"
+              value={`${report.median.toFixed(2)} / 10`}
+              icon={GaugeIcon}
+              iconClassName="text-slate-600"
+              iconBgClassName="bg-slate-100"
+            />
+            <StatCard
+              label="Min / Max"
+              value={`${fmt(report.min)} / ${fmt(report.max)}`}
+              icon={GaugeIcon}
+              iconClassName="text-teal-600"
+              iconBgClassName="bg-teal-50"
+            />
           </div>
 
           {/* Zone capturée pour PDF */}
@@ -653,31 +684,33 @@ export function CPMSLRapportsSection({
           </div>
 
           {/* Bouton génération */}
-          <Button
-            size="lg"
-            onClick={generatePDF}
-            disabled={isArchived || generating}
-            style={{
-              backgroundColor: isArchived || generating ? '#9CA3AF' : '#2C4A6E',
-              color: '#FFFFFF',
-              fontSize: '14px',
-              fontWeight: 600,
-              borderRadius: '8px',
-              padding: '10px 24px',
-            }}
-          >
-            <FileTextIcon className="mr-2 h-5 w-5" />
-            {generating ? 'Génération...' : 'Générer le rapport PDF 8½×14'}
-          </Button>
+          <Card className="border bg-card shadow-sm">
+            <CardContent className="flex justify-end p-4">
+              <Button
+                size="lg"
+                onClick={generatePDF}
+                disabled={isArchived || generating}
+              >
+                <FileTextIcon className="mr-2 h-5 w-5" />
+                {generating ? 'Génération...' : 'Générer le rapport PDF 8½×14'}
+              </Button>
+            </CardContent>
+          </Card>
         </>
       )}
 
       {!report && !loadingReport && (
-        <div style={{ backgroundColor: '#FFFFFF', borderRadius: '10px', border: '1px solid #E8E6E3', padding: '48px 24px', textAlign: 'center' }}>
-          <p style={{ fontSize: '15px', fontWeight: 500, color: '#78756F' }}>
-            Sélectionnez une classe et une étape pour générer le rapport
-          </p>
-        </div>
+        <Card className="border bg-card shadow-sm">
+          <CardContent className="flex flex-col items-center justify-center py-16">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+              <InboxIcon className="h-7 w-7 text-muted-foreground" />
+            </div>
+            <h3 className="mt-4 text-sm font-semibold text-foreground">Aucune sélection</h3>
+            <p className="mt-1 max-w-[320px] text-center text-sm text-muted-foreground">
+              Sélectionnez une classe et une étape pour générer le rapport statistique.
+            </p>
+          </CardContent>
+        </Card>
       )}
     </div>
   )
