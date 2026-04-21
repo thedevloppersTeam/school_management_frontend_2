@@ -28,6 +28,10 @@ import {
   AlertTriangleIcon, CheckCircleIcon, FileTextIcon, AlertCircleIcon,
   UserIcon, LayersIcon, Loader2, SearchIcon, InboxIcon,
 } from "lucide-react"
+import { toast } from "sonner"
+import { toMessage } from "@/lib/errors"
+import { BatchPreviewModal } from "@/components/school/batch-preview-modal"
+import { AuditNoteModal, type AuditReason } from "@/components/school/audit-note-modal"
 import { cn } from "@/lib/utils"
 import {
   fetchSteps,
@@ -58,8 +62,9 @@ interface CPMSLBulletinsSectionProps {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function isNisuValid(nisu: string): boolean {
-  return !!nisu && /^[A-Z0-9]{14}$/.test(nisu.trim())
+function isNisuValid(nisu: string | null): boolean {
+  if (!nisu) return false
+  return /^[A-Z0-9]{14}$/.test(nisu.trim())
 }
 
 
@@ -71,16 +76,23 @@ async function archiveBulletin(params: {
   source:           'individual' | 'batch'
   bulletinSnapshot: BulletinData
   isCorrection:     boolean
-}) {
+  auditNote?:       string  // WF-005 : motif pour correction post-clôture
+}): Promise<{ ok: true } | { ok: false; error: unknown }> {
   try {
-    await fetch('/api/bulletin-archives/create', {
+    const res = await fetch('/api/bulletin-archives/create', {
       method:      'POST',
       credentials: 'include',
       headers:     { 'Content-Type': 'application/json' },
       body:        JSON.stringify(params),
     })
+    if (!res.ok) {
+      return { ok: false, error: new Error(`HTTP ${res.status}`) }
+    }
+    return { ok: true }
   } catch (err) {
-    console.error('[archive lot] échec silencieux:', err)
+    // EP-003 : on ne swallow plus, on retourne l'erreur pour que
+    // l'appelant puisse la remonter à l'utilisateur
+    return { ok: false, error: err }
   }
 }
 
@@ -110,6 +122,11 @@ export function CPMSLBulletinsSection({
   const [lotProgress,   setLotProgress]   = useState({ current: 0, total: 0 })
   const [lotData,       setLotData]       = useState<BulletinData | null>(null)
   const lotRef = useRef<HTMLDivElement>(null)
+
+  // WF-003 / WF-005 : modaux de confirmation pré-génération
+  const [previewOpen,    setPreviewOpen]    = useState(false)
+  const [auditNoteOpen,  setAuditNoteOpen]  = useState(false)
+  const [pendingAudit,   setPendingAudit]   = useState<{ reason: AuditReason; note: string } | null>(null)
 
   // ── Recherche + pagination ─────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState("")
@@ -213,13 +230,49 @@ export function CPMSLBulletinsSection({
     return [1, 'ellipsis-left', currentPage - 1, currentPage, currentPage + 1, 'ellipsis-right', totalPages]
   }, [currentPage, totalPages])
 
-  // ── Génération en lot ──────────────────────────────────────────────────────
-  const generateLot = async () => {
+  // ── Génération en lot — découpée en 3 étapes (WF-003, WF-005, EP-003) ──
+
+  // Étape 1 — click "Générer le lot" → ouvre le preview
+  const handleOpenPreview = () => {
+    if (!selectedStep || !selectedSession) return
+    setPreviewOpen(true)
+  }
+
+  // Étape 2 — après validation du preview
+  const handlePreviewConfirm = () => {
+    setPreviewOpen(false)
+    const stepObj = steps.find(s => s.id === selectedStep)
+    const isCorrection = !(stepObj?.isCurrent ?? true)
+
+    if (isCorrection) {
+      // Période clôturée → demander le motif (WF-005)
+      setAuditNoteOpen(true)
+    } else {
+      // Période active → génération directe
+      void executeGenerateLot(null)
+    }
+  }
+
+  // Étape 2bis — après validation du motif post-clôture
+  const handleAuditNoteConfirm = async (payload: { reason: AuditReason; note: string }) => {
+    setAuditNoteOpen(false)
+    setPendingAudit(payload)
+    await executeGenerateLot(payload)
+  }
+
+  // Étape 3 — exécution réelle (ex-generateLot)
+  const executeGenerateLot = async (
+    audit: { reason: AuditReason; note: string } | null
+  ) => {
     const eligible = enrollments.filter(e => isNisuValid(e.nisu))
     if (eligible.length === 0 || !selectedStep || !selectedSession) return
 
     setGeneratingLot(true)
     setLotProgress({ current: 0, total: eligible.length })
+
+    // EP-003 : compteurs d'échec pour remonter à l'utilisateur
+    let archiveFailures = 0
+    let pdfSaved = false
 
     try {
       const html2canvas = (await import('html2canvas')).default
@@ -245,7 +298,6 @@ export function CPMSLBulletinsSection({
           yearId:         academicYearId,
         })
 
-        // Afficher dans le div caché pour capture
         setLotData(data)
         await new Promise(r => setTimeout(r, 600))
 
@@ -274,23 +326,63 @@ export function CPMSLBulletinsSection({
           position   -= pageHeight
         }
 
-        // ── REQ-F-007 : archiver chaque bulletin après génération ─────────
-        await archiveBulletin({
+        // WF-005 + EP-003 : archivage avec auditNote + remontée des échecs
+        const archiveResult = await archiveBulletin({
           enrollmentId:     student.enrollmentId,
           stepId:           selectedStep,
           source:           'batch',
           bulletinSnapshot: data,
           isCorrection,
+          auditNote: audit
+            ? `[${audit.reason}] ${audit.note}`
+            : undefined,
         })
+
+        if (!archiveResult.ok) {
+          archiveFailures++
+          console.error(
+            '[archive lot] échec pour', student.studentCode,
+            archiveResult.error
+          )
+        }
       }
 
+      // Téléchargement du PDF combiné
       pdf.save(`bulletins_lot_${className}_${stepName}_${new Date().toISOString().slice(0, 10)}.pdf`)
+      pdfSaved = true
+
+      // EP-003 : remonter l'état d'archivage à l'utilisateur
+      const total = eligible.length
+      const archived = total - archiveFailures
+      if (archiveFailures === 0) {
+        toast.success(
+          `${total} bulletin${total > 1 ? 's' : ''} généré${total > 1 ? 's' : ''} et archivé${total > 1 ? 's' : ''}.`
+        )
+      } else if (archiveFailures < total) {
+        toast.warning(
+          `${archived} bulletin${archived > 1 ? 's' : ''} archivé${archived > 1 ? 's' : ''}, ` +
+          `${archiveFailures} échec${archiveFailures > 1 ? 's' : ''} d'archivage. ` +
+          `Le PDF est téléchargé mais certaines archives sont incomplètes.`
+        )
+      } else {
+        toast.error(
+          `PDF téléchargé pour ${total} élèves, mais AUCUN bulletin n'a été archivé. ` +
+          `L'historique est incomplet. Contactez le support.`
+        )
+      }
     } catch (e) {
       console.error('[generateLot]', e)
+      // EP-003 : plus de silent fail sur l'erreur globale
+      if (pdfSaved) {
+        toast.error(toMessage(e, "lors de la finalisation du lot"))
+      } else {
+        toast.error(toMessage(e, "lors de la génération du lot"))
+      }
     } finally {
       setGeneratingLot(false)
       setLotData(null)
       setLotProgress({ current: 0, total: 0 })
+      setPendingAudit(null)
     }
   }
 
@@ -407,7 +499,7 @@ export function CPMSLBulletinsSection({
           <Card className="border bg-card shadow-sm">
             <CardContent className="flex flex-col items-start gap-3 p-4 sm:flex-row sm:items-center">
               <Button
-                onClick={generateLot}
+                onClick={handleOpenPreview}
                 disabled={isArchived || generatingLot || withNisu.length === 0}
               >
                 {generatingLot ? (
@@ -655,6 +747,38 @@ export function CPMSLBulletinsSection({
           stepIsCurrent={selectedStepObj.isCurrent}
         />
       )}
+
+      {/* WF-003 : aperçu avant génération en lot */}
+      <BatchPreviewModal
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        className={
+          selectedSession
+            ? getClassSessionName(sessions.find(s => s.id === selectedSession)!)
+            : ""
+        }
+        stepName={steps.find(s => s.id === selectedStep)?.name ?? ""}
+        stepIsClosed={!(steps.find(s => s.id === selectedStep)?.isCurrent ?? true)}
+        students={enrollments.map(e => ({
+          studentId:    e.studentId,
+          firstname:    e.firstname,
+          lastname:     e.lastname,
+          nisu:         e.nisu,
+          enrollmentId: e.enrollmentId,
+        }))}
+        isNisuValid={isNisuValid}
+        onConfirm={handlePreviewConfirm}
+        loading={generatingLot}
+      />
+
+      {/* WF-005 : motif pour correction post-clôture */}
+      <AuditNoteModal
+        open={auditNoteOpen}
+        onOpenChange={setAuditNoteOpen}
+        stepName={steps.find(s => s.id === selectedStep)?.name ?? ""}
+        onConfirm={handleAuditNoteConfirm}
+        loading={generatingLot}
+      />
     </div>
   )
 }
