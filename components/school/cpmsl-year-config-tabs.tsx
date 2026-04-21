@@ -27,6 +27,10 @@ import { DeleteSubjectParentModal } from "@/components/school/delete-subject-par
 import { EditSubjectChildModal } from "@/components/school/edit-subject-child-modal"
 import { DeleteSubjectChildModal } from "@/components/school/delete-subject-child-modal"
 import { toMessage } from '@/lib/errors'
+import {
+  computeClassroomStatuses,
+  type ClassroomStatus,
+} from '@/lib/api/close-readiness'
 
 interface Period { id: string; name: string; status: 'open' | 'closed' }
 interface Track { id: string; code: string; name: string }
@@ -85,6 +89,10 @@ export function CPMSLYearConfigTabs({
   const [reopenPeriodModalOpen, setReopenPeriodModalOpen] = useState(false)
   const [createPeriodModalOpen, setCreatePeriodModalOpen] = useState(false)
   const [selectedPeriod, setSelectedPeriod]               = useState<Period | null>(null)
+// WF-001 : état pour le calcul asynchrone des statuts
+  const [closeReadiness, setCloseReadiness]   = useState<ClassroomStatus[]>([])
+  const [readinessLoading, setReadinessLoading] = useState(false)
+
 
   // ── Modaux classes ────────────────────────────────────────────────────────
   const [addClassroomModalOpen, setAddClassroomModalOpen]       = useState(false)
@@ -147,15 +155,36 @@ export function CPMSLYearConfigTabs({
     setExpandedSubjects(prev => { const n = new Set(prev); n.has(subjectId) ? n.delete(subjectId) : n.add(subjectId); return n })
   }
 
-const getMockClassroomStatuses = () => [
-    { className: '7e',  classroomName: 'Salle A', gradesEntered: 24, totalGrades: 24, studentsWithoutNisu: 0, unmappedSubjects: 0, status: 'complete'    as const },
-    { className: '7e',  classroomName: 'Salle B', gradesEntered: 20, totalGrades: 24, studentsWithoutNisu: 0, unmappedSubjects: 0, status: 'incomplete'  as const },
-    { className: '8e',  classroomName: 'Salle A', gradesEntered: 24, totalGrades: 24, studentsWithoutNisu: 0, unmappedSubjects: 0, status: 'complete'    as const },
-    { className: 'NSI', classroomName: 'LLA',     gradesEntered: 0,  totalGrades: 28, studentsWithoutNisu: 0, unmappedSubjects: 0, status: 'not-started' as const },
-  ]
 
   // ── Handlers périodes ─────────────────────────────────────────────────────
-  const handleClosePeriod  = (p: Period) => { setSelectedPeriod(p); setClosePeriodModalOpen(true) }
+  const handleClosePeriod = async (p: Period) => {
+  // Ouvre le modal immédiatement avec un état de chargement
+  setSelectedPeriod(p)
+  setCloseReadiness([])
+  setReadinessLoading(true)
+  setClosePeriodModalOpen(true)
+
+  // Calcul asynchrone du vrai statut
+  try {
+    const statuses = await computeClassroomStatuses(
+      classrooms,
+      levels,
+      p.id
+    )
+    setCloseReadiness(statuses)
+  } catch (err) {
+    console.error('[close-readiness]', err)
+    toast({
+      title: "Erreur",
+      description: toMessage(err, "lors du calcul de l'état de clôture"),
+      variant: "destructive",
+    })
+    // On laisse closeReadiness vide → le modal affichera 0 partout,
+    // le typed-name protège quand même contre une clôture accidentelle.
+  } finally {
+    setReadinessLoading(false)
+  }
+}
   const handleReopenPeriod = (p: Period) => { setSelectedPeriod(p); setReopenPeriodModalOpen(true) }
 
   // ── Handlers classes ──────────────────────────────────────────────────────
@@ -758,13 +787,14 @@ toast({ title: "Coefficient modifié" })
       {/* ── Modaux périodes ── */}
       {selectedPeriod && (
         <>
-          <ClosePeriodModal
+<ClosePeriodModal
   open={closePeriodModalOpen}
   onOpenChange={setClosePeriodModalOpen}
   periodName={selectedPeriod.name}
   periodId={selectedPeriod.id}
   yearId={yearId}
-  classroomStatuses={getMockClassroomStatuses()}
+  classroomStatuses={closeReadiness}
+  loading={readinessLoading}
   onConfirm={() => onClosePeriod?.(selectedPeriod.id)}
 />
           <ReopenPeriodModalV2 open={reopenPeriodModalOpen} onOpenChange={setReopenPeriodModalOpen} periodName={selectedPeriod.name} onConfirm={reason => onReopenPeriod?.(selectedPeriod.id, reason)} />
