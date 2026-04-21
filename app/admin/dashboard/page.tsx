@@ -157,17 +157,17 @@ export default function AdminDashboardPage() {
           <h1 className="text-3xl font-bold tracking-tight text-foreground">
             Tableau de bord
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Vue d&apos;ensemble de votre établissement
-            {activeYear && (
-              <>
-                {" "}&middot;{" "}
-                <Badge variant="secondary" className="ml-1 align-middle">
-                  {activeYear.name}
-                </Badge>
-              </>
-            )}
-          </p>
+<div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
+  <span>Vue d&apos;ensemble de votre établissement</span>
+  {activeYear && (
+    <>
+      <span>&middot;</span>
+      <Badge variant="secondary" className="align-middle">
+        {activeYear.name}
+      </Badge>
+    </>
+  )}
+</div>
         </div>
 
         {/* ── KPI Cards ── */}

@@ -13,6 +13,7 @@ import {
   type AcademicYear,
   type AcademicYearStep
 } from "@/lib/api/dashboard"
+import { toMessage } from '@/lib/errors'
 
 // ── Types locaux (format attendu par CPMSLYearConfigTabs) ─────────────────────
 
@@ -263,8 +264,11 @@ export default function AcademicYearConfigPage() {
       toast({ title: "Étape clôturée" })
       await loadData()
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Erreur'
-      toast({ title: "Erreur", description: message, variant: "destructive" })
+      toast({
+        title: "Erreur",
+        description: toMessage(err),
+        variant: "destructive"
+      })
     }
   }
 
@@ -292,7 +296,11 @@ export default function AcademicYearConfigPage() {
           description: "Clôturez l'étape actuellement ouverte avant de réouvrir celle-ci.",
         })
       } else {
-        toast({ title: "Erreur réouverture", description: message, variant: "destructive" })
+        toast({
+          title: "Erreur réouverture",
+          description: toMessage(err, "lors de la réouverture"),
+          variant: "destructive"
+        })
       }
     }
   }
@@ -441,9 +449,12 @@ export default function AcademicYearConfigPage() {
 
       toast({ title: "Classe créée", description: `${level.name} ajoutée pour cette année.` })
       await loadData()
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Impossible de créer la classe'
-      toast({ title: "Erreur", description: message, variant: "destructive" })
+    } catch (err) {
+      toast({
+        title: "Erreur",
+        description: toMessage(err, "lors de la création de la classe"),
+        variant: "destructive"
+      })
       throw err
     }
   }

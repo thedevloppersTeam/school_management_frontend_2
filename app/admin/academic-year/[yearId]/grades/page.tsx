@@ -15,6 +15,7 @@ import type { AcademicYearStep, ClassSession } from "@/lib/api/dashboard"
 import type { ApiClassSubject, ApiEnrollment, ApiGrade, CreateGradePayload } from "@/lib/api/grades"
 import { fetchClassSubjects, fetchEnrollments, fetchGradesForClassSubjectStep, bulkCreateGrades, updateGrade } from "@/lib/api/grades"
 import type { UpdateGradePayload } from "@/components/school/cpmsl-grades-grid"
+import { toMessage } from '@/lib/errors'
 
 function buildSaveDescription(created: number, updated: number): string {
   const parts: string[] = []
@@ -79,7 +80,7 @@ export default function GradesPage() {
           setYearName(yearData?.name ?? "")
         }
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Erreur inconnue')
+        setError(toMessage(e, "lors du chargement du contexte"))
       } finally {
         setLoadingContext(false)
       }
@@ -101,7 +102,11 @@ export default function GradesPage() {
       setClassSubjects(cs)
       setEnrollments(enr)
     } catch (e) {
-      toast({ title: 'Erreur', description: e instanceof Error ? e.message : 'Erreur de chargement' })
+      toast({
+        title: 'Erreur',
+        description: toMessage(e, "lors du chargement de la classe"),
+        variant: 'destructive'
+      })
     } finally {
       setLoadingSession(false)
     }
@@ -113,7 +118,11 @@ export default function GradesPage() {
       const grades = await fetchGradesForClassSubjectStep(classSubjectId, stepId)
       setExistingGrades(grades)
     } catch (e) {
-      toast({ title: 'Erreur', description: e instanceof Error ? e.message : 'Erreur de chargement des notes' })
+      toast({
+        title: 'Erreur',
+        description: toMessage(e, "lors du chargement des notes"),
+        variant: 'destructive'
+      })
     } finally {
       setLoadingGrades(false)
     }
@@ -146,7 +155,11 @@ export default function GradesPage() {
         await loadGrades(selectedClassSubjectId, selectedStepId)
       }
     } catch (e) {
-      toast({ title: 'Erreur', description: e instanceof Error ? e.message : "Erreur lors de l'enregistrement", variant: 'destructive' })
+      toast({
+        title: "Échec de l'enregistrement",
+        description: toMessage(e, "lors de l'enregistrement des notes"),
+        variant: 'destructive'
+      })
     } finally {
       setSaving(false)
     }

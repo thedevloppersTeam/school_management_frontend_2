@@ -26,6 +26,7 @@ import { EditSubjectParentModal } from "@/components/school/edit-subject-parent-
 import { DeleteSubjectParentModal } from "@/components/school/delete-subject-parent-modal"
 import { EditSubjectChildModal } from "@/components/school/edit-subject-child-modal"
 import { DeleteSubjectChildModal } from "@/components/school/delete-subject-child-modal"
+import { toMessage } from '@/lib/errors'
 
 interface Period { id: string; name: string; status: 'open' | 'closed' }
 interface Track { id: string; code: string; name: string }
@@ -146,11 +147,11 @@ export function CPMSLYearConfigTabs({
     setExpandedSubjects(prev => { const n = new Set(prev); n.has(subjectId) ? n.delete(subjectId) : n.add(subjectId); return n })
   }
 
-  const getMockClassroomStatuses = () => [
-    { className: '7e', classroomName: 'Salle A', gradesEntered: 24, totalGrades: 24, status: 'complete' as const },
-    { className: '7e', classroomName: 'Salle B', gradesEntered: 20, totalGrades: 24, status: 'incomplete' as const },
-    { className: '8e', classroomName: 'Salle A', gradesEntered: 24, totalGrades: 24, status: 'complete' as const },
-    { className: 'NSI', classroomName: 'LLA', gradesEntered: 0, totalGrades: 28, status: 'not-started' as const }
+const getMockClassroomStatuses = () => [
+    { className: '7e',  classroomName: 'Salle A', gradesEntered: 24, totalGrades: 24, studentsWithoutNisu: 0, unmappedSubjects: 0, status: 'complete'    as const },
+    { className: '7e',  classroomName: 'Salle B', gradesEntered: 20, totalGrades: 24, studentsWithoutNisu: 0, unmappedSubjects: 0, status: 'incomplete'  as const },
+    { className: '8e',  classroomName: 'Salle A', gradesEntered: 24, totalGrades: 24, studentsWithoutNisu: 0, unmappedSubjects: 0, status: 'complete'    as const },
+    { className: 'NSI', classroomName: 'LLA',     gradesEntered: 0,  totalGrades: 28, studentsWithoutNisu: 0, unmappedSubjects: 0, status: 'not-started' as const },
   ]
 
   // ── Handlers périodes ─────────────────────────────────────────────────────
@@ -176,7 +177,7 @@ const loadClassSubjects = async (sessionId: string) => {
   setLoadingClassSubjects(true)
   try {
     const res = await fetch(`/api/class-subjects?classSessionId=${sessionId}`, { credentials: 'include' })
-    if (!res.ok) throw new Error()
+    if (!res.ok) throw new Error(`Échec du chargement (HTTP ${res.status})`)
     const data = await res.json()
     setClassSubjects(data.map((cs: any) => ({
       id:                  cs.id,
@@ -189,8 +190,14 @@ const loadClassSubjects = async (sessionId: string) => {
         ? Number(cs.coefficientOverride?.d?.[0] ?? cs.coefficientOverride)
         : null,
     })))
-  } catch {
-    console.error('[affectation] erreur chargement class-subjects')
+  } catch (err) {
+    console.error('[affectation] erreur chargement class-subjects:', err)
+    toast({
+      title: "Erreur",
+      description: toMessage(err, "lors du chargement des matières de la classe"),
+      variant: "destructive",
+    })
+    setClassSubjects([])  // vider la liste au lieu d'afficher de l'obsolète
   } finally {
     setLoadingClassSubjects(false)
   }
@@ -226,13 +233,17 @@ const openEditCoeffModal = (cs: typeof classSubjects[0]) => {
           coefficientOverride: editCoeffValue !== '' ? parseFloat(editCoeffValue) : null
         })
       })
-      if (!res.ok) throw new Error()
-      toast({ title: "Coefficient modifié" })
-      setEditCoeffModalOpen(false)
-      if (selectedSessionForAssign) await loadClassSubjects(selectedSessionForAssign)
-    } catch {
-      toast({ title: "Erreur", description: "Impossible de modifier le coefficient", variant: "destructive" })
-    } finally {
+      if (!res.ok) throw new Error(`Échec de la mise à jour (HTTP ${res.status})`)
+toast({ title: "Coefficient modifié" })
+// ...
+} catch (err) {
+  console.error('[coeff-override]', err)
+  toast({
+    title: "Erreur",
+    description: toMessage(err, "lors de la modification du coefficient"),
+    variant: "destructive",
+  })
+} finally {
       setEditCoeffSubmitting(false)
     }
   }
@@ -293,11 +304,10 @@ const openEditCoeffModal = (cs: typeof classSubjects[0]) => {
       setAssignModalOpen(false)
       if (selectedSessionForAssign) await loadClassSubjects(selectedSessionForAssign)
     } catch (err) {
-      const message = err instanceof Error ? err.message : ''
-      console.error('[affectation] erreur:', message)
+      console.error('[affectation] erreur:', err)
       toast({
         title: "Erreur assignation",
-        description: message || "Impossible d'assigner la matière.",
+        description: toMessage(err, "lors de l'assignation de la matière"),
         variant: "destructive",
       })
       setAssignError('')
@@ -748,7 +758,15 @@ const openEditCoeffModal = (cs: typeof classSubjects[0]) => {
       {/* ── Modaux périodes ── */}
       {selectedPeriod && (
         <>
-          <ClosePeriodModal open={closePeriodModalOpen} onOpenChange={setClosePeriodModalOpen} periodName={selectedPeriod.name} classroomStatuses={getMockClassroomStatuses()} onConfirm={() => onClosePeriod?.(selectedPeriod.id)} />
+          <ClosePeriodModal
+  open={closePeriodModalOpen}
+  onOpenChange={setClosePeriodModalOpen}
+  periodName={selectedPeriod.name}
+  periodId={selectedPeriod.id}
+  yearId={yearId}
+  classroomStatuses={getMockClassroomStatuses()}
+  onConfirm={() => onClosePeriod?.(selectedPeriod.id)}
+/>
           <ReopenPeriodModalV2 open={reopenPeriodModalOpen} onOpenChange={setReopenPeriodModalOpen} periodName={selectedPeriod.name} onConfirm={reason => onReopenPeriod?.(selectedPeriod.id, reason)} />
         </>
       )}
@@ -784,7 +802,7 @@ const openEditCoeffModal = (cs: typeof classSubjects[0]) => {
       {selectedSubjectChild && (
         <>
           <EditSubjectChildModal open={editSubjectChildModalOpen} onOpenChange={setEditSubjectChildModalOpen} child={selectedSubjectChild} parent={subjectParents.find(p => p.id === selectedSubjectChild.parentId)!} existingChildren={subjectChildren} onSubmit={data => { onEditSubjectChild?.(selectedSubjectChild.id, data); setEditSubjectChildModalOpen(false) }} />
-          <DeleteSubjectChildModal open={deleteSubjectChildModalOpen} onOpenChange={setDeleteSubjectChildModalOpen} child={selectedSubjectChild} studentCount={32} onConfirm={() => { onDeleteSubjectChild?.(selectedSubjectChild.id); setDeleteSubjectChildModalOpen(false) }} />
+         <DeleteSubjectChildModal open={deleteSubjectChildModalOpen} onOpenChange={setDeleteSubjectChildModalOpen} child={selectedSubjectChild} studentCount={0} onConfirm={() => { onDeleteSubjectChild?.(selectedSubjectChild.id); setDeleteSubjectChildModalOpen(false) }} />
         </>
       )}
     </div>

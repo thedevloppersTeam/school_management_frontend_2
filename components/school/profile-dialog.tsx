@@ -23,6 +23,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Loader2Icon } from "lucide-react"
 import type { AuthUser } from "@/lib/data/auth-data"
+import { toMessage } from '@/lib/errors'
 
 interface ProfileDialogProps {
   open: boolean
@@ -71,10 +72,10 @@ export function ProfileDialog({
       }
       toast({ title: "Profil mis à jour" })
       onProfileUpdated({ ...user, firstname, lastname })
-    } catch (e: any) {
+    } catch (e) {
       toast({
         title: "Erreur",
-        description: e.message || "Impossible de mettre à jour le profil",
+        description: toMessage(e, "lors de la mise à jour du profil"),
         variant: "destructive",
       })
     } finally {
@@ -119,10 +120,10 @@ export function ProfileDialog({
       setCurrentPassword("")
       setNewPassword("")
       setConfirmPassword("")
-    } catch (e: any) {
+    } catch (e) {
       toast({
         title: "Erreur",
-        description: e.message || "Impossible de changer le mot de passe",
+        description: toMessage(e, "lors du changement de mot de passe"),
         variant: "destructive",
       })
     } finally {

@@ -1,4 +1,9 @@
+"use client"
+
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
   Dialog,
   DialogContent,
@@ -7,6 +12,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+
+/**
+ * delete-level-modal.tsx — Patch EP-006
+ *
+ * Typed-name exigé si impact > 0 (classrooms ou élèves existants).
+ * Une classe vide (0 salle, 0 élève) se supprime directement.
+ */
 
 interface DeleteLevelModalProps {
   level: {
@@ -31,22 +43,26 @@ export function DeleteLevelModal({
   open,
   onOpenChange,
 }: DeleteLevelModalProps) {
+  const [typedName, setTypedName] = useState("")
+
+  useEffect(() => {
+    if (open) setTypedName("")
+  }, [open])
+
+  const needsTypedName = classroomCount > 0 || studentCount > 0
+  const typedMatches = !needsTypedName || typedName.trim() === level.name.trim()
+  const canConfirm = typedMatches
+
   const handleConfirm = () => {
+    if (!canConfirm) return
     onConfirm?.()
     onOpenChange?.(false)
   }
 
-  const getTitle = () => {
-    if (level.niveau === 'Fondamentale') {
-      return `Supprimer la classe ${level.name}`
-    }
-    return `Supprimer la classe ${level.name}`
-  }
+  const getTitle = () => `Supprimer la classe ${level.name}`
 
   const getClassroomLabel = () => {
-    if (level.niveau === 'Nouveau Secondaire') {
-      return 'filières'
-    }
+    if (level.niveau === 'Nouveau Secondaire') return 'filières'
     return 'salles'
   }
 
@@ -67,24 +83,45 @@ export function DeleteLevelModal({
           {/* Warning block */}
           <div className="bg-[#FEE2E2] border border-[#FCA5A5] rounded-md p-4">
             <p className="text-sm text-[#991B1B] leading-relaxed">
-              Cette classe contient {classroomCount} {getClassroomLabel()} et {studentCount} élèves. 
-              La suppression retirera toutes les {getClassroomLabel()} et tous les élèves associés. 
+              Cette classe contient {classroomCount} {getClassroomLabel()} et {studentCount} élèves.
+              La suppression retirera toutes les {getClassroomLabel()} et tous les élèves associés.
               Cette action est irréversible.
             </p>
           </div>
 
-          {/* 16px spacing */}
-          <div style={{ height: '16px' }} />
-
           {/* Summary lines */}
           <div className="space-y-2 text-sm text-muted-foreground">
             <p>
-              {level.niveau === 'Nouveau Secondaire' ? 'Filières' : 'Salles'} supprimées : <span className="font-medium text-foreground">{classroomCount}</span>
+              {level.niveau === 'Nouveau Secondaire' ? 'Filières' : 'Salles'} supprimées :{" "}
+              <span className="font-medium text-foreground">{classroomCount}</span>
             </p>
             <p>
               Élèves affectés : <span className="font-medium text-foreground">{studentCount}</span>
             </p>
           </div>
+
+          {/* Typed-name confirmation (uniquement si impact > 0) */}
+          {needsTypedName && (
+            <div className="space-y-2 pt-2">
+              <Label htmlFor={`confirm-level-${level.id}`} className="text-sm">
+                Pour confirmer, saisissez{" "}
+                <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
+                  {level.name}
+                </code>{" "}
+                ci-dessous :
+              </Label>
+              <Input
+                id={`confirm-level-${level.id}`}
+                value={typedName}
+                onChange={(e) => setTypedName(e.target.value)}
+                placeholder={level.name}
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+                autoFocus
+              />
+            </div>
+          )}
         </div>
 
         <DialogFooter className="gap-2 sm:gap-0">
@@ -98,7 +135,8 @@ export function DeleteLevelModal({
           <Button
             type="button"
             onClick={handleConfirm}
-            className="bg-[#B91C1C] hover:bg-[#991B1B] text-white"
+            disabled={!canConfirm}
+            className="bg-[#B91C1C] hover:bg-[#991B1B] text-white disabled:bg-[#D1CECC] disabled:cursor-not-allowed disabled:hover:bg-[#D1CECC]"
           >
             Supprimer définitivement
           </Button>

@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
 import { CPMSLYearCard } from "@/components/school/cpmsl-year-card"
 import { CreateAcademicYearModalV2 } from "@/components/school/create-academic-year-modal-v2"
+import { ConfirmDestructive } from "@/components/ui/confirm-destructive"
 import { PlusIcon, AlertTriangleIcon, SchoolIcon } from "lucide-react"
 import {
   fetchAllAcademicYears,
@@ -15,6 +16,7 @@ import {
   fetchClassSessions,
   type AcademicYear,
 } from "@/lib/api/dashboard"
+import { toMessage } from "@/lib/errors"
 
 // ── Types locaux ──────────────────────────────────────────────────────────────
 
@@ -48,18 +50,18 @@ function computeStepDates(
 ): Array<{ startDate: string; endDate: string }> {
   const start = new Date(yearStart).getTime()
   const end   = new Date(yearEnd).getTime()
-  const slice = (end - start) / count
+  const step  = (end - start) / count
 
   return Array.from({ length: count }, (_, i) => ({
-    startDate: new Date(start + i * slice).toISOString(),
-    endDate:   new Date(start + (i + 1) * slice).toISOString(),
+    startDate: new Date(start + i * step).toISOString(),
+    endDate:   new Date(start + (i + 1) * step - 1).toISOString(),
   }))
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
+// ── Composant ─────────────────────────────────────────────────────────────────
 
 export default function AcademicYearsPage() {
-  const router = useRouter()
+  const router   = useRouter()
   const { toast } = useToast()
 
   const [years, setYears]               = useState<AcademicYear[]>([])
@@ -67,6 +69,9 @@ export default function AcademicYearsPage() {
   const [loading, setLoading]           = useState(true)
   const [creating, setCreating]         = useState(false)
   const [activatingId, setActivatingId] = useState<string | null>(null)
+
+  // EP-005 : état pour le modal de confirmation d'activation
+  const [yearToActivate, setYearToActivate] = useState<AcademicYear | null>(null)
 
   // ── Chargement ────────────────────────────────────────────────────────────
 
@@ -113,15 +118,27 @@ export default function AcademicYearsPage() {
 
   useEffect(() => { loadYears() }, [loadYears])
 
-  // ── Activation d'une année ────────────────────────────────────────────────
+  // ── Activation d'une année (EP-005) ───────────────────────────────────────
+  //
+  // Flow :
+  //   1. Click "Activer" sur une card → handleActivateYear ouvre le modal
+  //   2. L'Administrateur tape le nom de l'année pour confirmer
+  //   3. Click "Activer définitivement" → handleConfirmActivation exécute
 
-  const handleActivateYear = async (yearId: string) => {
+  // Étape 1 — ouverture du modal
+  const handleActivateYear = (yearId: string) => {
     const target = years.find(y => y.id === yearId)
     if (!target) return
+    setYearToActivate(target)
+  }
 
-    setActivatingId(yearId)
+  // Étape 2 — exécution après confirmation
+  const handleConfirmActivation = async () => {
+    if (!yearToActivate) return
+
+    setActivatingId(yearToActivate.id)
     try {
-      const res = await fetch(`/api/academic-years/set-current/${yearId}`, {
+      const res = await fetch(`/api/academic-years/set-current/${yearToActivate.id}`, {
         method: 'POST',
         credentials: 'include',
       })
@@ -133,11 +150,16 @@ export default function AcademicYearsPage() {
 
       toast({
         title: "Année activée",
-        description: `${target.name} est maintenant l'année scolaire active.`
+        description: `${yearToActivate.name} est maintenant l'année scolaire active.`
       })
+      setYearToActivate(null)
       await loadYears()
-    } catch (e: any) {
-      toast({ title: "Erreur d'activation", description: e.message, variant: "destructive" })
+    } catch (e) {
+      toast({
+        title: "Erreur d'activation",
+        description: toMessage(e, "lors de l'activation de l'année scolaire"),
+        variant: "destructive"
+      })
     } finally {
       setActivatingId(null)
     }
@@ -267,8 +289,12 @@ export default function AcademicYearsPage() {
       }
 
       await loadYears()
-    } catch (e: any) {
-      toast({ title: "Erreur", description: e.message || "Impossible de créer l'année scolaire", variant: "destructive" })
+    } catch (e) {
+      toast({
+        title: "Erreur",
+        description: toMessage(e, "lors de la création de l'année scolaire"),
+        variant: "destructive"
+      })
     } finally {
       setCreating(false)
     }
@@ -365,6 +391,28 @@ export default function AcademicYearsPage() {
           ))
         )}
       </div>
+
+      {/* EP-005 : Modal de confirmation d'activation */}
+      <ConfirmDestructive
+        open={yearToActivate !== null}
+        onOpenChange={(open) => !open && setYearToActivate(null)}
+        title="Activer cette année scolaire ?"
+        description={
+          yearToActivate
+            ? `Cette action change l'année scolaire active pour toute l'application. ` +
+              `Les utilisateurs verront désormais les données de ${yearToActivate.name}. ` +
+              (hasActiveYear
+                ? `L'année actuellement active (${activeYear?.name}) sera désactivée ` +
+                  `mais reste consultable dans les archives.`
+                : `Aucune année n'est active actuellement.`)
+            : ""
+        }
+        confirmationName={yearToActivate?.name}
+        requireTypedName={true}
+        confirmLabel="Activer définitivement"
+        onConfirm={handleConfirmActivation}
+        loading={activatingId !== null}
+      />
     </div>
   )
 }

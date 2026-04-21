@@ -52,4 +52,15 @@ playwright-report/
 test-results/
 postman/
 
+# Security — never commit credentials
 login.json
+*.credentials.json
+*.pem
+*.key
+*yml
+
+*.sh
+use-unsaved-changes-warning.ts
+README.md
+errors.ts
+audit-report.json

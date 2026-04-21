@@ -1,13 +1,27 @@
+"use client"
+
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+
+/**
+ * delete-subject-parent-modal.tsx — Patch EP-006
+ *
+ * Typed-name exigé si childCount > 0 (la matière a des sous-matières).
+ *
+ * Nettoyage bonus : suppression du default `studentCount = 62` qui était
+ * un chiffre arbitraire jamais passé par l'appelant. Le champ devient
+ * optionnel et affiché uniquement si fourni réellement.
+ */
 
 interface DeleteSubjectParentModalProps {
   subject: {
@@ -15,6 +29,11 @@ interface DeleteSubjectParentModalProps {
     name: string
   }
   childCount: number
+  /**
+   * Nombre d'élèves impactés. Optionnel — si non fourni, la ligne
+   * "Élèves affectés" n'est pas affichée (au lieu d'afficher un
+   * chiffre arbitraire).
+   */
   studentCount?: number
   onConfirm?: () => void
   trigger?: React.ReactNode
@@ -25,12 +44,28 @@ interface DeleteSubjectParentModalProps {
 export function DeleteSubjectParentModal({
   subject,
   childCount,
-  studentCount = 62,
+  studentCount,
   onConfirm,
   trigger,
   open,
   onOpenChange
 }: DeleteSubjectParentModalProps) {
+  const [typedName, setTypedName] = useState("")
+
+  useEffect(() => {
+    if (open) setTypedName("")
+  }, [open])
+
+  const needsTypedName = childCount > 0
+  const typedMatches = !needsTypedName || typedName.trim() === subject.name.trim()
+  const canConfirm = typedMatches
+
+  const handleConfirm = () => {
+    if (!canConfirm) return
+    onConfirm?.()
+    onOpenChange?.(false)
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
@@ -88,15 +123,18 @@ export function DeleteSubjectParentModal({
             >
               Sous-matières supprimées : {childCount}
             </p>
-            <p
-              style={{
-                color: '#5C5955',
-                fontSize: '14px',
-                fontWeight: 500
-              }}
-            >
-              Élèves affectés : {studentCount}
-            </p>
+            {/* Élèves affectés : affiché uniquement si le chiffre est fourni */}
+            {studentCount !== undefined && (
+              <p
+                style={{
+                  color: '#5C5955',
+                  fontSize: '14px',
+                  fontWeight: 500
+                }}
+              >
+                Élèves affectés : {studentCount}
+              </p>
+            )}
             <p
               style={{
                 color: '#5C5955',
@@ -107,6 +145,37 @@ export function DeleteSubjectParentModal({
               Notes associées : toutes les notes de cette matière seront supprimées
             </p>
           </div>
+
+          {/* Typed-name (si impact > 0) */}
+          {needsTypedName && (
+            <div className="space-y-2 pt-2">
+              <Label
+                htmlFor={`confirm-subject-${subject.id}`}
+                style={{ fontSize: '13px', color: '#1E1A17' }}
+              >
+                Pour confirmer, saisissez{" "}
+                <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
+                  {subject.name}
+                </code>{" "}
+                ci-dessous :
+              </Label>
+              <Input
+                id={`confirm-subject-${subject.id}`}
+                value={typedName}
+                onChange={(e) => setTypedName(e.target.value)}
+                placeholder={subject.name}
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+                autoFocus
+                style={{
+                  borderRadius: '8px',
+                  border: '1px solid #D1CECC',
+                  fontSize: '14px'
+                }}
+              />
+            </div>
+          )}
         </div>
 
         <DialogFooter
@@ -130,14 +199,13 @@ export function DeleteSubjectParentModal({
             Annuler
           </Button>
           <Button
-            onClick={() => {
-              onConfirm?.()
-              onOpenChange?.(false)
-            }}
+            onClick={handleConfirm}
+            disabled={!canConfirm}
             style={{
-              backgroundColor: '#B91C1C',
+              backgroundColor: canConfirm ? '#B91C1C' : '#D1CECC',
               color: '#FFFFFF',
-              borderRadius: '8px'
+              borderRadius: '8px',
+              cursor: canConfirm ? 'pointer' : 'not-allowed'
             }}
           >
             Supprimer définitivement
