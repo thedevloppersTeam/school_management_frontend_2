@@ -1,13 +1,31 @@
+"use client"
+
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+
+/**
+ * delete-subject-child-modal.tsx — Patch EP-006
+ *
+ * Typed-name exigé si studentCount > 0 (des élèves sont affectés).
+ *
+ * Note : aujourd'hui l'appelant (cpmsl-year-config-tabs.tsx) passe
+ * studentCount via getStudentCountForSubjectChild() qui retourne 0
+ * en attendant l'endpoint backend. Donc le typed-name ne sera pas
+ * demandé tant que le backend n'expose pas la vraie donnée.
+ *
+ * C'est une dégradation PROPRE : mieux vaut ne pas demander qu'afficher
+ * un chiffre faux comme avant (studentCount={32} hardcodé).
+ */
 
 interface DeleteSubjectChildModalProps {
   child: {
@@ -29,6 +47,22 @@ export function DeleteSubjectChildModal({
   open,
   onOpenChange
 }: DeleteSubjectChildModalProps) {
+  const [typedName, setTypedName] = useState("")
+
+  useEffect(() => {
+    if (open) setTypedName("")
+  }, [open])
+
+  const needsTypedName = studentCount > 0
+  const typedMatches = !needsTypedName || typedName.trim() === child.name.trim()
+  const canConfirm = typedMatches
+
+  const handleConfirm = () => {
+    if (!canConfirm) return
+    onConfirm?.()
+    onOpenChange?.(false)
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
@@ -87,6 +121,37 @@ export function DeleteSubjectChildModal({
               Élèves affectés : {studentCount}
             </p>
           </div>
+
+          {/* Typed-name (si impact > 0) */}
+          {needsTypedName && (
+            <div className="space-y-2 pt-2">
+              <Label
+                htmlFor={`confirm-child-${child.id}`}
+                style={{ fontSize: '13px', color: '#1E1A17' }}
+              >
+                Pour confirmer, saisissez{" "}
+                <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
+                  {child.name}
+                </code>{" "}
+                ci-dessous :
+              </Label>
+              <Input
+                id={`confirm-child-${child.id}`}
+                value={typedName}
+                onChange={(e) => setTypedName(e.target.value)}
+                placeholder={child.name}
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+                autoFocus
+                style={{
+                  borderRadius: '8px',
+                  border: '1px solid #D1CECC',
+                  fontSize: '14px'
+                }}
+              />
+            </div>
+          )}
         </div>
 
         <DialogFooter
@@ -110,14 +175,13 @@ export function DeleteSubjectChildModal({
             Annuler
           </Button>
           <Button
-            onClick={() => {
-              onConfirm?.()
-              onOpenChange?.(false)
-            }}
+            onClick={handleConfirm}
+            disabled={!canConfirm}
             style={{
-              backgroundColor: '#B91C1C',
+              backgroundColor: canConfirm ? '#B91C1C' : '#D1CECC',
               color: '#FFFFFF',
-              borderRadius: '8px'
+              borderRadius: '8px',
+              cursor: canConfirm ? 'pointer' : 'not-allowed'
             }}
           >
             Supprimer définitivement

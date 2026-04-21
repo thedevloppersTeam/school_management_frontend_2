@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { AlertTriangleIcon, CheckCircle2Icon, LoaderIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { toMessage } from '@/lib/errors'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -138,8 +139,8 @@ export function StudentEnrollForm({
       setForm(EMPTY_FORM)
       onSuccess()
 
-    } catch (err: unknown) {
-      setApiError(err instanceof Error ? err.message : "Une erreur est survenue.")
+    } catch (err) {
+      setApiError(toMessage(err, "lors de l'inscription de l'élève"))
     } finally {
       setSubmitting(false)
     }
