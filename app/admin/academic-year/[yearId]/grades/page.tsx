@@ -260,17 +260,17 @@ export default function GradesPage() {
     <div className="space-y-8">
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-foreground">Notes</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Saisie, consultation, avancement et comportement
-          {yearName && (
-            <>
-              {" "}&middot;{" "}
-              <Badge variant="secondary" className="ml-1 align-middle">
-                {yearName}
-              </Badge>
-            </>
-          )}
-        </p>
+<div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+  <span>Saisie, consultation, avancement et comportement</span>
+  {yearName && (
+    <>
+      <span>&middot;</span>
+      <Badge variant="secondary" className="align-middle">
+        {yearName}
+      </Badge>
+    </>
+  )}
+</div>
       </div>
 
       {renderMainContent()}

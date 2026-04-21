@@ -30,6 +30,7 @@ import type { ApiClassSession } from "@/lib/api/students"
 import type { AcademicYearStep } from "@/lib/api/dashboard"
 import type { ApiClassSubject, ApiEnrollment, ApiGrade, CreateGradePayload } from "@/lib/api/grades"
 import { cn } from "@/lib/utils"
+import { useUnsavedChangesWarning } from "@/hooks/use-unsaved-changes-warning"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -265,7 +266,52 @@ export function CPMSLGradesGrid({
     () => Array.from(gradeEntries.values()).filter(e => e.value && e.isValid).length,
     [gradeEntries]
   )
+  // ── EP-006 : détection des modifications non enregistrées ─────────────────
+//
+// On compare gradeEntries (ce que l'utilisateur a tapé) avec
+// existingGrades (ce qui est déjà en base) pour détecter :
+//   - Nouvelles notes saisies mais pas encore enregistrées
+//   - Notes modifiées dont la valeur diffère de l'existante
+//
+// Quand hasUnsavedChanges = true, le browser demande confirmation
+// avant de quitter la page (fermeture onglet, F5, navigation URL…).
+// Protège contre la perte de 10-40 saisies en 1 clic accidentel.
+const hasUnsavedChanges = useMemo(() => {
+  if (isLocked) return false
+  if (!selectedClassSubjectId || !selectedStepId) return false
 
+  const existingMap = new Map(
+    existingGrades
+      .filter(g =>
+        g.classSubjectId === selectedClassSubjectId &&
+        g.stepId === selectedStepId &&
+        g.sectionId === null
+      )
+      .map(g => [g.enrollmentId, g])
+  )
+
+  for (const [enrollmentId, entry] of gradeEntries) {
+    if (!entry.value?.trim() || !entry.isValid) continue
+
+    const existing = existingMap.get(enrollmentId)
+    const scoreTyped = parseFloat(entry.value)
+
+    // Nouvelle note jamais enregistrée
+    if (!existing) return true
+    // Note modifiée par rapport à ce qui est en base
+    if (scoreTyped !== Number(existing.studentScore)) return true
+  }
+  return false
+}, [
+  gradeEntries,
+  existingGrades,
+  selectedClassSubjectId,
+  selectedStepId,
+  isLocked,
+])
+
+// Active le warning beforeunload du browser quand dirty
+useUnsavedChangesWarning(hasUnsavedChanges)
   // ── Save ─────────────────────────────────────────────────────────────────
 
   function handleSaveGrades() {
@@ -494,16 +540,21 @@ export function CPMSLGradesGrid({
         <CardHeader className="pb-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <CardTitle className="text-base font-semibold">Saisie des notes</CardTitle>
-              <CardDescription>
-                {headerLabel} &middot; {enteredCount} / {sortedEnrollments.length} notes saisies
+                <CardTitle className="text-base font-semibold">Saisie des notes</CardTitle>
+                <CardDescription className="flex flex-wrap items-center gap-2">
+                  <span>
+                  {headerLabel} &middot; {enteredCount} / {sortedEnrollments.length} notes saisies
+                  </span>
+                  {hasUnsavedChanges && (
+                <Badge
+          variant="outline"
+          className="border-amber-300 bg-amber-50 text-amber-800 text-[11px] font-medium"
+        >
+          Modifications non enregistrées
+        </Badge>
+                )}
               </CardDescription>
-            </div>
-            {isLocked && (
-              <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">
-                <LockIcon className="mr-1 h-3 w-3 !text-amber-600" /> Clôturée
-              </Badge>
-            )}
+          </div>
           </div>
         </CardHeader>
 

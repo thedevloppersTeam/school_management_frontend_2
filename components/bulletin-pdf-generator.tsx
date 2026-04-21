@@ -8,9 +8,8 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Loader2, Download, Eye, Printer, AlertTriangle } from "lucide-react"
 import { toast } from "sonner"
-import html2canvas from "html2canvas"
-import jsPDF from "jspdf"
 import { buildBulletinData } from "@/lib/api/bulletin"
+import { toMessage } from "@/lib/errors"
 import BulletinScolaire, { type BulletinData } from "./BulletinScolaire"
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -26,31 +25,43 @@ interface BulletinPDFGeneratorProps {
   className:        string
   enrollmentId:     string
   yearId:           string
-  stepIsCurrent?:   boolean    // Phase 2 — détecte si correction post-clôture
-  snapshotData?:    BulletinData  // Phase 4 — régénération depuis archive
+  stepIsCurrent?:   boolean
+  snapshotData?:    BulletinData
   onDownload?:      () => void
 }
 
-// ── Helper archive ────────────────────────────────────────────────────────────
+// ── Helper archive (EP-003 : retourne un résultat, ne swallow plus) ──────────
+//
+// AVANT : try { fetch } catch { console.error } — erreur silencieuse
+// APRÈS : on retourne { ok: true } ou { ok: false, error } pour que
+//         l'appelant puisse décider d'alerter l'utilisateur.
+//
+// Règle métier inchangée : un échec d'archivage NE BLOQUE PAS le
+// téléchargement du PDF (l'utilisateur a déjà le fichier). Mais
+// l'utilisateur DOIT savoir que l'archive est incomplète pour pouvoir
+// relancer ou contacter le support.
 
 async function archiveBulletin(params: {
-  enrollmentId:    string
-  stepId:          string
-  source:          'individual' | 'batch'
+  enrollmentId:     string
+  stepId:           string
+  source:           'individual' | 'batch'
   bulletinSnapshot: BulletinData
-  isCorrection:    boolean
-  auditNote?:      string
-}) {
+  isCorrection:     boolean
+  auditNote?:       string
+}): Promise<{ ok: true } | { ok: false; error: unknown }> {
   try {
-    await fetch('/api/bulletin-archives/create', {
+    const res = await fetch('/api/bulletin-archives/create', {
       method:      'POST',
       credentials: 'include',
       headers:     { 'Content-Type': 'application/json' },
       body:        JSON.stringify(params),
     })
+    if (!res.ok) {
+      return { ok: false, error: new Error(`HTTP ${res.status}`) }
+    }
+    return { ok: true }
   } catch (err) {
-    // Silencieux — l'archivage ne bloque jamais la génération
-    console.error('[archive] échec silencieux:', err)
+    return { ok: false, error: err }
   }
 }
 
@@ -82,7 +93,6 @@ export function BulletinPDFGenerator({
   const [auditNote,       setAuditNote]       = useState("")
   const [auditSubmitting, setAuditSubmitting] = useState(false)
 
-  // isCorrection = vrai si l'étape n'est plus active (clôturée puis réouverte)
   const isCorrection = !stepIsCurrent
 
   // ── Construction des données ────────────────────────────────────────────────
@@ -90,7 +100,6 @@ export function BulletinPDFGenerator({
   const fetchBulletinData = useCallback(async () => {
     if (!open || hasFetched) return
 
-    // Phase 4 — si un snapshot est fourni, on l'utilise directement
     if (snapshotData) {
       setBulletinData(snapshotData)
       setHasFetched(true)
@@ -112,7 +121,8 @@ export function BulletinPDFGenerator({
       setHasFetched(true)
     } catch (error) {
       console.error('[BulletinPDFGenerator] fetchBulletinData:', error)
-      toast.error("Erreur lors de la récupération des données du bulletin")
+      // Message métier au lieu du texte technique
+      toast.error(toMessage(error, "lors de la récupération des données du bulletin"))
     } finally {
       setLoading(false)
     }
@@ -137,11 +147,31 @@ export function BulletinPDFGenerator({
   }
 
   // ── Génération effective + archivage ──────────────────────────────────────
+  //
+  // Corrections PB-001 / EP-003 / WF-008 appliquées ici :
+  //
+  //   PB-001 : les imports html2canvas et jspdf deviennent dynamiques
+  //            (~600 KB retirés du bundle initial). Ils ne sont chargés
+  //            qu'au moment du clic "Télécharger PDF".
+  //
+  //   EP-003 : archiveBulletin retourne un résultat structuré au lieu
+  //            d'un silent fail. On capture et on remonte.
+  //
+  //   WF-008 : le toast de succès ("Bulletin téléchargé") ne s'affiche
+  //            plus AVANT l'archivage. On attend le résultat et on
+  //            ajuste le message selon succès / partiel / échec archive.
 
   const doGeneratePDF = async (note?: string) => {
     if (!bulletinRef.current || !bulletinData) return
     setGenerating(true)
+
+    let pdfSaved = false
+
     try {
+      // PB-001 : imports dynamiques, chargés uniquement à la demande
+      const html2canvas = (await import('html2canvas')).default
+      const jsPDF       = (await import('jspdf')).default
+
       const tempContainer = document.createElement('div')
       tempContainer.style.position = 'absolute'
       tempContainer.style.left = '-9999px'
@@ -181,11 +211,11 @@ export function BulletinPDFGenerator({
       }
 
       pdf.save(`bulletin_${bulletinData.nom ?? studentName}_${stepName}.pdf`)
-      toast.success("Bulletin téléchargé avec succès")
+      pdfSaved = true
 
       // ── REQ-F-007 : archiver après génération ─────────────────────────
-      // Silencieux — ne bloque jamais le téléchargement
-      await archiveBulletin({
+      // WF-008 + EP-003 : le résultat est remonté à l'utilisateur
+      const archiveResult = await archiveBulletin({
         enrollmentId,
         stepId,
         source:           'individual',
@@ -194,10 +224,27 @@ export function BulletinPDFGenerator({
         auditNote:        note,
       })
 
+      if (archiveResult.ok) {
+        toast.success("Bulletin téléchargé et archivé")
+      } else {
+        console.error('[archiveBulletin] échec individuel:', archiveResult.error)
+        // Le PDF est bien téléchargé, mais l'archive est incomplète.
+        // Le toast doit être clair sur les deux aspects.
+        toast.warning(
+          "Bulletin téléchargé, mais son archivage a échoué. " +
+          "L'historique est incomplet. Contactez le support si nécessaire."
+        )
+      }
+
       if (onDownload) onDownload()
     } catch (error) {
       console.error('[BulletinPDFGenerator] generatePDF:', error)
-      toast.error("Erreur lors de la génération du bulletin PDF")
+      // WF-008 : différencier selon qu'on ait sauvé le PDF ou non
+      if (pdfSaved) {
+        toast.error(toMessage(error, "lors de la finalisation du bulletin"))
+      } else {
+        toast.error(toMessage(error, "lors de la génération du bulletin"))
+      }
     } finally {
       setGenerating(false)
     }
@@ -208,7 +255,6 @@ export function BulletinPDFGenerator({
   const generatePDFFromHTML = async () => {
     if (!bulletinRef.current) { toast.error("Le bulletin n'est pas encore chargé"); return }
 
-    // REQ-F-010 : si correction post-clôture → demander la raison avant de générer
     if (isCorrection) {
       setAuditNote("")
       setAuditModalOpen(true)
