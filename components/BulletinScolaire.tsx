@@ -30,13 +30,25 @@ export interface ComportementData {
   remarque:        string;
 }
 
+/**
+ * EtablissementData
+ *
+ * Note : le nom de l'établissement n'est PLUS affiché visuellement
+ * sur le bulletin (décision produit — les bulletins CPMSL ne portent
+ * pas le nom de l'école dans le rendu). Il reste toutefois présent
+ * dans `nomPourAlt` pour l'accessibilité :
+ *   - alt text du logo (lecteurs d'écran)
+ *   - title attribute pour les utilisateurs qui survolent le logo
+ *
+ * Pour le rendu visuel : seuls logo, adresse, téléphone et email
+ * apparaissent.
+ */
 export interface EtablissementData {
-  nomLigne1: string;
-  nomLigne2: string;
-  adresse:   string;
-  telephone: string;
-  email:     string;
-  logoUrl:   string;
+  nomPourAlt: string;
+  adresse:    string;
+  telephone:  string;
+  email:      string;
+  logoUrl:    string;
 }
 
 export interface BulletinData {
@@ -240,7 +252,8 @@ export default function BulletinScolaire({ data }: Readonly<{ data: BulletinData
         alignItems: 'center',
         gap: '10px',
       }}>
-        {/* Logo */}
+        {/* Logo — le nom de l'école reste dans `alt` pour lecteurs
+            d'écran, mais n'est plus affiché visuellement. */}
         <div style={{
           width: '64px', height: '64px',
           border: '1px solid #bbb',
@@ -249,20 +262,18 @@ export default function BulletinScolaire({ data }: Readonly<{ data: BulletinData
         }}>
           <Image
             src={etab.logoUrl || '/test.jpeg'}
-            alt={`Logo ${etab.nomLigne2}`}
+            alt={`Logo ${etab.nomPourAlt}`}
+            title={etab.nomPourAlt}
             width={64} height={64}
             style={{ objectFit: 'contain' }}
           />
         </div>
 
-        {/* Titre */}
+        {/* Titre — uniquement 'BULLETIN SCOLAIRE' + année/période.
+            Le nom et la devise de l'école ont été retirés de
+            l'en-tête visuel par décision produit (cf. note sur
+            EtablissementData ci-dessus). */}
         <div style={{ flex: 1, textAlign: 'center' }}>
-          <div style={{ fontSize: '7pt', color: '#1a3a6e', fontWeight: 'bold', letterSpacing: '3px', textTransform: 'uppercase' }}>
-            {etab.nomLigne1}
-          </div>
-          <div style={{ fontSize: '14pt', fontWeight: 'bold', color: '#1a3a6e', letterSpacing: '4px' }}>
-            {etab.nomLigne2}
-          </div>
           <div style={{
             fontSize: '15pt', fontWeight: 'bold', color: '#000', letterSpacing: '3px',
             borderTop: '1.5px solid #1a3a6e', borderBottom: '1.5px solid #1a3a6e',

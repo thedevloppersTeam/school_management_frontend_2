@@ -172,25 +172,80 @@ export function CPMSLGradesGrid({
 
   // ── Pré-remplissage depuis les notes existantes ──────────────────────────
 
-  useEffect(() => {
-    const newEntries = new Map<string, GradeEntry>()
-    existingGrades
-      .filter(
-        g =>
-          g.classSubjectId === selectedClassSubjectId &&
-          g.sectionId      === null &&
-          g.stepId         === selectedStepId
-      )
-      .forEach(g => {
-        newEntries.set(g.enrollmentId, {
-          enrollmentId: g.enrollmentId,
-          value:   String(g.studentScore),
-          isValid: true,
-        })
+// ── SE-004 : Reconstruit les entries sans écraser les saisies dirty ──────
+//
+// AVANT : à chaque refetch d'existingGrades, on rebuildait gradeEntries
+//         from scratch → toute saisie pas encore envoyée était perdue
+//         (ex: admin tape 10 notes, un refetch arrive, tout disparaît).
+//
+// APRÈS : on merge les notes serveur avec les entries dirty locales.
+//         Une entry est "dirty" si :
+//           - elle n'a pas de contrepartie serveur (nouvelle note)
+//           - OU sa valeur locale ≠ valeur serveur (note modifiée)
+//
+// Un seul re-init complet : au CHANGEMENT de sélection (classe, étape,
+// matière), car là on est sur un autre contexte et les dirty n'ont plus
+// de sens.
+useEffect(() => {
+  // Reset complet au changement de sélection
+  const newEntries = new Map<string, GradeEntry>()
+  existingGrades
+    .filter(
+      g =>
+        g.classSubjectId === selectedClassSubjectId &&
+        g.sectionId      === null &&
+        g.stepId         === selectedStepId
+    )
+    .forEach(g => {
+      newEntries.set(g.enrollmentId, {
+        enrollmentId: g.enrollmentId,
+        value:   String(g.studentScore),
+        isValid: true,
       })
-    setGradeEntries(newEntries)
-    setCurrentPage(1)
-  }, [existingGrades, selectedClassSubjectId, selectedStepId])
+    })
+  setGradeEntries(newEntries)
+  setCurrentPage(1)
+  // ⚠ Important : dépendances limitées à la SÉLECTION, pas à existingGrades.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [selectedClassSubjectId, selectedStepId])
+
+// Effet séparé : merge côté serveur → local SANS écraser les dirty.
+// Se déclenche quand existingGrades change (après save réussi, polling, etc.)
+useEffect(() => {
+  setGradeEntries(prev => {
+    const next = new Map(prev)
+    const serverByEnrollment = new Map(
+      existingGrades
+        .filter(
+          g =>
+            g.classSubjectId === selectedClassSubjectId &&
+            g.sectionId      === null &&
+            g.stepId         === selectedStepId
+        )
+        .map(g => [g.enrollmentId, g])
+    )
+
+    serverByEnrollment.forEach((g, enrollmentId) => {
+      const local = next.get(enrollmentId)
+      const serverValue = String(g.studentScore)
+
+      if (!local) {
+        // Nouvelle note côté serveur dont on n'avait pas connaissance
+        next.set(enrollmentId, { enrollmentId, value: serverValue, isValid: true })
+        return
+      }
+
+      // Si la valeur locale MATCHE le serveur → pas dirty, on synchronise
+      // (ex: la note vient d'être save, elle a repassé le round-trip).
+      // Si la valeur locale DIFFÈRE → on préserve le dirty (pas d'écrasement).
+      if (local.value === serverValue) {
+        next.set(enrollmentId, { enrollmentId, value: serverValue, isValid: true })
+      }
+    })
+
+    return next
+  })
+}, [existingGrades, selectedClassSubjectId, selectedStepId])
 
   useEffect(() => { setCurrentPage(1) }, [selectedSessionId, selectedClassSubjectId, selectedStepId])
 
@@ -256,6 +311,86 @@ export function CPMSLGradesGrid({
       return next
     })
   }
+
+  // ── SE-002 : Navigation clavier complète dans la grille ─────────────────
+//
+// Raccourcis supportés depuis un input de note :
+//   Tab          → élève suivant (sort de la page si dernier)
+//   Shift+Tab    → élève précédent (sort de la page si premier)
+//   ↓ / Enter    → élève suivant (même page, reste dans la grille)
+//   ↑            → élève précédent
+//   Esc          → perte de focus (sort de l'input)
+//   Ctrl+S / Cmd+S → enregistrement (si pas d'erreur et période ouverte)
+//
+// WCAG 2.1.2 : Tab natif fonctionne si on arrive au bord (plus de trap).
+function focusInputByEnrollmentId(enrollmentId: string) {
+  const el = document.querySelector(
+    `input[data-enrollment-id="${enrollmentId}"]`
+  ) as HTMLInputElement | null
+  el?.focus()
+  el?.select()
+}
+
+function handleGradeKeyDown(
+  e: React.KeyboardEvent<HTMLInputElement>,
+  enrollmentId: string
+) {
+  // Ctrl/Cmd + S : raccourci d'enregistrement universel
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+    e.preventDefault()
+    if (!saving && !hasErrors && !isLocked) {
+      handleSaveGrades()
+    }
+    return
+  }
+
+  // Esc : on quitte le champ
+  if (e.key === 'Escape') {
+    e.preventDefault()
+    ;(e.target as HTMLInputElement).blur()
+    return
+  }
+
+  // Enter et ArrowDown : élève suivant (même page, reste dans la grille)
+  if (e.key === 'Enter' || e.key === 'ArrowDown') {
+    e.preventDefault()
+    const idx = paginatedEnrollments.findIndex(en => en.id === enrollmentId)
+    if (idx < 0 || idx >= paginatedEnrollments.length - 1) return
+    focusInputByEnrollmentId(paginatedEnrollments[idx + 1].id)
+    return
+  }
+
+  // ArrowUp : élève précédent
+  if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    const idx = paginatedEnrollments.findIndex(en => en.id === enrollmentId)
+    if (idx <= 0) return
+    focusInputByEnrollmentId(paginatedEnrollments[idx - 1].id)
+    return
+  }
+
+  // Tab / Shift+Tab : pour usage intra-grille, même comportement qu'Arrow.
+  // MAIS si on est sur la première/dernière ligne, on LAISSE le browser
+  // gérer — c'est ce qui empêche le keyboard trap (fix AI-005 / WCAG 2.1.2).
+  if (e.key === 'Tab') {
+    const idx = paginatedEnrollments.findIndex(en => en.id === enrollmentId)
+    if (idx < 0) return
+
+    if (e.shiftKey && idx > 0) {
+      e.preventDefault()
+      focusInputByEnrollmentId(paginatedEnrollments[idx - 1].id)
+      return
+    }
+    if (!e.shiftKey && idx < paginatedEnrollments.length - 1) {
+      e.preventDefault()
+      focusInputByEnrollmentId(paginatedEnrollments[idx + 1].id)
+      return
+    }
+    // Bords : laisser le Tab natif sortir de la grille vers le suivant
+    // composant (bouton Enregistrer, pagination, etc.)
+    return
+  }
+}  
 
   const hasErrors = useMemo(
     () => Array.from(gradeEntries.values()).some(e => !e.isValid),
@@ -408,30 +543,30 @@ useUnsavedChangesWarning(hasUnsavedChanges)
         <TableCell>
           <div className="flex flex-col items-center gap-1">
             <div className="flex items-center gap-2">
-              <Input
-                type="number" min="0" max={String(maxScore)} step="0.25"
-                value={entry?.value || ''} placeholder="—" disabled={isLocked}
-                onChange={e => handleGradeChange(enrollment.id, e.target.value)}
-                className={cn(
-                  "w-20 text-center tabular-nums",
-                  hasError && "border-destructive focus-visible:ring-destructive"
-                )}
-                onKeyDown={e => {
-                  if (e.key !== 'Tab') return
-                  e.preventDefault()
-                  const idx = paginatedEnrollments.findIndex(en => en.id === enrollment.id)
-                  if (idx >= paginatedEnrollments.length - 1) return
-                  const nextId = paginatedEnrollments[idx + 1].id
-                  const next = document.querySelector(`input[data-enrollment-id="${nextId}"]`) as HTMLInputElement
-                  next?.focus()
-                }}
-                data-enrollment-id={enrollment.id}
-              />
+<Input
+  type="number" min="0" max={String(maxScore)} step="0.25"
+  value={entry?.value || ''} placeholder="—" disabled={isLocked}
+  onChange={e => handleGradeChange(enrollment.id, e.target.value)}
+  className={cn(
+    "w-20 text-center tabular-nums",
+    hasError && "border-destructive focus-visible:ring-destructive"
+  )}
+  /* AI-004 : accessible name pour lecteurs d'écran.
+     Ex: "Note de Durand Pierre (sur 100)"                         */
+  aria-label={`Note de ${enrollment.student.user.lastname} ${enrollment.student.user.firstname} (sur ${maxScore})`}
+  aria-invalid={hasError ? true : undefined}
+  aria-errormessage={hasError ? `grade-error-${enrollment.id}` : undefined}
+  /* SE-002 : navigation clavier complète (remplace l'ancien Tab-trap) */
+  onKeyDown={e => handleGradeKeyDown(e, enrollment.id)}
+  data-enrollment-id={enrollment.id}
+/>
               <span className="text-xs text-muted-foreground">/ {maxScore}</span>
             </div>
             {hasError && entry?.error && (
-              <p className="text-[11px] text-destructive">{entry.error}</p>
-            )}
+  <p id={`grade-error-${enrollment.id}`} className="text-[11px] text-destructive">
+    {entry.error}
+  </p>
+)}
           </div>
         </TableCell>
         <TableCell className="pr-6 text-center">
@@ -668,29 +803,30 @@ useUnsavedChangesWarning(hasUnsavedChanges)
         <CardContent className="p-4">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {/* Classe */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Classe</label>
-              <Select value={selectedClassTypeId} onValueChange={handleClassTypeChange}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionner une classe" />
-                </SelectTrigger>
-                <SelectContent>
-                  {classTypes.map(ct => (
-                    <SelectItem key={ct.id} value={ct.id}>{ct.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+{/* Classe */}
+<div className="space-y-1.5">
+  <label id="label-class-type" className="text-xs font-medium text-muted-foreground">Classe</label>
+  <Select value={selectedClassTypeId} onValueChange={handleClassTypeChange}>
+    <SelectTrigger aria-labelledby="label-class-type">
+      <SelectValue placeholder="Sélectionner une classe" />
+    </SelectTrigger>
+    <SelectContent>
+      {classTypes.map(ct => (
+        <SelectItem key={ct.id} value={ct.id}>{ct.name}</SelectItem>
+      ))}
+    </SelectContent>
+  </Select>
+</div>
 
             {/* Salle */}
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Salle</label>
+              <label id="label-letter" className="text-xs font-medium text-muted-foreground">Salle</label>
               <Select
                 value={selectedLetter}
                 onValueChange={handleLetterChange}
                 disabled={!selectedClassTypeId}
               >
-                <SelectTrigger>
+                <SelectTrigger aria-labelledby="label-letter">
                   <SelectValue placeholder={!selectedClassTypeId ? "Choisir une classe d'abord" : "Sélectionner une salle"} />
                 </SelectTrigger>
                 <SelectContent>
@@ -703,9 +839,9 @@ useUnsavedChangesWarning(hasUnsavedChanges)
 
             {/* Étape */}
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Étape</label>
+              <label id="label-step" className="text-xs font-medium text-muted-foreground">Étape</label>
               <Select value={selectedStepId} onValueChange={onStepChange}>
-                <SelectTrigger>
+                <SelectTrigger aria-labelledby="label-step">
                   <div className="flex items-center gap-2">
                     {isLocked && <LockIcon className="h-4 w-4 text-amber-600" />}
                     <SelectValue placeholder="Sélectionner une étape" />
@@ -723,13 +859,13 @@ useUnsavedChangesWarning(hasUnsavedChanges)
 
             {/* Matière */}
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Matière</label>
+              <label id="label-subject" className="text-xs font-medium text-muted-foreground">Matière</label>
               <Select
                 value={selectedClassSubjectId}
                 onValueChange={onClassSubjectChange}
                 disabled={!selectedSessionId || loadingSession}
               >
-                <SelectTrigger>
+                <SelectTrigger aria-labelledby="label-subject">
                   <SelectValue placeholder={loadingSession ? "Chargement..." : "Sélectionner une matière"} />
                 </SelectTrigger>
                 <SelectContent>

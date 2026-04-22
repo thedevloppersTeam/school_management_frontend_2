@@ -17,6 +17,33 @@ type RubriqueSet = {
   r3: RubriqueEntry[]; r3Name: string
 }
 
+/**
+ * Shape renvoyée par GET /api/school-info (backend CPMSL).
+ * Source de vérité : vérifiée le 2026-04-21 via Postman.
+ */
+interface ApiSchoolInfo {
+  id?:           string
+  name?:         string      // "Cours Privé Mixte Saint Léonard"
+  motto?:        string      // "Une école ouverte sur le monde"
+  address?:      string      // "Port-au-Prince, Haïti"
+  phone?:        string      // "+509 3033 1295"
+  email?:        string      // "contact@cpmsl.ht"
+  logoUrl?:      string      // URL absolue du logo
+  directorName?: string
+  foundedYear?:  number
+}
+
+/**
+ * Shape d'une année scolaire backend.
+ */
+interface ApiAcademicYear {
+  id:        string
+  name:      string          // Ex: "2025-2026"
+  startDate: string
+  endDate:   string
+  isCurrent: boolean
+}
+
 // ── Helpers math ──────────────────────────────────────────────────────────────
 
 function avg(arr: number[]): number | null {
@@ -175,6 +202,50 @@ function buildComportement(behavior: any, attitudes: any[]) {
   }
 }
 
+// ── Mapping établissement ────────────────────────────────────────────────────
+//
+// Décision produit : le nom de l'établissement n'est plus affiché
+// VISUELLEMENT sur le bulletin. Il reste toutefois utile pour :
+//   - l'alt text du logo (accessibilité, lecteurs d'écran)
+//   - l'attribut title au survol du logo
+//
+// Le backend /api/school-info renvoie (vérifié Postman 2026-04-21) :
+//   { name, motto, address, phone, email, logoUrl, directorName, foundedYear }
+//
+// Le composant BulletinScolaire attend maintenant :
+//   { nomPourAlt, adresse, telephone, email, logoUrl }
+//
+// Mapping :
+//   nomPourAlt ← name        (pour a11y uniquement, pas affiché)
+//   adresse    ← address
+//   telephone  ← phone
+//   email      ← email
+//   logoUrl    ← logoUrl
+//
+// Le champ motto et l'ancien découpage nomLigne1/nomLigne2 ne sont plus
+// utilisés — le front ne les récupère plus, même si le backend les expose.
+
+function buildEtablissement(schoolInfo: ApiSchoolInfo | null) {
+  // Fallback = valeurs d'urgence si school-info KO. On garde le nom
+  // réel pour le fallback d'alt, pas une devise.
+  const fallback = {
+    nomPourAlt: 'École',
+    adresse:   '',
+    telephone: '',
+    email:     '',
+    logoUrl:   '/test.jpeg',
+  }
+  if (!schoolInfo) return fallback
+
+  return {
+    nomPourAlt: schoolInfo.name    || fallback.nomPourAlt,
+    adresse:    schoolInfo.address || fallback.adresse,
+    telephone:  schoolInfo.phone   || fallback.telephone,
+    email:      schoolInfo.email   || fallback.email,
+    logoUrl:    schoolInfo.logoUrl || fallback.logoUrl,
+  }
+}
+
 // ── Fonction principale ───────────────────────────────────────────────────────
 
 export async function buildBulletinData(params: {
@@ -188,13 +259,25 @@ export async function buildBulletinData(params: {
 }): Promise<BulletinData> {
   const { enrollmentId, studentId, classSessionId, stepId, stepName, className, yearId } = params
 
-  // 1. Fetch toutes les données en parallèle
-  const [student, classSubjects, allGrades, behaviorRaw, attitudesRaw] = await Promise.all([
+  // 1. Fetch toutes les données en parallèle.
+  //    school-info et academic-year viennent compléter le bulletin avec
+  //    les vraies coordonnées établissement + le nom correct de l'année.
+  const [
+    student,
+    classSubjects,
+    allGrades,
+    behaviorRaw,
+    attitudesRaw,
+    schoolInfo,
+    academicYear,
+  ] = await Promise.all([
     apiFetch<any>(`/api/students/${studentId}`),
     fetchClassSubjects(classSessionId),
     apiFetch<any[]>(`/api/grades/enrollment/${enrollmentId}?stepId=${stepId}`),
     safeFetch<any>(`/api/behaviors?enrollmentId=${enrollmentId}&stepId=${stepId}`, null),
     safeFetch<any[]>(`/api/attitudes?academicYearId=${yearId}`, []),
+    safeFetch<ApiSchoolInfo | null>(`/api/school-info`, null),
+    safeFetch<ApiAcademicYear | null>(`/api/academic-years/${yearId}`, null),
   ])
 
   // 2. Normaliser
@@ -216,6 +299,13 @@ export async function buildBulletinData(params: {
   // 6. Comportement
   const comportement = buildComportement(behavior, attitudes)
 
+  // 7. Établissement — plus de nom affiché, juste coordonnées + alt logo
+  const etablissement = buildEtablissement(schoolInfo)
+
+  // 8. Année scolaire — nom réel depuis academic-year, fallback calcul
+  const anneeScolaire = academicYear?.name
+    ?? `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`
+
   return {
     prenoms:       student?.user?.firstname ?? '',
     nom:           student?.user?.lastname  ?? '',
@@ -223,7 +313,7 @@ export async function buildBulletinData(params: {
     niveau:        className,
     filiere:       student?.filiere         ?? '—',
     dateNaissance: formatDate(student?.user?.birth_date ?? student?.user?.birthDate ?? ''),
-    anneeScolaire: `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`,
+    anneeScolaire,
     periode:       stepName,
     code:          student?.studentCode ?? '',
     nisu:          student?.nisu        ?? '',
@@ -250,13 +340,6 @@ export async function buildBulletinData(params: {
 
     comportement,
 
-    etablissement: {
-      nomLigne1: 'Cours Privé Mixte',
-      nomLigne2: 'SAINT LÉONARD',
-      adresse:   'Delmas, Angle 47 & 41 #10',
-      telephone: '2813-1205 / 2264-2081 / 4893-3367',
-      email:     'information@stleonard.ht',
-      logoUrl:   '/test.jpeg',
-    },
+    etablissement,
   }
 }

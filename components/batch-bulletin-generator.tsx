@@ -7,8 +7,6 @@ import { Progress } from "@/components/ui/progress"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Loader2, Download, FileText, CheckCircle2, XCircle, Eye } from "lucide-react"
 import { toast } from "sonner"
-import html2canvas from "html2canvas"
-import jsPDF from "jspdf"
 import { buildBulletinData } from "@/lib/api/bulletin"
 import BulletinScolaire, { type BulletinData } from "@/components/BulletinScolaire"
 
@@ -136,12 +134,17 @@ export function BatchBulletinGenerator({
   // ── Export PDF combiné ────────────────────────────────────────────────────
 
   const downloadAll = async () => {
-    if (bulletins.size === 0) return
-    setLoading(true)
+  if (bulletins.size === 0) return
+  setLoading(true)
 
-    try {
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-      let firstPage = true
+  try {
+    // PB-002 : imports dynamiques, chargés uniquement au clic "Tout télécharger"
+    // (~600 KB retirés du bundle initial des pages qui utilisent ce composant)
+    const html2canvas = (await import('html2canvas')).default
+    const jsPDF       = (await import('jspdf')).default
+
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+    let firstPage = true
 
       for (const [studentId, data] of bulletins) {
         if (status.get(studentId)?.status !== 'success') continue

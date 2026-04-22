@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { PlusIcon, ChevronRightIcon, ChevronDownIcon, CheckCircle2Icon, ZapIcon, Trash2Icon } from "lucide-react"
-
+import { ConfirmDestructive } from "@/components/ui/confirm-destructive"
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -211,6 +211,9 @@ function useSchoolSettings() {
     finally { setLoadingAttitudes(false) }
   }, [])
 
+  // EP-001 : état pour le modal de confirmation de suppression d'attitude
+const [attitudeToDelete, setAttitudeToDelete] = useState<Attitude | null>(null)
+const [deletingAttitude, setDeletingAttitude] = useState(false)  
   // ── Effects ────────────────────────────────────────────── complexity: 4 / 3
 
   useEffect(() => {
@@ -287,10 +290,19 @@ function useSchoolSettings() {
     setSubjectForm(f => ({ ...f, name, ...(!editingSubject && { code: generateCode(name, subjects.length) }) }))
   }
 
-  const handleSaveSubject = async () => {
-    setSubmitting(true)
-    try {
-      const body = { name: subjectForm.name, code: subjectForm.code, maxScore: Number.parseFloat(subjectForm.maxScore), coefficient: Number.parseFloat(subjectForm.coefficient), hasSections: subjectForm.hasSections, rubricId: subjectForm.rubricId || null }
+const handleSaveSubject = async () => {
+  // EP-004 / DR-003 : rubricId est obligatoire
+  if (!subjectForm.rubricId) {
+    toast({
+      title: "Rubrique manquante",
+      description: "Vous devez sélectionner une rubrique (R1, R2 ou R3) pour cette matière.",
+      variant: "destructive",
+    })
+    return
+  }
+  setSubmitting(true)
+  try {
+    const body = { name: subjectForm.name, code: subjectForm.code, maxScore: Number.parseFloat(subjectForm.maxScore), coefficient: Number.parseFloat(subjectForm.coefficient), hasSections: subjectForm.hasSections, rubricId: subjectForm.rubricId }
       if (editingSubject) {
         await apiFetch(`/api/subjects/update/${editingSubject.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
         toast({ title: "Matière modifiée" })
@@ -366,13 +378,31 @@ function useSchoolSettings() {
     finally { setSubmitting(false) }
   }
 
-  const handleDeleteAttitude = async (attitude: Attitude) => {
-    if (!currentYearId) return
-    try {
-      await fetch(`/api/attitudes/delete/${attitude.id}`, { method: 'POST', credentials: 'include' })
-      toast({ title: "Attitude supprimée" }); loadAttitudes(currentYearId)
-    } catch { toast({ title: "Erreur", variant: "destructive" }) }
+// EP-001 : suppression d'attitude en 2 étapes
+//
+// Étape 1 — click "Supprimer" → ouvre le modal de confirmation
+const handleDeleteAttitude = (attitude: Attitude) => {
+  setAttitudeToDelete(attitude)
+}
+
+// Étape 2 — click "Supprimer définitivement" dans le modal → exécute
+const handleConfirmDeleteAttitude = async () => {
+  if (!currentYearId || !attitudeToDelete) return
+  setDeletingAttitude(true)
+  try {
+    await fetch(`/api/attitudes/delete/${attitudeToDelete.id}`, {
+      method: 'POST',
+      credentials: 'include',
+    })
+    toast({ title: "Attitude supprimée" })
+    setAttitudeToDelete(null)
+    loadAttitudes(currentYearId)
+  } catch {
+    toast({ title: "Erreur", variant: "destructive" })
+  } finally {
+    setDeletingAttitude(false)
   }
+}
 
   // ── Class handlers ───────────────────────────────────────── complexity: 4
 
@@ -415,6 +445,7 @@ function useSchoolSettings() {
     openCreateRubric, openEditRubric, openCreateSubject, openEditSubject, openCreateSection,
     loadingClasses, classTypes, classes, initializing, handleInitializeClasses, openEditClass,
     loadingAttitudes, attitudes, currentYearId, openCreateAttitude, openEditAttitude, handleDeleteAttitude,
+    attitudeToDelete, setAttitudeToDelete, handleConfirmDeleteAttitude, deletingAttitude,
     rubricModal, setRubricModal, subjectModal, setSubjectModal, sectionModal, setSectionModal,
     attitudeModal, setAttitudeModal, classModal, setClassModal, submitting,
     editingRubric, editingSubject, editingClass, editingAttitude,
@@ -803,13 +834,22 @@ function SubjectModal({ open, onOpenChange, form, onChange, onNameChange, rubric
               <Input type="number" value={form.maxScore} onChange={e => onChange({ ...form, maxScore: e.target.value })} style={{ borderColor: '#D1CECC' }} />
             </div>
           </div>
-          <div className="space-y-1">
-            <Label style={{ fontSize: '13px', fontWeight: 500 }}>Rubrique *</Label>
-            <Select value={form.rubricId} onValueChange={v => onChange({ ...form, rubricId: v })}>
-              <SelectTrigger style={{ borderColor: '#D1CECC' }}><SelectValue placeholder="Sélectionner une rubrique" /></SelectTrigger>
-              <SelectContent>{rubrics.map(r => <SelectItem key={r.id} value={r.id}>{r.code} — {r.name}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
+<div className="space-y-1">
+  <Label style={{ fontSize: '13px', fontWeight: 500 }}>
+    Rubrique <span style={{ color: '#C43C3C' }}>*</span>
+  </Label>
+  <Select value={form.rubricId} onValueChange={v => onChange({ ...form, rubricId: v })}>
+    <SelectTrigger style={{ borderColor: !form.rubricId ? '#FCA5A5' : '#D1CECC' }}>
+      <SelectValue placeholder="Sélectionner une rubrique" />
+    </SelectTrigger>
+    <SelectContent>{rubrics.map(r => <SelectItem key={r.id} value={r.id}>{r.code} — {r.name}</SelectItem>)}</SelectContent>
+  </Select>
+  {!form.rubricId && (
+    <p style={{ fontSize: '11px', color: '#C43C3C' }}>
+      Obligatoire — détermine la pondération (R1=70%, R2=25%, R3=5%)
+    </p>
+  )}
+</div>
           <div className="flex items-center gap-3">
             <input type="checkbox" id="hasSections" checked={form.hasSections} onChange={e => onChange({ ...form, hasSections: e.target.checked })} />
             <Label htmlFor="hasSections" style={{ fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>Cette matière a des sous-matières (sections)</Label>
@@ -817,7 +857,15 @@ function SubjectModal({ open, onOpenChange, form, onChange, onNameChange, rubric
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} style={{ borderColor: '#D1CECC' }}>Annuler</Button>
-          <Button onClick={onSave} disabled={submitting || !form.name || !form.code} style={{ backgroundColor: '#2C4A6E', color: 'white' }}>
+          <Button
+  onClick={onSave}
+  disabled={submitting || !form.name || !form.code || !form.rubricId}
+  style={{
+    backgroundColor: !form.name || !form.code || !form.rubricId ? '#9CA3AF' : '#2C4A6E',
+    color: 'white',
+    cursor: !form.name || !form.code || !form.rubricId ? 'not-allowed' : 'pointer'
+  }}
+>
             {submitting ? 'En cours...' : editing ? 'Enregistrer' : 'Créer'}
           </Button>
         </DialogFooter>
@@ -1018,8 +1066,26 @@ export default function SchoolSettingsPage() {
       <AttitudeModal open={s.attitudeModal} onOpenChange={s.setAttitudeModal}
         label={s.attitudeLabel} onLabelChange={s.setAttitudeLabel}
         editing={s.editingAttitude} submitting={s.submitting} onSave={s.handleSaveAttitude} />
+      {/* EP-001 : confirmation avant suppression d'attitude */}
+<ConfirmDestructive
+  open={s.attitudeToDelete !== null}
+  onOpenChange={(open) => !open && s.setAttitudeToDelete(null)}
+  title="Supprimer cette attitude ?"
+  description={
+    s.attitudeToDelete
+      ? `L'attitude « ${s.attitudeToDelete.label} » sera retirée de la liste. ` +
+        `Les évaluations existantes associées à cette attitude peuvent ` +
+        `devenir orphelines. Cette action est irréversible.`
+      : ""
+  }
+  confirmLabel="Supprimer définitivement"
+  requireTypedName={false}
+  onConfirm={s.handleConfirmDeleteAttitude}
+  loading={s.deletingAttitude}
+/>
       <ClassModal open={s.classModal} onOpenChange={s.setClassModal} form={s.classForm} onChange={s.setClassForm}
         editing={s.editingClass} submitting={s.submitting} onSave={s.handleSaveClass} />
+
     </div>
   )
 }
