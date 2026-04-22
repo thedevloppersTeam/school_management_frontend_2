@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { StatCard } from "@/components/school/stat-card"
+import { toMessage } from "@/lib/errors"
+import { toast } from "sonner"
 import {
   FileTextIcon,
   UsersIcon,
@@ -383,6 +385,9 @@ export function CPMSLRapportsSection({
       pdf.save(`rapport_${pdfClassName}_${sn}_${new Date().toISOString().slice(0, 10)}.pdf`)
     } catch (e) {
       console.error('[rapports] PDF:', e)
+      // EP-007 : l'erreur était silencieuse → l'utilisateur cliquait "Générer"
+      // sans jamais savoir pourquoi le PDF n'apparaissait pas.
+      toast.error(toMessage(e, "lors de la génération du rapport PDF"))
     } finally {
       setGenerating(false)
     }

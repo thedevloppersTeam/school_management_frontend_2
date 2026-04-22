@@ -9,7 +9,7 @@ import { Loader2, Download, FileText, CheckCircle2, XCircle, Eye } from "lucide-
 import { toast } from "sonner"
 import { buildBulletinData } from "@/lib/api/bulletin"
 import BulletinScolaire, { type BulletinData } from "@/components/BulletinScolaire"
-
+import { toMessage } from "@/lib/errors"
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface BatchBulletinGeneratorProps {
@@ -111,9 +111,9 @@ export function BatchBulletinGenerator({
                     average: Number.parseFloat(data.moyenneEtape) || undefined,
         })
       } catch (err) {
-        console.error(`[BatchGenerator] student ${studentId}:`, err)
-        newStatus.set(studentId, { status: 'error', message: 'Erreur de génération' })
-      }
+  console.error(`[BatchGenerator] student ${studentId}:`, err)
+  newStatus.set(studentId, { status: 'error', message: 'Erreur de génération' })
+}
 
       processed++
       setProgress(Math.round((processed / studentIds.length) * 100))
@@ -124,11 +124,29 @@ export function BatchBulletinGenerator({
     setLoading(false)
     setGenerated(true)
 
-    const successCount = Array.from(newStatus.values()).filter(s => s.status === 'success').length
-    if (successCount > 0) {
-      toast.success(`${successCount} bulletin${successCount > 1 ? 's' : ''} prêt${successCount > 1 ? 's' : ''}`)
-      if (onComplete) onComplete()
-    }
+// EP-010 : remontée des résultats proactive — plus de silent errorCount
+const successCount = Array.from(newStatus.values()).filter(s => s.status === 'success').length
+const errorCount   = Array.from(newStatus.values()).filter(s => s.status === 'error').length
+const total        = successCount + errorCount
+
+if (errorCount === 0 && successCount > 0) {
+  // Cas idéal : tout est passé
+  toast.success(`${successCount} bulletin${successCount > 1 ? 's' : ''} prêt${successCount > 1 ? 's' : ''}`)
+  if (onComplete) onComplete()
+} else if (successCount > 0 && errorCount > 0) {
+  // Cas mixte : partiel
+  toast.warning(
+    `${successCount} / ${total} bulletin${total > 1 ? 's' : ''} prêt${successCount > 1 ? 's' : ''}. ` +
+    `${errorCount} échec${errorCount > 1 ? 's' : ''} — voir le détail dans le tableau.`
+  )
+  if (onComplete) onComplete()
+} else if (errorCount > 0 && successCount === 0) {
+  // Cas catastrophique : tout a échoué
+  toast.error(
+    `Aucun bulletin n'a pu être généré. ${errorCount} échec${errorCount > 1 ? 's' : ''}. ` +
+    `Vérifiez votre connexion ou contactez le support.`
+  )
+}
   }
 
   // ── Export PDF combiné ────────────────────────────────────────────────────

@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { PlusIcon, ChevronRightIcon, ChevronDownIcon, CheckCircle2Icon, ZapIcon, Trash2Icon } from "lucide-react"
 import { ConfirmDestructive } from "@/components/ui/confirm-destructive"
+import { toMessage } from "@/lib/errors"
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -249,7 +250,14 @@ const [deletingAttitude, setDeletingAttitude] = useState(false)
     try {
       await fetch('/api/school-info/update', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(info) })
       toast({ title: "Paramètres enregistrés" })
-    } catch { toast({ title: "Erreur", description: "Impossible de sauvegarder", variant: "destructive" }) }
+    
+  } catch (err) {
+      toast({
+        title: "Erreur",
+        description: toMessage(err, "lors de la sauvegarde des paramètres"),
+        variant: "destructive",
+      })
+    }
   }
 
   // ── Calendar ─────────────────────────────────────────────── complexity: 0-1
@@ -277,7 +285,13 @@ const [deletingAttitude, setDeletingAttitude] = useState(false)
         toast({ title: "Rubrique créée" })
       }
       setRubricModal(false); loadReferentiel()
-    } catch { toast({ title: "Erreur", variant: "destructive" }) }
+    } catch (err) {
+      toast({
+        title: "Erreur",
+        description: toMessage(err, "lors de la sauvegarde de la rubrique"),
+        variant: "destructive",
+      })
+    }
     finally { setSubmitting(false) }
   }
 
@@ -311,9 +325,16 @@ const handleSaveSubject = async () => {
         toast({ title: "Matière créée" })
       }
       setSubjectModal(false); loadReferentiel()
-    } catch { toast({ title: "Erreur", variant: "destructive" }) }
+    } catch (err) {
+      toast({
+        title: "Erreur",
+        description: toMessage(err, "lors de la sauvegarde de la matière"),
+        variant: "destructive",
+      })
+    }
     finally { setSubmitting(false) }
   }
+
 
   // ── Section handlers ─────────────────────────────────────── complexity: 4
 
@@ -340,7 +361,13 @@ const handleSaveSubject = async () => {
       const sectionId = result?.section?.id
       if (sectionId && sectionForm.cycles.length > 0) saveSectionCycles(sectionId, sectionForm.cycles)
       toast({ title: "Sous-matière créée" }); setSectionModal(false); loadReferentiel()
-    } catch { toast({ title: "Erreur", variant: "destructive" }) }
+    } catch (err) {
+      toast({
+        title: "Erreur",
+        description: toMessage(err, "lors de la sauvegarde de la sous-matière"),
+        variant: "destructive",
+      })
+    }
     finally { setSubmitting(false) }
   }
 
@@ -374,7 +401,13 @@ const handleSaveSubject = async () => {
         toast({ title: "Attitude créée" })
       }
       setAttitudeModal(false); loadAttitudes(currentYearId)
-    } catch { toast({ title: "Erreur", variant: "destructive" }) }
+    } catch (err) {
+      toast({
+        title: "Erreur",
+        description: toMessage(err, "lors de la sauvegarde de l'attitude"),
+        variant: "destructive",
+      })
+    }
     finally { setSubmitting(false) }
   }
 
@@ -397,9 +430,13 @@ const handleConfirmDeleteAttitude = async () => {
     toast({ title: "Attitude supprimée" })
     setAttitudeToDelete(null)
     loadAttitudes(currentYearId)
-  } catch {
-    toast({ title: "Erreur", variant: "destructive" })
-  } finally {
+  } catch (err) {
+  toast({
+    title: "Erreur",
+    description: toMessage(err, "..."),   // ← tu as laissé les trois points
+    variant: "destructive",
+  })
+} finally {
     setDeletingAttitude(false)
   }
 }
@@ -433,7 +470,13 @@ const handleConfirmDeleteAttitude = async () => {
     try {
       await apiFetch(`/api/classes/update/${editingClass.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ maxStudents: parseInt(classForm.maxStudents) || undefined }) })
       toast({ title: "Classe modifiée" }); setClassModal(false); setClassesLoaded(false); loadClasses()
-    } catch { toast({ title: "Erreur", variant: "destructive" }) }
+    } catch (err) {
+  toast({
+    title: "Erreur",
+    description: toMessage(err, "..."),
+    variant: "destructive",
+  })
+}
     finally { setSubmitting(false) }
   }
 
