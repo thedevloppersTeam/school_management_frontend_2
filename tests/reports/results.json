@@ -1,0 +1,1342 @@
+{
+  "config": {
+    "configFile": "C:\\Dev\\CPMSL\\school_management_frontend_2\\playwright.config.ts",
+    "rootDir": "C:/Dev/CPMSL/school_management_frontend_2/tests/e2e",
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {},
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "C:/Dev/CPMSL/school_management_frontend_2/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {},
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "C:/Dev/CPMSL/school_management_frontend_2/tests/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "html",
+        {
+          "open": "never"
+        }
+      ],
+      [
+        "json",
+        {
+          "outputFile": "tests/reports/results.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.59.1",
+    "workers": 1,
+    "webServer": {
+      "command": "npm run dev",
+      "url": "http://localhost:3000",
+      "reuseExistingServer": true,
+      "timeout": 120000
+    }
+  },
+  "suites": [
+    {
+      "title": "arch.spec.ts",
+      "file": "arch.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Module ARCH — Archivage et recherche",
+          "file": "arch.spec.ts",
+          "line": 4,
+          "column": 6,
+          "specs": [
+            {
+              "title": "ARCH-001 — Archivage automatique du bulletin après génération",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "05be636876839027c412-faf7b7f3de02c6613b00",
+              "file": "arch.spec.ts",
+              "line": 9,
+              "column": 7
+            },
+            {
+              "title": "ARCH-002 — Recherche de bulletins par critères multiples",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "05be636876839027c412-67a695ac31db4e5709f1",
+              "file": "arch.spec.ts",
+              "line": 34,
+              "column": 7
+            },
+            {
+              "title": "ARCH-003 — Régénération à l'identique d'une version archivée",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "05be636876839027c412-42c14eb6b395b6a549ca",
+              "file": "arch.spec.ts",
+              "line": 70,
+              "column": 7
+            },
+            {
+              "title": "ARCH-004 — Intégrité des métadonnées d'archivage (DR-005)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "05be636876839027c412-818866e6599a0642f25d",
+              "file": "arch.spec.ts",
+              "line": 115,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "auth.spec.ts",
+      "file": "auth.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Module AUTH — Authentification",
+          "file": "auth.spec.ts",
+          "line": 4,
+          "column": 6,
+          "specs": [
+            {
+              "title": "AUTH-001 — Connexion valide avec identifiants corrects",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "d748ac400d08b85935ef-26845c6b83b6e41fd2ec",
+              "file": "auth.spec.ts",
+              "line": 9,
+              "column": 7
+            },
+            {
+              "title": "AUTH-002 — Refus de connexion avec mot de passe incorrect",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "d748ac400d08b85935ef-2a179685d4e4b707a61d",
+              "file": "auth.spec.ts",
+              "line": 32,
+              "column": 7
+            },
+            {
+              "title": "AUTH-003 — Déconnexion et invalidation de session",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "d748ac400d08b85935ef-6e7231bdd4cc4e037ec1",
+              "file": "auth.spec.ts",
+              "line": 55,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "bull.spec.ts",
+      "file": "bull.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Module BULL — Génération des bulletins PDF",
+          "file": "bull.spec.ts",
+          "line": 16,
+          "column": 6,
+          "specs": [
+            {
+              "title": "BULL-001 — Générer un bulletin PDF lot pour toute une classe",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "f6532d103a1362c81873-5053c61c6f11acac9ebd",
+              "file": "bull.spec.ts",
+              "line": 21,
+              "column": 7
+            },
+            {
+              "title": "BULL-002 — Conformité du gabarit bulletin (IR-002)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "f6532d103a1362c81873-def71bbcda25390341b8",
+              "file": "bull.spec.ts",
+              "line": 64,
+              "column": 7
+            },
+            {
+              "title": "BULL-003 — Bulletin avec vignette si photo absente",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "f6532d103a1362c81873-1ad4ab02ed0ddaa0216f",
+              "file": "bull.spec.ts",
+              "line": 101,
+              "column": 7
+            },
+            {
+              "title": "BULL-004 — Blocage de génération si élève sans NISU valide",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "f6532d103a1362c81873-7b87d96cb72db885f0d0",
+              "file": "bull.spec.ts",
+              "line": 141,
+              "column": 7
+            },
+            {
+              "title": "BULL-005 — Export PDF — téléchargement et ouverture",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "f6532d103a1362c81873-5df2af79344880e31b2d",
+              "file": "bull.spec.ts",
+              "line": 182,
+              "column": 7
+            },
+            {
+              "title": "BULL-006 — Impression physique du bulletin 8½x11",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "f6532d103a1362c81873-35b5d3f804baf52917cd",
+              "file": "bull.spec.ts",
+              "line": 220,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "calc.spec.ts",
+      "file": "calc.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Module CALC — Calcul des moyennes",
+          "file": "calc.spec.ts",
+          "line": 16,
+          "column": 6,
+          "specs": [
+            {
+              "title": "CALC-001 — Calcul correct moyennes R1/R2/R3 et moyenne finale (70/25/5)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "c77fb733e8ed1e6f380b-ba4095673ee9b0ae4287",
+              "file": "calc.spec.ts",
+              "line": 21,
+              "column": 7
+            },
+            {
+              "title": "CALC-002 — Arrondi des moyennes au centième",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "c77fb733e8ed1e6f380b-f8810caf8956c29b9e0d",
+              "file": "calc.spec.ts",
+              "line": 64,
+              "column": 7
+            },
+            {
+              "title": "CALC-003 — Refus de calcul si une matière n'est pas mappée",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "c77fb733e8ed1e6f380b-34d34cf218df55d37409",
+              "file": "calc.spec.ts",
+              "line": 95,
+              "column": 7
+            },
+            {
+              "title": "CALC-004 — Recalcul après correction d'une note (pré-clôture)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "c77fb733e8ed1e6f380b-f86ba780257a74161eec",
+              "file": "calc.spec.ts",
+              "line": 138,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "clot.spec.ts",
+      "file": "clot.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Module CLOT — Clôture de période",
+          "file": "clot.spec.ts",
+          "line": 16,
+          "column": 6,
+          "specs": [
+            {
+              "title": "CLOT-001 — Clôturer une période — verrouillage des notes",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "e44bddc84a6c571c5684-62e70d8e67f9454e300e",
+              "file": "clot.spec.ts",
+              "line": 21,
+              "column": 7
+            },
+            {
+              "title": "CLOT-002 — Bloquer la modification des notes après clôture",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "e44bddc84a6c571c5684-c8487c91b305e65d4736",
+              "file": "clot.spec.ts",
+              "line": 63,
+              "column": 7
+            },
+            {
+              "title": "CLOT-003 — Journal d'audit — entrée créée lors de la clôture",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "e44bddc84a6c571c5684-386f239001697c603fa1",
+              "file": "clot.spec.ts",
+              "line": 122,
+              "column": 7
+            },
+            {
+              "title": "CLOT-004 — Impossible de générer un bulletin sur une période non clôturée",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "e44bddc84a6c571c5684-f1747e182aed78205603",
+              "file": "clot.spec.ts",
+              "line": 161,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "corr.spec.ts",
+      "file": "corr.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Module CORR — Corrections post-clôture",
+          "file": "corr.spec.ts",
+          "line": 4,
+          "column": 6,
+          "specs": [
+            {
+              "title": "CORR-001 — Réouverture ciblée et correction d'une note post-clôture",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "9b0e53c025312cb7f920-73c9af69ebbad2593195",
+              "file": "corr.spec.ts",
+              "line": 9,
+              "column": 7
+            },
+            {
+              "title": "CORR-002 — Conservation de l'historique des versions",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "9b0e53c025312cb7f920-ec5c18bdcc0503276d18",
+              "file": "corr.spec.ts",
+              "line": 67,
+              "column": 7
+            },
+            {
+              "title": "CORR-003 — Audit de la correction post-clôture",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "9b0e53c025312cb7f920-6ecc215cfef7b7cfb411",
+              "file": "corr.spec.ts",
+              "line": 97,
+              "column": 7
+            },
+            {
+              "title": "CORR-004 — La réouverture ne permet pas de modifier d'autres élèves",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "9b0e53c025312cb7f920-8a96a5b0f0c6c565e77c",
+              "file": "corr.spec.ts",
+              "line": 138,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "eleve.spec.ts",
+      "file": "eleve.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Module ELEVE — Gestion des eleves",
+          "file": "eleve.spec.ts",
+          "line": 15,
+          "column": 6,
+          "specs": [
+            {
+              "title": "ELEVE-001 — Creer un eleve avec NISU valide",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "14df94aeb9ff396db7f8-a2ed64dd2db6b4fe41bb",
+              "file": "eleve.spec.ts",
+              "line": 20,
+              "column": 7
+            },
+            {
+              "title": "ELEVE-002 — Refus d-enregistrement si NISU non conforme",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "14df94aeb9ff396db7f8-847ca36c5731849f2cfa",
+              "file": "eleve.spec.ts",
+              "line": 65,
+              "column": 7
+            },
+            {
+              "title": "ELEVE-003 — Creer un eleve sans photo — vignette par defaut",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "14df94aeb9ff396db7f8-c68f459555b88b72b82e",
+              "file": "eleve.spec.ts",
+              "line": 99,
+              "column": 7
+            },
+            {
+              "title": "ELEVE-004 — Modifier les informations d-un eleve existant",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "14df94aeb9ff396db7f8-767afd43d1fbff20c322",
+              "file": "eleve.spec.ts",
+              "line": 141,
+              "column": 7
+            },
+            {
+              "title": "ELEVE-005 — Affecter un eleve a une classe de l-annee en cours",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "14df94aeb9ff396db7f8-654a59aca6813918bf56",
+              "file": "eleve.spec.ts",
+              "line": 178,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "enf.spec.ts",
+      "file": "enf.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Module ENF — Exigences non fonctionnelles (MUST uniquement)",
+          "file": "enf.spec.ts",
+          "line": 7,
+          "column": 6,
+          "specs": [
+            {
+              "title": "ENF-003 — Sauvegarde quotidienne — restauration vérifiable",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "836e9522471adf4b9cac-45c910f3228adbe4664e",
+              "file": "enf.spec.ts",
+              "line": 12,
+              "column": 7
+            },
+            {
+              "title": "ENF-004 — Utilisabilité — terminologie CPMSL et parcours intuitif",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "836e9522471adf4b9cac-12386a78f0fa82591797",
+              "file": "enf.spec.ts",
+              "line": 49,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "note.spec.ts",
+      "file": "note.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Module NOTE — Saisie et validation des notes",
+          "file": "note.spec.ts",
+          "line": 15,
+          "column": 6,
+          "specs": [
+            {
+              "title": "NOTE-001 — Saisir des notes valides (multiples de 0,25)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "80dd51fcd5b14b3090f9-151d097b495754027574",
+              "file": "note.spec.ts",
+              "line": 20,
+              "column": 7
+            },
+            {
+              "title": "NOTE-002 — Refus de note non multiple de 0,25",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "80dd51fcd5b14b3090f9-7a0c16fdfee2a0250e4c",
+              "file": "note.spec.ts",
+              "line": 76,
+              "column": 7
+            },
+            {
+              "title": "NOTE-003 — Refus de note hors plage autorisee",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "80dd51fcd5b14b3090f9-4c3ef00ffe4759829579",
+              "file": "note.spec.ts",
+              "line": 124,
+              "column": 7
+            },
+            {
+              "title": "NOTE-004 — Validation en lot des notes d-une classe",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "80dd51fcd5b14b3090f9-be301c93bd0190929a7a",
+              "file": "note.spec.ts",
+              "line": 172,
+              "column": 7
+            },
+            {
+              "title": "NOTE-005 — Impossible de modifier une note apres validation sur periode ouverte",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "80dd51fcd5b14b3090f9-f003892d5d808ac68bbc",
+              "file": "note.spec.ts",
+              "line": 218,
+              "column": 7
+            },
+            {
+              "title": "NOTE-006 — Saisie partielle — notes manquantes pour certains eleves",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "80dd51fcd5b14b3090f9-3ed29f5c19e94b9cc345",
+              "file": "note.spec.ts",
+              "line": 238,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "param.spec.ts",
+      "file": "param.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Module PARAM — Parametrage",
+          "file": "param.spec.ts",
+          "line": 4,
+          "column": 6,
+          "specs": [
+            {
+              "title": "PARAM-001 — Creer une annee scolaire avec periodes",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "9c5e3df3e2bb54a9786a-651bc4f16e15012720fa",
+              "file": "param.spec.ts",
+              "line": 9,
+              "column": 7
+            },
+            {
+              "title": "PARAM-002 — Creer classes, niveaux et filieres (Nouveau Secondaire)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "9c5e3df3e2bb54a9786a-4c1302aeed171b7133dc",
+              "file": "param.spec.ts",
+              "line": 40,
+              "column": 7
+            },
+            {
+              "title": "PARAM-003 — Definir le referentiel de matieres avec mapping rubrique",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "9c5e3df3e2bb54a9786a-a3f9c261013736e6d579",
+              "file": "param.spec.ts",
+              "line": 61,
+              "column": 7
+            },
+            {
+              "title": "PARAM-004 — Copier la structure d-une annee existante vers une nouvelle annee",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "9c5e3df3e2bb54a9786a-e2906be98922e2d47325",
+              "file": "param.spec.ts",
+              "line": 82,
+              "column": 7
+            },
+            {
+              "title": "PARAM-005 — Ajout-retrait de matiere par classe (exception au referentiel)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "9c5e3df3e2bb54a9786a-05da0f079b160c6d3364",
+              "file": "param.spec.ts",
+              "line": 108,
+              "column": 7
+            },
+            {
+              "title": "PARAM-006 — Refus de generation-calcul si matiere non mappee",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "9c5e3df3e2bb54a9786a-f6f59164d057feef1013",
+              "file": "param.spec.ts",
+              "line": 129,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "sec.spec.ts",
+      "file": "sec.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Module SEC — Sécurité et auditabilité",
+          "file": "sec.spec.ts",
+          "line": 4,
+          "column": 6,
+          "specs": [
+            {
+              "title": "SEC-001 — Journal d'audit — actions sensibles enregistrées",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "5b29c05e5267c3425777-1bfa3dcec73a371af4b5",
+              "file": "sec.spec.ts",
+              "line": 9,
+              "column": 7
+            },
+            {
+              "title": "SEC-002 — Aucune diffusion en ligne des bulletins (SR-002)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "5b29c05e5267c3425777-e99f9c0bd2e0148137fb",
+              "file": "sec.spec.ts",
+              "line": 52,
+              "column": 7
+            },
+            {
+              "title": "SEC-003 — Consentement photo — traçabilité (SR-004)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "5b29c05e5267c3425777-c015c5cb99d0148ccd9a",
+              "file": "sec.spec.ts",
+              "line": 77,
+              "column": 7
+            },
+            {
+              "title": "SEC-004 — Intégrité des bulletins archivés — horodatage et versioning (SR-005)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "5b29c05e5267c3425777-24328c5a5c4dfb123fc9",
+              "file": "sec.spec.ts",
+              "line": 116,
+              "column": 7
+            },
+            {
+              "title": "SEC-005 — Accès uniquement via compte Administrateur authentifié",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "5b29c05e5267c3425777-e4756d3d6c8f2293c63f",
+              "file": "sec.spec.ts",
+              "line": 149,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "stat.spec.ts",
+      "file": "stat.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Module STAT — Rapport statistique de classe",
+          "file": "stat.spec.ts",
+          "line": 16,
+          "column": 6,
+          "specs": [
+            {
+              "title": "STAT-001 — Générer le rapport statistique PDF 8½x14",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "26d2bfb117925f08aac8-a529fc7318ccdbeaefaa",
+              "file": "stat.spec.ts",
+              "line": 21,
+              "column": 7
+            },
+            {
+              "title": "STAT-002 — Conformité du contenu du rapport statistique",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "26d2bfb117925f08aac8-d01b3868d51a472ce753",
+              "file": "stat.spec.ts",
+              "line": 68,
+              "column": 7
+            },
+            {
+              "title": "STAT-003 — Impression physique du rapport 8½x14",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "26d2bfb117925f08aac8-dbb29228d52722349ca3",
+              "file": "stat.spec.ts",
+              "line": 117,
+              "column": 7
+            },
+            {
+              "title": "STAT-004 — Cohérence entre moyennes calculées et rapport statistique",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "26d2bfb117925f08aac8-c7302e4973b827f45f67",
+              "file": "stat.spec.ts",
+              "line": 158,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-04-20T02:41:02.548Z",
+    "duration": 350.5,
+    "expected": 0,
+    "skipped": 53,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

@@ -39,28 +39,27 @@ yarn-error.log*
 *.md
 
 # typescript
-*.tsbuildinfo
-next-env.d.ts
-cookies.txt
-.gitignore
+#*.tsbuildinfo
+#next-env.d.ts
+#cookies.txt
 .gitignore
 
-.claude/
-tests/
-playwright.config.ts
-playwright-report/
-test-results/
-postman/
+#.claude/
+#tests/
+#playwright.config.ts
+#playwright-report/
+#test-results/
+#postman/
 
 # Security — never commit credentials
 login.json
 *.credentials.json
 *.pem
 *.key
-*yml
+#*.yml
 
-*.sh
-use-unsaved-changes-warning.ts
-README.md
-errors.ts
-audit-report.json
+#*.sh
+#use-unsaved-changes-warning.ts
+#README.md
+#errors.ts
+#audit-report.json

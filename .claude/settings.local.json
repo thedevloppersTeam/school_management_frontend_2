@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx playwright *)",
+      "Bash(dir C:\\\\\\\\Dev\\\\\\\\CPMSL\\\\\\\\school_management_frontend_2\\\\\\\\tests\\\\\\\\e2e\\\\\\\\ *)",
+      "Bash(ls *)",
+      "Bash(xargs grep *)"
+    ]
+  }
+}
