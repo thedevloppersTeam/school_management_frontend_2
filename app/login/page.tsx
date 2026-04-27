@@ -1,253 +1,197 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
-import { EyeIcon, EyeOffIcon, LoaderIcon } from "lucide-react"
-import { getRoleRoute, type UserType } from "@/lib/data/auth-data"
-import { useToast } from "@/components/ui/use-toast"
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { EyeIcon, EyeOffIcon, LoaderIcon } from "lucide-react";
+import { getRoleRoute, type UserType } from "@/lib/data/auth-data";
+import { useToast } from "@/components/ui/use-toast";
+import { clientFetch, ApiError } from "@/lib/client-fetch";
+import { toMessage } from "@/lib/errors";
+
+interface LoginResponse {
+  session?: {
+    type: UserType;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
 
 export default function LoginPage() {
-  const router = useRouter()
-  const { toast } = useToast()
-  const [username, setUsername] = useState("")
-  const [password, setPassword] = useState("")
-  const [showPassword, setShowPassword] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
+  const router = useRouter();
+  const { toast } = useToast();
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
+    e.preventDefault();
+    setIsLoading(true);
 
     try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+      const data = await clientFetch<LoginResponse>("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
-      })
+      });
 
-      const data = await res.json()
+      const route = getRoleRoute(data.session?.type as UserType);
+      router.push(route);
+    } catch (err) {
+      // Titres adaptés au contexte du login
+      const titlesByStatus: Record<number, string> = {
+        401: "Identifiants incorrects",
+        403: "Compte inactif",
+        500: "Erreur serveur",
+        502: "Service indisponible",
+        503: "Service indisponible",
+        504: "Serveur lent",
+      };
 
-      if (!res.ok) {
-        toast({
-          variant: "destructive",
-          title: "Échec de connexion",
-          description: data.message ?? "Identifiants incorrects. Veuillez réessayer.",
-        })
-        return
+      let title = "Erreur de connexion";
+      if (err instanceof ApiError) {
+        title = titlesByStatus[err.status] ?? "Échec de connexion";
+      } else if (err instanceof TypeError) {
+        // fetch failed côté navigateur (réseau coupé, CORS, etc.)
+        title = "Erreur réseau";
       }
 
-      const route = getRoleRoute(data.session?.type as UserType)
-      router.push(route)
-    } catch {
       toast({
         variant: "destructive",
-        title: "Erreur",
-        description: "Une erreur est survenue. Veuillez réessayer.",
-      })
+        title,
+        description: toMessage(err),
+      });
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
+
+  // Classe partagée pour les inputs : focus visible (A11Y-005), bordure CPMSL,
+  // états disabled propres. focus-visible n'apparaît qu'au focus clavier
+  // (pas au clic souris) — c'est le standard UX moderne.
+  const inputClass =
+    "w-full bg-white text-neutral-900 placeholder:text-neutral-500 " +
+    "border border-neutral-300 rounded-lg px-3 py-3 " +
+    "outline-none transition-all duration-200 " +
+    "focus-visible:border-primary-500 focus-visible:ring-2 focus-visible:ring-primary-500/20 " +
+    "disabled:bg-neutral-50 disabled:text-neutral-500 disabled:cursor-not-allowed";
 
   return (
-    <>
-      <style>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
+    <div className="bg-white border border-neutral-200 rounded-xl shadow-md p-8 w-full">
+      {/* En-tête du formulaire */}
+      <div className="mb-6">
+        <h1 className="font-serif text-3xl font-bold text-primary-800 mb-2 tracking-tight">
+          Connexion
+        </h1>
+        <p className="font-sans text-sm text-muted-foreground">
+          Connectez-vous à votre espace d&apos;administration
+        </p>
+      </div>
 
-      <div
-        style={{
-          backgroundColor: 'white',
-          border: '1px solid #E8E6E3',
-          borderRadius: '12px',
-          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.08)',
-          padding: '32px',
-          width: '100%'
-        }}
-      >
-        {/* En-tête du formulaire */}
-        <div style={{ marginBottom: '24px' }}>
-          <h1
-            className="font-serif font-bold"
-            style={{
-              color: '#2A3740',
-              marginBottom: '8px',
-              fontSize: '28px',
-              letterSpacing: '-0.025em',
-              fontWeight: 700
-            }}
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Champ Nom d'utilisateur */}
+        <div>
+          <label
+            htmlFor="username"
+            className="block font-sans text-sm font-medium text-neutral-900 mb-1.5"
           >
-            Connexion
-          </h1>
-          <p
-            className="font-sans text-muted-foreground"
-            style={{ fontSize: '13px', fontWeight: 400 }}
-          >
-            Connectez-vous à votre espace d&apos;administration
-          </p>
+            Nom d&apos;utilisateur
+          </label>
+          <input
+            id="username"
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            required
+            disabled={isLoading}
+            autoComplete="username"
+            suppressHydrationWarning
+            className={`body-base ${inputClass}`}
+          />
         </div>
 
-        <form onSubmit={handleSubmit}>
-          {/* Champ Nom d'utilisateur */}
-          <div style={{ marginBottom: '16px' }}>
-            <label
-              htmlFor="username"
-              className="font-sans"
-              style={{ display: 'block', color: '#1E1A17', marginBottom: '6px', fontSize: '13px', fontWeight: 500 }}
-            >
-              Nom d&apos;utilisateur
-            </label>
+        {/* Champ Mot de passe */}
+        <div>
+          <label
+            htmlFor="password"
+            className="block font-sans text-sm font-medium text-neutral-900 mb-1.5"
+          >
+            Mot de passe
+          </label>
+          <div className="relative">
             <input
-              id="username"
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              id="password"
+              type={showPassword ? "text" : "password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               required
               disabled={isLoading}
-              autoComplete="username"
-              className="body-base"
-              style={{
-                width: '100%',
-                backgroundColor: 'white',
-                border: '1px solid #D1CECC',
-                borderRadius: '8px',
-                padding: '12px',
-                outline: 'none',
-                transition: 'all 0.2s'
-              }}
-              onFocus={(e) => {
-                e.target.style.borderColor = '#5A7085'
-                e.target.style.boxShadow = '0 0 0 2px rgba(90, 112, 133, 0.2)'
-              }}
-              onBlur={(e) => {
-                e.target.style.borderColor = '#D1CECC'
-                e.target.style.boxShadow = 'none'
-              }}
+              autoComplete="current-password"
+              suppressHydrationWarning
+              className={`body-base pr-10 ${inputClass}`}
             />
-          </div>
-
-          {/* Champ Mot de passe */}
-          <div style={{ marginBottom: '16px' }}>
-            <label
-              htmlFor="password"
-              className="font-sans"
-              style={{ display: 'block', color: '#1E1A17', marginBottom: '6px', fontSize: '13px', fontWeight: 500 }}
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              disabled={isLoading}
+              suppressHydrationWarning
+              aria-label={
+                showPassword
+                  ? "Masquer le mot de passe"
+                  : "Afficher le mot de passe"
+              }
+              className="
+                absolute right-3 top-1/2 -translate-y-1/2
+                flex items-center justify-center
+                bg-transparent border-none cursor-pointer p-0
+                text-neutral-500 hover:text-neutral-900
+                focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:rounded
+                disabled:cursor-not-allowed
+              "
             >
-              Mot de passe
-            </label>
-            <div style={{ position: 'relative' }}>
-              <input
-                id="password"
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                disabled={isLoading}
-                autoComplete="current-password"
-                className="body-base"
-                style={{
-                  width: '100%',
-                  backgroundColor: 'white',
-                  border: '1px solid #D1CECC',
-                  borderRadius: '8px',
-                  padding: '12px',
-                  paddingRight: '40px',
-                  outline: 'none',
-                  transition: 'all 0.2s'
-                }}
-                onFocus={(e) => {
-                  e.target.style.borderColor = '#5A7085'
-                  e.target.style.boxShadow = '0 0 0 2px rgba(90, 112, 133, 0.2)'
-                }}
-                onBlur={(e) => {
-                  e.target.style.borderColor = '#D1CECC'
-                  e.target.style.boxShadow = 'none'
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                disabled={isLoading}
-                style={{
-                  position: 'absolute',
-                  right: '12px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-                onMouseEnter={(e) => {
-                  const icon = e.currentTarget.querySelector('svg')
-                  if (icon) (icon as unknown as HTMLElement).style.color = '#1E1A17'
-                }}
-                onMouseLeave={(e) => {
-                  const icon = e.currentTarget.querySelector('svg')
-                  if (icon) (icon as unknown as HTMLElement).style.color = '#78756F'
-                }}
-              >
-                {showPassword ? (
-                  <EyeOffIcon style={{ width: '16px', height: '16px', color: '#78756F' }} />
-                ) : (
-                  <EyeIcon style={{ width: '16px', height: '16px', color: '#78756F' }} />
-                )}
-              </button>
-            </div>
+              {showPassword ? (
+                <EyeOffIcon className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                <EyeIcon className="h-4 w-4" aria-hidden="true" />
+              )}
+            </button>
           </div>
-
-          {/* Bouton Se connecter */}
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="font-sans"
-            style={{
-              width: '100%',
-              backgroundColor: isLoading ? '#4A5D6E' : '#5A7085',
-              color: 'white',
-              borderRadius: '8px',
-              height: '44px',
-              border: 'none',
-              cursor: isLoading ? 'not-allowed' : 'pointer',
-              transition: 'background-color 0.2s',
-              fontSize: '15px',
-              fontWeight: 600,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px'
-            }}
-            onMouseEnter={(e) => {
-              if (!isLoading) e.currentTarget.style.backgroundColor = '#4A5D6E'
-            }}
-            onMouseLeave={(e) => {
-              if (!isLoading) e.currentTarget.style.backgroundColor = '#5A7085'
-            }}
-          >
-            {isLoading && (
-              <LoaderIcon style={{ width: '16px', height: '16px', animation: 'spin 1s linear infinite' }} />
-            )}
-            {isLoading ? "Connexion en cours..." : "Se connecter"}
-          </button>
-        </form>
-
-        {/* Pied de page */}
-        <div style={{ marginTop: '32px', paddingTop: '24px', borderTop: '1px solid #E8E6E3' }}>
-          <p className="caption" style={{ color: '#A8A5A2', textAlign: 'center', marginBottom: '4px' }}>
-            © 2026 Cours Privé Mixte Saint Léonard
-          </p>
-          <p className="caption" style={{ color: '#A8A5A2', textAlign: 'center' }}>
-            Port-au-Prince, Haïti
-          </p>
         </div>
+
+        {/* Bouton Se connecter */}
+        <button
+          type="submit"
+          disabled={isLoading}
+          className="
+            w-full h-11 rounded-lg
+            font-sans text-base font-semibold
+            flex items-center justify-center gap-2
+            bg-primary-500 hover:bg-primary-600 text-white
+            transition-colors duration-200
+            disabled:bg-primary-600 disabled:cursor-not-allowed
+            focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500
+          "
+        >
+          {isLoading && (
+            <LoaderIcon
+              className="h-4 w-4 animate-spin"
+              role="status"
+              aria-label="Connexion en cours"
+            />
+          )}
+          {isLoading ? "Connexion en cours..." : "Se connecter"}
+        </button>
+      </form>
+
+      {/* Pied de page */}
+      <div className="mt-8 pt-6 border-t border-neutral-200">
+        <p className="caption text-neutral-500 text-center mb-1">
+          © 2026 Cours Privé Mixte Saint Léonard
+        </p>
+        <p className="caption text-neutral-500 text-center">
+          Port-au-Prince, Haïti
+        </p>
       </div>
-    </>
-  )
+    </div>
+  );
 }

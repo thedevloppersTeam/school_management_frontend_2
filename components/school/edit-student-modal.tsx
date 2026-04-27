@@ -1,33 +1,35 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { useState, useEffect } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { AlertTriangleIcon } from "lucide-react";
 
 interface EditStudentData {
-  address:      string
-  motherName:   string
-  fatherName:   string
-  phone1:       string
-  phone2:       string
-  parentsEmail: string
+  address: string;
+  motherName: string;
+  fatherName: string;
+  phone1: string;
+  phone2: string;
+  parentsEmail: string;
 }
 
 interface EditStudentModalProps {
-  open:          boolean
-  onOpenChange:  (open: boolean) => void
-  studentName:   string
-  studentCode:   string
-  initialData:   Partial<EditStudentData>
-  submitting?:   boolean
-  onSubmit:      (data: EditStudentData) => void
-}
-
-const C = {
-  primary:  { 800: '#2A3740', 600: '#4A5D6E' },
-  neutral:  { 200: '#E8E6E3', 300: '#D1CECC', 500: '#78756F' },
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  studentName: string;
+  studentCode: string;
+  initialData: Partial<EditStudentData>;
+  submitting?: boolean;
+  onSubmit: (data: EditStudentData) => void;
 }
 
 export function EditStudentModal({
@@ -40,99 +42,183 @@ export function EditStudentModal({
   onSubmit,
 }: EditStudentModalProps) {
   const [form, setForm] = useState<EditStudentData>({
-    address:      '',
-    motherName:   '',
-    fatherName:   '',
-    phone1:       '',
-    phone2:       '',
-    parentsEmail: '',
-  })
+    address: "",
+    motherName: "",
+    fatherName: "",
+    phone1: "",
+    phone2: "",
+    parentsEmail: "",
+  });
 
   useEffect(() => {
     if (open) {
       setForm({
-        address:      initialData.address      || '',
-        motherName:   initialData.motherName   || '',
-        fatherName:   initialData.fatherName   || '',
-        phone1:       initialData.phone1       || '',
-        phone2:       initialData.phone2       || '',
-        parentsEmail: initialData.parentsEmail || '',
-      })
+        address: initialData.address || "",
+        motherName: initialData.motherName || "",
+        fatherName: initialData.fatherName || "",
+        phone1: initialData.phone1 || "",
+        phone2: initialData.phone2 || "",
+        parentsEmail: initialData.parentsEmail || "",
+      });
     }
-  }, [open, initialData])
+  }, [open, initialData]);
 
-  const set = (field: keyof EditStudentData) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm(f => ({ ...f, [field]: e.target.value }))
+  const set =
+    (field: keyof EditStudentData) =>
+    (e: React.ChangeEvent<HTMLInputElement>) =>
+      setForm((f) => ({ ...f, [field]: e.target.value }));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent style={{ maxWidth: '480px', backgroundColor: 'white', borderRadius: '12px' }}>
+      <DialogContent className="max-w-[480px] bg-white rounded-xl">
         <DialogHeader>
-          <DialogTitle style={{ fontFamily: 'var(--font-serif)', fontSize: '22px', fontWeight: 700, color: C.primary[800] }}>
+          <DialogTitle className="font-serif text-2xl font-bold text-primary-800">
             Modifier le profil
           </DialogTitle>
-          <p style={{ fontSize: '13px', color: C.neutral[500], marginTop: '2px' }}>
-            {studentName} · <span style={{ fontFamily: 'monospace' }}>{studentCode}</span>
+          <p className="text-sm text-neutral-500 mt-0.5">
+            {studentName} · <span className="font-mono">{studentCode}</span>
           </p>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-
+          {/* Adresse */}
           <div className="space-y-2">
-            <Label style={{ fontSize: '13px', fontWeight: 500 }}>Adresse</Label>
-            <Input value={form.address} onChange={set('address')} placeholder="Adresse de l'élève"
-              style={{ borderColor: C.neutral[300] }} />
+            <Label
+              htmlFor="student-address"
+              className="text-sm font-medium text-neutral-900"
+            >
+              Adresse
+            </Label>
+            <Input
+              id="student-address"
+              value={form.address}
+              onChange={set("address")}
+              placeholder="Adresse de l'élève"
+              className="border-neutral-300 rounded-lg"
+            />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          {/* Mère + Père */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label style={{ fontSize: '13px', fontWeight: 500 }}>Nom de la mère</Label>
-              <Input value={form.motherName} onChange={set('motherName')} placeholder="Prénom Nom"
-                style={{ borderColor: C.neutral[300] }} />
+              <Label
+                htmlFor="student-mother-name"
+                className="text-sm font-medium text-neutral-900"
+              >
+                Nom de la mère
+              </Label>
+              <Input
+                id="student-mother-name"
+                value={form.motherName}
+                onChange={set("motherName")}
+                placeholder="Prénom Nom"
+                className="border-neutral-300 rounded-lg"
+              />
             </div>
             <div className="space-y-2">
-              <Label style={{ fontSize: '13px', fontWeight: 500 }}>Nom du père</Label>
-              <Input value={form.fatherName} onChange={set('fatherName')} placeholder="Prénom Nom"
-                style={{ borderColor: C.neutral[300] }} />
+              <Label
+                htmlFor="student-father-name"
+                className="text-sm font-medium text-neutral-900"
+              >
+                Nom du père
+              </Label>
+              <Input
+                id="student-father-name"
+                value={form.fatherName}
+                onChange={set("fatherName")}
+                placeholder="Prénom Nom"
+                className="border-neutral-300 rounded-lg"
+              />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          {/* Téléphone 1 + 2 */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label style={{ fontSize: '13px', fontWeight: 500 }}>Téléphone 1</Label>
-              <Input value={form.phone1} onChange={set('phone1')} placeholder="+509..."
-                style={{ borderColor: C.neutral[300] }} />
+              <Label
+                htmlFor="student-phone1"
+                className="text-sm font-medium text-neutral-900"
+              >
+                Téléphone 1
+              </Label>
+              <Input
+                id="student-phone1"
+                type="tel"
+                value={form.phone1}
+                onChange={set("phone1")}
+                placeholder="+509..."
+                className="border-neutral-300 rounded-lg"
+              />
             </div>
             <div className="space-y-2">
-              <Label style={{ fontSize: '13px', fontWeight: 500 }}>Téléphone 2</Label>
-              <Input value={form.phone2} onChange={set('phone2')} placeholder="+509..."
-                style={{ borderColor: C.neutral[300] }} />
+              <Label
+                htmlFor="student-phone2"
+                className="text-sm font-medium text-neutral-900"
+              >
+                Téléphone 2
+              </Label>
+              <Input
+                id="student-phone2"
+                type="tel"
+                value={form.phone2}
+                onChange={set("phone2")}
+                placeholder="+509..."
+                className="border-neutral-300 rounded-lg"
+              />
             </div>
           </div>
 
+          {/* Email parents */}
           <div className="space-y-2">
-            <Label style={{ fontSize: '13px', fontWeight: 500 }}>Email des parents</Label>
-            <Input value={form.parentsEmail} onChange={set('parentsEmail')} type="email"
-              placeholder="email@exemple.com" style={{ borderColor: C.neutral[300] }} />
+            <Label
+              htmlFor="student-parents-email"
+              className="text-sm font-medium text-neutral-900"
+            >
+              Email des parents
+            </Label>
+            <Input
+              id="student-parents-email"
+              type="email"
+              value={form.parentsEmail}
+              onChange={set("parentsEmail")}
+              placeholder="email@exemple.com"
+              className="border-neutral-300 rounded-lg"
+            />
           </div>
 
-          <div style={{ backgroundColor: '#FEF6E0', border: '1px solid #C48B1A', borderRadius: '8px',
-            padding: '10px 14px', fontSize: '12px', color: '#92400E' }}>
-            Le NISU n'est pas modifiable après l'inscription.
+          {/* Warning : NISU non modifiable */}
+          <div
+            className="flex items-start gap-2 bg-warning-soft border border-warning rounded-lg px-3 py-2.5 text-xs text-warning"
+            role="note"
+          >
+            <AlertTriangleIcon
+              className="h-4 w-4 mt-0.5 flex-shrink-0"
+              aria-hidden="true"
+            />
+            <span>
+              Le NISU n&apos;est pas modifiable après l&apos;inscription.
+            </span>
           </div>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}
-            style={{ borderColor: C.neutral[300] }}>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={submitting}
+            className="border-neutral-300 rounded-lg"
+          >
             Annuler
           </Button>
-          <Button onClick={() => onSubmit(form)} disabled={submitting}
-            style={{ backgroundColor: submitting ? '#9CA3AF' : '#5A7085', color: '#FFFFFF' }}>
-            {submitting ? 'Enregistrement...' : 'Enregistrer'}
+          <Button
+            onClick={() => onSubmit(form)}
+            disabled={submitting}
+            className="bg-primary-500 hover:bg-primary-600 text-white rounded-lg disabled:bg-neutral-400 disabled:cursor-not-allowed"
+          >
+            {submitting ? "Enregistrement..." : "Enregistrer"}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

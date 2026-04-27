@@ -1,13 +1,13 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { env } from '@/lib/env'
+/**
+ * GET /api/auth/me
+ * Proxy → GET https://apicpmsl.stelloud.cloud/api/users/me
+ *
+ * Retourne les infos de l'utilisateur courant (basé sur le cookie de session).
+ * Renvoie 401 si la session est invalide ou expirée.
+ */
+import { NextRequest } from "next/server";
+import { backendFetch } from "@/lib/backend";
 
 export async function GET(request: NextRequest) {
-  const cookie = request.headers.get('cookie') ?? ''
-
-  const backendRes = await fetch(`${env.BACKEND_URL}/api/users/me`, {
-    headers: { cookie },
-  })
-
-  const data = await backendRes.json()
-  return NextResponse.json(data, { status: backendRes.status })
+  return backendFetch(request, "/api/users/me", "GET");
 }
