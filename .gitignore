@@ -60,7 +60,6 @@ login.json
 *yml
 
 *.sh
-use-unsaved-changes-warning.ts
 README.md
 errors.ts
 audit-report.json
