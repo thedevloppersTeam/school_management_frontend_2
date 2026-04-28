@@ -1,7 +1,7 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -10,42 +10,42 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
+} from "@/components/ui/select";
 
 interface Level {
-  id: string
-  name: string
-  niveau: string
+  id: string;
+  name: string;
+  niveau: string;
 }
 
 interface Classroom {
-  id: string
-  name: string
-  levelId: string
-  capacity: number
+  id: string;
+  name: string;
+  levelId: string;
+  capacity: number;
 }
 
 interface AddClassroomModalProps {
-  level: Level
-  existingClassrooms: Classroom[]
+  level: Level;
+  existingClassrooms: Classroom[];
   onSubmit?: (data: {
-    name: string
-    capacity: number
-    description?: string
-  }) => void
-  trigger?: React.ReactNode
-  open?: boolean
-  onOpenChange?: (open: boolean) => void
+    name: string;
+    capacity: number;
+    description?: string;
+  }) => void;
+  trigger?: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 export function AddClassroomModal({
@@ -54,98 +54,86 @@ export function AddClassroomModal({
   onSubmit,
   trigger,
   open,
-  onOpenChange
+  onOpenChange,
 }: AddClassroomModalProps) {
-  const [isOpen, setIsOpen] = useState(false)
-  const [name, setName] = useState("")
-  const [capacity, setCapacity] = useState("")
-  const [description, setDescription] = useState("")
+  const [isOpen, setIsOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [capacity, setCapacity] = useState("");
+  const [description, setDescription] = useState("");
 
   const handleOpenChange = (newOpen: boolean) => {
     if (onOpenChange) {
-      onOpenChange(newOpen)
+      onOpenChange(newOpen);
     } else {
-      setIsOpen(newOpen)
+      setIsOpen(newOpen);
     }
-    
+
     // Reset form when closing
     if (!newOpen) {
-      setName("")
-      setCapacity("")
-      setDescription("")
+      setName("");
+      setCapacity("");
+      setDescription("");
     }
-  }
+  };
 
-    const currentOpen = open ?? isOpen
+  const currentOpen = open ?? isOpen;
 
-  const isFondamentale = level.niveau === 'Fondamentale'
-  const modalTitle = isFondamentale 
+  const isFondamentale = level.niveau === "Fondamentale";
+  const modalTitle = isFondamentale
     ? `Ajouter une salle — ${level.name}`
-    : `Ajouter une filière — ${level.name}`
+    : `Ajouter une filière — ${level.name}`;
 
   // Get available options based on level type
   const getAvailableOptions = () => {
-    const usedNames = existingClassrooms.map(c => c.name)
-    
+    const usedNames = existingClassrooms.map((c) => c.name);
+
     if (isFondamentale) {
       // For Fondamentale: A, B, C, D, E
-      const allOptions = ['A', 'B', 'C', 'D', 'E']
-      return allOptions.filter(option => !usedNames.includes(option))
+      const allOptions = ["A", "B", "C", "D", "E"];
+      return allOptions.filter((option) => !usedNames.includes(option));
     } else {
       // For Secondaire: LLA, SES, SMP, SVT
-      const allOptions = ['LLA', 'SES', 'SMP', 'SVT']
-      return allOptions.filter(option => !usedNames.includes(option))
+      const allOptions = ["LLA", "SES", "SMP", "SVT"];
+      return allOptions.filter((option) => !usedNames.includes(option));
     }
-  }
+  };
 
-  const availableOptions = getAvailableOptions()
+  const availableOptions = getAvailableOptions();
 
   // Validation
-   const isValid = name.trim() !== "" && capacity.trim() !== "" && 
-                  Number.parseInt(capacity) >= 1 && Number.parseInt(capacity) <= 60
+  const isValid =
+    name.trim() !== "" &&
+    capacity.trim() !== "" &&
+    Number.parseInt(capacity) >= 1 &&
+    Number.parseInt(capacity) <= 60;
 
   const handleSubmit = () => {
-    if (!isValid) return
+    if (!isValid) return;
 
     onSubmit?.({
       name: name.trim(),
       capacity: Number.parseInt(capacity),
-      description: description.trim() || undefined
-    })
-    
-    handleOpenChange(false)
-  }
+      description: description.trim() || undefined,
+    });
 
-  const maxDescriptionLength = 200
-  const charCount = description.length
+    handleOpenChange(false);
+  };
+
+  const maxDescriptionLength = 200;
+  const charCount = description.length;
 
   return (
     <Dialog open={currentOpen} onOpenChange={handleOpenChange}>
       {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
-      <DialogContent
-        className="max-w-lg"
-        style={{
-          backgroundColor: '#FFFFFF',
-          border: '1px solid #E8E6E3',
-          borderRadius: '10px',
-          padding: '32px'
-        }}
-      >
+      <DialogContent className="max-w-lg bg-white border border-neutral-200 rounded-lg p-8">
         <DialogHeader>
-          <DialogTitle
-            className="heading-3"
-            style={{ color: '#1E1A17', marginBottom: '8px' }}
-          >
+          <DialogTitle className="heading-3 text-neutral-900 mb-2">
             {modalTitle}
           </DialogTitle>
-          <DialogDescription
-            className="body-base"
-            style={{ color: '#5C5955' }}
-          >
-            {isFondamentale 
-              ? 'Configurez une nouvelle salle pour cette classe'
-              : 'Configurez une nouvelle filière pour ce niveau'
-            }
+          <DialogDescription className="body-base text-neutral-600">
+            {isFondamentale
+              ? "Configurez une nouvelle salle pour cette classe"
+              : "Configurez une nouvelle filière pour ce niveau"}
           </DialogDescription>
         </DialogHeader>
 
@@ -154,22 +142,22 @@ export function AddClassroomModal({
           <div className="space-y-2">
             <Label
               htmlFor="name"
-              className="label-ui"
-              style={{ color: '#1E1A17', fontWeight: 600 }}
+              className="label-ui text-neutral-900 font-semibold"
             >
-              Nom <span style={{ color: '#C84A3D' }}>*</span>
+              Nom <span className="text-error">*</span>
             </Label>
             <Select value={name} onValueChange={setName}>
               <SelectTrigger
                 id="name"
-                style={{
-                  border: '1px solid #D1CECC',
-                  borderRadius: '8px',
-                  backgroundColor: '#FFFFFF'
-                }}
-                className="focus:border-[#5A7085] focus:ring-[#5A7085]"
+                className="border border-neutral-300 rounded-lg bg-white focus-visible:ring-2 focus-visible:ring-primary-500/40 focus-visible:border-primary-500"
               >
-                <SelectValue placeholder={isFondamentale ? "Sélectionnez une lettre" : "Sélectionnez une filière"} />
+                <SelectValue
+                  placeholder={
+                    isFondamentale
+                      ? "Sélectionnez une lettre"
+                      : "Sélectionnez une filière"
+                  }
+                />
               </SelectTrigger>
               <SelectContent>
                 {availableOptions.length === 0 ? (
@@ -177,7 +165,7 @@ export function AddClassroomModal({
                     Toutes les options sont déjà utilisées
                   </div>
                 ) : (
-                  availableOptions.map(option => (
+                  availableOptions.map((option) => (
                     <SelectItem key={option} value={option}>
                       {option}
                     </SelectItem>
@@ -191,10 +179,9 @@ export function AddClassroomModal({
           <div className="space-y-2">
             <Label
               htmlFor="capacity"
-              className="label-ui"
-              style={{ color: '#1E1A17', fontWeight: 600 }}
+              className="label-ui text-neutral-900 font-semibold"
             >
-              Capacité maximale <span style={{ color: '#C84A3D' }}>*</span>
+              Capacité maximale <span className="text-error">*</span>
             </Label>
             <Input
               id="capacity"
@@ -204,16 +191,9 @@ export function AddClassroomModal({
               placeholder="Ex: 30"
               value={capacity}
               onChange={(e) => setCapacity(e.target.value)}
-              style={{
-                border: '1px solid #D1CECC',
-                borderRadius: '8px'
-              }}
-              className="focus:border-[#5A7085] focus:ring-[#5A7085]"
+              className="border border-neutral-300 rounded-lg focus-visible:ring-2 focus-visible:ring-primary-500/40 focus-visible:border-primary-500"
             />
-            <p
-              className="caption"
-              style={{ color: '#78756F', marginTop: '6px' }}
-            >
+            <p className="caption text-neutral-500 mt-1.5">
               Nombre maximum d'élèves dans ce groupe
             </p>
           </div>
@@ -222,8 +202,7 @@ export function AddClassroomModal({
           <div className="space-y-2">
             <Label
               htmlFor="description"
-              className="label-ui"
-              style={{ color: '#1E1A17', fontWeight: 600 }}
+              className="label-ui text-neutral-900 font-semibold"
             >
               Description
             </Label>
@@ -233,25 +212,13 @@ export function AddClassroomModal({
               value={description}
               onChange={(e) => {
                 if (e.target.value.length <= maxDescriptionLength) {
-                  setDescription(e.target.value)
+                  setDescription(e.target.value);
                 }
               }}
               rows={3}
-              style={{
-                border: '1px solid #D1CECC',
-                borderRadius: '8px',
-                resize: 'none'
-              }}
-              className="focus:border-[#5A7085] focus:ring-[#5A7085]"
+              className="border border-neutral-300 rounded-lg resize-none focus-visible:ring-2 focus-visible:ring-primary-500/40 focus-visible:border-primary-500"
             />
-            <p
-              className="caption"
-              style={{ 
-                color: '#78756F',
-                marginTop: '6px',
-                textAlign: 'right'
-              }}
-            >
+            <p className="caption text-neutral-500 mt-1.5 text-right">
               {charCount}/{maxDescriptionLength} caractères
             </p>
           </div>
@@ -261,29 +228,19 @@ export function AddClassroomModal({
           <Button
             variant="outline"
             onClick={() => handleOpenChange(false)}
-            style={{
-              borderRadius: '8px',
-              border: '1px solid #D1CECC',
-              color: '#5C5955'
-            }}
+            className="rounded-lg border border-neutral-300 text-neutral-600"
           >
             Annuler
           </Button>
           <Button
             onClick={handleSubmit}
             disabled={!isValid}
-            style={{
-              backgroundColor: isValid ? '#2C4A6E' : '#9CA3AF',
-              color: '#FFFFFF',
-              borderRadius: '8px',
-              cursor: isValid ? 'pointer' : 'not-allowed'
-            }}
-            className={isValid ? "hover:bg-[#243D5A]" : ""}
+            className="rounded-lg bg-primary-700 text-white hover:bg-primary-800 disabled:bg-neutral-400 disabled:cursor-not-allowed"
           >
             Créer
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

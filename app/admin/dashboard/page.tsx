@@ -1,7 +1,11 @@
-"use client"
+// app/admin/dashboard/page.tsx
+// Client Component : page essentiellement interactive avec fetches parallèles
+// et state local complexe (activeYear, steps, sessions, notifications).
+// Exception légitime à PB-002 selon docs/ui/responsive-rules.md §7.4
+"use client";
 
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   CalendarIcon,
   UsersIcon,
@@ -15,7 +19,7 @@ import {
   CheckCircle2Icon,
   ArrowRightIcon,
   TrendingUpIcon,
-} from "lucide-react"
+} from "lucide-react";
 import {
   fetchActiveAcademicYear,
   fetchSteps,
@@ -26,15 +30,21 @@ import {
   type AcademicYear,
   type AcademicYearStep,
   type ClassSession,
-} from "@/lib/api/dashboard"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { StatCard } from "@/components/school/stat-card"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
-import { Separator } from "@/components/ui/separator"
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
+} from "@/lib/api/dashboard";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { StatCard } from "@/components/school/stat-card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { Separator } from "@/components/ui/separator";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import {
   Table,
   TableBody,
@@ -42,67 +52,70 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table"
+} from "@/components/ui/table";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip"
+} from "@/components/ui/tooltip";
 
 interface SessionStat {
-  sessionId: string
-  className: string
-  studentCount: number
+  sessionId: string;
+  className: string;
+  studentCount: number;
 }
 
 export default function AdminDashboardPage() {
-  const router = useRouter()
+  const router = useRouter();
 
-  const [activeYear, setActiveYear] = useState<AcademicYear | null>(null)
-  const [steps, setSteps] = useState<AcademicYearStep[]>([])
-  const [sessions, setSessions] = useState<ClassSession[]>([])
-  const [sessionStats, setSessionStats] = useState<SessionStat[]>([])
-  const [totalStudents, setTotalStudents] = useState(0)
-  const [loading, setLoading] = useState(true)
+  const [activeYear, setActiveYear] = useState<AcademicYear | null>(null);
+  const [steps, setSteps] = useState<AcademicYearStep[]>([]);
+  const [sessions, setSessions] = useState<ClassSession[]>([]);
+  const [sessionStats, setSessionStats] = useState<SessionStat[]>([]);
+  const [totalStudents, setTotalStudents] = useState(0);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadDashboard() {
       try {
-        const year = await fetchActiveAcademicYear()
-        setActiveYear(year)
+        const year = await fetchActiveAcademicYear();
+        setActiveYear(year);
 
-        if (!year) return
+        if (!year) return;
 
         const [stepsData, sessionsData] = await Promise.all([
           fetchSteps(year.id),
           fetchClassSessions(year.id),
-        ])
-        setSteps(stepsData)
-        setSessions(sessionsData)
+        ]);
+        setSteps(stepsData);
+        setSessions(sessionsData);
 
         const counts = await Promise.all(
           sessionsData.map(async (s) => ({
             sessionId: s.id,
             className: getClassSessionName(s),
             studentCount: await fetchEnrollmentCount(s.id),
-          }))
-        )
-        setSessionStats(counts)
-        setTotalStudents(counts.reduce((sum, c) => sum + c.studentCount, 0))
+          })),
+        );
+        setSessionStats(counts);
+        setTotalStudents(counts.reduce((sum, c) => sum + c.studentCount, 0));
       } catch (err) {
-        console.error("[dashboard] Erreur chargement:", err)
+        console.error("[dashboard] Erreur chargement:", err);
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
     }
 
-    loadDashboard()
-  }, [])
+    loadDashboard();
+  }, []);
 
-  const currentStep = getCurrentStep(steps)
-  const currentStepIndex = currentStep ? steps.findIndex((s) => s.id === currentStep.id) : -1
-  const stepProgress = steps.length > 0 ? ((currentStepIndex + 1) / steps.length) * 100 : 0
+  const currentStep = getCurrentStep(steps);
+  const currentStepIndex = currentStep
+    ? steps.findIndex((s) => s.id === currentStep.id)
+    : -1;
+  const stepProgress =
+    steps.length > 0 ? ((currentStepIndex + 1) / steps.length) * 100 : 0;
 
   if (loading) {
     return (
@@ -122,7 +135,7 @@ export default function AdminDashboardPage() {
           <Skeleton className="h-64 rounded-xl lg:col-span-2" />
         </div>
       </div>
-    )
+    );
   }
 
   const quickActions = [
@@ -147,7 +160,7 @@ export default function AdminDashboardPage() {
       href: `/admin/academic-year/${activeYear?.id}/students`,
       disabled: !activeYear,
     },
-  ]
+  ];
 
   return (
     <TooltipProvider>
@@ -157,17 +170,17 @@ export default function AdminDashboardPage() {
           <h1 className="text-3xl font-bold tracking-tight text-foreground">
             Tableau de bord
           </h1>
-<div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
-  <span>Vue d&apos;ensemble de votre établissement</span>
-  {activeYear && (
-    <>
-      <span>&middot;</span>
-      <Badge variant="secondary" className="align-middle">
-        {activeYear.name}
-      </Badge>
-    </>
-  )}
-</div>
+          <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
+            <span>Vue d&apos;ensemble de votre établissement</span>
+            {activeYear && (
+              <>
+                <span>&middot;</span>
+                <Badge variant="secondary" className="align-middle">
+                  {activeYear.name}
+                </Badge>
+              </>
+            )}
+          </div>
         </div>
 
         {/* ── KPI Cards ── */}
@@ -211,22 +224,20 @@ export default function AdminDashboardPage() {
                   <TrendingUpIcon className="h-4 w-4 text-violet-600" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-foreground">
-                    Progression de l&apos;année
+                  <p className="text-sm font-semibold text-foreground">
+                    Étape {currentStepIndex + 1} sur {steps.length}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {currentStep
-                      ? `${currentStep.name} — étape ${currentStepIndex + 1} sur ${steps.length}`
-                      : "Aucune étape active"}
+                    {currentStep?.name ?? "—"}
                   </p>
                 </div>
               </div>
               <div className="flex flex-1 items-center gap-3">
                 <Progress
                   value={stepProgress}
-                  className="h-2.5 flex-1 bg-violet-100 [&>div]:bg-violet-500"
+                  className="flex-1 bg-muted [&>div]:bg-violet-500"
                 />
-                <span className="text-sm font-semibold text-violet-600 tabular-nums">
+                <span className="text-sm font-medium tabular-nums text-muted-foreground">
                   {Math.round(stepProgress)}%
                 </span>
               </div>
@@ -234,13 +245,14 @@ export default function AdminDashboardPage() {
           </Card>
         )}
 
-        {/* ── Alerts ── */}
+        {/* ── Status Alerts ── */}
         {!activeYear && (
           <Alert className="border-amber-200 bg-amber-50 text-amber-900">
             <AlertTriangleIcon className="h-4 w-4 !text-amber-600" />
             <AlertTitle>Aucune année scolaire active</AlertTitle>
             <AlertDescription>
-              Configurez une année scolaire pour commencer à utiliser le système.
+              Configurez une année scolaire pour commencer à utiliser le
+              système.
               <Button
                 variant="link"
                 size="sm"
@@ -257,7 +269,8 @@ export default function AdminDashboardPage() {
             <InfoIcon className="h-4 w-4 !text-blue-600" />
             <AlertTitle>Aucune étape active</AlertTitle>
             <AlertDescription>
-              Configurez les étapes de l&apos;année pour activer la saisie des notes.
+              Configurez les étapes de l&apos;année pour activer la saisie des
+              notes.
             </AlertDescription>
           </Alert>
         )}
@@ -275,8 +288,8 @@ export default function AdminDashboardPage() {
             <CheckCircle2Icon className="h-4 w-4 !text-emerald-600" />
             <AlertTitle>Système opérationnel</AlertTitle>
             <AlertDescription>
-              {sessions.length} classe(s) &middot; {totalStudents} élève(s) &middot; Étape :{" "}
-              {currentStep.name}
+              {sessions.length} classe(s) &middot; {totalStudents} élève(s)
+              &middot; Étape : {currentStep.name}
             </AlertDescription>
           </Alert>
         )}
@@ -293,7 +306,7 @@ export default function AdminDashboardPage() {
             </CardHeader>
             <CardContent className="space-y-2">
               {quickActions.map((action) => {
-                const ActionIcon = action.icon
+                const ActionIcon = action.icon;
                 return (
                   <button
                     key={action.label}
@@ -314,7 +327,7 @@ export default function AdminDashboardPage() {
                     </div>
                     <ArrowRightIcon className="h-4 w-4 shrink-0 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5 group-hover:text-muted-foreground" />
                   </button>
-                )
+                );
               })}
             </CardContent>
           </Card>
@@ -383,9 +396,9 @@ export default function AdminDashboardPage() {
                       const pct =
                         totalStudents > 0
                           ? Math.round(
-                              (stat.studentCount / totalStudents) * 100
+                              (stat.studentCount / totalStudents) * 100,
                             )
-                          : 0
+                          : 0;
                       return (
                         <TableRow key={stat.sessionId}>
                           <TableCell className="pl-6 font-medium">
@@ -426,7 +439,7 @@ export default function AdminDashboardPage() {
                               className="h-8 text-xs"
                               onClick={() =>
                                 router.push(
-                                  `/admin/academic-year/${activeYear?.id}/grades`
+                                  `/admin/academic-year/${activeYear?.id}/grades`,
                                 )
                               }
                             >
@@ -435,7 +448,7 @@ export default function AdminDashboardPage() {
                             </Button>
                           </TableCell>
                         </TableRow>
-                      )
+                      );
                     })}
                   </TableBody>
                 </Table>
@@ -445,5 +458,5 @@ export default function AdminDashboardPage() {
         </div>
       </div>
     </TooltipProvider>
-  )
+  );
 }
