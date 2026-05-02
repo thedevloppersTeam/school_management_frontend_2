@@ -1,15 +1,34 @@
-"use client"
-import { clientFetch as apiFetch } from '@/lib/client-fetch'
-import { useState, useEffect, useCallback, useRef, useMemo } from "react"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Separator } from "@/components/ui/separator"
-import { Progress } from "@/components/ui/progress"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+"use client";
+import { clientFetch as apiFetch } from "@/lib/client-fetch";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { Progress } from "@/components/ui/progress";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   Pagination,
   PaginationContent,
@@ -18,81 +37,92 @@ import {
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
-} from "@/components/ui/pagination"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { StatCard } from "@/components/school/stat-card"
-import { BulletinPDFGenerator } from "@/components/bulletin-pdf-generator"
-import BulletinScolaire, { type BulletinData } from "@/components/BulletinScolaire"
-import { buildBulletinData } from "@/lib/api/bulletin"
+} from "@/components/ui/pagination";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { StatCard } from "@/components/school/stat-card";
+import { BulletinPDFGenerator } from "@/components/bulletin-pdf-generator";
+import BulletinScolaire, {
+  type BulletinData,
+} from "@/components/BulletinScolaire";
+import { buildBulletinData } from "@/lib/api/bulletin";
 import {
-  AlertTriangleIcon, CheckCircleIcon, FileTextIcon, AlertCircleIcon,
-  UserIcon, LayersIcon, Loader2, SearchIcon, InboxIcon,
-} from "lucide-react"
-import { toast } from "sonner"
-import { toMessage } from "@/lib/errors"
-import { BatchPreviewModal } from "@/components/school/batch-preview-modal"
-import { AuditNoteModal, type AuditReason } from "@/components/school/audit-note-modal"
-import { cn } from "@/lib/utils"
+  AlertTriangleIcon,
+  CheckCircleIcon,
+  FileTextIcon,
+  AlertCircleIcon,
+  UserIcon,
+  LayersIcon,
+  Loader2,
+  SearchIcon,
+  InboxIcon,
+} from "lucide-react";
+import { toast } from "sonner";
+import { toMessage } from "@/lib/errors";
+import { BatchPreviewModal } from "@/components/school/batch-preview-modal";
+import {
+  AuditNoteModal,
+  type AuditReason,
+} from "@/components/school/audit-note-modal";
+import { cn } from "@/lib/utils";
 import {
   fetchSteps,
   fetchClassSessions,
   getClassSessionName,
   type AcademicYearStep,
   type ClassSession,
-} from "@/lib/api/dashboard"
+} from "@/lib/api/dashboard";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface EnrollmentRow {
-  enrollmentId:   string
-  studentId:      string
-  studentCode:    string
-  nisu:           string
-  firstname:      string
-  lastname:       string
-  classSessionId: string
-  className:      string
-  status:         string
+  enrollmentId: string;
+  studentId: string;
+  studentCode: string;
+  nisu: string;
+  firstname: string;
+  lastname: string;
+  classSessionId: string;
+  className: string;
+  status: string;
 }
 
 interface CPMSLBulletinsSectionProps {
-  academicYearId: string
-  isArchived?:    boolean
+  academicYearId: string;
+  isArchived?: boolean;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function isNisuValid(nisu: string | null): boolean {
-  if (!nisu) return false
-  return /^[A-Z0-9]{14}$/.test(nisu.trim())
+  if (!nisu) return false;
+  return /^[A-Z0-9]{14}$/.test(nisu.trim());
 }
-
 
 // ── Helper archive silencieux ─────────────────────────────────────────────────
 
 async function archiveBulletin(params: {
-  enrollmentId:     string
-  stepId:           string
-  source:           'individual' | 'batch'
-  bulletinSnapshot: BulletinData
-  isCorrection:     boolean
-  auditNote?:       string  // WF-005 : motif pour correction post-clôture
+  enrollmentId: string;
+  stepId: string;
+  source: "individual" | "batch";
+  bulletinSnapshot: BulletinData;
+  isCorrection: boolean;
+  auditNote?: string; // WF-005 : motif pour correction post-clôture
 }): Promise<{ ok: true } | { ok: false; error: unknown }> {
   try {
-    const res = await fetch('/api/bulletin-archives/create', {
-      method:      'POST',
-      credentials: 'include',
-      headers:     { 'Content-Type': 'application/json' },
-      body:        JSON.stringify(params),
-    })
+    const res = await fetch("/api/bulletin-archives/create", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    });
     if (!res.ok) {
-      return { ok: false, error: new Error(`HTTP ${res.status}`) }
+      return { ok: false, error: new Error(`HTTP ${res.status}`) };
     }
-    return { ok: true }
+    return { ok: true };
   } catch (err) {
     // EP-003 : on ne swallow plus, on retourne l'erreur pour que
     // l'appelant puisse la remonter à l'utilisateur
-    return { ok: false, error: err }
+    return { ok: false, error: err };
   }
 }
 
@@ -103,54 +133,58 @@ export function CPMSLBulletinsSection({
   isArchived = false,
 }: CPMSLBulletinsSectionProps) {
   // ── Données ──────────────────────────────────────────────────────────────────
-  const [steps,       setSteps]       = useState<AcademicYearStep[]>([])
-  const [sessions,    setSessions]    = useState<ClassSession[]>([])
-  const [enrollments, setEnrollments] = useState<EnrollmentRow[]>([])
-  const [loadingInit,     setLoadingInit]     = useState(true)
-  const [loadingStudents, setLoadingStudents] = useState(false)
+  const [steps, setSteps] = useState<AcademicYearStep[]>([]);
+  const [sessions, setSessions] = useState<ClassSession[]>([]);
+  const [enrollments, setEnrollments] = useState<EnrollmentRow[]>([]);
+  const [loadingInit, setLoadingInit] = useState(true);
+  const [loadingStudents, setLoadingStudents] = useState(false);
 
   // ── Sélections ───────────────────────────────────────────────────────────────
-  const [selectedStep,    setSelectedStep]    = useState("")
-  const [selectedSession, setSelectedSession] = useState("")
+  const [selectedStep, setSelectedStep] = useState("");
+  const [selectedSession, setSelectedSession] = useState("");
 
   // ── PDF Generator ─────────────────────────────────────────────────────────────
-  const [pdfOpen,    setPdfOpen]    = useState(false)
-  const [pdfStudent, setPdfStudent] = useState<EnrollmentRow | null>(null)
+  const [pdfOpen, setPdfOpen] = useState(false);
+  const [pdfStudent, setPdfStudent] = useState<EnrollmentRow | null>(null);
 
   // ── Génération en lot ──────────────────────────────────────────────────────
-  const [generatingLot, setGeneratingLot] = useState(false)
-  const [lotProgress,   setLotProgress]   = useState({ current: 0, total: 0 })
-  const [lotData,       setLotData]       = useState<BulletinData | null>(null)
-  const lotRef = useRef<HTMLDivElement>(null)
+  const [generatingLot, setGeneratingLot] = useState(false);
+  const [lotProgress, setLotProgress] = useState({ current: 0, total: 0 });
+  const [lotData, setLotData] = useState<BulletinData | null>(null);
+  const lotRef = useRef<HTMLDivElement>(null);
 
   // WF-003 / WF-005 : modaux de confirmation pré-génération
-  const [previewOpen,    setPreviewOpen]    = useState(false)
-  const [auditNoteOpen,  setAuditNoteOpen]  = useState(false)
-  const [pendingAudit,   setPendingAudit]   = useState<{ reason: AuditReason; note: string } | null>(null)
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [auditNoteOpen, setAuditNoteOpen] = useState(false);
+  const [pendingAudit, setPendingAudit] = useState<{
+    reason: AuditReason;
+    note: string;
+  } | null>(null);
 
   // ── Recherche + pagination ─────────────────────────────────────────────────
-  const [searchQuery, setSearchQuery] = useState("")
-  const [currentPage, setCurrentPage] = useState(1)
-  const [itemsPerPage, setItemsPerPage] = useState(15)
-  const PAGE_SIZE_OPTIONS = [15, 25, 50, 100]
+  const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(15);
+  const PAGE_SIZE_OPTIONS = [15, 25, 50, 100];
 
   const filteredEnrollments = useMemo(() => {
-    if (!searchQuery) return enrollments
-    return enrollments.filter(enrollment => {
-      const studentName = `${enrollment.firstname} ${enrollment.lastname}`.toLowerCase()
-      return studentName.includes(searchQuery.toLowerCase())
-    })
-  }, [enrollments, searchQuery])
+    if (!searchQuery) return enrollments;
+    return enrollments.filter((enrollment) => {
+      const studentName =
+        `${enrollment.firstname} ${enrollment.lastname}`.toLowerCase();
+      return studentName.includes(searchQuery.toLowerCase());
+    });
+  }, [enrollments, searchQuery]);
 
   const paginatedEnrollments = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage
-    const end = start + itemsPerPage
-    return filteredEnrollments.slice(start, end)
-  }, [filteredEnrollments, currentPage, itemsPerPage])
+    const start = (currentPage - 1) * itemsPerPage;
+    const end = start + itemsPerPage;
+    return filteredEnrollments.slice(start, end);
+  }, [filteredEnrollments, currentPage, itemsPerPage]);
 
   useEffect(() => {
-    setCurrentPage(1)
-  }, [searchQuery, itemsPerPage])
+    setCurrentPage(1);
+  }, [searchQuery, itemsPerPage]);
 
   // ── Chargement initial ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -159,239 +193,274 @@ export function CPMSLBulletinsSection({
         const [stepsData, sessionsData] = await Promise.all([
           fetchSteps(academicYearId),
           fetchClassSessions(academicYearId),
-        ])
-        setSteps(stepsData)
-        setSessions(sessionsData)
+        ]);
+        setSteps(stepsData);
+        setSessions(sessionsData);
       } catch (err) {
-        console.error('[bulletins] init error:', err)
+        console.error("[bulletins] init error:", err);
       } finally {
-        setLoadingInit(false)
+        setLoadingInit(false);
       }
     }
-    init()
-  }, [academicYearId])
+    init();
+  }, [academicYearId]);
 
   // ── Chargement élèves quand session sélectionnée ──────────────────────────────
-  const loadEnrollments = useCallback(async (sessionId: string) => {
-    if (!sessionId) return
-    setLoadingStudents(true)
-    try {
-      const data = await apiFetch<Array<{
-        id: string
-        studentId: string
-        classSessionId: string
-        status: string
-        student?: {
-          id: string
-          studentCode?: string
-          nisu?: string
-          user?: { firstname?: string; lastname?: string }
-        }
-      }>>(`/api/enrollments?classSessionId=${sessionId}&status=ACTIVE`)
+  const loadEnrollments = useCallback(
+    async (sessionId: string) => {
+      if (!sessionId) return;
+      setLoadingStudents(true);
+      try {
+        const data = await apiFetch<
+          Array<{
+            id: string;
+            studentId: string;
+            classSessionId: string;
+            status: string;
+            student?: {
+              id: string;
+              studentCode?: string;
+              nisu?: string;
+              user?: { firstname?: string; lastname?: string };
+            };
+          }>
+        >(`/api/enrollments?classSessionId=${sessionId}&status=ACTIVE`);
 
-      const session   = sessions.find(s => s.id === sessionId)
-      const className = session ? getClassSessionName(session) : ''
+        const session = sessions.find((s) => s.id === sessionId);
+        const className = session ? getClassSessionName(session) : "";
 
-      setEnrollments(data.map(enr => ({
-        enrollmentId:   enr.id,
-        studentId:      enr.studentId,
-        studentCode:    enr.student?.studentCode || '—',
-        nisu:           enr.student?.nisu || '',
-        firstname:      enr.student?.user?.firstname || '',
-        lastname:       enr.student?.user?.lastname  || '',
-        classSessionId: sessionId,
-        className,
-        status:         enr.status,
-      })))
-    } catch (err) {
-      console.error('[bulletins] enrollments error:', err)
-    } finally {
-      setLoadingStudents(false)
-    }
-  }, [sessions])
+        setEnrollments(
+          data.map((enr) => ({
+            enrollmentId: enr.id,
+            studentId: enr.studentId,
+            studentCode: enr.student?.studentCode || "—",
+            nisu: enr.student?.nisu || "",
+            firstname: enr.student?.user?.firstname || "",
+            lastname: enr.student?.user?.lastname || "",
+            classSessionId: sessionId,
+            className,
+            status: enr.status,
+          })),
+        );
+      } catch (err) {
+        console.error("[bulletins] enrollments error:", err);
+      } finally {
+        setLoadingStudents(false);
+      }
+    },
+    [sessions],
+  );
 
   useEffect(() => {
-    if (selectedSession) loadEnrollments(selectedSession)
-    else setEnrollments([])
-  }, [selectedSession, loadEnrollments])
+    if (selectedSession) loadEnrollments(selectedSession);
+    else setEnrollments([]);
+  }, [selectedSession, loadEnrollments]);
 
   // ── KPIs ──────────────────────────────────────────────────────────────────────
-  const withNisu        = enrollments.filter(e => isNisuValid(e.nisu))
-  const withoutNisu     = enrollments.filter(e => !isNisuValid(e.nisu))
-  const selectedStepObj = steps.find(s => s.id === selectedStep)
+  const withNisu = enrollments.filter((e) => isNisuValid(e.nisu));
+  const withoutNisu = enrollments.filter((e) => !isNisuValid(e.nisu));
+  const selectedStepObj = steps.find((s) => s.id === selectedStep);
 
-  const totalPages = Math.max(1, Math.ceil(filteredEnrollments.length / itemsPerPage))
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredEnrollments.length / itemsPerPage),
+  );
   const paginationWindow = useMemo(() => {
-    if (totalPages <= 5) return Array.from({ length: totalPages }, (_, i) => i + 1)
-    if (currentPage <= 3) return [1, 2, 3, 4, 'ellipsis-right', totalPages]
+    if (totalPages <= 5)
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    if (currentPage <= 3) return [1, 2, 3, 4, "ellipsis-right", totalPages];
     if (currentPage >= totalPages - 2) {
-      return [1, 'ellipsis-left', totalPages - 3, totalPages - 2, totalPages - 1, totalPages]
+      return [
+        1,
+        "ellipsis-left",
+        totalPages - 3,
+        totalPages - 2,
+        totalPages - 1,
+        totalPages,
+      ];
     }
-    return [1, 'ellipsis-left', currentPage - 1, currentPage, currentPage + 1, 'ellipsis-right', totalPages]
-  }, [currentPage, totalPages])
+    return [
+      1,
+      "ellipsis-left",
+      currentPage - 1,
+      currentPage,
+      currentPage + 1,
+      "ellipsis-right",
+      totalPages,
+    ];
+  }, [currentPage, totalPages]);
 
   // ── Génération en lot — découpée en 3 étapes (WF-003, WF-005, EP-003) ──
 
   // Étape 1 — click "Générer le lot" → ouvre le preview
   const handleOpenPreview = () => {
-    if (!selectedStep || !selectedSession) return
-    setPreviewOpen(true)
-  }
+    if (!selectedStep || !selectedSession) return;
+    setPreviewOpen(true);
+  };
 
   // Étape 2 — après validation du preview
   const handlePreviewConfirm = () => {
-    setPreviewOpen(false)
-    const stepObj = steps.find(s => s.id === selectedStep)
-    const isCorrection = !(stepObj?.isCurrent ?? true)
+    setPreviewOpen(false);
+    const stepObj = steps.find((s) => s.id === selectedStep);
+    const isCorrection = !(stepObj?.isCurrent ?? true);
 
     if (isCorrection) {
       // Période clôturée → demander le motif (WF-005)
-      setAuditNoteOpen(true)
+      setAuditNoteOpen(true);
     } else {
       // Période active → génération directe
-      void executeGenerateLot(null)
+      void executeGenerateLot(null);
     }
-  }
+  };
 
   // Étape 2bis — après validation du motif post-clôture
-  const handleAuditNoteConfirm = async (payload: { reason: AuditReason; note: string }) => {
-    setAuditNoteOpen(false)
-    setPendingAudit(payload)
-    await executeGenerateLot(payload)
-  }
+  const handleAuditNoteConfirm = async (payload: {
+    reason: AuditReason;
+    note: string;
+  }) => {
+    setAuditNoteOpen(false);
+    setPendingAudit(payload);
+    await executeGenerateLot(payload);
+  };
 
   // Étape 3 — exécution réelle (ex-generateLot)
   const executeGenerateLot = async (
-    audit: { reason: AuditReason; note: string } | null
+    audit: { reason: AuditReason; note: string } | null,
   ) => {
-    const eligible = enrollments.filter(e => isNisuValid(e.nisu))
-    if (eligible.length === 0 || !selectedStep || !selectedSession) return
+    const eligible = enrollments.filter((e) => isNisuValid(e.nisu));
+    if (eligible.length === 0 || !selectedStep || !selectedSession) return;
 
-    setGeneratingLot(true)
-    setLotProgress({ current: 0, total: eligible.length })
+    setGeneratingLot(true);
+    setLotProgress({ current: 0, total: eligible.length });
 
     // EP-003 : compteurs d'échec pour remonter à l'utilisateur
-    let archiveFailures = 0
-    let pdfSaved = false
+    let archiveFailures = 0;
+    let pdfSaved = false;
 
     try {
-      const html2canvas = (await import('html2canvas')).default
-      const jsPDF       = (await import('jspdf')).default
-      const pdf         = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-      const stepObj     = steps.find(s => s.id === selectedStep)
-      const stepName    = stepObj?.name ?? 'etape'
-      const isCorrection = !(stepObj?.isCurrent ?? true)
-      const sessionObj  = sessions.find(s => s.id === selectedSession)
-      const className   = sessionObj ? getClassSessionName(sessionObj) : 'classe'
+      const html2canvas = (await import("html2canvas")).default;
+      const jsPDF = (await import("jspdf")).default;
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+      });
+      const stepObj = steps.find((s) => s.id === selectedStep);
+      const stepName = stepObj?.name ?? "etape";
+      const isCorrection = !(stepObj?.isCurrent ?? true);
+      const sessionObj = sessions.find((s) => s.id === selectedSession);
+      const className = sessionObj ? getClassSessionName(sessionObj) : "classe";
 
       for (let i = 0; i < eligible.length; i++) {
-        const student = eligible[i]
-        setLotProgress({ current: i + 1, total: eligible.length })
+        const student = eligible[i];
+        setLotProgress({ current: i + 1, total: eligible.length });
 
         const data = await buildBulletinData({
-          enrollmentId:   student.enrollmentId,
-          studentId:      student.studentId,
+          enrollmentId: student.enrollmentId,
+          studentId: student.studentId,
           classSessionId: student.classSessionId,
-          stepId:         selectedStep,
+          stepId: selectedStep,
           stepName,
-          className:      student.className,
-          yearId:         academicYearId,
-        })
+          className: student.className,
+          yearId: academicYearId,
+        });
 
-        setLotData(data)
-        await new Promise(r => setTimeout(r, 600))
+        setLotData(data);
+        await new Promise((r) => setTimeout(r, 600));
 
-        if (!lotRef.current) continue
+        if (!lotRef.current) continue;
 
         const canvas = await html2canvas(lotRef.current, {
-          scale: 2, useCORS: true,
-          backgroundColor: '#ffffff',
-          windowWidth:  lotRef.current.scrollWidth,
+          scale: 2,
+          useCORS: true,
+          backgroundColor: "#ffffff",
+          windowWidth: lotRef.current.scrollWidth,
           windowHeight: lotRef.current.scrollHeight,
-        })
+        });
 
-        if (i > 0) pdf.addPage()
-        const imgData   = canvas.toDataURL('image/png')
-        const imgWidth  = 210
-        const imgHeight = (canvas.height * imgWidth) / canvas.width
-        pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight)
+        if (i > 0) pdf.addPage();
+        const imgData = canvas.toDataURL("image/png");
+        const imgWidth = 210;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+        pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight);
 
-        const pageHeight = 297
-        let heightLeft   = imgHeight - pageHeight
-        let position     = -pageHeight
+        const pageHeight = 297;
+        let heightLeft = imgHeight - pageHeight;
+        let position = -pageHeight;
         while (heightLeft > 0) {
-          pdf.addPage()
-          pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
-          heightLeft -= pageHeight
-          position   -= pageHeight
+          pdf.addPage();
+          pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+          heightLeft -= pageHeight;
+          position -= pageHeight;
         }
 
         // WF-005 + EP-003 : archivage avec auditNote + remontée des échecs
         const archiveResult = await archiveBulletin({
-          enrollmentId:     student.enrollmentId,
-          stepId:           selectedStep,
-          source:           'batch',
+          enrollmentId: student.enrollmentId,
+          stepId: selectedStep,
+          source: "batch",
           bulletinSnapshot: data,
           isCorrection,
-          auditNote: audit
-            ? `[${audit.reason}] ${audit.note}`
-            : undefined,
-        })
+          auditNote: audit ? `[${audit.reason}] ${audit.note}` : undefined,
+        });
 
         if (!archiveResult.ok) {
-          archiveFailures++
+          archiveFailures++;
           console.error(
-            '[archive lot] échec pour', student.studentCode,
-            archiveResult.error
-          )
+            "[archive lot] échec pour",
+            student.studentCode,
+            archiveResult.error,
+          );
         }
       }
 
       // Téléchargement du PDF combiné
-      pdf.save(`bulletins_lot_${className}_${stepName}_${new Date().toISOString().slice(0, 10)}.pdf`)
-      pdfSaved = true
+      pdf.save(
+        `bulletins_lot_${className}_${stepName}_${new Date().toISOString().slice(0, 10)}.pdf`,
+      );
+      pdfSaved = true;
 
       // EP-003 : remonter l'état d'archivage à l'utilisateur
-      const total = eligible.length
-      const archived = total - archiveFailures
+      const total = eligible.length;
+      const archived = total - archiveFailures;
       if (archiveFailures === 0) {
         toast.success(
-          `${total} bulletin${total > 1 ? 's' : ''} généré${total > 1 ? 's' : ''} et archivé${total > 1 ? 's' : ''}.`
-        )
+          `${total} bulletin${total > 1 ? "s" : ""} généré${total > 1 ? "s" : ""} et archivé${total > 1 ? "s" : ""}.`,
+        );
       } else if (archiveFailures < total) {
         toast.warning(
-          `${archived} bulletin${archived > 1 ? 's' : ''} archivé${archived > 1 ? 's' : ''}, ` +
-          `${archiveFailures} échec${archiveFailures > 1 ? 's' : ''} d'archivage. ` +
-          `Le PDF est téléchargé mais certaines archives sont incomplètes.`
-        )
+          `${archived} bulletin${archived > 1 ? "s" : ""} archivé${archived > 1 ? "s" : ""}, ` +
+            `${archiveFailures} échec${archiveFailures > 1 ? "s" : ""} d'archivage. ` +
+            `Le PDF est téléchargé mais certaines archives sont incomplètes.`,
+        );
       } else {
         toast.error(
           `PDF téléchargé pour ${total} élèves, mais AUCUN bulletin n'a été archivé. ` +
-          `L'historique est incomplet. Contactez le support.`
-        )
+            `L'historique est incomplet. Contactez le support.`,
+        );
       }
     } catch (e) {
-      console.error('[generateLot]', e)
+      console.error("[generateLot]", e);
       // EP-003 : plus de silent fail sur l'erreur globale
       if (pdfSaved) {
-        toast.error(toMessage(e, "lors de la finalisation du lot"))
+        toast.error(toMessage(e, "lors de la finalisation du lot"));
       } else {
-        toast.error(toMessage(e, "lors de la génération du lot"))
+        toast.error(toMessage(e, "lors de la génération du lot"));
       }
     } finally {
-      setGeneratingLot(false)
-      setLotData(null)
-      setLotProgress({ current: 0, total: 0 })
-      setPendingAudit(null)
+      setGeneratingLot(false);
+      setLotData(null);
+      setLotProgress({ current: 0, total: 0 });
+      setPendingAudit(null);
     }
-  }
+  };
 
   // ── Ouvrir PDF Generator ──────────────────────────────────────────────────────
   const handleGenerateBulletin = (student: EnrollmentRow) => {
-    if (!selectedStep) return
-    setPdfStudent(student)
-    setPdfOpen(true)
-  }
+    if (!selectedStep) return;
+    setPdfStudent(student);
+    setPdfOpen(true);
+  };
 
   // ── Rendu ─────────────────────────────────────────────────────────────────────
   if (loadingInit) {
@@ -400,12 +469,12 @@ export function CPMSLBulletinsSection({
         <Skeleton className="h-24 w-full" />
         <Skeleton className="h-64 w-full" />
       </div>
-    )
+    );
   }
 
-  const selectedSessionLabel = sessions.find(s => s.id === selectedSession)
-    ? getClassSessionName(sessions.find(s => s.id === selectedSession)!)
-    : ''
+  const selectedSessionLabel = sessions.find((s) => s.id === selectedSession)
+    ? getClassSessionName(sessions.find((s) => s.id === selectedSession)!)
+    : "";
 
   return (
     <div className="space-y-6">
@@ -413,7 +482,9 @@ export function CPMSLBulletinsSection({
       <Card className="border bg-card shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-base font-semibold">Sélection</CardTitle>
-          <CardDescription>Classe et étape pour la génération des bulletins</CardDescription>
+          <CardDescription>
+            Classe et étape pour la génération des bulletins
+          </CardDescription>
         </CardHeader>
         <Separator />
         <CardContent className="p-4">
@@ -423,8 +494,10 @@ export function CPMSLBulletinsSection({
                 <SelectValue placeholder="Sélectionner une étape" />
               </SelectTrigger>
               <SelectContent>
-                {steps.map(step => (
-                  <SelectItem key={step.id} value={step.id}>{step.name}</SelectItem>
+                {steps.map((step) => (
+                  <SelectItem key={step.id} value={step.id}>
+                    {step.name}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -434,7 +507,7 @@ export function CPMSLBulletinsSection({
                 <SelectValue placeholder="Sélectionner une classe" />
               </SelectTrigger>
               <SelectContent>
-                {sessions.map(session => (
+                {sessions.map((session) => (
                   <SelectItem key={session.id} value={session.id}>
                     {getClassSessionName(session)}
                   </SelectItem>
@@ -452,9 +525,12 @@ export function CPMSLBulletinsSection({
             <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
               <InboxIcon className="h-7 w-7 text-muted-foreground" />
             </div>
-            <h3 className="mt-4 text-sm font-semibold text-foreground">Aucune sélection</h3>
+            <h3 className="mt-4 text-sm font-semibold text-foreground">
+              Aucune sélection
+            </h3>
             <p className="mt-1 max-w-[320px] text-center text-sm text-muted-foreground">
-              Sélectionnez une étape et une classe pour commencer la génération des bulletins.
+              Sélectionnez une étape et une classe pour commencer la génération
+              des bulletins.
             </p>
           </CardContent>
         </Card>
@@ -488,7 +564,7 @@ export function CPMSLBulletinsSection({
             />
             <StatCard
               label="Étape"
-              value={selectedStepObj?.name || '—'}
+              value={selectedStepObj?.name || "—"}
               icon={FileTextIcon}
               iconClassName="text-violet-600"
               iconBgClassName="bg-violet-50"
@@ -510,7 +586,8 @@ export function CPMSLBulletinsSection({
                 ) : (
                   <>
                     <LayersIcon className="mr-2 h-4 w-4" />
-                    Générer le lot ({withNisu.length} bulletin{withNisu.length > 1 ? 's' : ''})
+                    Générer le lot ({withNisu.length} bulletin
+                    {withNisu.length > 1 ? "s" : ""})
                   </>
                 )}
               </Button>
@@ -522,7 +599,10 @@ export function CPMSLBulletinsSection({
                     className="h-2 flex-1 [&>div]:bg-primary"
                   />
                   <span className="whitespace-nowrap text-xs font-medium tabular-nums text-muted-foreground">
-                    {Math.round((lotProgress.current / lotProgress.total) * 100)}%
+                    {Math.round(
+                      (lotProgress.current / lotProgress.total) * 100,
+                    )}
+                    %
                   </span>
                 </div>
               )}
@@ -536,7 +616,8 @@ export function CPMSLBulletinsSection({
                 Liste des élèves — {selectedSessionLabel}
               </CardTitle>
               <CardDescription>
-                {filteredEnrollments.length} élève{filteredEnrollments.length > 1 ? 's' : ''}
+                {filteredEnrollments.length} élève
+                {filteredEnrollments.length > 1 ? "s" : ""}
                 {searchQuery && ` — recherche : "${searchQuery}"`}
               </CardDescription>
             </CardHeader>
@@ -550,7 +631,7 @@ export function CPMSLBulletinsSection({
                 <Input
                   placeholder="Rechercher par nom..."
                   value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
+                  onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-9"
                 />
               </div>
@@ -572,74 +653,84 @@ export function CPMSLBulletinsSection({
                     {searchQuery ? "Aucun élève trouvé" : "Aucun élève actif"}
                   </h3>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {searchQuery ? "Modifiez vos critères de recherche." : "Aucun élève actif dans cette classe."}
+                    {searchQuery
+                      ? "Modifiez vos critères de recherche."
+                      : "Aucun élève actif dans cette classe."}
                   </p>
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow className="hover:bg-transparent">
-                      <TableHead className="w-[60px] pl-6 font-semibold">Élève</TableHead>
-                      <TableHead className="font-semibold">Nom</TableHead>
-                      <TableHead className="font-semibold">Prénom</TableHead>
-                      <TableHead className="font-semibold">NISU</TableHead>
-                      <TableHead className="font-semibold">Statut</TableHead>
-                      <TableHead className="pr-6 text-right font-semibold">Action</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {paginatedEnrollments.map(student => {
-                      const nisuOk = isNisuValid(student.nisu)
-                      return (
-                        <TableRow key={student.enrollmentId}>
-                          <TableCell className="pl-6">
-                            <Avatar className="h-8 w-8">
-                              <AvatarFallback className="bg-muted text-muted-foreground">
-                                <UserIcon className="h-4 w-4" />
-                              </AvatarFallback>
-                            </Avatar>
-                          </TableCell>
-                          <TableCell className="font-medium text-foreground">
-                            {student.lastname}
-                          </TableCell>
-                          <TableCell className="text-foreground">
-                            {student.firstname}
-                          </TableCell>
-                          <TableCell>
-                            <span
-                              className={cn(
-                                "font-mono text-xs tabular-nums",
-                                nisuOk ? "text-foreground" : "text-destructive font-medium"
+                <div className="overflow-x-auto">
+                  <Table className="min-w-[800px]">
+                    <TableHeader>
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead className="w-[60px] pl-6 font-semibold">
+                          Élève
+                        </TableHead>
+                        <TableHead className="font-semibold">Nom</TableHead>
+                        <TableHead className="font-semibold">Prénom</TableHead>
+                        <TableHead className="font-semibold">NISU</TableHead>
+                        <TableHead className="font-semibold">Statut</TableHead>
+                        <TableHead className="pr-6 text-right font-semibold">
+                          Action
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paginatedEnrollments.map((student) => {
+                        const nisuOk = isNisuValid(student.nisu);
+                        return (
+                          <TableRow key={student.enrollmentId}>
+                            <TableCell className="pl-6">
+                              <Avatar className="h-8 w-8">
+                                <AvatarFallback className="bg-muted text-muted-foreground">
+                                  <UserIcon className="h-4 w-4" />
+                                </AvatarFallback>
+                              </Avatar>
+                            </TableCell>
+                            <TableCell className="font-medium text-foreground">
+                              {student.lastname}
+                            </TableCell>
+                            <TableCell className="text-foreground">
+                              {student.firstname}
+                            </TableCell>
+                            <TableCell>
+                              <span
+                                className={cn(
+                                  "font-mono text-xs tabular-nums",
+                                  nisuOk
+                                    ? "text-foreground"
+                                    : "text-destructive font-medium",
+                                )}
+                              >
+                                {student.nisu || "—"}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              {nisuOk ? (
+                                <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
+                                  Valide
+                                </Badge>
+                              ) : (
+                                <Badge variant="destructive">Invalide</Badge>
                               )}
-                            >
-                              {student.nisu || '—'}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            {nisuOk ? (
-                              <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
-                                Valide
-                              </Badge>
-                            ) : (
-                              <Badge variant="destructive">Invalide</Badge>
-                            )}
-                          </TableCell>
-                          <TableCell className="pr-6 text-right">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={isArchived || !nisuOk}
-                              onClick={() => handleGenerateBulletin(student)}
-                            >
-                              <FileTextIcon className="mr-1 h-3 w-3" />
-                              Générer
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })}
-                  </TableBody>
-                </Table>
+                            </TableCell>
+                            <TableCell className="pr-6 text-right">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={isArchived || !nisuOk}
+                                onClick={() => handleGenerateBulletin(student)}
+                              >
+                                <FileTextIcon className="mr-1 h-3 w-3" />
+                                Générer
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
               )}
             </CardContent>
 
@@ -650,21 +741,29 @@ export function CPMSLBulletinsSection({
                 <div className="flex flex-col items-center justify-between gap-3 px-4 py-3 sm:flex-row">
                   <div className="flex items-center gap-3">
                     <p className="text-xs text-muted-foreground">
-                      Page <span className="font-medium text-foreground tabular-nums">{currentPage}</span>{" "}
-                      sur <span className="font-medium text-foreground tabular-nums">{totalPages}</span>
-                      {" "}&middot; {filteredEnrollments.length} élève(s)
+                      Page{" "}
+                      <span className="font-medium text-foreground tabular-nums">
+                        {currentPage}
+                      </span>{" "}
+                      sur{" "}
+                      <span className="font-medium text-foreground tabular-nums">
+                        {totalPages}
+                      </span>{" "}
+                      &middot; {filteredEnrollments.length} élève(s)
                     </p>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground">Afficher</span>
+                      <span className="text-xs text-muted-foreground">
+                        Afficher
+                      </span>
                       <Select
                         value={String(itemsPerPage)}
-                        onValueChange={v => setItemsPerPage(Number(v))}
+                        onValueChange={(v) => setItemsPerPage(Number(v))}
                       >
                         <SelectTrigger className="h-8 w-[72px]">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {PAGE_SIZE_OPTIONS.map(size => (
+                          {PAGE_SIZE_OPTIONS.map((size) => (
                             <SelectItem key={size} value={String(size)}>
                               {size}
                             </SelectItem>
@@ -680,35 +779,51 @@ export function CPMSLBulletinsSection({
                         <PaginationItem>
                           <PaginationPrevious
                             href="#"
-                            onClick={e => { e.preventDefault(); if (currentPage > 1) setCurrentPage(p => p - 1) }}
-                            className={cn(currentPage === 1 && "pointer-events-none opacity-50")}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              if (currentPage > 1) setCurrentPage((p) => p - 1);
+                            }}
+                            className={cn(
+                              currentPage === 1 &&
+                                "pointer-events-none opacity-50",
+                            )}
                           />
                         </PaginationItem>
                         {paginationWindow.map((p, idx) => {
-                          if (typeof p === 'string') {
+                          if (typeof p === "string") {
                             return (
                               <PaginationItem key={`${p}-${idx}`}>
                                 <PaginationEllipsis />
                               </PaginationItem>
-                            )
+                            );
                           }
                           return (
                             <PaginationItem key={p}>
                               <PaginationLink
                                 href="#"
                                 isActive={currentPage === p}
-                                onClick={e => { e.preventDefault(); setCurrentPage(p) }}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  setCurrentPage(p);
+                                }}
                               >
                                 {p}
                               </PaginationLink>
                             </PaginationItem>
-                          )
+                          );
                         })}
                         <PaginationItem>
                           <PaginationNext
                             href="#"
-                            onClick={e => { e.preventDefault(); if (currentPage < totalPages) setCurrentPage(p => p + 1) }}
-                            className={cn(currentPage === totalPages && "pointer-events-none opacity-50")}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              if (currentPage < totalPages)
+                                setCurrentPage((p) => p + 1);
+                            }}
+                            className={cn(
+                              currentPage === totalPages &&
+                                "pointer-events-none opacity-50",
+                            )}
                           />
                         </PaginationItem>
                       </PaginationContent>
@@ -722,10 +837,16 @@ export function CPMSLBulletinsSection({
       )}
 
       {/* Div caché pour capture lot PDF */}
-      <div style={{ position: 'fixed', left: '-9999px', top: 0, zIndex: -1, background: 'white' }}>
-        <div ref={lotRef}>
-          {lotData && <BulletinScolaire data={lotData} />}
-        </div>
+      <div
+        style={{
+          position: "fixed",
+          left: "-9999px",
+          top: 0,
+          zIndex: -1,
+          background: "white",
+        }}
+      >
+        <div ref={lotRef}>{lotData && <BulletinScolaire data={lotData} />}</div>
       </div>
 
       {/* PDF Generator Modal — individuel */}
@@ -733,8 +854,8 @@ export function CPMSLBulletinsSection({
         <BulletinPDFGenerator
           open={pdfOpen}
           onOpenChange={(open) => {
-            setPdfOpen(open)
-            if (!open) setPdfStudent(null)
+            setPdfOpen(open);
+            if (!open) setPdfStudent(null);
           }}
           studentId={pdfStudent.studentId}
           studentName={`${pdfStudent.lastname} ${pdfStudent.firstname}`}
@@ -754,16 +875,20 @@ export function CPMSLBulletinsSection({
         onOpenChange={setPreviewOpen}
         className={
           selectedSession
-            ? getClassSessionName(sessions.find(s => s.id === selectedSession)!)
+            ? getClassSessionName(
+                sessions.find((s) => s.id === selectedSession)!,
+              )
             : ""
         }
-        stepName={steps.find(s => s.id === selectedStep)?.name ?? ""}
-        stepIsClosed={!(steps.find(s => s.id === selectedStep)?.isCurrent ?? true)}
-        students={enrollments.map(e => ({
-          studentId:    e.studentId,
-          firstname:    e.firstname,
-          lastname:     e.lastname,
-          nisu:         e.nisu,
+        stepName={steps.find((s) => s.id === selectedStep)?.name ?? ""}
+        stepIsClosed={
+          !(steps.find((s) => s.id === selectedStep)?.isCurrent ?? true)
+        }
+        students={enrollments.map((e) => ({
+          studentId: e.studentId,
+          firstname: e.firstname,
+          lastname: e.lastname,
+          nisu: e.nisu,
           enrollmentId: e.enrollmentId,
         }))}
         isNisuValid={isNisuValid}
@@ -775,10 +900,10 @@ export function CPMSLBulletinsSection({
       <AuditNoteModal
         open={auditNoteOpen}
         onOpenChange={setAuditNoteOpen}
-        stepName={steps.find(s => s.id === selectedStep)?.name ?? ""}
+        stepName={steps.find((s) => s.id === selectedStep)?.name ?? ""}
         onConfirm={handleAuditNoteConfirm}
         loading={generatingLot}
       />
     </div>
-  )
+  );
 }

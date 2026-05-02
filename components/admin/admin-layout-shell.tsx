@@ -508,7 +508,12 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
           {/* Notifications */}
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="ghost" size="icon" className="relative h-8 w-8">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="relative h-8 w-8"
+                aria-label="Notifications"
+              >
                 <BellIcon className="h-4 w-4 text-muted-foreground" />
                 {unreadCount > 0 && (
                   <span className="absolute right-1 top-1 flex h-2 w-2">

@@ -295,8 +295,8 @@ export function CPMSLCalendarManagement({
               }
             />
           ) : (
-            <div className="border border-neutral-200 rounded-lg overflow-hidden">
-              <Table>
+            <div className="border border-neutral-200 rounded-lg overflow-hidden overflow-x-auto">
+              <Table className="min-w-[600px]">
                 <TableHeader>
                   <TableRow className="bg-primary-50 border-b-2 border-neutral-300">
                     <TableHead className={TABLE_HEAD_CLASS}>Date</TableHead>
@@ -516,8 +516,8 @@ export function CPMSLCalendarManagement({
               }
             />
           ) : (
-            <div className="border border-neutral-200 rounded-lg overflow-hidden">
-              <Table>
+            <div className="border border-neutral-200 rounded-lg overflow-hidden overflow-x-auto">
+              <Table className="min-w-[700px]">
                 <TableHeader>
                   <TableRow className="bg-primary-50 border-b-2 border-neutral-300">
                     <TableHead className={TABLE_HEAD_CLASS}>Date</TableHead>
