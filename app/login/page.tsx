@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { EyeIcon, EyeOffIcon, LoaderIcon } from "lucide-react";
 import { getRoleRoute, type UserType } from "@/lib/data/auth-data";
 import { useToast } from "@/components/ui/use-toast";
@@ -16,8 +16,35 @@ interface LoginResponse {
   [key: string]: unknown;
 }
 
-export default function LoginPage() {
+/**
+ * Validation anti open-redirect.
+ * Doit être SYNCHRONISÉE avec proxy.ts (même règle).
+ *
+ * N'autorise que les chemins relatifs commençant par / et pas par //
+ * (// ouvrirait une redirection vers un domaine externe).
+ *
+ * Bloque :
+ *  - URLs absolues : https://evil.com
+ *  - Protocole-relatif : //evil.com
+ *  - Backslash trick : /\evil.com
+ *  - javascript: et autres pseudo-protocoles
+ */
+function isSafeRedirectPath(path: string | null): boolean {
+  if (!path) return false;
+  if (!path.startsWith("/")) return false;
+  if (path.startsWith("//")) return false;
+  if (path.startsWith("/\\")) return false;
+  return true;
+}
+
+/**
+ * Composant interne qui utilise useSearchParams.
+ * Doit être wrappé dans <Suspense> car useSearchParams suspend le rendu
+ * lors du build statique (Next.js 15+/16 requirement).
+ */
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -35,7 +62,20 @@ export default function LoginPage() {
         body: JSON.stringify({ username, password }),
       });
 
-      const route = getRoleRoute(data.session?.type as UserType);
+      // ── Préserver la destination originale si présente (?from=...) ──
+      // Si l'utilisateur a tenté d'accéder à /admin/archives sans session,
+      // proxy.ts l'a redirigé vers /login?from=/admin/archives.
+      // Après login, on l'envoie sur la page demandée plutôt que sur le
+      // dashboard générique.
+      //
+      // SÉCURITÉ : isSafeRedirectPath bloque les open redirects (//evil.com,
+      // https://, etc.). Si le from est invalide ou absent, fallback sur
+      // la route par défaut du rôle (getRoleRoute).
+      const from = searchParams.get("from");
+      const route = isSafeRedirectPath(from)
+        ? from!
+        : getRoleRoute(data.session?.type as UserType);
+
       router.push(route);
     } catch (err) {
       // Titres adaptés au contexte du login
@@ -193,5 +233,59 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+/**
+ * Skeleton affiché pendant la suspension de useSearchParams.
+ * Doit avoir la même structure visuelle que LoginForm pour éviter le CLS
+ * (Cumulative Layout Shift) lors de la transition skeleton → contenu réel.
+ */
+function LoginFormSkeleton() {
+  return (
+    <div className="bg-white border border-neutral-200 rounded-xl shadow-md p-8 w-full">
+      <div className="mb-6">
+        <h1 className="font-serif text-3xl font-bold text-primary-800 mb-2 tracking-tight">
+          Connexion
+        </h1>
+        <p className="font-sans text-sm text-muted-foreground">
+          Connectez-vous à votre espace d&apos;administration
+        </p>
+      </div>
+      <div className="space-y-4 animate-pulse">
+        <div>
+          <div className="h-4 w-32 bg-neutral-200 rounded mb-1.5" />
+          <div className="h-12 bg-neutral-100 rounded-lg" />
+        </div>
+        <div>
+          <div className="h-4 w-24 bg-neutral-200 rounded mb-1.5" />
+          <div className="h-12 bg-neutral-100 rounded-lg" />
+        </div>
+        <div className="h-11 bg-neutral-200 rounded-lg" />
+      </div>
+      <div className="mt-8 pt-6 border-t border-neutral-200">
+        <p className="caption text-neutral-500 text-center mb-1">
+          © 2026 Cours Privé Mixte Saint Léonard
+        </p>
+        <p className="caption text-neutral-500 text-center">
+          Port-au-Prince, Haïti
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Page de login.
+ *
+ * Suspense wrapper REQUIS car useSearchParams() suspend le rendu pendant
+ * le build statique (Next.js 15+/16 requirement).
+ * @see https://nextjs.org/docs/messages/missing-suspense-with-csr-bailout
+ */
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginFormSkeleton />}>
+      <LoginForm />
+    </Suspense>
   );
 }
