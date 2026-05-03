@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { env } from "./env";
+import { logger } from "./logger";
 
 /**
  * Timeout max pour les requêtes backend.
@@ -41,9 +42,24 @@ export async function backendFetch(
   if (method !== "GET" && method !== "HEAD") {
     try {
       const json = await request.json();
+
+      // SEC-A09-002 : ne PLUS logger le body complet (contenait passwords en clair).
+      // On log uniquement la méthode + path + clés présentes (pas les valeurs).
+      // La redaction du logger gère password/nisu/email même si une clé connue passe,
+      // mais on reste conservateur : on ne forward jamais les valeurs ici.
       if (env.NODE_ENV === "development") {
-        console.log(`[backendFetch] ${method} ${path}`, json);
+        const bodyKeys = Object.keys(json ?? {});
+        logger.debug(
+          {
+            event: "backend_fetch_request",
+            method,
+            path,
+            bodyKeys, // ← juste les noms des champs, jamais les valeurs
+          },
+          "backendFetch outgoing",
+        );
       }
+
       body = JSON.stringify(json);
       headers["content-type"] = "application/json";
     } catch {
@@ -79,11 +95,32 @@ export async function backendFetch(
     return response;
   } catch (error: unknown) {
     const err = error as { name?: string; message?: string };
+
+    // SEC-A09-001 : logs structurés pour ingestion future (Loki/Datadog)
     if (err.name === "AbortError") {
-      console.error(`[backendFetch] Timeout ${method} ${path}`);
+      logger.error(
+        {
+          event: "backend_fetch_timeout",
+          method,
+          path,
+          timeoutMs: BACKEND_TIMEOUT_MS,
+        },
+        "Backend timeout",
+      );
       return NextResponse.json({ message: "Backend timeout" }, { status: 504 });
     }
-    console.error(`[backendFetch] Error ${method} ${path}:`, err.message);
+
+    logger.error(
+      {
+        event: "backend_fetch_error",
+        method,
+        path,
+        errorName: err.name,
+        errorMessage: err.message,
+      },
+      "Backend unreachable",
+    );
+
     return NextResponse.json(
       { message: "Backend unreachable" },
       { status: 503 },
