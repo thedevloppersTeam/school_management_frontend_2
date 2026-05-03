@@ -67,7 +67,8 @@ import {
   ArchiveIcon,
   CheckIcon,
 } from "lucide-react";
-import { getMe, type AuthUser } from "@/lib/data/auth-data";
+// SEC-A01-004 : ajout de `logout` à l'import
+import { getMe, logout, type AuthUser } from "@/lib/data/auth-data";
 import {
   fetchActiveAcademicYear,
   type AcademicYear,
@@ -181,16 +182,22 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
   const [profileOpen, setProfileOpen] = useState(false);
 
   // ── Auth guard ──
+  // proxy.ts gère déjà la redirection si pas de cookie. Ici on gère uniquement
+  // le cas "cookie présent mais session invalide côté backend" (logout, expirée).
+  // window.location.href au lieu de router.push pour éviter les race conditions
+  // RSC pendant les transitions ("Failed to fetch RSC payload" error).
   useEffect(() => {
     getMe().then((user) => {
       if (!user) {
-        router.push("/login");
+        // Full reload : évite "Failed to fetch RSC payload" + ne garde aucun
+        // cache potentiellement compromis côté client.
+        window.location.href = "/login";
       } else {
         setCurrentUser(user);
         setAuthLoading(false);
       }
     });
-  }, [router]);
+  }, []);
 
   // ── Année active ──
   useEffect(() => {
@@ -246,8 +253,23 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
 
-  const handleLogout = () => {
-    window.location.href = "/api/auth/logout";
+  // SEC-A01-004 : POST au lieu de GET (anti-CSRF)
+  // L'ancien `window.location.href = "/api/auth/logout"` faisait un GET,
+  // ce qui était exploitable via <img src=...> sur un site malveillant.
+  // logout() est défini dans lib/data/auth-data.tsx et fait fetch POST.
+  //
+  // Full reload (window.location.href) après le logout pour :
+  // - Forcer la relecture des cookies par le navigateur
+  // - Éviter les race conditions React entre démontage du layout et navigation
+  // - Casser tout cache Next.js stale
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch {
+      // Best-effort : même si l'appel backend échoue, on force la déconnexion
+      // locale. Le proxy.ts redirigera vers /login s'il n'y a plus de session.
+    }
+    window.location.href = "/login";
   };
 
   const getNavHref = (href: string) => {
