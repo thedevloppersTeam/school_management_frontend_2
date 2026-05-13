@@ -122,9 +122,10 @@ export default function ArchivesPage() {
       if (filterNisu)    params.set('nisu', filterNisu)
 
       const data = await apiFetch<ArchiveRow[]>(`/api/bulletin-archives?${params}`)
-      setArchives(data)
+      setArchives(Array.isArray(data) ? data : [])
     } catch (err) {
       console.error('[archives] load:', err)
+      setArchives([])
     } finally {
       setLoadingList(false)
     }
@@ -141,9 +142,10 @@ export default function ArchivesPage() {
       const data = await apiFetch<ArchiveRow[]>(
         `/api/bulletin-archives/${archive.enrollmentId}/${archive.stepId}`
       )
-      setVersions(data)
+      setVersions(Array.isArray(data) ? data : [])
     } catch (err) {
       console.error('[archives] versions:', err)
+      setVersions([])
     } finally {
       setLoadingVersions(false)
     }

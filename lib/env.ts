@@ -28,7 +28,10 @@ export const env = createEnv({
     BACKEND_URL: z
       .string()
       .url("BACKEND_URL doit être une URL valide")
-      .startsWith("https://", "BACKEND_URL doit commencer par https:// (HTTP non autorisé)"),
+      .refine(
+        (url) => process.env.NODE_ENV !== "production" || url.startsWith("https://"),
+        { message: "BACKEND_URL doit commencer par https:// en production (HTTP non autorisé)" }
+      ),
 
     NODE_ENV: z
       .enum(["development", "test", "production"])

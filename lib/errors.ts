@@ -122,8 +122,10 @@ export function toMessage(err: unknown, context?: string): string {
 
   // Ajoute le contexte métier. On retire le point final du base
   // pour éviter "..déjà utilisé.. lors de la clôture."
+  // Le contexte doit déjà inclure "lors de / du / d'" — on ne le préfixe pas
+  // pour éviter "lors de lors du calcul…".
   const baseTrimmed = base.replace(/[.!?]+$/, '')
-  return `${baseTrimmed} lors de ${context}.`
+  return `${baseTrimmed} ${context}.`
 }
 
 // ── Logique interne ──────────────────────────────────────────────────

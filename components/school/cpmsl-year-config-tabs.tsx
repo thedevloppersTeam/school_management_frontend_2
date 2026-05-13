@@ -7,10 +7,23 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { PlusIcon, SearchIcon, LockIcon, UnlockIcon, ChevronDownIcon, ChevronRightIcon } from "lucide-react"
+import { PlusIcon, SearchIcon, LockIcon, UnlockIcon, ChevronDownIcon, ChevronRightIcon, CheckIcon, BookOpenIcon } from "lucide-react"
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from "@/components/ui/tooltip"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { cn } from "@/lib/utils"
 import { ClosePeriodModal } from "@/components/school/close-period-modal"
 import { ReopenPeriodModalV2 } from "@/components/school/reopen-period-modal-v2"
 import { CreatePeriodModalV2 } from "@/components/school/create-period-modal-v2"
@@ -124,12 +137,15 @@ export function CPMSLYearConfigTabs({
   const [loadingClassSubjects, setLoadingClassSubjects] = useState(false)
 
   // ── Modal assignation ─────────────────────────────────────────────────────
-  const [assignModalOpen, setAssignModalOpen]               = useState(false)
-  const [assignSubjectId, setAssignSubjectId]               = useState('')
-  const [assignSelectedSessions, setAssignSelectedSessions] = useState<Set<string>>(new Set())
-  const [assignCoeffOverride, setAssignCoeffOverride]       = useState('')
-  const [assignSubmitting, setAssignSubmitting]             = useState(false)
-  const [assignError, setAssignError]                       = useState('')
+  const [assignModalOpen, setAssignModalOpen]                 = useState(false)
+  const [assignSessionId, setAssignSessionId]                 = useState('')
+  const [assignSelectedSubjectIds, setAssignSelectedSubjectIds] = useState<Set<string>>(new Set())
+  const [assignSubjectOverrides, setAssignSubjectOverrides]   = useState<Map<string, string>>(new Map())
+  const [assignAlreadyAssigned, setAssignAlreadyAssigned]     = useState<Set<string>>(new Set())
+  const [assignSubjectSearch, setAssignSubjectSearch]         = useState('')
+  const [assignLoadingExisting, setAssignLoadingExisting]     = useState(false)
+  const [assignSubmitting, setAssignSubmitting]               = useState(false)
+  const [assignError, setAssignError]                         = useState('')
 
   // ── Modal edit coefficient override ──────────────────────────────────────
   const [editCoeffModalOpen, setEditCoeffModalOpen]           = useState(false)
@@ -278,42 +294,103 @@ toast({ title: "Coefficient modifié" })
   }
 
   // ── Modal assignation ─────────────────────────────────────────────────────
-  const openAssignModal = () => {
-    setAssignSubjectId('')
-    setAssignSelectedSessions(new Set())
-    setAssignCoeffOverride('')
-    setAssignError('')
-    setAssignModalOpen(true)
+  const loadAssignedSubjectsForSession = async (sessionId: string) => {
+    setAssignLoadingExisting(true)
+    try {
+      const res = await fetch(`/api/class-subjects?classSessionId=${sessionId}`, { credentials: 'include' })
+      if (!res.ok) throw new Error('Échec du chargement')
+      const data = await res.json()
+      setAssignAlreadyAssigned(new Set(data.map((cs: { subjectId: string }) => cs.subjectId)))
+    } catch {
+      setAssignAlreadyAssigned(new Set())
+    } finally {
+      setAssignLoadingExisting(false)
+    }
   }
 
-  const toggleAssignSession = (sessionId: string) => {
-    setAssignSelectedSessions(prev => {
+  const openAssignModal = () => {
+    const initialSession = selectedSessionForAssign || ''
+    setAssignSessionId(initialSession)
+    setAssignSelectedSubjectIds(new Set())
+    setAssignSubjectOverrides(new Map())
+    setAssignAlreadyAssigned(new Set())
+    setAssignSubjectSearch('')
+    setAssignError('')
+    setAssignModalOpen(true)
+    if (initialSession) loadAssignedSubjectsForSession(initialSession)
+  }
+
+  const handleAssignSessionChange = (sessionId: string) => {
+    setAssignSessionId(sessionId)
+    setAssignSelectedSubjectIds(new Set())
+    setAssignSubjectOverrides(new Map())
+    setAssignAlreadyAssigned(new Set())
+    if (sessionId) loadAssignedSubjectsForSession(sessionId)
+  }
+
+  const toggleAssignSubject = (subjectId: string) => {
+    if (assignAlreadyAssigned.has(subjectId)) return
+    setAssignSelectedSubjectIds(prev => {
       const n = new Set(prev)
-      n.has(sessionId) ? n.delete(sessionId) : n.add(sessionId)
+      if (n.has(subjectId)) {
+        n.delete(subjectId)
+        setAssignSubjectOverrides(o => {
+          const m = new Map(o)
+          m.delete(subjectId)
+          return m
+        })
+      } else {
+        n.add(subjectId)
+      }
       return n
     })
   }
 
-  const toggleSelectAll = () => {
-    if (assignSelectedSessions.size === classrooms.length) {
-      setAssignSelectedSessions(new Set())
-    } else {
-      setAssignSelectedSessions(new Set(classrooms.map(c => c.id)))
-    }
+  const setSubjectOverride = (subjectId: string, value: string) => {
+    setAssignSubjectOverrides(prev => {
+      const m = new Map(prev)
+      if (value === '') m.delete(subjectId)
+      else m.set(subjectId, value)
+      return m
+    })
   }
 
-  const handleAssignSubjectToClasses = async () => {
-    if (!assignSubjectId || assignSelectedSessions.size === 0) return
+  const toggleSelectAllSubjects = () => {
+    const selectableIds = filteredAssignSubjects.filter(s => !assignAlreadyAssigned.has(s.id)).map(s => s.id)
+    const allSelected = selectableIds.length > 0 && selectableIds.every(id => assignSelectedSubjectIds.has(id))
+    setAssignSelectedSubjectIds(prev => {
+      const n = new Set(prev)
+      if (allSelected) {
+        selectableIds.forEach(id => n.delete(id))
+        setAssignSubjectOverrides(o => {
+          const m = new Map(o)
+          selectableIds.forEach(id => m.delete(id))
+          return m
+        })
+      } else {
+        selectableIds.forEach(id => n.add(id))
+      }
+      return n
+    })
+  }
+
+  const handleAssignSubjectsToClass = async () => {
+    if (!assignSessionId || assignSelectedSubjectIds.size === 0) return
     setAssignSubmitting(true)
     setAssignError('')
+    let successCount = 0
+    const failures: string[] = []
     try {
       await Promise.all(
-        Array.from(assignSelectedSessions).map(async sessionId => {
+        Array.from(assignSelectedSubjectIds).map(async subjectId => {
+          const subject = subjectParents.find(s => s.id === subjectId)
+          const overrideRaw = assignSubjectOverrides.get(subjectId)
+          const override = overrideRaw && overrideRaw.trim() !== '' ? parseFloat(overrideRaw) : null
           const payload = {
-            classSessionId:      sessionId,
-            subjectId:           assignSubjectId,
+            classSessionId:      assignSessionId,
+            subjectId,
             teacherId:           null,
-            coefficientOverride: assignCoeffOverride ? parseFloat(assignCoeffOverride) : null,
+            coefficientOverride: override,
           }
           const res = await fetch('/api/class-subjects/create', {
             method: 'POST',
@@ -322,24 +399,44 @@ toast({ title: "Coefficient modifié" })
             body: JSON.stringify(payload),
           })
           if (!res.ok) {
-            const err = await res.json().catch(() => ({}))
-            const msg: string = err.message || ''
-            if (res.status === 500) return
-            if (res.status === 409) return
-            throw new Error(msg || `Échec assignation (HTTP ${res.status})`)
+            if (res.status !== 409) {
+              const err = await res.json().catch(() => ({}))
+              failures.push(`${subject?.name ?? subjectId} — ${err.message || `HTTP ${res.status}`}`)
+            }
+            return
           }
+          successCount++
         })
       )
+
+      if (successCount > 0) {
+        toast({
+          title: `${successCount} matière${successCount > 1 ? 's assignées' : ' assignée'}`,
+          description: failures.length > 0 ? `${failures.length} échec(s) — voir la console.` : undefined,
+        })
+      }
+      if (failures.length > 0) {
+        console.error('[affectation] échecs:', failures)
+        if (successCount === 0) {
+          setAssignError(failures[0])
+          return
+        }
+      }
+
       setAssignModalOpen(false)
-      if (selectedSessionForAssign) await loadClassSubjects(selectedSessionForAssign)
+      if (selectedSessionForAssign === assignSessionId) {
+        await loadClassSubjects(assignSessionId)
+      } else {
+        setSelectedSessionForAssign(assignSessionId)
+        await loadClassSubjects(assignSessionId)
+      }
     } catch (err) {
       console.error('[affectation] erreur:', err)
       toast({
         title: "Erreur assignation",
-        description: toMessage(err, "lors de l'assignation de la matière"),
+        description: toMessage(err, "lors de l'assignation des matières"),
         variant: "destructive",
       })
-      setAssignError('')
     } finally {
       setAssignSubmitting(false)
     }
@@ -352,7 +449,12 @@ toast({ title: "Coefficient modifié" })
     s.name.toLowerCase().includes(searchSubject.toLowerCase()) ||
     s.code.toLowerCase().includes(searchSubject.toLowerCase())
   )
-  const assignSelectedSubject = subjectParents.find(s => s.id === assignSubjectId)
+  const filteredAssignSubjects = subjectParents.filter(s => {
+    if (!assignSubjectSearch.trim()) return true
+    const q = assignSubjectSearch.toLowerCase()
+    return s.name.toLowerCase().includes(q) || s.code.toLowerCase().includes(q)
+  })
+  const assignSelectedClass = classrooms.find(c => c.id === assignSessionId)
 
   return (
     <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E8E6E3', borderRadius: '10px', overflow: 'hidden' }}>
@@ -629,7 +731,7 @@ toast({ title: "Coefficient modifié" })
               </div>
               {!isArchived && subjectParents.length > 0 && classrooms.length > 0 && (
                 <button onClick={openAssignModal} style={{ backgroundColor: '#2C4A6E', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>
-                  + Assigner une matière
+                  + Assigner des matières
                 </button>
               )}
             </div>
@@ -739,50 +841,197 @@ toast({ title: "Coefficient modifié" })
         </div>
       )}
 
-      {/* ── Modal Assignation ── */}
-      {assignModalOpen && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
-          <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '28px', width: '520px', maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.15)' }}>
-            <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: '20px', fontWeight: 700, color: '#2A3740', marginBottom: '20px' }}>Assigner une matière aux classes</h3>
+      {/* ── Modal Assignation (classe → matières) ── */}
+      <Dialog open={assignModalOpen} onOpenChange={setAssignModalOpen}>
+        <DialogContent className="flex max-h-[85vh] flex-col gap-0 p-0 sm:max-w-[640px]">
+          <DialogHeader className="border-b px-6 py-4">
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <BookOpenIcon className="h-5 w-5 text-[#2C4A6E]" />
+              Assigner des matières à une classe
+            </DialogTitle>
+            <DialogDescription>
+              Choisissez la classe, puis sélectionnez les matières à lui assigner. Vous pouvez ajuster le coefficient pour chaque matière.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-4 overflow-hidden px-6 py-4">
             {assignError && (
-              <div style={{ backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', fontSize: '13px', color: '#B91C1C' }}>{assignError}</div>
+              <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                {assignError}
+              </div>
             )}
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ fontSize: '13px', fontWeight: 500, color: '#1E1A17', display: 'block', marginBottom: '6px' }}>Matière * <span style={{ color: '#78756F', fontWeight: 400 }}>— choisir la matière à assigner</span></label>
-              <select value={assignSubjectId} onChange={e => setAssignSubjectId(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #D1CECC', fontSize: '14px', color: '#1E1A17' }}>
-                <option value="">Sélectionner une matière</option>
-                {subjectParents.map(s => <option key={s.id} value={s.id}>{s.code} — {s.name} ({s.rubrique})</option>)}
-              </select>
+
+            {/* Step 1 — Classe */}
+            <div className="space-y-2">
+              <Label htmlFor="assign-class" className="text-sm font-semibold">
+                Classe <span className="text-destructive">*</span>
+              </Label>
+              <Select value={assignSessionId} onValueChange={handleAssignSessionChange}>
+                <SelectTrigger id="assign-class">
+                  <SelectValue placeholder="Sélectionner une classe" />
+                </SelectTrigger>
+                <SelectContent>
+                  {classrooms.length === 0 ? (
+                    <div className="px-3 py-2 text-sm text-muted-foreground">Aucune classe dans cette année</div>
+                  ) : (
+                    classrooms.map(c => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+              {assignSelectedClass && (
+                <p className="text-xs text-muted-foreground">
+                  {assignLoadingExisting
+                    ? 'Vérification des matières déjà assignées...'
+                    : `${assignAlreadyAssigned.size} matière${assignAlreadyAssigned.size > 1 ? 's' : ''} déjà assignée${assignAlreadyAssigned.size > 1 ? 's' : ''} à cette classe`}
+                </p>
+              )}
             </div>
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ fontSize: '13px', fontWeight: 500, color: '#1E1A17', display: 'block', marginBottom: '6px' }}>Coefficient override <span style={{ color: '#78756F', fontWeight: 400 }}>(optionnel)</span></label>
-              <input type="number" step="0.5" value={assignCoeffOverride} onChange={e => setAssignCoeffOverride(e.target.value)} placeholder={assignSelectedSubject ? `Coefficient global : ${assignSelectedSubject.coefficient}` : 'Ex: 3'} style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #D1CECC', fontSize: '14px' }} />
-            </div>
-            <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <label style={{ fontSize: '13px', fontWeight: 500, color: '#1E1A17' }}>Classes * <span style={{ color: '#78756F', fontWeight: 400 }}>({assignSelectedSessions.size} sélectionnée{assignSelectedSessions.size > 1 ? 's' : ''})</span></label>
-              <button onClick={toggleSelectAll} style={{ fontSize: '12px', color: '#2C4A6E', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 500 }}>
-                {assignSelectedSessions.size === classrooms.length ? 'Tout désélectionner' : 'Tout sélectionner'}
-              </button>
-            </div>
-            <div style={{ border: '1px solid #E8E6E3', borderRadius: '8px', overflow: 'auto', maxHeight: '240px', marginBottom: '20px' }}>
-              {classrooms.length === 0 ? (
-                <p style={{ padding: '16px', textAlign: 'center', color: '#78756F', fontSize: '13px' }}>Aucune classe dans cette année</p>
-              ) : classrooms.map((classroom, i) => (
-                <label key={classroom.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 16px', cursor: 'pointer', borderTop: i > 0 ? '1px solid #F0EDE8' : 'none', backgroundColor: assignSelectedSessions.has(classroom.id) ? '#F0F4F7' : 'white' }} className="hover:bg-[#FAF8F3]">
-                  <input type="checkbox" checked={assignSelectedSessions.has(classroom.id)} onChange={() => toggleAssignSession(classroom.id)} style={{ width: '16px', height: '16px', accentColor: '#2C4A6E', cursor: 'pointer' }} />
-                  <span style={{ fontSize: '14px', fontWeight: assignSelectedSessions.has(classroom.id) ? 600 : 400, color: '#1E1A17' }}>{classroom.name}</span>
-                </label>
-              ))}
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-              <button onClick={() => setAssignModalOpen(false)} style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #D1CECC', backgroundColor: 'white', fontSize: '13px', cursor: 'pointer', color: '#5C5955' }}>Annuler</button>
-              <button onClick={handleAssignSubjectToClasses} disabled={assignSubmitting || !assignSubjectId || assignSelectedSessions.size === 0} style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', backgroundColor: assignSubmitting || !assignSubjectId || assignSelectedSessions.size === 0 ? '#9CA3AF' : '#2C4A6E', color: 'white', fontSize: '13px', fontWeight: 500, cursor: assignSubmitting || !assignSubjectId || assignSelectedSessions.size === 0 ? 'not-allowed' : 'pointer' }}>
-                {assignSubmitting ? 'Assignation...' : `Assigner à ${assignSelectedSessions.size} classe${assignSelectedSessions.size > 1 ? 's' : ''}`}
-              </button>
+
+            {/* Step 2 — Matières */}
+            <div className="flex flex-1 flex-col overflow-hidden">
+              <div className="mb-2 flex items-center justify-between">
+                <Label className="text-sm font-semibold">
+                  Matières <span className="text-destructive">*</span>{' '}
+                  <span className="font-normal text-muted-foreground">
+                    ({assignSelectedSubjectIds.size} sélectionnée{assignSelectedSubjectIds.size > 1 ? 's' : ''})
+                  </span>
+                </Label>
+                <button
+                  type="button"
+                  onClick={toggleSelectAllSubjects}
+                  disabled={!assignSessionId || subjectParents.length === 0}
+                  className="text-xs font-medium text-[#2C4A6E] hover:underline disabled:text-muted-foreground disabled:no-underline"
+                >
+                  Tout sélectionner
+                </button>
+              </div>
+
+              <div className="relative mb-2">
+                <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Rechercher par nom ou code..."
+                  value={assignSubjectSearch}
+                  onChange={e => setAssignSubjectSearch(e.target.value)}
+                  className="pl-9"
+                  disabled={!assignSessionId}
+                />
+              </div>
+
+              <ScrollArea className="h-[300px] rounded-md border bg-muted/20">
+                {!assignSessionId ? (
+                  <div className="flex h-[300px] items-center justify-center px-6 text-center text-sm text-muted-foreground">
+                    Choisissez d&apos;abord une classe ci-dessus.
+                  </div>
+                ) : filteredAssignSubjects.length === 0 ? (
+                  <div className="flex h-[300px] items-center justify-center px-6 text-center text-sm text-muted-foreground">
+                    Aucune matière ne correspond à votre recherche.
+                  </div>
+                ) : (
+                  <ul className="divide-y divide-border bg-background">
+                    {filteredAssignSubjects.map(s => {
+                      const isAssigned = assignAlreadyAssigned.has(s.id)
+                      const isChecked = assignSelectedSubjectIds.has(s.id)
+                      return (
+                        <li
+                          key={s.id}
+                          className={cn(
+                            'flex items-start gap-3 px-3 py-2.5 transition-colors',
+                            isAssigned && 'opacity-60',
+                            !isAssigned && 'hover:bg-muted/40 cursor-pointer',
+                            isChecked && !isAssigned && 'bg-[#F0F4F7]'
+                          )}
+                          onClick={() => toggleAssignSubject(s.id)}
+                        >
+                          <Checkbox
+                            checked={isAssigned || isChecked}
+                            disabled={isAssigned}
+                            onCheckedChange={() => toggleAssignSubject(s.id)}
+                            onClick={e => e.stopPropagation()}
+                            className="mt-0.5"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
+                                {s.code}
+                              </code>
+                              <span className="text-sm font-medium text-foreground">{s.name}</span>
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  'text-[10px] font-bold',
+                                  s.rubrique === 'R1' && 'border-blue-200 bg-blue-50 text-blue-700',
+                                  s.rubrique === 'R2' && 'border-emerald-200 bg-emerald-50 text-emerald-700',
+                                  s.rubrique === 'R3' && 'border-amber-200 bg-amber-50 text-amber-700',
+                                )}
+                              >
+                                {s.rubrique}
+                              </Badge>
+                              {isAssigned && (
+                                <Badge variant="secondary" className="gap-1 text-[10px]">
+                                  <CheckIcon className="h-3 w-3" />
+                                  Déjà assignée
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                              Coefficient global : <span className="tabular-nums">{s.coefficient}</span>
+                            </p>
+                            {isChecked && !isAssigned && (
+                              <div className="mt-2 flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                                <Label htmlFor={`coef-${s.id}`} className="text-xs text-muted-foreground">
+                                  Coeff. override :
+                                </Label>
+                                <Input
+                                  id={`coef-${s.id}`}
+                                  type="number"
+                                  step="0.5"
+                                  min="0"
+                                  value={assignSubjectOverrides.get(s.id) ?? ''}
+                                  onChange={e => setSubjectOverride(s.id, e.target.value)}
+                                  placeholder={String(s.coefficient)}
+                                  className="h-7 w-24 text-xs"
+                                />
+                                <span className="text-[11px] text-muted-foreground">optionnel</span>
+                              </div>
+                            )}
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+              </ScrollArea>
             </div>
           </div>
-        </div>
-      )}
+
+          <DialogFooter className="border-t bg-muted/30 px-6 py-3">
+            <div className="flex w-full items-center justify-between gap-3">
+              <p className="text-xs text-muted-foreground">
+                {assignSelectedClass
+                  ? <>Classe : <span className="font-medium text-foreground">{assignSelectedClass.name}</span></>
+                  : 'Aucune classe sélectionnée'}
+              </p>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setAssignModalOpen(false)} disabled={assignSubmitting}>
+                  Annuler
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleAssignSubjectsToClass}
+                  disabled={assignSubmitting || !assignSessionId || assignSelectedSubjectIds.size === 0}
+                  className="bg-[#2C4A6E] text-white hover:bg-[#1F3856]"
+                >
+                  {assignSubmitting
+                    ? 'Assignation...'
+                    : `Assigner ${assignSelectedSubjectIds.size > 0 ? `${assignSelectedSubjectIds.size} ` : ''}matière${assignSelectedSubjectIds.size > 1 ? 's' : ''}`}
+                </Button>
+              </div>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Modaux périodes ── */}
       {selectedPeriod && (

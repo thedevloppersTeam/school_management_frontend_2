@@ -67,6 +67,7 @@ import {
   HelpCircleIcon,
   ArchiveIcon,
   CheckIcon,
+  UserPlusIcon,
 } from "lucide-react"
 import { getMe, logout, type AuthUser } from "@/lib/data/auth-data"
 import { fetchActiveAcademicYear, type AcademicYear } from "@/lib/api/dashboard"
@@ -100,12 +101,19 @@ type NavItem = NavLink | NavGroup
 const navItems: NavItem[] = [
   { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboardIcon },
   {
+    label: "Inscription",
+    icon: UserPlusIcon,
+    children: [
+      { label: "Élève", href: "/admin/all-students", icon: UsersIcon },
+    ],
+  },
+  {
     label: "Gestion Scolaire",
     icon: SchoolIcon,
     children: [
-      { label: "Élèves", href: "/admin/academic-year/:yearId/students", icon: UsersIcon },
-      { label: "Notes", href: "/admin/academic-year/:yearId/grades", icon: ClipboardEditIcon },
-      { label: "Bulletins", href: "/admin/academic-year/:yearId/reports", icon: FileTextIcon },
+      { label: "Élèves inscrits", href: "/admin/students", icon: UserIcon },
+      { label: "Notes", href: "/admin/grades", icon: ClipboardEditIcon },
+      { label: "Bulletins", href: "/admin/reports", icon: FileTextIcon },
     ],
   },
   {

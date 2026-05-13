@@ -99,7 +99,17 @@ function buildSubjectEntries(cs: ApiClassSubject, bucket: GradeBucket | undefine
     ? Number((rawCoeff as any).d[0])
     : Number(rawCoeff) || 1
 
+  // Cas 1 : matière sans sections déclarées → toujours la note globale
   if (!subject.hasSections || subject.sections.length === 0) {
+    return [{ name: subject.name, note: avg(bucket?.direct ?? []), coeff, isParent: false }]
+  }
+
+  // Cas 2 : matière avec sections. On regarde si au moins UNE section a des
+  // notes. Sinon on retombe sur la note globale (par exemple : l'admin a
+  // activé hasSections mais l'enseignant continue d'entrer des notes globales).
+  // C'est plus utile que d'afficher des sections vides.
+  const hasAnySectionGrade = Array.from(bucket?.sections.values() ?? []).some(arr => arr.length > 0)
+  if (!hasAnySectionGrade) {
     return [{ name: subject.name, note: avg(bucket?.direct ?? []), coeff, isParent: false }]
   }
 

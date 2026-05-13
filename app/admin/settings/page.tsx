@@ -1,20 +1,59 @@
-// app/admin/settings/school/page.tsx
 "use client"
-import { clientFetch as apiFetch } from '@/lib/client-fetch'
+
 import React, { useState, useEffect, useCallback } from "react"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/components/ui/use-toast"
-import { CPMSLSchoolInfoForm }      from "@/components/school/cpmsl-school-info-form"
-import { CPMSLCalendarManagement } from "@/components/school/cpmsl-calendar-management"
-import { Button }   from "@/components/ui/button"
-import { Input }    from "@/components/ui/input"
-import { Label }    from "@/components/ui/label"
-import { Badge }    from "@/components/ui/badge"
+import { clientFetch as apiFetch } from "@/lib/client-fetch"
+import { parseDecimal } from "@/lib/decimal"
+import { toMessage } from "@/lib/errors"
+import { cn } from "@/lib/utils"
+
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Separator } from "@/components/ui/separator"
+import { Switch } from "@/components/ui/switch"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { PlusIcon, ChevronRightIcon, ChevronDownIcon, CheckCircle2Icon, ZapIcon, Trash2Icon } from "lucide-react"
+
+import { CPMSLSchoolInfoForm } from "@/components/school/cpmsl-school-info-form"
+import { CPMSLCalendarManagement } from "@/components/school/cpmsl-calendar-management"
+
+import {
+  PlusIcon,
+  ChevronRightIcon,
+  ChevronDownIcon,
+  CheckCircle2Icon,
+  ZapIcon,
+  Trash2Icon,
+  PencilIcon,
+  BookOpenIcon,
+  LayersIcon,
+  SmileIcon,
+  SchoolIcon as SchoolBuildingIcon,
+} from "lucide-react"
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -24,9 +63,17 @@ interface SchoolInfo  { name: string; motto?: string; foundedYear?: number; logo
 interface Holiday     { id: string; name: string; date: string }
 interface SchoolEvent { id: string; title: string; date: string; type: 'exam'|'holiday'|'meeting'|'other'|'ceremony'|'trip'; academicYearId: string }
 interface Rubric      { id: string; name: string; code: string; description?: string }
-interface Section     { id: string; name: string; code: string; maxScore: number; displayOrder: number }
-interface Subject     { id: string; name: string; code: string; maxScore: number; coefficient: number; hasSections: boolean; rubricId?: string; rubric?: Rubric; sections?: Section[] }
+interface Section     { id: string; name: string; code: string; maxScore: unknown; displayOrder: number }
+interface ApiSubject  { id: string; name: string; code: string; maxScore: unknown; coefficient: unknown; hasSections: boolean; rubricId?: string }
+interface Subject {
+  id: string; name: string; code: string
+  maxScore: number; coefficient: number
+  hasSections: boolean
+  rubricId?: string; rubric?: Rubric
+  sections?: Section[]
+}
 interface ClassType   { id: string; name: string; code?: string; isTerminal: boolean }
+interface ApiClass    { id: string; classTypeId: string; letter: string; maxStudents?: number }
 interface Class       { id: string; classTypeId: string; classType?: ClassType; letter: string; maxStudents?: number }
 interface Attitude    { id: string; label: string; academicYearId: string }
 interface RubricForm  { name: string; code: string; description: string }
@@ -74,278 +121,412 @@ const TAB_LABELS: Record<string, string> = {
   attitudes:   'Attitudes',
 }
 
-const TH = { fontSize: '12px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: '#2C4A6E' }
+const NONE_RUBRIC = "__none__"
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// MODULE-LEVEL HELPERS  (complexity score: independent from SchoolSettingsPage)
+// HELPERS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// complexity: 1
 function getSectionCycles(sectionId: string): string[] {
+  if (typeof window === "undefined") return []
   try {
     const raw = localStorage.getItem(`section-cycles-${sectionId}`)
     return raw ? JSON.parse(raw) : []
-  } catch { return [] }
+  } catch {
+    return []
+  }
 }
 
-// complexity: 0
 function saveSectionCycles(sectionId: string, cycles: string[]): void {
+  if (typeof window === "undefined") return
   localStorage.setItem(`section-cycles-${sectionId}`, JSON.stringify(cycles))
 }
 
-
-// complexity: 3
-function rubricColor(code?: string) {
-  if (code === 'R1') return { bg: '#E3EFF9', color: '#2B6CB0' }
-  if (code === 'R2') return { bg: '#E8F5EC', color: '#2D7D46' }
-  if (code === 'R3') return { bg: '#FAF8F3', color: '#B0A07A' }
-  return { bg: '#F0F4F7', color: '#5A7085' }
+function rubricBadgeClasses(code?: string): string {
+  if (code === "R1") return "border-blue-200 bg-blue-50 text-blue-700"
+  if (code === "R2") return "border-emerald-200 bg-emerald-50 text-emerald-700"
+  if (code === "R3") return "border-amber-200 bg-amber-50 text-amber-700"
+  return "border-slate-200 bg-slate-50 text-slate-700"
 }
 
-// complexity: 3
-function rubricWeight(code: string) {
-  if (code === 'R1') return '70%'
-  if (code === 'R2') return '25%'
-  if (code === 'R3') return '5%'
-  return '—'
+function rubricWeight(code: string): string {
+  if (code === "R1") return "70%"
+  if (code === "R2") return "25%"
+  if (code === "R3") return "5%"
+  return "—"
 }
 
-// complexity: 3
 function extractLetters(words: string[]): string {
   if (words.length === 1) return words[0].slice(0, 3)
   if (words.length === 2) return words[0].slice(0, 2) + words[1].slice(0, 1)
-  return words.map(w => w[0]).join('').slice(0, 3)
+  return words.map((w) => w[0]).join("").slice(0, 3)
 }
 
-// complexity: 1
 function generateCode(name: string, existingCount: number): string {
   const words = name
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z\s]/g, '').toUpperCase().trim()
-    .split(/\s+/).filter(Boolean)
-  if (words.length === 0) return ''
-  return `${extractLetters(words)}-${String(existingCount + 1).padStart(3, '0')}`
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-zA-Z\s]/g, "")
+    .toUpperCase()
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+  if (words.length === 0) return ""
+  return `${extractLetters(words)}-${String(existingCount + 1).padStart(3, "0")}`
+}
+
+function normalizeSubject(s: ApiSubject, rubric?: Rubric): Subject {
+  return {
+    id: s.id,
+    name: s.name,
+    code: s.code,
+    maxScore: parseDecimal(s.maxScore) ?? 0,
+    coefficient: parseDecimal(s.coefficient) ?? 1,
+    hasSections: s.hasSections,
+    rubricId: s.rubricId,
+    rubric,
+    sections: [],
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// HOOK  (complexity per function: ≤ 6 each, all independent)
+// HOOK
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function useSchoolSettings() {
   const { toast } = useToast()
 
   // data
-  const [schoolInfo,        setSchoolInfo]        = useState<SchoolInfo>(DEFAULT_SCHOOL_INFO)
+  const [schoolInfo, setSchoolInfo] = useState<SchoolInfo>(DEFAULT_SCHOOL_INFO)
   const [loadingSchoolInfo, setLoadingSchoolInfo] = useState(false)
-  const [schoolInfoLoaded,  setSchoolInfoLoaded]  = useState(false)
+  const [schoolInfoLoaded, setSchoolInfoLoaded] = useState(false)
   const [holidays, setHolidays] = useState<Holiday[]>([])
-  const [events,   setEvents]   = useState<SchoolEvent[]>([])
-  const [rubrics,  setRubrics]  = useState<Rubric[]>([])
+  const [events, setEvents] = useState<SchoolEvent[]>([])
+  const [rubrics, setRubrics] = useState<Rubric[]>([])
   const [subjects, setSubjects] = useState<Subject[]>([])
-  const [loadingRef,        setLoadingRef]        = useState(false)
+  const [loadingRef, setLoadingRef] = useState(false)
   const [referentielLoaded, setReferentielLoaded] = useState(false)
-  const [expandedSubjects,  setExpandedSubjects]  = useState<Set<string>>(new Set())
-  const [classTypes,     setClassTypes]     = useState<ClassType[]>([])
-  const [classes,        setClasses]        = useState<Class[]>([])
+  const [expandedSubjects, setExpandedSubjects] = useState<Set<string>>(new Set())
+  const [classTypes, setClassTypes] = useState<ClassType[]>([])
+  const [classes, setClasses] = useState<Class[]>([])
   const [loadingClasses, setLoadingClasses] = useState(false)
-  const [classesLoaded,  setClassesLoaded]  = useState(false)
-  const [initializing,   setInitializing]   = useState(false)
-  const [attitudes,        setAttitudes]        = useState<Attitude[]>([])
+  const [classesLoaded, setClassesLoaded] = useState(false)
+  const [initializing, setInitializing] = useState(false)
+  const [attitudes, setAttitudes] = useState<Attitude[]>([])
   const [loadingAttitudes, setLoadingAttitudes] = useState(false)
-  const [attitudesLoaded,  setAttitudesLoaded]  = useState(false)
-  const [currentYearId,    setCurrentYearId]    = useState<string | null>(null)
+  const [attitudesLoaded, setAttitudesLoaded] = useState(false)
+  const [currentYearId, setCurrentYearId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState("general")
 
   // modals
-  const [rubricModal,     setRubricModal]     = useState(false)
-  const [subjectModal,    setSubjectModal]    = useState(false)
-  const [sectionModal,    setSectionModal]    = useState(false)
-  const [attitudeModal,   setAttitudeModal]   = useState(false)
-  const [classModal,      setClassModal]      = useState(false)
-  const [submitting,      setSubmitting]      = useState(false)
-  const [editingRubric,   setEditingRubric]   = useState<Rubric | null>(null)
-  const [editingSubject,  setEditingSubject]  = useState<Subject | null>(null)
-  const [editingClass,    setEditingClass]    = useState<Class | null>(null)
+  const [rubricModal, setRubricModal] = useState(false)
+  const [subjectModal, setSubjectModal] = useState(false)
+  const [sectionModal, setSectionModal] = useState(false)
+  const [attitudeModal, setAttitudeModal] = useState(false)
+  const [classModal, setClassModal] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [editingRubric, setEditingRubric] = useState<Rubric | null>(null)
+  const [editingSubject, setEditingSubject] = useState<Subject | null>(null)
+  const [editingClass, setEditingClass] = useState<Class | null>(null)
   const [editingAttitude, setEditingAttitude] = useState<Attitude | null>(null)
   const [sectionParentId, setSectionParentId] = useState<string | null>(null)
-  const [rubricForm,    setRubricForm]    = useState<RubricForm>({ name: '', code: '', description: '' })
-  const [subjectForm,   setSubjectForm]   = useState<SubjectForm>({ name: '', code: '', maxScore: '100', coefficient: '1', hasSections: false, rubricId: '' })
-  const [sectionForm,   setSectionForm]   = useState<SectionForm>({ name: '', code: '', maxScore: '100', cycles: [] })
-  const [classForm,     setClassForm]     = useState<ClassForm>({ maxStudents: '30' })
+  const [deleteAttitudeTarget, setDeleteAttitudeTarget] = useState<Attitude | null>(null)
+  const [rubricForm, setRubricForm] = useState<RubricForm>({ name: "", code: "", description: "" })
+  const [subjectForm, setSubjectForm] = useState<SubjectForm>({ name: "", code: "", maxScore: "100", coefficient: "1", hasSections: false, rubricId: NONE_RUBRIC })
+  const [sectionForm, setSectionForm] = useState<SectionForm>({ name: "", code: "", maxScore: "100", cycles: [] })
+  const [classForm, setClassForm] = useState<ClassForm>({ maxStudents: "30" })
   const [attitudeLabel, setAttitudeLabel] = useState("")
 
-  // ── Loaders ────────────────────────────────────────────── complexity: 1 each
+  // ── Loaders ────────────────────────────────────────────────────────────────
 
   const loadReferentiel = useCallback(async () => {
     setLoadingRef(true)
     try {
       const [rubricsData, subjectsData] = await Promise.all([
-        apiFetch<Rubric[]>('/api/subject-rubrics/'),
-        apiFetch<Subject[]>('/api/subjects/'),
+        apiFetch<Rubric[]>("/api/subject-rubrics/"),
+        apiFetch<ApiSubject[]>("/api/subjects/"),
       ])
       setRubrics(rubricsData)
-      setSubjects(subjectsData.map(s => ({ ...s, sections: [], rubric: rubricsData.find(r => r.id === s.rubricId) })))
-    } catch (err) { console.error('[settings] referentiel:', err) }
-    finally { setLoadingRef(false) }
-  }, [])
+      setSubjects(
+        subjectsData.map((s) =>
+          normalizeSubject(s, rubricsData.find((r) => r.id === s.rubricId))
+        )
+      )
+    } catch (err) {
+      toast({
+        title: "Erreur",
+        description: toMessage(err, "lors du chargement du référentiel"),
+        variant: "destructive",
+      })
+    } finally {
+      setLoadingRef(false)
+    }
+  }, [toast])
 
   const loadClasses = useCallback(async () => {
     setLoadingClasses(true)
     try {
       const [ctData, clData] = await Promise.all([
-        apiFetch<ClassType[]>('/api/class-types/'),
-        apiFetch<Class[]>('/api/classes/'),
+        apiFetch<ClassType[]>("/api/class-types/"),
+        apiFetch<ApiClass[]>("/api/classes/"),
       ])
       setClassTypes(ctData)
-      setClasses(clData.map(c => ({ ...c, classType: ctData.find(ct => ct.id === c.classTypeId) })))
-    } catch (err) { console.error('[settings] classes:', err) }
-    finally { setLoadingClasses(false) }
-  }, [])
+      setClasses(clData.map((c) => ({ ...c, classType: ctData.find((ct) => ct.id === c.classTypeId) })))
+    } catch (err) {
+      toast({
+        title: "Erreur",
+        description: toMessage(err, "lors du chargement des classes"),
+        variant: "destructive",
+      })
+    } finally {
+      setLoadingClasses(false)
+    }
+  }, [toast])
 
   const loadAttitudes = useCallback(async (yearId: string) => {
     setLoadingAttitudes(true)
     try {
-      const data = await fetch(`/api/attitudes?academicYearId=${yearId}`, { credentials: 'include' }).then(r => r.json())
+      const data = await apiFetch<Attitude[]>(`/api/attitudes?academicYearId=${yearId}`)
       setAttitudes(Array.isArray(data) ? data : [])
-    } catch (err) { console.error('[settings] attitudes:', err) }
-    finally { setLoadingAttitudes(false) }
-  }, [])
+    } catch (err) {
+      toast({
+        title: "Erreur",
+        description: toMessage(err, "lors du chargement des attitudes"),
+        variant: "destructive",
+      })
+    } finally {
+      setLoadingAttitudes(false)
+    }
+  }, [toast])
 
-  // ── Effects ────────────────────────────────────────────── complexity: 4 / 3
+  // ── Effects ────────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (activeTab === 'referentiel' && !referentielLoaded) { loadReferentiel(); setReferentielLoaded(true) }
-    if (activeTab === 'classes'     && !classesLoaded)     { loadClasses();     setClassesLoaded(true) }
-    if (activeTab === 'attitudes'   && !attitudesLoaded) {
+    if (activeTab === "referentiel" && !referentielLoaded) { loadReferentiel(); setReferentielLoaded(true) }
+    if (activeTab === "classes" && !classesLoaded) { loadClasses(); setClassesLoaded(true) }
+    if (activeTab === "attitudes" && !attitudesLoaded) {
       setAttitudesLoaded(true)
-      fetch('/api/academic-years/current', { credentials: 'include' }).then(r => r.json())
-        .then(data => {
-          const yearId = data?.id ?? data?.academicYear?.id
-          if (yearId) { setCurrentYearId(yearId); loadAttitudes(yearId) }
+      apiFetch<{ id?: string }>("/api/academic-years/current")
+        .then((data) => {
+          if (data?.id) {
+            setCurrentYearId(data.id)
+            loadAttitudes(data.id)
+          }
         })
-        .catch(err => console.error('[settings] current year:', err))
+        .catch(() => {
+          // no current year set — handled in UI
+        })
     }
   }, [activeTab, referentielLoaded, classesLoaded, attitudesLoaded, loadReferentiel, loadClasses, loadAttitudes])
 
   useEffect(() => {
-    if (activeTab !== 'general' || schoolInfoLoaded) return
+    if (activeTab !== "general" || schoolInfoLoaded) return
     setSchoolInfoLoaded(true)
     setLoadingSchoolInfo(true)
-    fetch('/api/school-info', { credentials: 'include' }).then(r => r.json())
-      .then(data => {
-        if (data) setSchoolInfo({ name: data.name ?? DEFAULT_SCHOOL_INFO.name, motto: data.motto ?? '', foundedYear: data.foundedYear, logo: data.logo ?? '', address: data.address ?? '', phone: data.phone ?? '', email: data.email ?? '' })
+    apiFetch<SchoolInfo & { logoUrl?: string }>("/api/school-info")
+      .then((data) => {
+        if (data) {
+          setSchoolInfo({
+            name: data.name ?? DEFAULT_SCHOOL_INFO.name,
+            motto: data.motto ?? "",
+            foundedYear: data.foundedYear,
+            logo: data.logo ?? data.logoUrl ?? "",
+            address: data.address ?? "",
+            phone: data.phone ?? "",
+            email: data.email ?? "",
+          })
+        }
       })
-      .catch(err => console.error('[settings] school-info:', err))
+      .catch(() => {
+        // singleton — empty on first run is fine
+      })
       .finally(() => setLoadingSchoolInfo(false))
   }, [activeTab, schoolInfoLoaded])
 
-  // ── School info ─────────────────────────────────────────── complexity: 1
+  // ── School info ────────────────────────────────────────────────────────────
 
   const handleSaveSchoolInfo = async (info: SchoolInfo) => {
     setSchoolInfo(info)
     try {
-      await fetch('/api/school-info/update', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(info) })
+      // Backend field is `logoUrl` (the form uses `logo` internally).
+      const { logo, ...rest } = info
+      const payload = { ...rest, logoUrl: logo || null }
+      await apiFetch("/api/school-info/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
       toast({ title: "Paramètres enregistrés" })
-    } catch { toast({ title: "Erreur", description: "Impossible de sauvegarder", variant: "destructive" }) }
+    } catch (err) {
+      toast({
+        title: "Erreur",
+        description: toMessage(err, "lors de la sauvegarde"),
+        variant: "destructive",
+      })
+    }
   }
 
-  // ── Calendar ─────────────────────────────────────────────── complexity: 0-1
+  // ── Calendar (local-state only — persisted by the component itself if needed) ──
 
-  const handleAddHoliday    = (d: { name: string; date: string }) => setHolidays(p => [...p, { id: `h-${Date.now()}`, ...d }])
-  const handleEditHoliday   = (id: string, d: { name: string; date: string }) => setHolidays(p => p.map(h => h.id === id ? { ...h, ...d } : h))
-  const handleDeleteHoliday = (id: string) => setHolidays(p => p.filter(h => h.id !== id))
-  const handleAddEvent      = (d: { title: string; date: string; type: SchoolEvent['type'] }) => setEvents(p => [...p, { id: `e-${Date.now()}`, ...d, academicYearId: '' }])
-  const handleEditEvent     = (id: string, d: { title: string; date: string; type: SchoolEvent['type'] }) => setEvents(p => p.map(e => e.id === id ? { ...e, ...d } : e))
-  const handleDeleteEvent   = (id: string) => setEvents(p => p.filter(e => e.id !== id))
+  const handleAddHoliday    = (d: { name: string; date: string }) => setHolidays((p) => [...p, { id: `h-${Date.now()}`, ...d }])
+  const handleEditHoliday   = (id: string, d: { name: string; date: string }) => setHolidays((p) => p.map((h) => (h.id === id ? { ...h, ...d } : h)))
+  const handleDeleteHoliday = (id: string) => setHolidays((p) => p.filter((h) => h.id !== id))
+  const handleAddEvent      = (d: { title: string; date: string; type: SchoolEvent["type"] }) => setEvents((p) => [...p, { id: `e-${Date.now()}`, ...d, academicYearId: "" }])
+  const handleEditEvent     = (id: string, d: { title: string; date: string; type: SchoolEvent["type"] }) => setEvents((p) => p.map((e) => (e.id === id ? { ...e, ...d } : e)))
+  const handleDeleteEvent   = (id: string) => setEvents((p) => p.filter((e) => e.id !== id))
 
-  // ── Rubric handlers ──────────────────────────────────────── complexity: 2
+  // ── Rubric handlers ────────────────────────────────────────────────────────
 
-  const openCreateRubric = () => { setEditingRubric(null); setRubricForm({ name: '', code: '', description: '' }); setRubricModal(true) }
-  const openEditRubric   = (r: Rubric) => { setEditingRubric(r); setRubricForm({ name: r.name, code: r.code, description: r.description || '' }); setRubricModal(true) }
+  const openCreateRubric = () => { setEditingRubric(null); setRubricForm({ name: "", code: "", description: "" }); setRubricModal(true) }
+  const openEditRubric   = (r: Rubric) => { setEditingRubric(r); setRubricForm({ name: r.name, code: r.code, description: r.description || "" }); setRubricModal(true) }
 
   const handleSaveRubric = async () => {
     setSubmitting(true)
     try {
-      if (editingRubric) {
-        await apiFetch(`/api/subject-rubrics/update/${editingRubric.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(rubricForm) })
-        toast({ title: "Rubrique modifiée" })
-      } else {
-        await apiFetch('/api/subject-rubrics/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(rubricForm) })
-        toast({ title: "Rubrique créée" })
-      }
-      setRubricModal(false); loadReferentiel()
-    } catch { toast({ title: "Erreur", variant: "destructive" }) }
-    finally { setSubmitting(false) }
+      const url = editingRubric ? `/api/subject-rubrics/update/${editingRubric.id}` : "/api/subject-rubrics/create"
+      await apiFetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(rubricForm),
+      })
+      toast({ title: editingRubric ? "Rubrique modifiée" : "Rubrique créée" })
+      setRubricModal(false)
+      await loadReferentiel()
+    } catch (err) {
+      toast({
+        title: "Erreur",
+        description: toMessage(err, editingRubric ? "lors de la modification" : "lors de la création"),
+        variant: "destructive",
+      })
+    } finally {
+      setSubmitting(false)
+    }
   }
 
-  // ── Subject handlers ─────────────────────────────────────── complexity: 2
+  // ── Subject handlers ───────────────────────────────────────────────────────
 
-  const openCreateSubject = () => { setEditingSubject(null); setSubjectForm({ name: '', code: '', maxScore: '100', coefficient: '1', hasSections: false, rubricId: '' }); setSubjectModal(true) }
-  const openEditSubject   = (s: Subject) => { setEditingSubject(s); setSubjectForm({ name: s.name, code: s.code, maxScore: String(s.maxScore), coefficient: String(s.coefficient), hasSections: s.hasSections, rubricId: s.rubricId || '' }); setSubjectModal(true) }
+  const openCreateSubject = () => {
+    setEditingSubject(null)
+    setSubjectForm({ name: "", code: "", maxScore: "100", coefficient: "1", hasSections: false, rubricId: NONE_RUBRIC })
+    setSubjectModal(true)
+  }
+  const openEditSubject = (s: Subject) => {
+    setEditingSubject(s)
+    setSubjectForm({
+      name: s.name,
+      code: s.code,
+      maxScore: String(s.maxScore),
+      coefficient: String(s.coefficient),
+      hasSections: s.hasSections,
+      rubricId: s.rubricId || NONE_RUBRIC,
+    })
+    setSubjectModal(true)
+  }
 
   const handleSubjectNameChange = (name: string) => {
-    setSubjectForm(f => ({ ...f, name, ...(!editingSubject && { code: generateCode(name, subjects.length) }) }))
+    setSubjectForm((f) => ({ ...f, name, ...(!editingSubject && { code: generateCode(name, subjects.length) }) }))
   }
 
   const handleSaveSubject = async () => {
     setSubmitting(true)
     try {
-      const body = { name: subjectForm.name, code: subjectForm.code, maxScore: Number.parseFloat(subjectForm.maxScore), coefficient: Number.parseFloat(subjectForm.coefficient), hasSections: subjectForm.hasSections, rubricId: subjectForm.rubricId || null }
-      if (editingSubject) {
-        await apiFetch(`/api/subjects/update/${editingSubject.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-        toast({ title: "Matière modifiée" })
-      } else {
-        await apiFetch('/api/subjects/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-        toast({ title: "Matière créée" })
+      const body = {
+        name: subjectForm.name,
+        code: subjectForm.code,
+        maxScore: Number.parseFloat(subjectForm.maxScore),
+        coefficient: Number.parseFloat(subjectForm.coefficient),
+        hasSections: subjectForm.hasSections,
+        rubricId: subjectForm.rubricId === NONE_RUBRIC ? null : subjectForm.rubricId,
       }
-      setSubjectModal(false); loadReferentiel()
-    } catch { toast({ title: "Erreur", variant: "destructive" }) }
-    finally { setSubmitting(false) }
+      const url = editingSubject ? `/api/subjects/update/${editingSubject.id}` : "/api/subjects/create"
+      await apiFetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+      toast({ title: editingSubject ? "Matière modifiée" : "Matière créée" })
+      setSubjectModal(false)
+      await loadReferentiel()
+    } catch (err) {
+      toast({
+        title: "Erreur",
+        description: toMessage(err, editingSubject ? "lors de la modification" : "lors de la création"),
+        variant: "destructive",
+      })
+    } finally {
+      setSubmitting(false)
+    }
   }
 
-  // ── Section handlers ─────────────────────────────────────── complexity: 4
+  // ── Section handlers ───────────────────────────────────────────────────────
 
-  const openCreateSection = (subjectId: string) => { setSectionParentId(subjectId); setSectionForm({ name: '', code: '', maxScore: '100', cycles: [] }); setSectionModal(true) }
+  const openCreateSection = (subjectId: string) => {
+    setSectionParentId(subjectId)
+    setSectionForm({ name: "", code: "", maxScore: "100", cycles: [] })
+    setSectionModal(true)
+  }
 
   const handleSectionNameChange = (name: string) => {
-    const parent = subjects.find(s => s.id === sectionParentId)
-    setSectionForm(f => ({ ...f, name, code: generateCode(name, parent?.sections?.length || 0) }))
+    const parent = subjects.find((s) => s.id === sectionParentId)
+    setSectionForm((f) => ({ ...f, name, code: generateCode(name, parent?.sections?.length || 0) }))
   }
 
   const toggleSectionCycle = (key: string, checked: boolean) => {
-    setSectionForm(f => ({ ...f, cycles: checked ? [...f.cycles, key] : f.cycles.filter(c => c !== key) }))
+    setSectionForm((f) => ({ ...f, cycles: checked ? [...f.cycles, key] : f.cycles.filter((c) => c !== key) }))
   }
 
   const handleSaveSection = async () => {
     if (!sectionParentId) return
     setSubmitting(true)
     try {
-      const parent = subjects.find(s => s.id === sectionParentId)
-      const result = await apiFetch<any>(`/api/subjects/${sectionParentId}/sections/create`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: sectionForm.name, code: sectionForm.code, maxScore: parseFloat(sectionForm.maxScore), displayOrder: (parent?.sections?.length || 0) + 1 })
+      const parent = subjects.find((s) => s.id === sectionParentId)
+      const result = await apiFetch<{ section?: { id: string } }>(`/api/subjects/${sectionParentId}/sections/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: sectionForm.name,
+          code: sectionForm.code,
+          maxScore: parseFloat(sectionForm.maxScore),
+          displayOrder: (parent?.sections?.length || 0) + 1,
+        }),
       })
       const sectionId = result?.section?.id
       if (sectionId && sectionForm.cycles.length > 0) saveSectionCycles(sectionId, sectionForm.cycles)
-      toast({ title: "Sous-matière créée" }); setSectionModal(false); loadReferentiel()
-    } catch { toast({ title: "Erreur", variant: "destructive" }) }
-    finally { setSubmitting(false) }
-  }
-
-  // ── Expand ───────────────────────────────────────────────── complexity: 4
-
-  const toggleExpand = async (subjectId: string) => {
-    setExpandedSubjects(prev => { const n = new Set(prev); n.has(subjectId) ? n.delete(subjectId) : n.add(subjectId); return n })
-    const subject = subjects.find(s => s.id === subjectId)
-    if (subject?.hasSections && (!subject.sections || subject.sections.length === 0)) {
-      try {
-        const sections = await apiFetch<Section[]>(`/api/subjects/${subjectId}/sections`)
-        setSubjects(prev => prev.map(s => s.id === subjectId ? { ...s, sections } : s))
-      } catch { /* ignore */ }
+      toast({ title: "Sous-matière créée" })
+      setSectionModal(false)
+      await loadReferentiel()
+    } catch (err) {
+      toast({
+        title: "Erreur",
+        description: toMessage(err, "lors de la création de la sous-matière"),
+        variant: "destructive",
+      })
+    } finally {
+      setSubmitting(false)
     }
   }
 
-  // ── Attitude handlers ────────────────────────────────────── complexity: 3
+  // ── Expand ─────────────────────────────────────────────────────────────────
+
+  const toggleExpand = async (subjectId: string) => {
+    setExpandedSubjects((prev) => {
+      const n = new Set(prev)
+      if (n.has(subjectId)) n.delete(subjectId)
+      else n.add(subjectId)
+      return n
+    })
+    const subject = subjects.find((s) => s.id === subjectId)
+    if (subject?.hasSections && (!subject.sections || subject.sections.length === 0)) {
+      try {
+        const sections = await apiFetch<Section[]>(`/api/subjects/${subjectId}/sections`)
+        setSubjects((prev) => prev.map((s) => (s.id === subjectId ? { ...s, sections } : s)))
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  // ── Attitude handlers ──────────────────────────────────────────────────────
 
   const openCreateAttitude = () => { setEditingAttitude(null); setAttitudeLabel(""); setAttitudeModal(true) }
   const openEditAttitude   = (a: Attitude) => { setEditingAttitude(a); setAttitudeLabel(a.label); setAttitudeModal(true) }
@@ -355,44 +536,86 @@ function useSchoolSettings() {
     setSubmitting(true)
     try {
       if (editingAttitude) {
-        await fetch(`/api/attitudes/update/${editingAttitude.id}`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label: attitudeLabel.trim() }) })
+        await apiFetch(`/api/attitudes/update/${editingAttitude.id}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ label: attitudeLabel.trim() }),
+        })
         toast({ title: "Attitude modifiée" })
       } else {
-        await fetch('/api/attitudes/create', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label: attitudeLabel.trim(), academicYearId: currentYearId }) })
+        await apiFetch("/api/attitudes/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ label: attitudeLabel.trim(), academicYearId: currentYearId }),
+        })
         toast({ title: "Attitude créée" })
       }
-      setAttitudeModal(false); loadAttitudes(currentYearId)
-    } catch { toast({ title: "Erreur", variant: "destructive" }) }
-    finally { setSubmitting(false) }
+      setAttitudeModal(false)
+      await loadAttitudes(currentYearId)
+    } catch (err) {
+      toast({
+        title: "Erreur",
+        description: toMessage(err, editingAttitude ? "lors de la modification" : "lors de la création"),
+        variant: "destructive",
+      })
+    } finally {
+      setSubmitting(false)
+    }
   }
 
-  const handleDeleteAttitude = async (attitude: Attitude) => {
-    if (!currentYearId) return
+  const confirmDeleteAttitude = async () => {
+    if (!deleteAttitudeTarget || !currentYearId) return
     try {
-      await fetch(`/api/attitudes/delete/${attitude.id}`, { method: 'POST', credentials: 'include' })
-      toast({ title: "Attitude supprimée" }); loadAttitudes(currentYearId)
-    } catch { toast({ title: "Erreur", variant: "destructive" }) }
+      await apiFetch(`/api/attitudes/delete/${deleteAttitudeTarget.id}`, { method: "POST" })
+      toast({ title: "Attitude supprimée" })
+      setDeleteAttitudeTarget(null)
+      await loadAttitudes(currentYearId)
+    } catch (err) {
+      toast({
+        title: "Erreur",
+        description: toMessage(err, "lors de la suppression"),
+        variant: "destructive",
+      })
+    }
   }
 
-  // ── Class handlers ───────────────────────────────────────── complexity: 4
+  // ── Class handlers ─────────────────────────────────────────────────────────
 
   const handleInitializeClasses = async () => {
     setInitializing(true)
     try {
-      const createdTypes: any[] = []
+      const createdTypes: Array<{ classType?: { id: string }; id?: string }> = []
       for (const ct of CLASS_TYPES_SEED) {
-        const res = await apiFetch<any>('/api/class-types/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(ct) })
+        const res = await apiFetch<{ classType?: { id: string }; id?: string }>("/api/class-types/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(ct),
+        })
         createdTypes.push(res)
       }
-      await Promise.all(createdTypes.map((res: any) => {
-        const id = res?.classType?.id ?? res?.data?.id ?? res?.id
-        if (!id) return Promise.resolve()
-        return apiFetch('/api/classes/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ classTypeId: id, letter: 'A', maxStudents: 30 }) })
-      }))
+      await Promise.all(
+        createdTypes.map((res) => {
+          const id = res?.classType?.id ?? res?.id
+          if (!id) return Promise.resolve()
+          return apiFetch("/api/classes/create", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ classTypeId: id, letter: "A", maxStudents: 30 }),
+          })
+        })
+      )
       toast({ title: "Initialisation réussie", description: "13 niveaux et 13 classes créés." })
+      setClassesLoaded(false)
       await loadClasses()
-    } catch { toast({ title: "Erreur", description: "Impossible d'initialiser", variant: "destructive" }) }
-    finally { setInitializing(false) }
+    } catch (err) {
+      toast({
+        title: "Erreur",
+        description: toMessage(err, "lors de l'initialisation"),
+        variant: "destructive",
+      })
+    } finally {
+      setInitializing(false)
+    }
   }
 
   const openEditClass = (c: Class) => { setEditingClass(c); setClassForm({ maxStudents: String(c.maxStudents || 30) }); setClassModal(true) }
@@ -401,10 +624,24 @@ function useSchoolSettings() {
     if (!editingClass) return
     setSubmitting(true)
     try {
-      await apiFetch(`/api/classes/update/${editingClass.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ maxStudents: parseInt(classForm.maxStudents) || undefined }) })
-      toast({ title: "Classe modifiée" }); setClassModal(false); setClassesLoaded(false); loadClasses()
-    } catch { toast({ title: "Erreur", variant: "destructive" }) }
-    finally { setSubmitting(false) }
+      await apiFetch(`/api/classes/update/${editingClass.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ maxStudents: parseInt(classForm.maxStudents) || undefined }),
+      })
+      toast({ title: "Classe modifiée" })
+      setClassModal(false)
+      setClassesLoaded(false)
+      await loadClasses()
+    } catch (err) {
+      toast({
+        title: "Erreur",
+        description: toMessage(err, "lors de la modification"),
+        variant: "destructive",
+      })
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return {
@@ -414,7 +651,8 @@ function useSchoolSettings() {
     loadingRef, rubrics, subjects, expandedSubjects, toggleExpand,
     openCreateRubric, openEditRubric, openCreateSubject, openEditSubject, openCreateSection,
     loadingClasses, classTypes, classes, initializing, handleInitializeClasses, openEditClass,
-    loadingAttitudes, attitudes, currentYearId, openCreateAttitude, openEditAttitude, handleDeleteAttitude,
+    loadingAttitudes, attitudes, currentYearId, openCreateAttitude, openEditAttitude,
+    deleteAttitudeTarget, setDeleteAttitudeTarget, confirmDeleteAttitude,
     rubricModal, setRubricModal, subjectModal, setSubjectModal, sectionModal, setSectionModal,
     attitudeModal, setAttitudeModal, classModal, setClassModal, submitting,
     editingRubric, editingSubject, editingClass, editingAttitude,
@@ -426,342 +664,525 @@ function useSchoolSettings() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// TAB COMPONENTS  (complexity: 1 each — only the early-return guard)
+// SECTION HEADER (reusable card head with title/desc/action)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function SectionCard({
+  icon: Icon,
+  title,
+  description,
+  action,
+  children,
+}: {
+  icon?: React.ElementType
+  title: string
+  description?: string
+  action?: React.ReactNode
+  children: React.ReactNode
+}) {
+  return (
+    <Card className="border bg-card shadow-sm">
+      <CardHeader className="pb-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-base font-semibold">
+              {Icon && <Icon className="h-4 w-4 text-[#2C4A6E]" />}
+              {title}
+            </CardTitle>
+            {description && <CardDescription className="mt-0.5">{description}</CardDescription>}
+          </div>
+          {action}
+        </div>
+      </CardHeader>
+      <Separator />
+      <CardContent className="p-0">{children}</CardContent>
+    </Card>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TAB COMPONENTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
 interface ReferentielTabProps {
-  loading: boolean; rubrics: Rubric[]; subjects: Subject[]; expandedSubjects: Set<string>
-  onCreateRubric: () => void; onEditRubric: (r: Rubric) => void
-  onCreateSubject: () => void; onEditSubject: (s: Subject) => void
-  onCreateSection: (id: string) => void; onToggleExpand: (id: string) => void
+  loading: boolean
+  rubrics: Rubric[]
+  subjects: Subject[]
+  expandedSubjects: Set<string>
+  onCreateRubric: () => void
+  onEditRubric: (r: Rubric) => void
+  onCreateSubject: () => void
+  onEditSubject: (s: Subject) => void
+  onCreateSection: (id: string) => void
+  onToggleExpand: (id: string) => void
 }
 
-function ReferentielTab({ loading, rubrics, subjects, expandedSubjects, onCreateRubric, onEditRubric, onCreateSubject, onEditSubject, onCreateSection, onToggleExpand }: ReferentielTabProps) {
-  if (loading) return <div className="space-y-4"><Skeleton className="h-32 w-full" /><Skeleton className="h-64 w-full" /></div>
-  return (
-    <>
-      <div style={{ backgroundColor: '#FFFFFF', borderRadius: '10px', border: '1px solid #E8E6E3', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
-        <div style={{ padding: '20px 24px', borderBottom: '1px solid #E8E6E3', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: '18px', fontWeight: 600, color: '#2A3740' }}>Rubriques ({rubrics.length})</h3>
-            <p style={{ fontSize: '13px', color: '#78756F', marginTop: '2px' }}>Formule BR-001 : R1 × 70% + R2 × 25% + R3 × 5%</p>
-          </div>
-          <Button onClick={onCreateRubric} disabled={rubrics.length >= 3} title={rubrics.length >= 3 ? "Maximum 3 rubriques" : undefined}
-            style={{ backgroundColor: rubrics.length >= 3 ? '#9CA3AF' : '#2C4A6E', color: 'white', borderRadius: '8px' }}>
-            <PlusIcon className="mr-2 h-4 w-4" />Nouvelle rubrique
-          </Button>
-        </div>
-        <div style={{ padding: '24px' }}>
-          <div style={{ borderRadius: '8px', border: '1px solid #E8E6E3', overflow: 'hidden' }}>
-            <Table>
-              <TableHeader>
-                <TableRow style={{ backgroundColor: '#F1F5F9', borderBottom: '2px solid #D1D5DB' }}>
-                  <TableHead style={TH}>Code</TableHead><TableHead style={TH}>Nom</TableHead>
-                  <TableHead style={TH}>Description</TableHead><TableHead style={TH}>Poids BR-001</TableHead>
-                  <TableHead style={{ ...TH, textAlign: 'center' }}>Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rubrics.length === 0
-                  ? <TableRow><TableCell colSpan={5} style={{ textAlign: 'center', color: '#78756F', padding: '32px' }}>Aucune rubrique — créez R1, R2, R3</TableCell></TableRow>
-                  : rubrics.map((r, i) => {
-                      const c = rubricColor(r.code)
-                      return (
-                        <TableRow key={r.id} style={{ borderTop: i > 0 ? '1px solid #E8E6E3' : 'none' }}>
-                          <TableCell><Badge style={{ backgroundColor: c.bg, color: c.color, border: 'none', fontWeight: 700 }}>{r.code}</Badge></TableCell>
-                          <TableCell style={{ fontWeight: 600, color: '#1E1A17', fontSize: '14px' }}>{r.name}</TableCell>
-                          <TableCell style={{ color: '#78756F', fontSize: '13px' }}>{r.description || '—'}</TableCell>
-                          <TableCell style={{ fontWeight: 700, color: c.color, fontSize: '14px' }}>{rubricWeight(r.code)}</TableCell>
-                          <TableCell style={{ textAlign: 'center' }}>
-                            <button onClick={() => onEditRubric(r)} style={{ fontSize: '13px', fontWeight: 500, color: '#5A7085', background: 'none', border: 'none', cursor: 'pointer' }}>Modifier</button>
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
+function ReferentielTab({
+  loading, rubrics, subjects, expandedSubjects,
+  onCreateRubric, onEditRubric, onCreateSubject, onEditSubject, onCreateSection, onToggleExpand,
+}: ReferentielTabProps) {
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-40 w-full rounded-xl" />
+        <Skeleton className="h-72 w-full rounded-xl" />
       </div>
+    )
+  }
 
-      <div style={{ backgroundColor: '#FFFFFF', borderRadius: '10px', border: '1px solid #E8E6E3', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
-        <div style={{ padding: '20px 24px', borderBottom: '1px solid #E8E6E3', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: '18px', fontWeight: 600, color: '#2A3740' }}>Matières ({subjects.length})</h3>
-            <p style={{ fontSize: '13px', color: '#78756F', marginTop: '2px' }}>Référentiel global — assignées aux classes dans la configuration de l&apos;année</p>
-          </div>
-          <Button onClick={onCreateSubject} disabled={rubrics.length === 0} title={rubrics.length === 0 ? "Créez d'abord les rubriques" : undefined}
-            style={{ backgroundColor: rubrics.length === 0 ? '#9CA3AF' : '#2C4A6E', color: 'white', borderRadius: '8px' }}>
-            <PlusIcon className="mr-2 h-4 w-4" />Nouvelle matière
+  return (
+    <div className="space-y-6">
+      <SectionCard
+        icon={LayersIcon}
+        title={`Rubriques (${rubrics.length})`}
+        description="Formule BR-001 : R1 × 70% + R2 × 25% + R3 × 5%"
+        action={
+          <Button
+            size="sm"
+            onClick={onCreateRubric}
+            disabled={rubrics.length >= 3}
+            title={rubrics.length >= 3 ? "Maximum 3 rubriques" : undefined}
+            className="bg-[#2C4A6E] text-white hover:bg-[#1F3856]"
+          >
+            <PlusIcon className="mr-2 h-4 w-4" />
+            Nouvelle rubrique
           </Button>
-        </div>
-        <div style={{ padding: '24px' }}>
-          <div style={{ borderRadius: '8px', border: '1px solid #E8E6E3', overflow: 'hidden' }}>
-            <Table>
-              <TableHeader>
-                <TableRow style={{ backgroundColor: '#F1F5F9', borderBottom: '2px solid #D1D5DB' }}>
-                  <TableHead style={{ ...TH, width: '3%' }}></TableHead>
-                  <TableHead style={TH}>Code</TableHead><TableHead style={TH}>Nom</TableHead>
-                  <TableHead style={TH}>Rubrique</TableHead><TableHead style={TH}>Coeff.</TableHead>
-                  <TableHead style={TH}>Max</TableHead><TableHead style={{ ...TH, textAlign: 'center' }}>Actions</TableHead>
+        }
+      >
+        {rubrics.length === 0 ? (
+          <div className="px-6 py-10 text-center text-sm text-muted-foreground">
+            Aucune rubrique — créez R1, R2 et R3 pour commencer.
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="pl-6 font-semibold">Code</TableHead>
+                <TableHead className="font-semibold">Nom</TableHead>
+                <TableHead className="font-semibold">Description</TableHead>
+                <TableHead className="font-semibold">Poids BR-001</TableHead>
+                <TableHead className="pr-6 text-right font-semibold">Action</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rubrics.map((r) => (
+                <TableRow key={r.id}>
+                  <TableCell className="pl-6">
+                    <Badge variant="outline" className={cn("font-bold", rubricBadgeClasses(r.code))}>{r.code}</Badge>
+                  </TableCell>
+                  <TableCell className="font-medium text-foreground">{r.name}</TableCell>
+                  <TableCell className="text-muted-foreground">{r.description || "—"}</TableCell>
+                  <TableCell className="font-semibold tabular-nums">{rubricWeight(r.code)}</TableCell>
+                  <TableCell className="pr-6 text-right">
+                    <Button variant="ghost" size="sm" onClick={() => onEditRubric(r)}>
+                      <PencilIcon className="mr-1 h-3.5 w-3.5" />
+                      Modifier
+                    </Button>
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {subjects.length === 0
-                  ? <TableRow><TableCell colSpan={7} style={{ textAlign: 'center', color: '#78756F', padding: '32px' }}>
-                      {rubrics.length === 0 ? "Créez d'abord les rubriques (R1, R2, R3)" : "Aucune matière — créez la première"}
-                    </TableCell></TableRow>
-                  : subjects.map((subject, i) => {
-                      const isExpanded = expandedSubjects.has(subject.id)
-                      const c = rubricColor(subject.rubric?.code)
-                      return (
-                        <React.Fragment key={subject.id}>
-                          <TableRow style={{ borderTop: i > 0 ? '1px solid #E8E6E3' : 'none', backgroundColor: 'white' }} className="hover:bg-[#FAF8F3]">
-                            <TableCell style={{ padding: '12px 8px' }}>
-                              {subject.hasSections && (
-                                <button onClick={() => onToggleExpand(subject.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5A7085', display: 'flex' }}>
-                                  {isExpanded ? <ChevronDownIcon className="h-4 w-4" /> : <ChevronRightIcon className="h-4 w-4" />}
-                                </button>
-                              )}
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </SectionCard>
+
+      <SectionCard
+        icon={BookOpenIcon}
+        title={`Matières (${subjects.length})`}
+        description="Référentiel global — assignées aux classes dans la configuration de l'année"
+        action={
+          <Button
+            size="sm"
+            onClick={onCreateSubject}
+            disabled={rubrics.length === 0}
+            title={rubrics.length === 0 ? "Créez d'abord les rubriques" : undefined}
+            className="bg-[#2C4A6E] text-white hover:bg-[#1F3856]"
+          >
+            <PlusIcon className="mr-2 h-4 w-4" />
+            Nouvelle matière
+          </Button>
+        }
+      >
+        {subjects.length === 0 ? (
+          <div className="px-6 py-10 text-center text-sm text-muted-foreground">
+            {rubrics.length === 0 ? "Créez d'abord les rubriques (R1, R2, R3)." : "Aucune matière — créez la première."}
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="w-[40px] pl-6"></TableHead>
+                <TableHead className="font-semibold">Code</TableHead>
+                <TableHead className="font-semibold">Nom</TableHead>
+                <TableHead className="font-semibold">Rubrique</TableHead>
+                <TableHead className="text-right font-semibold">Coef.</TableHead>
+                <TableHead className="text-right font-semibold">Note max</TableHead>
+                <TableHead className="pr-6 text-right font-semibold">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {subjects.map((subject) => {
+                const isExpanded = expandedSubjects.has(subject.id)
+                return (
+                  <React.Fragment key={subject.id}>
+                    <TableRow>
+                      <TableCell className="pl-6">
+                        {subject.hasSections && (
+                          <button
+                            type="button"
+                            onClick={() => onToggleExpand(subject.id)}
+                            className="text-muted-foreground hover:text-foreground"
+                          >
+                            {isExpanded ? <ChevronDownIcon className="h-4 w-4" /> : <ChevronRightIcon className="h-4 w-4" />}
+                          </button>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
+                          {subject.code}
+                        </code>
+                      </TableCell>
+                      <TableCell className="font-medium text-foreground">{subject.name}</TableCell>
+                      <TableCell>
+                        {subject.rubric ? (
+                          <Badge variant="outline" className={cn("font-bold", rubricBadgeClasses(subject.rubric.code))}>
+                            {subject.rubric.code}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">{subject.coefficient}</TableCell>
+                      <TableCell className="text-right tabular-nums">{subject.maxScore}</TableCell>
+                      <TableCell className="pr-6 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => onCreateSection(subject.id)}>
+                            <PlusIcon className="mr-1 h-3.5 w-3.5" />
+                            Section
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => onEditSubject(subject)}>
+                            <PencilIcon className="mr-1 h-3.5 w-3.5" />
+                            Modifier
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                    {isExpanded &&
+                      subject.sections?.map((section) => {
+                        const cycles = getSectionCycles(section.id)
+                        const secMax = parseDecimal(section.maxScore) ?? 0
+                        return (
+                          <TableRow key={section.id} className="bg-muted/30">
+                            <TableCell></TableCell>
+                            <TableCell className="pl-6">
+                              <code className="font-mono text-[11px] text-muted-foreground">
+                                <span className="text-muted-foreground/60">└ </span>
+                                {section.code}
+                              </code>
                             </TableCell>
-                            <TableCell style={{ fontFamily: 'monospace', fontSize: '12px', fontWeight: 600, color: '#1E1A17', textTransform: 'uppercase' }}>{subject.code}</TableCell>
-                            <TableCell style={{ fontWeight: 600, color: '#1E1A17', fontSize: '14px' }}>{subject.name}</TableCell>
+                            <TableCell className="text-sm">{section.name}</TableCell>
                             <TableCell>
-                              {subject.rubric
-                                ? <Badge style={{ backgroundColor: c.bg, color: c.color, border: 'none' }}>{subject.rubric.code}</Badge>
-                                : <span style={{ color: '#A8A5A2' }}>—</span>}
-                            </TableCell>
-                            <TableCell style={{ fontSize: '14px' }}>{subject.coefficient}</TableCell>
-                            <TableCell style={{ fontSize: '14px' }}>{subject.maxScore}</TableCell>
-                            <TableCell>
-                              <div className="flex items-center justify-center gap-2">
-                                <button onClick={() => onCreateSection(subject.id)} style={{ fontSize: '12px', fontWeight: 500, color: '#2C4A6E', background: 'none', border: 'none', cursor: 'pointer' }}>+ Section</button>
-                                <span style={{ color: '#D1CECC' }}>|</span>
-                                <button onClick={() => onEditSubject(subject)} style={{ fontSize: '13px', fontWeight: 500, color: '#5A7085', background: 'none', border: 'none', cursor: 'pointer' }}>Modifier</button>
+                              <div className="flex flex-wrap gap-1">
+                                {cycles.length > 0 ? (
+                                  cycles.map((cyc) => (
+                                    <Badge
+                                      key={cyc}
+                                      variant="outline"
+                                      className="border-blue-200 bg-blue-50 text-[10px] text-blue-700"
+                                    >
+                                      {cyc}
+                                    </Badge>
+                                  ))
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">Tous les cycles</span>
+                                )}
                               </div>
                             </TableCell>
+                            <TableCell></TableCell>
+                            <TableCell className="text-right text-sm text-muted-foreground tabular-nums">
+                              {secMax}
+                            </TableCell>
+                            <TableCell></TableCell>
                           </TableRow>
-                          {isExpanded && subject.sections?.map(section => {
-                            const cycles = getSectionCycles(section.id)
-                            return (
-                              <TableRow key={section.id} style={{ borderTop: '1px solid #E8E6E3', backgroundColor: '#FAFAF8' }}>
-                                <TableCell></TableCell>
-                                <TableCell style={{ paddingLeft: '24px', fontFamily: 'monospace', fontSize: '11px', color: '#78756F', textTransform: 'uppercase' }}>
-                                  <span style={{ color: '#A8A5A2' }}>└ </span>{section.code}
-                                </TableCell>
-                                <TableCell style={{ fontSize: '13px', color: '#1E1A17' }}>{section.name}</TableCell>
-                                <TableCell>
-                                  <div className="flex gap-1 flex-wrap">
-                                    {cycles.length > 0
-                                      ? cycles.map(cyc => <span key={cyc} style={{ backgroundColor: '#E3EFF9', color: '#2B6CB0', padding: '1px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 500 }}>{cyc}</span>)
-                                      : <span style={{ color: '#A8A5A2', fontSize: '12px' }}>Tous les cycles</span>}
-                                  </div>
-                                </TableCell>
-                                <TableCell style={{ fontSize: '13px', color: '#78756F' }}>{section.maxScore}</TableCell>
-                                <TableCell></TableCell>
-                              </TableRow>
-                            )
-                          })}
-                        </React.Fragment>
-                      )
-                    })}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
-      </div>
-    </>
+                        )
+                      })}
+                  </React.Fragment>
+                )
+              })}
+            </TableBody>
+          </Table>
+        )}
+      </SectionCard>
+    </div>
   )
 }
 
-function ClassesTab({ loading, classTypes, classes, initializing, onInitialize, onEditClass }: {
-  loading: boolean; classTypes: ClassType[]; classes: Class[]
-  initializing: boolean; onInitialize: () => void; onEditClass: (c: Class) => void
+function ClassesTab({
+  loading, classTypes, classes, initializing, onInitialize, onEditClass,
+}: {
+  loading: boolean
+  classTypes: ClassType[]
+  classes: Class[]
+  initializing: boolean
+  onInitialize: () => void
+  onEditClass: (c: Class) => void
 }) {
-  if (loading) return <Skeleton className="h-64 w-full" />
+  if (loading) return <Skeleton className="h-64 w-full rounded-xl" />
+
   return (
-    <div style={{ backgroundColor: '#FFFFFF', borderRadius: '10px', border: '1px solid #E8E6E3', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
-      <div style={{ padding: '20px 24px', borderBottom: '1px solid #E8E6E3', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
-          <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: '18px', fontWeight: 600, color: '#2A3740' }}>Classes ({classes.length} / {classTypes.length || 13})</h3>
-          <p style={{ fontSize: '13px', color: '#78756F', marginTop: '2px' }}>Référentiel permanent — salle A par défaut pour chaque niveau</p>
-        </div>
-        {classTypes.length === 0 && (
-          <Button onClick={onInitialize} disabled={initializing} style={{ backgroundColor: '#2C4A6E', color: 'white', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <ZapIcon className="h-4 w-4" />{initializing ? 'Initialisation...' : 'Initialiser niveaux & classes'}
+    <SectionCard
+      icon={SchoolBuildingIcon}
+      title={`Classes (${classes.length} / ${classTypes.length || 13})`}
+      description="Référentiel permanent — salle A par défaut pour chaque niveau"
+      action={
+        classTypes.length === 0 ? (
+          <Button
+            size="sm"
+            onClick={onInitialize}
+            disabled={initializing}
+            className="bg-[#2C4A6E] text-white hover:bg-[#1F3856]"
+          >
+            <ZapIcon className="mr-2 h-4 w-4" />
+            {initializing ? "Initialisation..." : "Initialiser niveaux & classes"}
           </Button>
-        )}
-        {classes.length > 0 && (
-          <div className="flex items-center gap-2" style={{ color: '#2D7D46', fontSize: '13px', fontWeight: 500 }}>
-            <CheckCircle2Icon className="h-4 w-4" />Classes initialisées
+        ) : (
+          <div className="flex items-center gap-1.5 text-sm font-medium text-emerald-700">
+            <CheckCircle2Icon className="h-4 w-4" />
+            Classes initialisées
           </div>
-        )}
-      </div>
-      <div style={{ padding: '24px' }}>
-        {classTypes.length === 0
-          ? (
-            <div style={{ textAlign: 'center', padding: '48px 24px' }}>
-              <p style={{ fontSize: '16px', fontWeight: 600, color: '#3A4A57', marginBottom: '8px' }}>Aucun niveau configuré</p>
-              <p style={{ fontSize: '13px', color: '#78756F', marginBottom: '24px' }}>Cliquez sur &quot;Initialiser niveaux &amp; classes&quot; pour créer les 13 niveaux MENFP.</p>
-              <Button onClick={onInitialize} disabled={initializing} style={{ backgroundColor: '#2C4A6E', color: 'white', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-                <ZapIcon className="h-4 w-4" />{initializing ? 'Initialisation en cours...' : 'Initialiser niveaux & classes'}
-              </Button>
-            </div>
-          )
-          : (
-            <div style={{ borderRadius: '8px', border: '1px solid #E8E6E3', overflow: 'hidden' }}>
-              <Table>
-                <TableHeader>
-                  <TableRow style={{ backgroundColor: '#F1F5F9', borderBottom: '2px solid #D1D5DB' }}>
-                    <TableHead style={TH}>Niveau</TableHead><TableHead style={TH}>Type</TableHead>
-                    <TableHead style={TH}>Max élèves</TableHead>
-                    <TableHead style={{ ...TH, textAlign: 'center' }}>Statut</TableHead>
-                    <TableHead style={{ ...TH, textAlign: 'center' }}>Action</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {classTypes.map((ct, i) => {
-                    const cls = classes.find(c => c.classTypeId === ct.id)
-                    return (
-                      <TableRow key={ct.id} style={{ borderTop: i > 0 ? '1px solid #E8E6E3' : 'none' }}>
-                        <TableCell style={{ fontWeight: 700, color: '#1E1A17', fontSize: '14px' }}>{ct.name}</TableCell>
-                        <TableCell>
-                          {ct.isTerminal
-                            ? <Badge style={{ backgroundColor: '#FEF6E0', color: '#C48B1A', border: 'none', fontSize: '11px' }}>Examen</Badge>
-                            : <Badge style={{ backgroundColor: '#F0F4F7', color: '#5A7085', border: 'none', fontSize: '11px' }}>Standard</Badge>}
-                        </TableCell>
-                        <TableCell style={{ fontSize: '13px', color: '#78756F' }}>{cls?.maxStudents ?? '—'}</TableCell>
-                        <TableCell style={{ textAlign: 'center' }}>
-                          {cls
-                            ? <Badge style={{ backgroundColor: '#E8F5EC', color: '#2D7D46', border: 'none', fontSize: '11px' }}>✓ Créée</Badge>
-                            : <Badge style={{ backgroundColor: '#FEF6E0', color: '#C48B1A', border: 'none', fontSize: '11px' }}>En attente</Badge>}
-                        </TableCell>
-                        <TableCell style={{ textAlign: 'center' }}>
-                          {cls
-                            ? <button onClick={() => onEditClass(cls)} style={{ fontSize: '13px', fontWeight: 500, color: '#5A7085', background: 'none', border: 'none', cursor: 'pointer' }}>Modifier</button>
-                            : <span style={{ color: '#D1CECC', fontSize: '13px' }}>—</span>}
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-      </div>
-    </div>
+        )
+      }
+    >
+      {classTypes.length === 0 ? (
+        <div className="flex flex-col items-center px-6 py-12 text-center">
+          <p className="text-sm font-semibold text-foreground">Aucun niveau configuré</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Cliquez sur &quot;Initialiser niveaux &amp; classes&quot; pour créer les 13 niveaux MENFP.
+          </p>
+          <Button
+            onClick={onInitialize}
+            disabled={initializing}
+            className="mt-4 bg-[#2C4A6E] text-white hover:bg-[#1F3856]"
+          >
+            <ZapIcon className="mr-2 h-4 w-4" />
+            {initializing ? "Initialisation en cours..." : "Initialiser niveaux & classes"}
+          </Button>
+        </div>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead className="pl-6 font-semibold">Niveau</TableHead>
+              <TableHead className="font-semibold">Type</TableHead>
+              <TableHead className="text-right font-semibold">Max élèves</TableHead>
+              <TableHead className="text-center font-semibold">Statut</TableHead>
+              <TableHead className="pr-6 text-right font-semibold">Action</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {classTypes.map((ct) => {
+              const cls = classes.find((c) => c.classTypeId === ct.id)
+              return (
+                <TableRow key={ct.id}>
+                  <TableCell className="pl-6 font-medium text-foreground">{ct.name}</TableCell>
+                  <TableCell>
+                    {ct.isTerminal ? (
+                      <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">
+                        Examen
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-700">
+                        Standard
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right text-sm tabular-nums text-muted-foreground">
+                    {cls?.maxStudents ?? "—"}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {cls ? (
+                      <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
+                        Créée
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">
+                        En attente
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell className="pr-6 text-right">
+                    {cls ? (
+                      <Button variant="ghost" size="sm" onClick={() => onEditClass(cls)}>
+                        <PencilIcon className="mr-1 h-3.5 w-3.5" />
+                        Modifier
+                      </Button>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                </TableRow>
+              )
+            })}
+          </TableBody>
+        </Table>
+      )}
+    </SectionCard>
   )
 }
 
-function AttitudesTab({ loading, attitudes, currentYearId, onCreateAttitude, onEditAttitude, onDeleteAttitude }: {
-  loading: boolean; attitudes: Attitude[]; currentYearId: string | null
-  onCreateAttitude: () => void; onEditAttitude: (a: Attitude) => void; onDeleteAttitude: (a: Attitude) => void
+function AttitudesTab({
+  loading, attitudes, currentYearId,
+  onCreateAttitude, onEditAttitude, onDeleteAttitude,
+}: {
+  loading: boolean
+  attitudes: Attitude[]
+  currentYearId: string | null
+  onCreateAttitude: () => void
+  onEditAttitude: (a: Attitude) => void
+  onDeleteAttitude: (a: Attitude) => void
 }) {
-  if (loading) return <Skeleton className="h-64 w-full" />
+  if (loading) return <Skeleton className="h-64 w-full rounded-xl" />
+
   return (
-    <div style={{ backgroundColor: '#FFFFFF', borderRadius: '10px', border: '1px solid #E8E6E3', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
-      <div style={{ padding: '20px 24px', borderBottom: '1px solid #E8E6E3', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
-          <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: '18px', fontWeight: 600, color: '#2A3740' }}>Attitudes ({attitudes.length})</h3>
-          <p style={{ fontSize: '13px', color: '#78756F', marginTop: '2px' }}>Caractéristiques de comportement — Oui / Non par élève</p>
-        </div>
-        <Button onClick={onCreateAttitude} disabled={!currentYearId} title={!currentYearId ? "Aucune année active" : undefined}
-          style={{ backgroundColor: !currentYearId ? '#9CA3AF' : '#2C4A6E', color: 'white', borderRadius: '8px' }}>
-          <PlusIcon className="mr-2 h-4 w-4" />Nouvelle attitude
+    <SectionCard
+      icon={SmileIcon}
+      title={`Attitudes (${attitudes.length})`}
+      description="Caractéristiques de comportement — Oui / Non par élève"
+      action={
+        <Button
+          size="sm"
+          onClick={onCreateAttitude}
+          disabled={!currentYearId}
+          title={!currentYearId ? "Aucune année active" : undefined}
+          className="bg-[#2C4A6E] text-white hover:bg-[#1F3856]"
+        >
+          <PlusIcon className="mr-2 h-4 w-4" />
+          Nouvelle attitude
         </Button>
-      </div>
-      {!currentYearId && (
-        <div style={{ padding: '32px', textAlign: 'center' }}>
-          <p style={{ fontSize: '14px', color: '#C48B1A' }}>Aucune année scolaire active. Activez une année dans la configuration.</p>
+      }
+    >
+      {!currentYearId ? (
+        <div className="px-6 py-10 text-center text-sm text-amber-700">
+          Aucune année scolaire active. Activez une année dans la configuration.
         </div>
-      )}
-      {currentYearId && (
-        <div style={{ padding: '24px' }}>
-          {attitudes.length === 0
-            ? (
-              <div style={{ textAlign: 'center', padding: '48px 24px', border: '1px dashed #D1CECC', borderRadius: '8px' }}>
-                <p style={{ fontSize: '15px', fontWeight: 600, color: '#3A4A57', marginBottom: '6px' }}>Aucune attitude configurée</p>
-                <p style={{ fontSize: '13px', color: '#78756F', marginBottom: '20px' }}>Exemples : Respectueux(se), Ponctuel(le), Attentif(ve)</p>
-                <Button onClick={onCreateAttitude} style={{ backgroundColor: '#2C4A6E', color: 'white', borderRadius: '8px' }}>
-                  <PlusIcon className="mr-2 h-4 w-4" />Créer la première attitude
-                </Button>
-              </div>
-            )
-            : (
-              <div style={{ borderRadius: '8px', border: '1px solid #E8E6E3', overflow: 'hidden' }}>
-                <Table>
-                  <TableHeader>
-                    <TableRow style={{ backgroundColor: '#F1F5F9', borderBottom: '2px solid #D1D5DB' }}>
-                      <TableHead style={TH}>#</TableHead><TableHead style={TH}>Libellé</TableHead>
-                      <TableHead style={{ ...TH, textAlign: 'center' }}>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {attitudes.map((att, i) => (
-                      <TableRow key={att.id} style={{ borderTop: i > 0 ? '1px solid #E8E6E3' : 'none' }}>
-                        <TableCell style={{ width: '48px', color: '#A8A5A2', fontSize: '13px', fontWeight: 500 }}>{i + 1}</TableCell>
-                        <TableCell style={{ fontWeight: 600, color: '#1E1A17', fontSize: '14px' }}>{att.label}</TableCell>
-                        <TableCell style={{ textAlign: 'center' }}>
-                          <div className="flex items-center justify-center gap-3">
-                            <button onClick={() => onEditAttitude(att)} style={{ fontSize: '13px', fontWeight: 500, color: '#5A7085', background: 'none', border: 'none', cursor: 'pointer' }}>Modifier</button>
-                            <span style={{ color: '#D1CECC' }}>|</span>
-                            <button onClick={() => onDeleteAttitude(att)} style={{ fontSize: '13px', fontWeight: 500, color: '#C43C3C', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                              <Trash2Icon className="h-3.5 w-3.5" />Supprimer
-                            </button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
+      ) : attitudes.length === 0 ? (
+        <div className="flex flex-col items-center px-6 py-12 text-center">
+          <p className="text-sm font-semibold text-foreground">Aucune attitude configurée</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Exemples : Respectueux(se), Ponctuel(le), Attentif(ve)
+          </p>
+          <Button
+            onClick={onCreateAttitude}
+            className="mt-4 bg-[#2C4A6E] text-white hover:bg-[#1F3856]"
+          >
+            <PlusIcon className="mr-2 h-4 w-4" />
+            Créer la première attitude
+          </Button>
         </div>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead className="w-[60px] pl-6 font-semibold">#</TableHead>
+              <TableHead className="font-semibold">Libellé</TableHead>
+              <TableHead className="pr-6 text-right font-semibold">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {attitudes.map((att, i) => (
+              <TableRow key={att.id}>
+                <TableCell className="pl-6 text-sm tabular-nums text-muted-foreground">{i + 1}</TableCell>
+                <TableCell className="font-medium text-foreground">{att.label}</TableCell>
+                <TableCell className="pr-6 text-right">
+                  <div className="flex items-center justify-end gap-1">
+                    <Button variant="ghost" size="sm" onClick={() => onEditAttitude(att)}>
+                      <PencilIcon className="mr-1 h-3.5 w-3.5" />
+                      Modifier
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onDeleteAttitude(att)}
+                      className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    >
+                      <Trash2Icon className="mr-1 h-3.5 w-3.5" />
+                      Supprimer
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       )}
-    </div>
+    </SectionCard>
   )
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// MODAL COMPONENTS  (complexity: 0 each — pure JSX, no branches in the function body)
+// MODALS
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function RubricModal({ open, onOpenChange, form, onChange, editing, submitting, onSave }: {
-  open: boolean; onOpenChange: (v: boolean) => void; form: RubricForm; onChange: (f: RubricForm) => void
+  open: boolean; onOpenChange: (v: boolean) => void
+  form: RubricForm; onChange: (f: RubricForm) => void
   editing: Rubric | null; submitting: boolean; onSave: () => void
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent style={{ backgroundColor: 'white', borderRadius: '12px' }}>
+      <DialogContent className="sm:max-w-[520px]">
         <DialogHeader>
-          <DialogTitle className="font-serif" style={{ fontSize: '22px', fontWeight: 700, color: '#2A3740' }}>{editing ? 'Modifier la rubrique' : 'Nouvelle rubrique'}</DialogTitle>
-          <DialogDescription className="sr-only">Formulaire rubrique</DialogDescription>
+          <DialogTitle>{editing ? "Modifier la rubrique" : "Nouvelle rubrique"}</DialogTitle>
+          <DialogDescription>
+            Les rubriques permettent de pondérer les matières (BR-001 : R1 × 70% + R2 × 25% + R3 × 5%).
+          </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 py-2">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <Label style={{ fontSize: '13px', fontWeight: 500 }}>Code * <span style={{ color: '#78756F', fontWeight: 400 }}>(ex: R1)</span></Label>
-              <Input value={form.code} onChange={e => onChange({ ...form, code: e.target.value.toUpperCase() })} disabled={!!editing}
-                style={{ borderColor: '#D1CECC', backgroundColor: editing ? '#F5F4F2' : 'white' }} placeholder="R1" />
-              {editing && <p style={{ fontSize: '11px', color: '#78756F' }}>Le code ne peut pas être modifié</p>}
-            </div>
-            <div className="space-y-1">
-              <Label style={{ fontSize: '13px', fontWeight: 500 }}>Nom *</Label>
-              <Input value={form.name} onChange={e => onChange({ ...form, name: e.target.value })} style={{ borderColor: '#D1CECC' }} placeholder="Ex: Évaluation continue" />
-            </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="rubric-code">
+              Code <span className="text-destructive">*</span>{" "}
+              <span className="text-muted-foreground">(ex: R1)</span>
+            </Label>
+            <Input
+              id="rubric-code"
+              value={form.code}
+              onChange={(e) => onChange({ ...form, code: e.target.value.toUpperCase() })}
+              disabled={!!editing}
+              placeholder="R1"
+              maxLength={10}
+            />
+            {editing && <p className="text-[11px] text-muted-foreground">Le code ne peut pas être modifié</p>}
           </div>
-          <div className="space-y-1">
-            <Label style={{ fontSize: '13px', fontWeight: 500 }}>Description</Label>
-            <Input value={form.description} onChange={e => onChange({ ...form, description: e.target.value })} style={{ borderColor: '#D1CECC' }} />
+          <div className="space-y-2">
+            <Label htmlFor="rubric-name">
+              Nom <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="rubric-name"
+              value={form.name}
+              onChange={(e) => onChange({ ...form, name: e.target.value })}
+              placeholder="Ex: Évaluation continue"
+            />
           </div>
-          <div style={{ backgroundColor: '#F0F4F7', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', color: '#5A7085' }}>
-            <strong>Poids BR-001 :</strong> R1 = 70% · R2 = 25% · R3 = 5%
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor="rubric-description">Description</Label>
+            <Input
+              id="rubric-description"
+              value={form.description}
+              onChange={(e) => onChange({ ...form, description: e.target.value })}
+            />
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} style={{ borderColor: '#D1CECC' }}>Annuler</Button>
-          <Button onClick={onSave} disabled={submitting || !form.name || !form.code} style={{ backgroundColor: '#2C4A6E', color: 'white' }}>
-            {submitting ? 'En cours...' : editing ? 'Enregistrer' : 'Créer'}
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+            Annuler
+          </Button>
+          <Button
+            onClick={onSave}
+            disabled={submitting || !form.name || !form.code}
+            className="bg-[#2C4A6E] text-white hover:bg-[#1F3856]"
+          >
+            {submitting ? "En cours..." : editing ? "Enregistrer" : "Créer"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -770,55 +1191,106 @@ function RubricModal({ open, onOpenChange, form, onChange, editing, submitting, 
 }
 
 function SubjectModal({ open, onOpenChange, form, onChange, onNameChange, rubrics, editing, submitting, onSave }: {
-  open: boolean; onOpenChange: (v: boolean) => void; form: SubjectForm; onChange: (f: SubjectForm) => void
-  onNameChange: (name: string) => void; rubrics: Rubric[]; editing: Subject | null; submitting: boolean; onSave: () => void
+  open: boolean; onOpenChange: (v: boolean) => void
+  form: SubjectForm; onChange: (f: SubjectForm) => void
+  onNameChange: (name: string) => void; rubrics: Rubric[]
+  editing: Subject | null; submitting: boolean; onSave: () => void
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent style={{ backgroundColor: 'white', borderRadius: '12px' }}>
+      <DialogContent className="sm:max-w-[560px]">
         <DialogHeader>
-          <DialogTitle className="font-serif" style={{ fontSize: '22px', fontWeight: 700, color: '#2A3740' }}>{editing ? 'Modifier la matière' : 'Nouvelle matière'}</DialogTitle>
-          <DialogDescription className="sr-only">Formulaire matière</DialogDescription>
+          <DialogTitle>{editing ? "Modifier la matière" : "Nouvelle matière"}</DialogTitle>
+          <DialogDescription>
+            {editing
+              ? "Le code est immuable après création."
+              : "Le code est généré automatiquement depuis le nom et ne pourra plus être modifié."}
+          </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 py-2">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <Label style={{ fontSize: '13px', fontWeight: 500 }}>Nom *</Label>
-              <Input value={form.name} onChange={e => onNameChange(e.target.value)} style={{ borderColor: '#D1CECC' }} />
-            </div>
-            <div className="space-y-1">
-              <Label style={{ fontSize: '13px', fontWeight: 500 }}>Code</Label>
-              <Input value={form.code} readOnly={!editing} onChange={e => editing && onChange({ ...form, code: e.target.value.toUpperCase() })}
-                style={{ borderColor: '#D1CECC', backgroundColor: !editing ? '#F5F4F2' : 'white' }} />
-              {!editing && <p style={{ fontSize: '11px', color: '#78756F' }}>Généré automatiquement depuis le nom</p>}
-            </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor="subj-name">
+              Nom <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="subj-name"
+              value={form.name}
+              onChange={(e) => onNameChange(e.target.value)}
+              placeholder="Ex: Mathématiques"
+            />
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <Label style={{ fontSize: '13px', fontWeight: 500 }}>Coefficient</Label>
-              <Input type="number" step="0.5" value={form.coefficient} onChange={e => onChange({ ...form, coefficient: e.target.value })} style={{ borderColor: '#D1CECC' }} />
-            </div>
-            <div className="space-y-1">
-              <Label style={{ fontSize: '13px', fontWeight: 500 }}>Note max</Label>
-              <Input type="number" value={form.maxScore} onChange={e => onChange({ ...form, maxScore: e.target.value })} style={{ borderColor: '#D1CECC' }} />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="subj-code">Code</Label>
+            <Input
+              id="subj-code"
+              value={form.code}
+              readOnly={!editing}
+              disabled={!editing}
+              onChange={(e) => editing && onChange({ ...form, code: e.target.value.toUpperCase() })}
+            />
+            {!editing && <p className="text-[11px] text-muted-foreground">Généré automatiquement</p>}
           </div>
-          <div className="space-y-1">
-            <Label style={{ fontSize: '13px', fontWeight: 500 }}>Rubrique *</Label>
-            <Select value={form.rubricId} onValueChange={v => onChange({ ...form, rubricId: v })}>
-              <SelectTrigger style={{ borderColor: '#D1CECC' }}><SelectValue placeholder="Sélectionner une rubrique" /></SelectTrigger>
-              <SelectContent>{rubrics.map(r => <SelectItem key={r.id} value={r.id}>{r.code} — {r.name}</SelectItem>)}</SelectContent>
+          <div className="space-y-2">
+            <Label htmlFor="subj-rubric">
+              Rubrique <span className="text-destructive">*</span>
+            </Label>
+            <Select value={form.rubricId} onValueChange={(v) => onChange({ ...form, rubricId: v })}>
+              <SelectTrigger id="subj-rubric">
+                <SelectValue placeholder="Sélectionner une rubrique" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NONE_RUBRIC}>Aucune</SelectItem>
+                {rubrics.map((r) => (
+                  <SelectItem key={r.id} value={r.id}>
+                    {r.code} — {r.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
             </Select>
           </div>
-          <div className="flex items-center gap-3">
-            <input type="checkbox" id="hasSections" checked={form.hasSections} onChange={e => onChange({ ...form, hasSections: e.target.checked })} />
-            <Label htmlFor="hasSections" style={{ fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>Cette matière a des sous-matières (sections)</Label>
+          <div className="space-y-2">
+            <Label htmlFor="subj-coef">Coefficient</Label>
+            <Input
+              id="subj-coef"
+              type="number"
+              step="0.5"
+              min="0"
+              value={form.coefficient}
+              onChange={(e) => onChange({ ...form, coefficient: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="subj-max">Note max</Label>
+            <Input
+              id="subj-max"
+              type="number"
+              min="0"
+              step="0.01"
+              value={form.maxScore}
+              onChange={(e) => onChange({ ...form, maxScore: e.target.value })}
+            />
+          </div>
+          <div className="flex items-center gap-3 rounded-md border bg-muted/30 px-3 py-2 sm:col-span-2">
+            <Switch
+              id="subj-sections"
+              checked={form.hasSections}
+              onCheckedChange={(v) => onChange({ ...form, hasSections: v })}
+            />
+            <Label htmlFor="subj-sections" className="cursor-pointer text-sm">
+              Cette matière a des sous-matières (sections)
+            </Label>
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} style={{ borderColor: '#D1CECC' }}>Annuler</Button>
-          <Button onClick={onSave} disabled={submitting || !form.name || !form.code} style={{ backgroundColor: '#2C4A6E', color: 'white' }}>
-            {submitting ? 'En cours...' : editing ? 'Enregistrer' : 'Créer'}
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+            Annuler
+          </Button>
+          <Button
+            onClick={onSave}
+            disabled={submitting || !form.name || !form.code}
+            className="bg-[#2C4A6E] text-white hover:bg-[#1F3856]"
+          >
+            {submitting ? "En cours..." : editing ? "Enregistrer" : "Créer"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -827,57 +1299,99 @@ function SubjectModal({ open, onOpenChange, form, onChange, onNameChange, rubric
 }
 
 function SectionModal({ open, onOpenChange, form, onChange, onNameChange, onToggleCycle, submitting, onSave }: {
-  open: boolean; onOpenChange: (v: boolean) => void; form: SectionForm; onChange: (f: SectionForm) => void
+  open: boolean; onOpenChange: (v: boolean) => void
+  form: SectionForm; onChange: (f: SectionForm) => void
   onNameChange: (name: string) => void; onToggleCycle: (key: string, checked: boolean) => void
   submitting: boolean; onSave: () => void
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent style={{ backgroundColor: 'white', borderRadius: '12px' }}>
+      <DialogContent className="sm:max-w-[560px]">
         <DialogHeader>
-          <DialogTitle className="font-serif" style={{ fontSize: '22px', fontWeight: 700, color: '#2A3740' }}>Nouvelle sous-matière</DialogTitle>
-          <DialogDescription className="sr-only">Formulaire sous-matière</DialogDescription>
+          <DialogTitle>Nouvelle sous-matière</DialogTitle>
+          <DialogDescription>
+            Une sous-matière permet de découper une matière (ex: Algèbre / Géométrie / Analyse).
+          </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 py-2">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <Label style={{ fontSize: '13px', fontWeight: 500 }}>Nom *</Label>
-              <Input value={form.name} onChange={e => onNameChange(e.target.value)} style={{ borderColor: '#D1CECC' }} />
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="sec-name">
+                Nom <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="sec-name"
+                value={form.name}
+                onChange={(e) => onNameChange(e.target.value)}
+                placeholder="Ex: Algèbre"
+              />
             </div>
-            <div className="space-y-1">
-              <Label style={{ fontSize: '13px', fontWeight: 500 }}>Code</Label>
-              <Input value={form.code} readOnly style={{ borderColor: '#D1CECC', backgroundColor: '#F5F4F2' }} />
-              <p style={{ fontSize: '11px', color: '#78756F' }}>Généré automatiquement depuis le nom</p>
+            <div className="space-y-2">
+              <Label htmlFor="sec-code">Code</Label>
+              <Input id="sec-code" value={form.code} readOnly disabled />
+              <p className="text-[11px] text-muted-foreground">Généré automatiquement</p>
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="sec-max">Note max</Label>
+              <Input
+                id="sec-max"
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.maxScore}
+                onChange={(e) => onChange({ ...form, maxScore: e.target.value })}
+              />
             </div>
           </div>
-          <div className="space-y-1">
-            <Label style={{ fontSize: '13px', fontWeight: 500 }}>Note max</Label>
-            <Input type="number" value={form.maxScore} onChange={e => onChange({ ...form, maxScore: e.target.value })} style={{ borderColor: '#D1CECC' }} />
-          </div>
+
           <div className="space-y-2">
-            <Label style={{ fontSize: '13px', fontWeight: 500 }}>
-              Cycles applicables *
-              <span style={{ color: '#78756F', fontWeight: 400, marginLeft: '6px', fontSize: '12px' }}>Dans quels cycles cette sous-matière est enseignée ?</span>
+            <Label className="text-sm font-medium">
+              Cycles applicables{" "}
+              <span className="text-xs font-normal text-muted-foreground">
+                — Dans quels cycles cette sous-matière est enseignée ?
+              </span>
             </Label>
-            <div style={{ border: '1px solid #E8E6E3', borderRadius: '8px', overflow: 'hidden' }}>
-              {CYCLES_MENFP.map((cycle, i) => (
-                <label key={cycle.key} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', cursor: 'pointer', borderTop: i > 0 ? '1px solid #F0EDE8' : 'none', backgroundColor: form.cycles.includes(cycle.key) ? '#F0F4F7' : 'white' }}>
-                  <input type="checkbox" checked={form.cycles.includes(cycle.key)} onChange={e => onToggleCycle(cycle.key, e.target.checked)}
-                    style={{ width: '16px', height: '16px', accentColor: '#2C4A6E', cursor: 'pointer' }} />
-                  <div>
-                    <span style={{ fontSize: '13px', fontWeight: 600, color: '#1E1A17' }}>{cycle.label}</span>
-                    <span style={{ fontSize: '12px', color: '#78756F', marginLeft: '8px' }}>{cycle.description}</span>
-                  </div>
-                </label>
-              ))}
+            <div className="overflow-hidden rounded-md border">
+              {CYCLES_MENFP.map((cycle, i) => {
+                const isChecked = form.cycles.includes(cycle.key)
+                return (
+                  <label
+                    key={cycle.key}
+                    className={cn(
+                      "flex cursor-pointer items-center gap-3 px-3 py-2.5 transition-colors",
+                      i > 0 && "border-t",
+                      isChecked ? "bg-[#F0F4F7]" : "hover:bg-muted/30"
+                    )}
+                  >
+                    <Checkbox
+                      checked={isChecked}
+                      onCheckedChange={(v) => onToggleCycle(cycle.key, v === true)}
+                    />
+                    <div className="flex-1">
+                      <span className="text-sm font-semibold text-foreground">{cycle.label}</span>
+                      <span className="ml-2 text-xs text-muted-foreground">{cycle.description}</span>
+                    </div>
+                  </label>
+                )
+              })}
             </div>
-            {form.cycles.length === 0 && <p style={{ fontSize: '11px', color: '#C48B1A' }}>⚠ Aucun cycle — la sous-matière s&apos;appliquera à toutes les classes</p>}
+            {form.cycles.length === 0 && (
+              <p className="text-[11px] text-amber-700">
+                Aucun cycle sélectionné — la sous-matière s&apos;appliquera à toutes les classes.
+              </p>
+            )}
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} style={{ borderColor: '#D1CECC' }}>Annuler</Button>
-          <Button onClick={onSave} disabled={submitting || !form.name || !form.code} style={{ backgroundColor: '#2C4A6E', color: 'white' }}>
-            {submitting ? 'En cours...' : 'Créer'}
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+            Annuler
+          </Button>
+          <Button
+            onClick={onSave}
+            disabled={submitting || !form.name || !form.code}
+            className="bg-[#2C4A6E] text-white hover:bg-[#1F3856]"
+          >
+            {submitting ? "En cours..." : "Créer"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -886,30 +1400,48 @@ function SectionModal({ open, onOpenChange, form, onChange, onNameChange, onTogg
 }
 
 function AttitudeModal({ open, onOpenChange, label, onLabelChange, editing, submitting, onSave }: {
-  open: boolean; onOpenChange: (v: boolean) => void; label: string; onLabelChange: (v: string) => void
+  open: boolean; onOpenChange: (v: boolean) => void
+  label: string; onLabelChange: (v: string) => void
   editing: Attitude | null; submitting: boolean; onSave: () => void
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent style={{ backgroundColor: 'white', borderRadius: '12px' }}>
+      <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
-          <DialogTitle className="font-serif" style={{ fontSize: '22px', fontWeight: 700, color: '#2A3740' }}>{editing ? "Modifier l'attitude" : 'Nouvelle attitude'}</DialogTitle>
-          <DialogDescription style={{ fontSize: '13px', color: '#78756F' }}>L&apos;attitude sera évaluée Oui / Non pour chaque élève.</DialogDescription>
+          <DialogTitle>{editing ? "Modifier l'attitude" : "Nouvelle attitude"}</DialogTitle>
+          <DialogDescription>
+            L&apos;attitude sera évaluée Oui / Non pour chaque élève dans le bulletin.
+          </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 py-2">
-          <div className="space-y-1">
-            <Label style={{ fontSize: '13px', fontWeight: 500 }}>Libellé *</Label>
-            <Input value={label} onChange={e => onLabelChange(e.target.value)} placeholder="Ex: Respectueux(se), Ponctuel(le)..."
-              style={{ borderColor: '#D1CECC' }} onKeyDown={e => e.key === 'Enter' && onSave()} autoFocus />
+        <div className="space-y-3">
+          <div className="space-y-2">
+            <Label htmlFor="att-label">
+              Libellé <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="att-label"
+              value={label}
+              onChange={(e) => onLabelChange(e.target.value)}
+              placeholder="Ex: Respectueux(se), Ponctuel(le)..."
+              onKeyDown={(e) => e.key === "Enter" && onSave()}
+              autoFocus
+            />
           </div>
-          <div style={{ backgroundColor: '#F0F4F7', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', color: '#5A7085' }}>
-            Exemples : Respectueux(se) · Ponctuel(le) · Attentif(ve) · Travailleur(se) · Perturbateur(trice)
+          <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">Exemples :</span>{" "}
+            Respectueux(se) · Ponctuel(le) · Attentif(ve) · Travailleur(se) · Perturbateur(trice)
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} style={{ borderColor: '#D1CECC' }}>Annuler</Button>
-          <Button onClick={onSave} disabled={submitting || !label.trim()} style={{ backgroundColor: '#2C4A6E', color: 'white' }}>
-            {submitting ? 'En cours...' : editing ? 'Enregistrer' : 'Créer'}
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+            Annuler
+          </Button>
+          <Button
+            onClick={onSave}
+            disabled={submitting || !label.trim()}
+            className="bg-[#2C4A6E] text-white hover:bg-[#1F3856]"
+          >
+            {submitting ? "En cours..." : editing ? "Enregistrer" : "Créer"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -918,30 +1450,43 @@ function AttitudeModal({ open, onOpenChange, label, onLabelChange, editing, subm
 }
 
 function ClassModal({ open, onOpenChange, form, onChange, editing, submitting, onSave }: {
-  open: boolean; onOpenChange: (v: boolean) => void; form: ClassForm; onChange: (f: ClassForm) => void
+  open: boolean; onOpenChange: (v: boolean) => void
+  form: ClassForm; onChange: (f: ClassForm) => void
   editing: Class | null; submitting: boolean; onSave: () => void
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent style={{ backgroundColor: 'white', borderRadius: '12px' }}>
+      <DialogContent className="sm:max-w-[420px]">
         <DialogHeader>
-          <DialogTitle className="font-serif" style={{ fontSize: '22px', fontWeight: 700, color: '#2A3740' }}>Modifier la classe</DialogTitle>
-          <DialogDescription className="sr-only">Modifier le nombre max d&apos;élèves</DialogDescription>
+          <DialogTitle>Modifier la classe</DialogTitle>
+          <DialogDescription>Ajustez la capacité d&apos;accueil de la classe.</DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 py-2">
-          <div style={{ backgroundColor: '#F0F4F7', borderRadius: '8px', padding: '12px 16px' }}>
-            <p style={{ fontSize: '12px', color: '#78756F', marginBottom: '4px' }}>Classe</p>
-            <p style={{ fontSize: '16px', fontWeight: 700, color: '#2A3740' }}>{editing?.classType?.name} — Salle A</p>
+        <div className="space-y-4">
+          <div className="rounded-md border bg-muted/30 px-3 py-2">
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Classe</p>
+            <p className="text-base font-semibold text-foreground">{editing?.classType?.name} — Salle A</p>
           </div>
-          <div className="space-y-1">
-            <Label style={{ fontSize: '13px', fontWeight: 500 }}>Max élèves</Label>
-            <Input type="number" value={form.maxStudents} onChange={e => onChange({ ...form, maxStudents: e.target.value })} style={{ borderColor: '#D1CECC' }} />
+          <div className="space-y-2">
+            <Label htmlFor="class-max">Max élèves</Label>
+            <Input
+              id="class-max"
+              type="number"
+              min="1"
+              value={form.maxStudents}
+              onChange={(e) => onChange({ ...form, maxStudents: e.target.value })}
+            />
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} style={{ borderColor: '#D1CECC' }}>Annuler</Button>
-          <Button onClick={onSave} disabled={submitting} style={{ backgroundColor: '#2C4A6E', color: 'white' }}>
-            {submitting ? 'En cours...' : 'Enregistrer'}
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+            Annuler
+          </Button>
+          <Button
+            onClick={onSave}
+            disabled={submitting}
+            className="bg-[#2C4A6E] text-white hover:bg-[#1F3856]"
+          >
+            {submitting ? "En cours..." : "Enregistrer"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -950,76 +1495,161 @@ function ClassModal({ open, onOpenChange, form, onChange, editing, submitting, o
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// PAGE  —  cognitive complexity: 0
-// Zero branches. Zero conditions. Only: call hook → wire props → render.
+// PAGE
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export default function SchoolSettingsPage() {
   const s = useSchoolSettings()
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-foreground">Établissement</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Paramètres et référentiel de votre établissement</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Paramètres et référentiel de votre établissement
+        </p>
       </div>
 
-      <Tabs defaultValue="general" className="w-full" onValueChange={s.setActiveTab}>
-        <TabsList>
+      <Tabs value={s.activeTab} onValueChange={s.setActiveTab} className="space-y-6">
+        <TabsList className="flex h-auto flex-wrap justify-start gap-1 bg-muted/40 p-1">
           {Object.entries(TAB_LABELS).map(([value, label]) => (
-            <TabsTrigger key={value} value={value}>{label}</TabsTrigger>
+            <TabsTrigger key={value} value={value}>
+              {label}
+            </TabsTrigger>
           ))}
         </TabsList>
 
-        <TabsContent value="general" className="space-y-6 mt-6">
-          <CPMSLSchoolInfoForm schoolInfo={s.schoolInfo} onSave={s.handleSaveSchoolInfo} loading={s.loadingSchoolInfo} />
+        <TabsContent value="general" className="space-y-6">
+          <CPMSLSchoolInfoForm
+            schoolInfo={s.schoolInfo}
+            onSave={s.handleSaveSchoolInfo}
+            loading={s.loadingSchoolInfo}
+          />
         </TabsContent>
 
-        <TabsContent value="calendar" className="space-y-8 mt-6">
+        <TabsContent value="calendar" className="space-y-6">
           <CPMSLCalendarManagement
-            holidays={s.holidays} events={s.events}
-            onAddHoliday={s.handleAddHoliday} onEditHoliday={s.handleEditHoliday} onDeleteHoliday={s.handleDeleteHoliday}
-            onAddEvent={s.handleAddEvent}     onEditEvent={s.handleEditEvent}     onDeleteEvent={s.handleDeleteEvent}
+            holidays={s.holidays}
+            events={s.events}
+            onAddHoliday={s.handleAddHoliday}
+            onEditHoliday={s.handleEditHoliday}
+            onDeleteHoliday={s.handleDeleteHoliday}
+            onAddEvent={s.handleAddEvent}
+            onEditEvent={s.handleEditEvent}
+            onDeleteEvent={s.handleDeleteEvent}
           />
         </TabsContent>
 
-        <TabsContent value="referentiel" className="space-y-6 mt-6">
+        <TabsContent value="referentiel" className="space-y-6">
           <ReferentielTab
-            loading={s.loadingRef} rubrics={s.rubrics} subjects={s.subjects} expandedSubjects={s.expandedSubjects}
-            onCreateRubric={s.openCreateRubric} onEditRubric={s.openEditRubric}
-            onCreateSubject={s.openCreateSubject} onEditSubject={s.openEditSubject}
-            onCreateSection={s.openCreateSection} onToggleExpand={s.toggleExpand}
+            loading={s.loadingRef}
+            rubrics={s.rubrics}
+            subjects={s.subjects}
+            expandedSubjects={s.expandedSubjects}
+            onCreateRubric={s.openCreateRubric}
+            onEditRubric={s.openEditRubric}
+            onCreateSubject={s.openCreateSubject}
+            onEditSubject={s.openEditSubject}
+            onCreateSection={s.openCreateSection}
+            onToggleExpand={s.toggleExpand}
           />
         </TabsContent>
 
-        <TabsContent value="classes" className="space-y-6 mt-6">
+        <TabsContent value="classes" className="space-y-6">
           <ClassesTab
-            loading={s.loadingClasses} classTypes={s.classTypes} classes={s.classes}
-            initializing={s.initializing} onInitialize={s.handleInitializeClasses} onEditClass={s.openEditClass}
+            loading={s.loadingClasses}
+            classTypes={s.classTypes}
+            classes={s.classes}
+            initializing={s.initializing}
+            onInitialize={s.handleInitializeClasses}
+            onEditClass={s.openEditClass}
           />
         </TabsContent>
 
-        <TabsContent value="attitudes" className="space-y-6 mt-6">
+        <TabsContent value="attitudes" className="space-y-6">
           <AttitudesTab
-            loading={s.loadingAttitudes} attitudes={s.attitudes} currentYearId={s.currentYearId}
-            onCreateAttitude={s.openCreateAttitude} onEditAttitude={s.openEditAttitude} onDeleteAttitude={s.handleDeleteAttitude}
+            loading={s.loadingAttitudes}
+            attitudes={s.attitudes}
+            currentYearId={s.currentYearId}
+            onCreateAttitude={s.openCreateAttitude}
+            onEditAttitude={s.openEditAttitude}
+            onDeleteAttitude={s.setDeleteAttitudeTarget}
           />
         </TabsContent>
       </Tabs>
 
-      <RubricModal  open={s.rubricModal}  onOpenChange={s.setRubricModal}  form={s.rubricForm}  onChange={s.setRubricForm}
-        editing={s.editingRubric}  submitting={s.submitting} onSave={s.handleSaveRubric} />
-      <SubjectModal open={s.subjectModal} onOpenChange={s.setSubjectModal} form={s.subjectForm} onChange={s.setSubjectForm}
-        onNameChange={s.handleSubjectNameChange} rubrics={s.rubrics}
-        editing={s.editingSubject} submitting={s.submitting} onSave={s.handleSaveSubject} />
-      <SectionModal open={s.sectionModal} onOpenChange={s.setSectionModal} form={s.sectionForm} onChange={s.setSectionForm}
-        onNameChange={s.handleSectionNameChange} onToggleCycle={s.toggleSectionCycle}
-        submitting={s.submitting} onSave={s.handleSaveSection} />
-      <AttitudeModal open={s.attitudeModal} onOpenChange={s.setAttitudeModal}
-        label={s.attitudeLabel} onLabelChange={s.setAttitudeLabel}
-        editing={s.editingAttitude} submitting={s.submitting} onSave={s.handleSaveAttitude} />
-      <ClassModal open={s.classModal} onOpenChange={s.setClassModal} form={s.classForm} onChange={s.setClassForm}
-        editing={s.editingClass} submitting={s.submitting} onSave={s.handleSaveClass} />
+      <RubricModal
+        open={s.rubricModal}
+        onOpenChange={s.setRubricModal}
+        form={s.rubricForm}
+        onChange={s.setRubricForm}
+        editing={s.editingRubric}
+        submitting={s.submitting}
+        onSave={s.handleSaveRubric}
+      />
+      <SubjectModal
+        open={s.subjectModal}
+        onOpenChange={s.setSubjectModal}
+        form={s.subjectForm}
+        onChange={s.setSubjectForm}
+        onNameChange={s.handleSubjectNameChange}
+        rubrics={s.rubrics}
+        editing={s.editingSubject}
+        submitting={s.submitting}
+        onSave={s.handleSaveSubject}
+      />
+      <SectionModal
+        open={s.sectionModal}
+        onOpenChange={s.setSectionModal}
+        form={s.sectionForm}
+        onChange={s.setSectionForm}
+        onNameChange={s.handleSectionNameChange}
+        onToggleCycle={s.toggleSectionCycle}
+        submitting={s.submitting}
+        onSave={s.handleSaveSection}
+      />
+      <AttitudeModal
+        open={s.attitudeModal}
+        onOpenChange={s.setAttitudeModal}
+        label={s.attitudeLabel}
+        onLabelChange={s.setAttitudeLabel}
+        editing={s.editingAttitude}
+        submitting={s.submitting}
+        onSave={s.handleSaveAttitude}
+      />
+      <ClassModal
+        open={s.classModal}
+        onOpenChange={s.setClassModal}
+        form={s.classForm}
+        onChange={s.setClassForm}
+        editing={s.editingClass}
+        submitting={s.submitting}
+        onSave={s.handleSaveClass}
+      />
+
+      <AlertDialog
+        open={!!s.deleteAttitudeTarget}
+        onOpenChange={(o) => !o && s.setDeleteAttitudeTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Supprimer cette attitude ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              L&apos;attitude <span className="font-medium text-foreground">{s.deleteAttitudeTarget?.label}</span>{" "}
+              sera retirée des évaluations à venir. Les évaluations déjà saisies ne seront pas affectées.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={s.confirmDeleteAttitude}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Supprimer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

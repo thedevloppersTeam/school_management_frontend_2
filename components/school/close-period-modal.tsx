@@ -195,7 +195,7 @@ export function ClosePeriodModal({
                   <td className="px-4 py-2 text-right">
                     {cr.status !== 'complete' && cr.sessionId && (
                       <Link
-                        href={`/admin/academic-year/${yearId}/grades?sessionId=${cr.sessionId}`}
+                        href={`/admin/grades?sessionId=${cr.sessionId}`}
                         className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
                       >
                         Saisir <ExternalLinkIcon className="h-3 w-3" />

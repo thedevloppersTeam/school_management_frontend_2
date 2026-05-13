@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useParams } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -9,9 +8,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CPMSLGradesGrid } from "@/components/school/cpmsl-grades-grid"
 import { CPMSLBehaviorGrid } from "@/components/school/cpmsl-behavior-grid"
 import { CPMSLProgressionTab } from "@/components/school/cpmsl-progression-tab"
-import GradesViewPage from "@/app/admin/academic-year/[yearId]/grades/view/page"
+import GradesViewPage from "@/app/admin/grades/view/page"
 import type { ApiClassSession } from "@/lib/api/students"
-import type { AcademicYearStep, ClassSession } from "@/lib/api/dashboard"
+import { fetchActiveAcademicYear, type AcademicYearStep, type ClassSession } from "@/lib/api/dashboard"
 import type { ApiClassSubject, ApiEnrollment, ApiGrade, CreateGradePayload } from "@/lib/api/grades"
 import { fetchClassSubjects, fetchEnrollments, fetchGradesForClassSubjectStep, bulkCreateGrades, updateGrade } from "@/lib/api/grades"
 import type { UpdateGradePayload } from "@/components/school/cpmsl-grades-grid"
@@ -31,9 +30,11 @@ function buildSaveDescription(created: number, updated: number): string {
 }
 
 export default function GradesPage() {
-  const params  = useParams()
-  const yearId  = params.yearId as string
   const { toast } = useToast()
+
+  // ── Année courante résolue en interne ─────────────────────────────────────
+  const [yearId, setYearId] = useState<string>("")
+  const [noCurrentYear, setNoCurrentYear] = useState(false)
 
   // ── Contexte partagé ──────────────────────────────────────────────────────
   const [sessions,    setSessions]    = useState<ClassSession[]>([])
@@ -61,11 +62,19 @@ export default function GradesPage() {
     async function loadContext() {
       setLoadingContext(true)
       setError(null)
+      setNoCurrentYear(false)
       try {
-        const [sessionsRes, stepsRes, yearRes] = await Promise.all([
-          fetch(`/api/class-sessions?academicYearId=${yearId}`, { credentials: 'include' }),
-          fetch(`/api/academic-years/${yearId}/steps`, { credentials: 'include' }),
-          fetch(`/api/academic-years/${yearId}`, { credentials: 'include' }),
+        const current = await fetchActiveAcademicYear()
+        if (!current) {
+          setNoCurrentYear(true)
+          return
+        }
+        setYearId(current.id)
+        setYearName(current.name)
+
+        const [sessionsRes, stepsRes] = await Promise.all([
+          fetch(`/api/class-sessions?academicYearId=${current.id}`, { credentials: 'include' }),
+          fetch(`/api/academic-years/${current.id}/steps`, { credentials: 'include' }),
         ])
         if (!sessionsRes.ok || !stepsRes.ok) throw new Error('Erreur de chargement du contexte')
         const [sessionsData, stepsData] = await Promise.all([
@@ -75,10 +84,6 @@ export default function GradesPage() {
         setSessions(sessionsData)
         setApiSessions(sessionsData)
         setSteps([...stepsData].sort((a, b) => a.stepNumber - b.stepNumber))
-        if (yearRes.ok) {
-          const yearData = await yearRes.json()
-          setYearName(yearData?.name ?? "")
-        }
       } catch (e) {
         setError(toMessage(e, "lors du chargement du contexte"))
       } finally {
@@ -86,7 +91,7 @@ export default function GradesPage() {
       }
     }
     loadContext()
-  }, [yearId])
+  }, [])
 
   // ── Handlers W3 ──────────────────────────────────────────────────────────
   async function handleSessionChange(sessionId: string) {
@@ -180,6 +185,16 @@ export default function GradesPage() {
       return (
         <div className="flex items-center justify-center py-20">
           <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-muted border-t-primary" />
+        </div>
+      )
+    }
+
+    if (noCurrentYear) {
+      return (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-800">
+          Aucune année scolaire n&apos;est marquée comme courante. Activez une année dans
+          {" "}<a href="/admin/academic-years" className="font-semibold underline">Paramétrage &middot; Années Scolaires</a>{" "}
+          avant de saisir des notes.
         </div>
       )
     }

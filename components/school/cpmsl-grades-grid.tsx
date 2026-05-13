@@ -30,6 +30,7 @@ import type { ApiClassSession } from "@/lib/api/students"
 import type { AcademicYearStep } from "@/lib/api/dashboard"
 import type { ApiClassSubject, ApiEnrollment, ApiGrade, CreateGradePayload } from "@/lib/api/grades"
 import { cn } from "@/lib/utils"
+import { parseDecimal } from "@/lib/decimal"
 import { useUnsavedChangesWarning } from "@/hooks/use-unsaved-changes-warning"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -93,6 +94,9 @@ export function CPMSLGradesGrid({
   onSaveGrades,
 }: CPMSLGradesGridProps) {
   const [gradeEntries, setGradeEntries] = useState<Map<string, GradeEntry>>(new Map())
+  // Section mode: enrollmentId -> sectionId -> entry
+  const [sectionEntries, setSectionEntries] = useState<Map<string, Map<string, GradeEntry>>>(new Map())
+  const [entryMode, setEntryMode] = useState<'global' | 'sections'>('global')
   const [currentPage,  setCurrentPage]  = useState(1)
   const [searchQuery,  setSearchQuery]  = useState("")
   const [itemsPerPage, setItemsPerPage] = useState(15)
@@ -149,12 +153,15 @@ export function CPMSLGradesGrid({
     () => classSubjects.find(cs => cs.id === selectedClassSubjectId),
     [classSubjects, selectedClassSubjectId]
   )
-  const maxScore = (() => {
-  const raw = selectedClassSubject?.subject.maxScore
-  if (!raw) return 10
-  if (typeof raw === 'object' && (raw as any).d) return Number((raw as any).d[0])
-  return Number(raw) || 10
-  })()
+  const maxScore = parseDecimal(selectedClassSubject?.subject.maxScore) ?? 10
+
+  const subjectSections = useMemo(
+    () => (selectedClassSubject?.subject.sections ?? [])
+      .map(sec => ({ ...sec, maxScore: parseDecimal(sec.maxScore) ?? 0 }))
+      .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0)),
+    [selectedClassSubject]
+  )
+  const subjectHasSections = (selectedClassSubject?.subject.hasSections ?? false) && subjectSections.length > 0
 
 
   const selectedStep = useMemo(
@@ -173,24 +180,48 @@ export function CPMSLGradesGrid({
   // ── Pré-remplissage depuis les notes existantes ──────────────────────────
 
   useEffect(() => {
-    const newEntries = new Map<string, GradeEntry>()
+    const newGlobalEntries = new Map<string, GradeEntry>()
+    const newSectionEntries = new Map<string, Map<string, GradeEntry>>()
+    let hasGlobalGrades = false
+    let hasSectionGrades = false
+
     existingGrades
-      .filter(
-        g =>
-          g.classSubjectId === selectedClassSubjectId &&
-          g.sectionId      === null &&
-          g.stepId         === selectedStepId
-      )
+      .filter(g => g.classSubjectId === selectedClassSubjectId && g.stepId === selectedStepId)
       .forEach(g => {
-        newEntries.set(g.enrollmentId, {
-          enrollmentId: g.enrollmentId,
-          value:   String(g.studentScore),
-          isValid: true,
-        })
+        const value = String(g.studentScore)
+        if (g.sectionId === null) {
+          newGlobalEntries.set(g.enrollmentId, { enrollmentId: g.enrollmentId, value, isValid: true })
+          hasGlobalGrades = true
+        } else {
+          const studentMap = newSectionEntries.get(g.enrollmentId) ?? new Map<string, GradeEntry>()
+          studentMap.set(g.sectionId, { enrollmentId: g.enrollmentId, value, isValid: true })
+          newSectionEntries.set(g.enrollmentId, studentMap)
+          hasSectionGrades = true
+        }
       })
-    setGradeEntries(newEntries)
+
+    setGradeEntries(newGlobalEntries)
+    setSectionEntries(newSectionEntries)
+
+    // Auto-detect mode:
+    //   - subject has no sections → 'global' (only option)
+    //   - subject has sections    → 'sections' (always — the structured intent)
+    //     Note: orphan global grades on a sectioned subject still display
+    //     in the bulletin thanks to the fallback in buildSubjectEntries.
+    //     The toggle remains visible so the teacher can switch to 'global'
+    //     deliberately if needed.
+    if (!subjectHasSections) {
+      setEntryMode('global')
+    } else if (hasSectionGrades || !hasGlobalGrades) {
+      setEntryMode('sections')
+    } else {
+      // hasSections + only global data exists → still default to sections,
+      // but the UI will show a hint about the existing global entries below.
+      setEntryMode('sections')
+    }
+
     setCurrentPage(1)
-  }, [existingGrades, selectedClassSubjectId, selectedStepId])
+  }, [existingGrades, selectedClassSubjectId, selectedStepId, subjectHasSections])
 
   useEffect(() => { setCurrentPage(1) }, [selectedSessionId, selectedClassSubjectId, selectedStepId])
 
@@ -257,15 +288,72 @@ export function CPMSLGradesGrid({
     })
   }
 
-  const hasErrors = useMemo(
-    () => Array.from(gradeEntries.values()).some(e => !e.isValid),
-    [gradeEntries]
-  )
+  function validateSectionScore(value: string, max: number): { isValid: boolean; error?: string } {
+    if (!value || value.trim() === '') return { isValid: true }
+    const num = parseFloat(value)
+    if (isNaN(num)) return { isValid: false, error: 'Valeur invalide' }
+    if (num < 0 || num > max) return { isValid: false, error: `Entre 0 et ${max}` }
+    if (Math.round(num * 4 * 1e10) / 1e10 !== Math.round(num * 4))
+      return { isValid: false, error: 'Multiples de 0.25 uniquement' }
+    return { isValid: true }
+  }
 
-  const enteredCount = useMemo(
-    () => Array.from(gradeEntries.values()).filter(e => e.value && e.isValid).length,
-    [gradeEntries]
-  )
+  function handleSectionGradeChange(enrollmentId: string, sectionId: string, value: string) {
+    const section = subjectSections.find(s => s.id === sectionId)
+    const sectionMax = section ? section.maxScore : 0
+    const validation = validateSectionScore(value, sectionMax)
+    setSectionEntries(prev => {
+      const next = new Map(prev)
+      const studentMap = new Map(next.get(enrollmentId) ?? new Map<string, GradeEntry>())
+      studentMap.set(sectionId, { enrollmentId, value, isValid: validation.isValid, error: validation.error })
+      next.set(enrollmentId, studentMap)
+      return next
+    })
+  }
+
+  function sectionRowTotal(enrollmentId: string): { raw: number; max: number; complete: boolean } {
+    const studentMap = sectionEntries.get(enrollmentId)
+    let raw = 0
+    let filledMax = 0
+    let totalMax = 0
+    let complete = true
+    for (const sec of subjectSections) {
+      totalMax += sec.maxScore
+      const entry = studentMap?.get(sec.id)
+      if (entry && entry.value.trim() && entry.isValid) {
+        raw += parseFloat(entry.value)
+        filledMax += sec.maxScore
+      } else {
+        complete = false
+      }
+    }
+    return { raw, max: totalMax, complete: complete && filledMax === totalMax }
+  }
+
+  const hasErrors = useMemo(() => {
+    if (entryMode === 'global') {
+      return Array.from(gradeEntries.values()).some(e => !e.isValid)
+    }
+    for (const studentMap of sectionEntries.values()) {
+      for (const entry of studentMap.values()) {
+        if (!entry.isValid) return true
+      }
+    }
+    return false
+  }, [entryMode, gradeEntries, sectionEntries])
+
+  const enteredCount = useMemo(() => {
+    if (entryMode === 'global') {
+      return Array.from(gradeEntries.values()).filter(e => e.value && e.isValid).length
+    }
+    // In sections mode, count students who have at least one valid section entry
+    let count = 0
+    for (const studentMap of sectionEntries.values()) {
+      const hasAny = Array.from(studentMap.values()).some(e => e.value.trim() && e.isValid)
+      if (hasAny) count++
+    }
+    return count
+  }, [entryMode, gradeEntries, sectionEntries])
   // ── EP-006 : détection des modifications non enregistrées ─────────────────
 //
 // On compare gradeEntries (ce que l'utilisateur a tapé) avec
@@ -280,30 +368,55 @@ const hasUnsavedChanges = useMemo(() => {
   if (isLocked) return false
   if (!selectedClassSubjectId || !selectedStepId) return false
 
-  const existingMap = new Map(
-    existingGrades
-      .filter(g =>
-        g.classSubjectId === selectedClassSubjectId &&
-        g.stepId === selectedStepId &&
-        g.sectionId === null
-      )
-      .map(g => [g.enrollmentId, g])
-  )
+  if (entryMode === 'global') {
+    const existingMap = new Map(
+      existingGrades
+        .filter(g =>
+          g.classSubjectId === selectedClassSubjectId &&
+          g.stepId === selectedStepId &&
+          g.sectionId === null
+        )
+        .map(g => [g.enrollmentId, g])
+    )
 
-  for (const [enrollmentId, entry] of gradeEntries) {
-    if (!entry.value?.trim() || !entry.isValid) continue
+    for (const [enrollmentId, entry] of gradeEntries) {
+      if (!entry.value?.trim() || !entry.isValid) continue
+      const existing = existingMap.get(enrollmentId)
+      const scoreTyped = parseFloat(entry.value)
+      if (!existing) return true
+      if (scoreTyped !== Number(existing.studentScore)) return true
+    }
+    return false
+  }
 
-    const existing = existingMap.get(enrollmentId)
-    const scoreTyped = parseFloat(entry.value)
+  // sections mode
+  const existingSectionMap = new Map<string, Map<string, ApiGrade>>()
+  existingGrades
+    .filter(g =>
+      g.classSubjectId === selectedClassSubjectId &&
+      g.stepId === selectedStepId &&
+      g.sectionId !== null
+    )
+    .forEach(g => {
+      const m = existingSectionMap.get(g.enrollmentId) ?? new Map<string, ApiGrade>()
+      m.set(g.sectionId!, g)
+      existingSectionMap.set(g.enrollmentId, m)
+    })
 
-    // Nouvelle note jamais enregistrée
-    if (!existing) return true
-    // Note modifiée par rapport à ce qui est en base
-    if (scoreTyped !== Number(existing.studentScore)) return true
+  for (const [enrollmentId, studentMap] of sectionEntries) {
+    for (const [sectionId, entry] of studentMap) {
+      if (!entry.value?.trim() || !entry.isValid) continue
+      const existing = existingSectionMap.get(enrollmentId)?.get(sectionId)
+      const scoreTyped = parseFloat(entry.value)
+      if (!existing) return true
+      if (scoreTyped !== Number(existing.studentScore)) return true
+    }
   }
   return false
 }, [
+  entryMode,
   gradeEntries,
+  sectionEntries,
   existingGrades,
   selectedClassSubjectId,
   selectedStepId,
@@ -317,26 +430,50 @@ useUnsavedChangesWarning(hasUnsavedChanges)
   function handleSaveGrades() {
     if (!selectedClassSubjectId || !selectedStepId || hasErrors || isLocked) return
 
-    const existingMap = new Map(
-      existingGrades
-        .filter(g => g.classSubjectId === selectedClassSubjectId && g.stepId === selectedStepId && g.sectionId === null)
-        .map(g => [g.enrollmentId, g])
-    )
-
     const toCreate: CreateGradePayload[] = []
     const toUpdate: UpdateGradePayload[] = []
 
-    gradeEntries.forEach((entry, enrollmentId) => {
-      if (!entry.value || !entry.isValid) return
-      const score    = parseFloat(entry.value)
-      const existing = existingMap.get(enrollmentId)
+    if (entryMode === 'global') {
+      const existingMap = new Map(
+        existingGrades
+          .filter(g => g.classSubjectId === selectedClassSubjectId && g.stepId === selectedStepId && g.sectionId === null)
+          .map(g => [g.enrollmentId, g])
+      )
 
-      if (!existing) {
-        toCreate.push({ enrollmentId, classSubjectId: selectedClassSubjectId, stepId: selectedStepId, studentScore: score, gradeType: 'EXAM' })
-      } else if (score !== Number(existing.studentScore)) {
-        toUpdate.push({ gradeId: existing.id, studentScore: score, gradeType: 'EXAM' })
-      }
-    })
+      gradeEntries.forEach((entry, enrollmentId) => {
+        if (!entry.value || !entry.isValid) return
+        const score    = parseFloat(entry.value)
+        const existing = existingMap.get(enrollmentId)
+        if (!existing) {
+          toCreate.push({ enrollmentId, classSubjectId: selectedClassSubjectId, stepId: selectedStepId, studentScore: score, gradeType: 'EXAM' })
+        } else if (score !== Number(existing.studentScore)) {
+          toUpdate.push({ gradeId: existing.id, studentScore: score, gradeType: 'EXAM' })
+        }
+      })
+    } else {
+      // sections mode — one Grade row per section per student
+      const existingSectionMap = new Map<string, Map<string, ApiGrade>>()
+      existingGrades
+        .filter(g => g.classSubjectId === selectedClassSubjectId && g.stepId === selectedStepId && g.sectionId !== null)
+        .forEach(g => {
+          const m = existingSectionMap.get(g.enrollmentId) ?? new Map<string, ApiGrade>()
+          m.set(g.sectionId!, g)
+          existingSectionMap.set(g.enrollmentId, m)
+        })
+
+      sectionEntries.forEach((studentMap, enrollmentId) => {
+        studentMap.forEach((entry, sectionId) => {
+          if (!entry.value || !entry.isValid) return
+          const score    = parseFloat(entry.value)
+          const existing = existingSectionMap.get(enrollmentId)?.get(sectionId)
+          if (!existing) {
+            toCreate.push({ enrollmentId, classSubjectId: selectedClassSubjectId, sectionId, stepId: selectedStepId, studentScore: score, gradeType: 'EXAM' })
+          } else if (score !== Number(existing.studentScore)) {
+            toUpdate.push({ gradeId: existing.id, studentScore: score, gradeType: 'EXAM' })
+          }
+        })
+      })
+    }
 
     if (toCreate.length === 0 && toUpdate.length === 0) return
     onSaveGrades(toCreate, toUpdate)
@@ -354,20 +491,57 @@ useUnsavedChangesWarning(hasUnsavedChanges)
 
   type BadgeKind = 'modified' | 'saved' | 'entered' | 'empty'
   function getBadgeKind(enrollmentId: string): BadgeKind {
-    const entry    = gradeEntries.get(enrollmentId)
-    const existing = existingGrades.find(
-      g => g.enrollmentId === enrollmentId &&
-           g.classSubjectId === selectedClassSubjectId &&
-           g.stepId         === selectedStepId &&
-           g.sectionId      === null
-    )
-    const hasValue   = !!entry?.value?.trim()
-    const hasError   = hasValue && entry && !entry.isValid
-    const isModified = existing && hasValue && !hasError && parseFloat(entry!.value) !== Number(existing.studentScore)
+    if (entryMode === 'global') {
+      const entry    = gradeEntries.get(enrollmentId)
+      const existing = existingGrades.find(
+        g => g.enrollmentId === enrollmentId &&
+             g.classSubjectId === selectedClassSubjectId &&
+             g.stepId         === selectedStepId &&
+             g.sectionId      === null
+      )
+      const hasValue   = !!entry?.value?.trim()
+      const hasError   = hasValue && entry && !entry.isValid
+      const isModified = existing && hasValue && !hasError && parseFloat(entry!.value) !== Number(existing.studentScore)
 
-    if (isModified) return 'modified'
-    if (existing)   return 'saved'
-    if (hasValue && !hasError) return 'entered'
+      if (isModified) return 'modified'
+      if (existing)   return 'saved'
+      if (hasValue && !hasError) return 'entered'
+      return 'empty'
+    }
+
+    // sections mode — aggregate over the row's sections
+    const studentMap = sectionEntries.get(enrollmentId)
+    const existingForRow = new Map(
+      existingGrades
+        .filter(g =>
+          g.enrollmentId === enrollmentId &&
+          g.classSubjectId === selectedClassSubjectId &&
+          g.stepId === selectedStepId &&
+          g.sectionId !== null
+        )
+        .map(g => [g.sectionId!, g])
+    )
+
+    let anyValue = false
+    let anyModified = false
+    let allSavedAndUnchanged = subjectSections.length > 0 && existingForRow.size > 0
+
+    for (const sec of subjectSections) {
+      const entry = studentMap?.get(sec.id)
+      const existing = existingForRow.get(sec.id)
+      const value = entry?.value?.trim() ?? ''
+      if (value) anyValue = true
+
+      if (existing && value && entry?.isValid && parseFloat(value) !== Number(existing.studentScore)) {
+        anyModified = true
+        allSavedAndUnchanged = false
+      }
+      if (!existing) allSavedAndUnchanged = false
+    }
+
+    if (anyModified) return 'modified'
+    if (allSavedAndUnchanged) return 'saved'
+    if (anyValue) return 'entered'
     return 'empty'
   }
 
@@ -433,6 +607,70 @@ useUnsavedChangesWarning(hasUnsavedChanges)
               <p className="text-[11px] text-destructive">{entry.error}</p>
             )}
           </div>
+        </TableCell>
+        <TableCell className="pr-6 text-center">
+          {renderBadge(enrollment.id)}
+        </TableCell>
+      </TableRow>
+    )
+  }
+
+  function renderSectionsTableRow(enrollment: ApiEnrollment) {
+    const studentMap = sectionEntries.get(enrollment.id)
+    const total = sectionRowTotal(enrollment.id)
+    return (
+      <TableRow key={enrollment.id}>
+        <TableCell className="pl-6 font-medium text-foreground">
+          {enrollment.student.user.lastname}
+        </TableCell>
+        <TableCell className="text-foreground">
+          {enrollment.student.user.firstname}
+        </TableCell>
+        <TableCell>
+          <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
+            {enrollment.student.studentCode}
+          </code>
+        </TableCell>
+        {subjectSections.map(sec => {
+          const entry = studentMap?.get(sec.id)
+          const hasValue = !!entry?.value?.trim()
+          const hasError = hasValue && entry && !entry.isValid
+          return (
+            <TableCell key={sec.id} className="align-top">
+              <div className="flex flex-col items-center gap-1">
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    type="number" min="0" max={String(sec.maxScore)} step="0.25"
+                    value={entry?.value || ''} placeholder="—" disabled={isLocked}
+                    onChange={e => handleSectionGradeChange(enrollment.id, sec.id, e.target.value)}
+                    className={cn(
+                      "w-16 text-center tabular-nums",
+                      hasError && "border-destructive focus-visible:ring-destructive"
+                    )}
+                  />
+                  <span className="text-[10px] text-muted-foreground tabular-nums">/ {sec.maxScore}</span>
+                </div>
+                {hasError && entry?.error && (
+                  <p className="text-[10px] text-destructive">{entry.error}</p>
+                )}
+              </div>
+            </TableCell>
+          )
+        })}
+        <TableCell className="text-center">
+          {total.raw > 0 || total.complete ? (
+            <span
+              className={cn(
+                "tabular-nums text-sm font-semibold",
+                total.complete ? "text-emerald-700" : "text-amber-700"
+              )}
+              title={total.complete ? "Total complet" : "Total partiel (toutes les sections ne sont pas saisies)"}
+            >
+              {total.raw.toFixed(2)} <span className="text-muted-foreground font-normal">/ {total.max}</span>
+            </span>
+          ) : (
+            <span className="text-xs text-muted-foreground">—</span>
+          )}
         </TableCell>
         <TableCell className="pr-6 text-center">
           {renderBadge(enrollment.id)}
@@ -560,9 +798,9 @@ useUnsavedChangesWarning(hasUnsavedChanges)
 
         <Separator />
 
-        {/* Search toolbar */}
-        <div className="p-4">
-          <div className="relative max-w-md">
+        {/* Search toolbar + mode toggle */}
+        <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative max-w-md flex-1">
             <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="Rechercher par nom ou code..."
@@ -571,6 +809,37 @@ useUnsavedChangesWarning(hasUnsavedChanges)
               className="pl-9"
             />
           </div>
+          {subjectHasSections && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-muted-foreground">Mode :</span>
+              <div className="inline-flex overflow-hidden rounded-md border bg-muted/30">
+                <button
+                  type="button"
+                  onClick={() => setEntryMode('global')}
+                  className={cn(
+                    "px-3 py-1.5 text-xs font-medium transition-colors",
+                    entryMode === 'global'
+                      ? "bg-[#2C4A6E] text-white"
+                      : "text-muted-foreground hover:bg-muted"
+                  )}
+                >
+                  Note globale
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEntryMode('sections')}
+                  className={cn(
+                    "px-3 py-1.5 text-xs font-medium transition-colors",
+                    entryMode === 'sections'
+                      ? "bg-[#2C4A6E] text-white"
+                      : "text-muted-foreground hover:bg-muted"
+                  )}
+                >
+                  Par sections ({subjectSections.length})
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         <Separator />
@@ -587,6 +856,36 @@ useUnsavedChangesWarning(hasUnsavedChanges)
               <p className="mt-1 text-sm text-muted-foreground">
                 {searchQuery ? "Modifiez vos critères de recherche." : "Aucun élève inscrit dans cette classe."}
               </p>
+            </div>
+          ) : entryMode === 'sections' ? (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="pl-6 font-semibold">Nom</TableHead>
+                    <TableHead className="font-semibold">Prénom</TableHead>
+                    <TableHead className="font-semibold">Code</TableHead>
+                    {subjectSections.map(sec => (
+                      <TableHead key={sec.id} className="text-center font-semibold">
+                        <div className="flex flex-col items-center gap-0.5">
+                          <span>{sec.name}</span>
+                          <span className="text-[10px] font-normal text-muted-foreground">/ {sec.maxScore}</span>
+                        </div>
+                      </TableHead>
+                    ))}
+                    <TableHead className="text-center font-semibold">
+                      <div className="flex flex-col items-center gap-0.5">
+                        <span>Total</span>
+                        <span className="text-[10px] font-normal text-muted-foreground">/ {maxScore}</span>
+                      </div>
+                    </TableHead>
+                    <TableHead className="pr-6 text-center font-semibold">Statut</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginatedEnrollments.map(enrollment => renderSectionsTableRow(enrollment))}
+                </TableBody>
+              </Table>
             </div>
           ) : (
             <Table>

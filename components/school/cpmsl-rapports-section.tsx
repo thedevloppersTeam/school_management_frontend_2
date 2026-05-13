@@ -1,7 +1,7 @@
 "use client"
 
 import { clientFetch as apiFetch } from '@/lib/client-fetch'
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -210,7 +210,37 @@ export function CPMSLRapportsSection({
   const [generating,    setGenerating]    = useState(false)
   const [selectedStep,    setSelectedStep]    = useState("")
   const [selectedSession, setSelectedSession] = useState("")
+  const [selectedClassTypeId, setSelectedClassTypeId] = useState("")
   const [report,          setReport]          = useState<ReportData | null>(null)
+
+  useEffect(() => {
+    if (!selectedSession) {
+      setSelectedClassTypeId("")
+      return
+    }
+    const s = sessions.find(x => x.id === selectedSession)
+    if (s) setSelectedClassTypeId(s.class.classType.id)
+  }, [selectedSession, sessions])
+
+  const classTypeOptions = useMemo(() => {
+    const map = new Map<string, { id: string; name: string }>()
+    sessions.forEach(s => {
+      const ct = s.class?.classType
+      if (ct && !map.has(ct.id)) map.set(ct.id, { id: ct.id, name: ct.name })
+    })
+    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name))
+  }, [sessions])
+
+  const salleOptions = useMemo(() => {
+    if (!selectedClassTypeId) return []
+    return sessions
+      .filter(s => s.class?.classType?.id === selectedClassTypeId)
+      .map(s => ({
+        sessionId: s.id,
+        label: s.class.track?.code ?? s.class.letter ?? "",
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label))
+  }, [sessions, selectedClassTypeId])
   const reportRef = useRef<HTMLDivElement>(null)
 
   // ── Init ───────────────────────────────────────────────────────────────────
@@ -451,21 +481,39 @@ export function CPMSLRapportsSection({
         </CardHeader>
         <Separator />
         <CardContent className="p-4">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Select value={selectedSession} onValueChange={setSelectedSession}>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <Select
+              value={selectedClassTypeId}
+              onValueChange={(v) => { setSelectedClassTypeId(v); setSelectedSession("") }}
+            >
               <SelectTrigger id="class-select">
-                <SelectValue placeholder="Sélectionner une classe" />
+                <SelectValue placeholder="Classe" />
               </SelectTrigger>
               <SelectContent>
-                {sessions.map(s => (
-                  <SelectItem key={s.id} value={s.id}>{getClassSessionName(s)}</SelectItem>
+                {classTypeOptions.map(ct => (
+                  <SelectItem key={ct.id} value={ct.id}>{ct.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={selectedSession}
+              onValueChange={setSelectedSession}
+              disabled={!selectedClassTypeId}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={selectedClassTypeId ? "Salle" : "Choisir d'abord une classe"} />
+              </SelectTrigger>
+              <SelectContent>
+                {salleOptions.map(opt => (
+                  <SelectItem key={opt.sessionId} value={opt.sessionId}>{opt.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
 
             <Select value={selectedStep} onValueChange={setSelectedStep}>
               <SelectTrigger>
-                <SelectValue placeholder="Sélectionner une étape" />
+                <SelectValue placeholder="Étape" />
               </SelectTrigger>
               <SelectContent>
                 {steps.map(s => (

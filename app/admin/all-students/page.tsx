@@ -2,7 +2,6 @@
 
 import { clientFetch as apiFetch } from '@/lib/client-fetch'
 import { useEffect, useState, useMemo, useCallback } from "react"
-import { useParams } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -40,13 +39,12 @@ import {
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
+import Link from "next/link"
 import {
   PlusIcon,
   SearchIcon,
   UserIcon,
   UsersIcon,
-  UserXIcon,
-  ImageOffIcon,
   BadgeAlertIcon,
   ArrowUpIcon,
   ArrowDownIcon,
@@ -55,28 +53,40 @@ import {
   ArrowRightLeftIcon,
   UserRoundXIcon,
   UserRoundCheckIcon,
+  FileTextIcon,
+  CameraIcon,
 } from "lucide-react"
 import { ArchivedYearBanner } from "@/components/school/archived-year-banner"
 import { StudentEnrollForm } from "@/components/school/students/student-enroll-form"
 import { EditStudentModal } from "@/components/school/edit-student-modal"
 import { TransferEnrollmentModal } from "@/components/school/transfer-enrollment-modal"
+import { PromotionPhotoModal } from "@/components/school/promotion-photo-modal"
 import { StatCard } from "@/components/school/stat-card"
-import { fetchClassSessions, type AcademicYear, type ClassSession } from "@/lib/api/dashboard"
+import { fetchActiveAcademicYear, fetchClassSessions, type AcademicYear, type ClassSession } from "@/lib/api/dashboard"
 import { cn } from "@/lib/utils"
 
 // ── Types locaux ──────────────────────────────────────────────────────────────
 
+type EnrollmentStatus = 'ACTIVE' | 'TRANSFERRED' | 'DROPPED' | 'GRADUATED'
+
 interface StudentRow {
-  enrollmentId:  string
   studentId:     string
   studentCode:   string
   nisu:          string
   firstname:     string
   lastname:      string
   profilePhoto?: string
-  classSessionId: string
-  className:     string
-  status:        'ACTIVE' | 'TRANSFERRED' | 'DROPPED' | 'GRADUATED'
+  promotionPhotoUrl?: string | null
+  // Latest enrollment (any year) — may be absent if the student was never enrolled
+  enrollmentId?:   string
+  classSessionId?: string
+  className?:      string         // combined (e.g. "2ème AF A") — used for filtering/sorting
+  classTypeName?:  string         // e.g. "2ème AF"
+  salleLabel?:     string         // e.g. "A" or track code "LLA"
+  yearString?:     string
+  yearId?:         string
+  status?:         EnrollmentStatus
+  enrollmentDate?: string
   address?:      string
   motherName?:   string
   fatherName?:   string
@@ -98,7 +108,8 @@ function deriveYearStatus(year: AcademicYear): 'active' | 'preparation' | 'archi
 }
 
 
-function StatusBadge({ status }: { status: StudentRow['status'] }) {
+function StatusBadge({ status }: { status?: EnrollmentStatus }) {
+  if (!status) return <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-600">Non inscrit</Badge>
   switch (status) {
     case 'ACTIVE':
       return (
@@ -126,12 +137,11 @@ function StatusBadge({ status }: { status: StudentRow['status'] }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function StudentsManagementPage() {
-  const params = useParams()
-  const yearId = params.yearId as string
   const { toast } = useToast()
 
   // ── État ────────────────────────────────────────────────────────────────────
   const [year, setYear]               = useState<AcademicYear | null>(null)
+  const [noCurrentYear, setNoCurrentYear] = useState(false)
   const [sessions, setSessions]       = useState<ClassSession[]>([])
   const [students, setStudents]       = useState<StudentRow[]>([])
   const [loading, setLoading]         = useState(true)
@@ -140,7 +150,8 @@ export default function StudentsManagementPage() {
 
   // Filtres
   const [searchQuery, setSearchQuery]   = useState("")
-  const [selectedClass, setSelectedClass] = useState("all")
+  const [selectedClass, setSelectedClass] = useState("all")        // classe (classType name)
+  const [selectedSalle, setSelectedSalle] = useState("all")        // salle (letter or track code)
   const [currentPage, setCurrentPage]   = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(15)
   const PAGE_SIZE_OPTIONS = [15, 25, 50, 100]
@@ -149,6 +160,9 @@ export default function StudentsManagementPage() {
   const [deactivatingId, setDeactivatingId] = useState<string | null>(null)
   const [deactivationReason, setDeactivationReason] = useState("")
   const [deactivating, setDeactivating] = useState(false)
+
+  // Photo de promotion
+  const [photoTarget, setPhotoTarget] = useState<StudentRow | null>(null)
 
   // Modification profil
   const [editingStudent, setEditingStudent]     = useState<StudentRow | null>(null)
@@ -166,96 +180,160 @@ export default function StudentsManagementPage() {
   // ── Chargement ───────────────────────────────────────────────────────────────
   const loadStudents = useCallback(async () => {
     setLoading(true)
+    setNoCurrentYear(false)
     try {
-      // 1. Année
-      const yearData = await apiFetch<AcademicYear>(`/api/academic-years/${yearId}`)
+      // 1. Année courante (utilisée pour l'inscription, le transfert, la photo de promotion)
+      const yearData = await fetchActiveAcademicYear()
       setYear(yearData)
+      setNoCurrentYear(!yearData)
 
-      // 2. Sessions de classe
-      const sessionsData = await fetchClassSessions(yearId)
-      setSessions(sessionsData)
+      // 2. Sessions de classe de l'année courante (pour les modaux Transférer / Inscrire)
+      let sessionsData: ClassSession[] = []
+      if (yearData) {
+        sessionsData = await fetchClassSessions(yearData.id)
+        setSessions(sessionsData)
+      } else {
+        setSessions([])
+      }
 
-      // 3. Inscriptions pour toutes les sessions
-      const allEnrollments: StudentRow[] = []
+      // 3. Liste de tous les élèves du système (un seul appel)
+      const studentsData = await apiFetch<Array<{
+        id: string
+        studentCode?: string
+        nisu?: string
+        address?: string
+        motherName?: string
+        fatherName?: string
+        phone1?: string
+        phone2?: string
+        parentsEmail?: string
+        user?: { firstname?: string; lastname?: string; profilePhoto?: string }
+      }>>("/api/students", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      })
 
-      await Promise.all(sessionsData.map(async (session) => {
+      // 4. Toutes les inscriptions, toutes années confondues (pour résoudre la situation actuelle de chaque élève)
+      const allEnrollments = await apiFetch<Array<{
+        id: string
+        studentId: string
+        classSessionId: string
+        enrollmentDate?: string
+        status: EnrollmentStatus
+        classSession?: {
+          id: string
+          class?: {
+            letter?: string
+            classType?: { name?: string }
+            track?: { code?: string }
+          }
+          academicYear?: { id?: string; yearString?: string; name?: string; isCurrent?: boolean }
+        }
+      }>>("/api/enrollments")
+
+      // 5. Photos de promotion pour l'année courante uniquement
+      const photoByStudent = new Map<string, string>()
+      if (yearData) {
         try {
-          const enrollments = await apiFetch<Array<{
-            id: string
-            studentId: string
-            classSessionId: string
-            status: 'ACTIVE' | 'TRANSFERRED' | 'DROPPED' | 'GRADUATED'
-            student?: {
-              id: string
-              studentCode?: string
-              nisu?: string
-              address?: string
-              motherName?: string
-              fatherName?: string
-              phone1?: string
-              phone2?: string
-              parentsEmail?: string
-              user?: { firstname?: string; lastname?: string; profilePhoto?: string }
-            }
-          }>>(`/api/enrollments?classSessionId=${session.id}`)
+          const photos = await apiFetch<Array<{ studentId: string; photoUrl: string }>>(
+            `/api/promotion-photos?academicYearId=${yearData.id}`
+          )
+          photos.forEach((p) => photoByStudent.set(p.studentId, p.photoUrl))
+        } catch {
+          /* best-effort */
+        }
+      }
 
-                    const trackSuffix = session.class.track ? ` — ${session.class.track.code}` : ''
-          const className = `${session.class.classType.name} ${session.class.letter}${trackSuffix}`
+      // 6. Pour chaque élève, on retient l'inscription la plus récente
+      const latestByStudent = new Map<string, typeof allEnrollments[number]>()
+      for (const enr of allEnrollments) {
+        const prev = latestByStudent.get(enr.studentId)
+        const enrDate = enr.enrollmentDate ?? ""
+        const prevDate = prev?.enrollmentDate ?? ""
+        if (!prev || enrDate > prevDate) {
+          latestByStudent.set(enr.studentId, enr)
+        }
+      }
 
-          enrollments.forEach(enr => {
-            allEnrollments.push({
-              enrollmentId:  enr.id,
-              studentId:     enr.studentId,
-              studentCode:   enr.student?.studentCode || '—',
-              nisu:          enr.student?.nisu || '',
-              firstname:     enr.student?.user?.firstname || '',
-              lastname:      enr.student?.user?.lastname || '',
-              profilePhoto:  enr.student?.user?.profilePhoto,
-              classSessionId: session.id,
-              className,
-              status:        enr.status,
-              address:       enr.student?.address || '',
-              motherName:    enr.student?.motherName || '',
-              fatherName:    enr.student?.fatherName || '',
-              phone1:        enr.student?.phone1 || '',
-              phone2:        enr.student?.phone2 || '',
-              parentsEmail:  enr.student?.parentsEmail || '',
-            })
-          })
-        } catch { /* ignorer les erreurs par session */ }
-      }))
+      const rows: StudentRow[] = studentsData.map((s) => {
+        const latest = latestByStudent.get(s.id)
+        const cls = latest?.classSession?.class
+        const classTypeName = cls?.classType?.name
+        // For tracked classes (NS3/NS4) the track code is treated as the "salle"
+        // (per the school convention from the config tabs). Otherwise the letter is used.
+        const salleLabel = cls?.track?.code ?? cls?.letter
+        const className = classTypeName
+          ? `${classTypeName}${salleLabel ? ` ${salleLabel}` : ""}`
+          : undefined
+        return {
+          studentId: s.id,
+          studentCode: s.studentCode || "—",
+          nisu: s.nisu || "",
+          firstname: s.user?.firstname || "",
+          lastname: s.user?.lastname || "",
+          profilePhoto: s.user?.profilePhoto,
+          promotionPhotoUrl: photoByStudent.get(s.id) ?? null,
+          enrollmentId: latest?.id,
+          classSessionId: latest?.classSessionId,
+          className,
+          classTypeName,
+          salleLabel,
+          yearString: latest?.classSession?.academicYear?.yearString,
+          yearId: latest?.classSession?.academicYear?.id,
+          status: latest?.status,
+          enrollmentDate: latest?.enrollmentDate,
+          address: s.address || "",
+          motherName: s.motherName || "",
+          fatherName: s.fatherName || "",
+          phone1: s.phone1 || "",
+          phone2: s.phone2 || "",
+          parentsEmail: s.parentsEmail || "",
+        }
+      })
 
-      setStudents(allEnrollments)
-    } catch {
+      setStudents(rows)
+    } catch (err) {
+      console.error("[all-students] load failed:", err)
       toast({ title: "Erreur", description: "Impossible de charger les élèves", variant: "destructive" })
     } finally {
       setLoading(false)
     }
-  }, [yearId, toast])
+  }, [toast])
 
   useEffect(() => { loadStudents() }, [loadStudents])
 
   // ── KPIs ─────────────────────────────────────────────────────────────────────
-  const activeStudents      = students.filter(s => s.status === 'ACTIVE')
-  const inactiveStudents    = students.filter(s => s.status !== 'ACTIVE')
-  const withoutPhoto        = activeStudents.filter(s => !s.profilePhoto)
-  const withInvalidNisu     = activeStudents.filter(s => !isNisuValid(s.nisu))
+  const totalStudents       = students.length
+  const currentYearId       = year?.id
+  const withPromotionPhoto  = students.filter(s => !!s.promotionPhotoUrl)
+  const withInvalidNisu     = students.filter(s => !isNisuValid(s.nisu))
+  // "Inclure désactivés" toggle compte les DROPPED de l'année courante (uniquement informatif)
+  const droppedCurrentYear  = students.filter(s => s.status === 'DROPPED' && s.yearId === currentYearId && !!currentYearId)
 
   // ── Données filtrées ─────────────────────────────────────────────────────────
   const displayed = useMemo(() => {
-    let result = showInactive ? students : activeStudents
+    // Default: show every student. The "Désactivés" switch hides DROPPED enrollments.
+    let result = students
+    if (!showInactive) {
+      result = result.filter(s => s.status !== 'DROPPED')
+    }
 
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
       result = result.filter(s =>
         s.firstname.toLowerCase().includes(q) ||
         s.lastname.toLowerCase().includes(q) ||
-        s.nisu.includes(q)
+        s.nisu.includes(q) ||
+        s.studentCode.toLowerCase().includes(q)
       )
     }
 
     if (selectedClass !== 'all') {
-      result = result.filter(s => s.className === selectedClass)
+      result = result.filter(s => (s.classTypeName ?? '—') === selectedClass)
+    }
+    if (selectedSalle !== 'all') {
+      result = result.filter(s => (s.salleLabel ?? '—') === selectedSalle)
     }
 
     if (sortCol && sortDir) {
@@ -263,7 +341,7 @@ export default function StudentsManagementPage() {
         const val = (s: StudentRow) => {
           if (sortCol === 'nisu') return s.nisu
           if (sortCol === 'name') return `${s.lastname} ${s.firstname}`.toLowerCase()
-          return s.className.toLowerCase()
+          return (s.className ?? '').toLowerCase()
         }
         const av = val(a), bv = val(b)
         const comparison = av.localeCompare(bv)
@@ -271,11 +349,21 @@ export default function StudentsManagementPage() {
       })
     }
     return result
-  }, [students, showInactive, searchQuery, selectedClass, sortCol, sortDir, activeStudents])
+  }, [students, showInactive, searchQuery, selectedClass, selectedSalle, sortCol, sortDir])
 
   const totalPages        = Math.ceil(displayed.length / itemsPerPage)
   const paginated         = displayed.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
-    const uniqueClasses     = [...new Set(students.map(s => s.className))].sort((a, b) => a.localeCompare(b))
+
+  const classTypeOptions = useMemo(
+    () => [...new Set(students.map(s => s.classTypeName).filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b)),
+    [students]
+  )
+  const salleOptions = useMemo(() => {
+    const filtered = selectedClass === 'all'
+      ? students
+      : students.filter(s => s.classTypeName === selectedClass)
+    return [...new Set(filtered.map(s => s.salleLabel).filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b))
+  }, [students, selectedClass])
 
   // ── Tri ──────────────────────────────────────────────────────────────────────
   const handleSort = (col: SortCol) => {
@@ -421,43 +509,43 @@ export default function StudentsManagementPage() {
       {/* ── Header ── */}
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-foreground">Élèves</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Gérez les inscriptions
+        <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+          <span>Tous les élèves enregistrés dans le système — toutes années confondues</span>
           {year && (
             <>
-              {" "}&middot;{" "}
-              <Badge variant="secondary" className="ml-1 align-middle">
-                {year.name}
+              <span>&middot;</span>
+              <Badge variant="secondary" className="align-middle">
+                Année courante : {year.name}
               </Badge>
             </>
           )}
-        </p>
+        </div>
       </div>
+
+      {noCurrentYear && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          Aucune année scolaire courante n&apos;est définie. Les actions d&apos;inscription, de transfert et de photo de promotion sont désactivées.
+          {" "}<a href="/admin/academic-years" className="font-semibold underline">Configurer une année</a>.
+        </div>
+      )}
 
       {isArchived && year && <ArchivedYearBanner yearName={year.name} />}
 
       {/* ── KPI Cards ── */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard
-          label="Total actifs"
-          value={activeStudents.length}
+          label="Total élèves"
+          value={totalStudents}
           icon={UsersIcon}
+          iconClassName="text-[#2C4A6E]"
+          iconBgClassName="bg-blue-50"
+        />
+        <StatCard
+          label={year ? `Avec photo (${year.yearString})` : "Avec photo de promotion"}
+          value={withPromotionPhoto.length}
+          icon={UserIcon}
           iconClassName="text-emerald-600"
           iconBgClassName="bg-emerald-50"
-        />
-        <StatCard
-          label="Désactivés"
-          value={inactiveStudents.length}
-          icon={UserXIcon}
-          iconClassName="text-slate-600"
-          iconBgClassName="bg-slate-100"
-        />
-        <StatCard
-          label="Sans photo"
-          value={withoutPhoto.length}
-          icon={ImageOffIcon}
-          iconClassName="text-amber-600"
-          iconBgClassName="bg-amber-50"
         />
         <StatCard
           label="NISU invalide"
@@ -477,14 +565,15 @@ export default function StudentsManagementPage() {
               <CardDescription>
                 {displayed.length} élève{displayed.length > 1 ? 's' : ''}
                 {selectedClass !== 'all' && ` — ${selectedClass}`}
+                {selectedSalle !== 'all' && ` ${selectedSalle}`}
                 {searchQuery && ` — recherche : "${searchQuery}"`}
               </CardDescription>
             </div>
-            {!isArchived && (
+            {!isArchived && year && (
               <StudentEnrollForm
                 open={enrollOpen}
                 onOpenChange={setEnrollOpen}
-                academicYearId={yearId}
+                academicYearId={year.id}
                 onSuccess={() => { setEnrollOpen(false); loadStudents() }}
                 trigger={
                   <Button size="sm" onClick={() => setEnrollOpen(true)}>
@@ -504,20 +593,41 @@ export default function StudentsManagementPage() {
           <div className="relative flex-1">
             <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Rechercher par nom ou NISU..."
+              placeholder="Rechercher par nom, NISU ou code..."
               value={searchQuery}
               onChange={e => { setSearchQuery(e.target.value); setCurrentPage(1) }}
               className="pl-9"
             />
           </div>
 
-          <Select value={selectedClass} onValueChange={v => { setSelectedClass(v); setCurrentPage(1) }}>
-            <SelectTrigger className="w-full sm:w-[220px]">
+          <Select
+            value={selectedClass}
+            onValueChange={v => {
+              setSelectedClass(v)
+              setSelectedSalle('all')
+              setCurrentPage(1)
+            }}
+          >
+            <SelectTrigger className="w-full sm:w-[180px]">
               <SelectValue placeholder="Toutes les classes" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Toutes les classes</SelectItem>
-              {uniqueClasses.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              {classTypeOptions.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            </SelectContent>
+          </Select>
+
+          <Select
+            value={selectedSalle}
+            onValueChange={v => { setSelectedSalle(v); setCurrentPage(1) }}
+            disabled={selectedClass === 'all' && salleOptions.length === 0}
+          >
+            <SelectTrigger className="w-full sm:w-[140px]">
+              <SelectValue placeholder="Toutes les salles" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Toutes les salles</SelectItem>
+              {salleOptions.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
             </SelectContent>
           </Select>
 
@@ -526,10 +636,9 @@ export default function StudentsManagementPage() {
               id="show-inactive"
               checked={showInactive}
               onCheckedChange={setShowInactive}
-              disabled={isArchived}
             />
             <Label htmlFor="show-inactive" className="cursor-pointer text-sm text-muted-foreground">
-              Désactivés ({inactiveStudents.length})
+              Inclure désactivés ({droppedCurrentYear.length})
             </Label>
           </div>
         </div>
@@ -543,10 +652,10 @@ export default function StudentsManagementPage() {
                 <UserIcon className="h-7 w-7 text-muted-foreground" />
               </div>
               <h3 className="mt-4 text-sm font-semibold text-foreground">
-                {searchQuery || selectedClass !== 'all' ? "Aucun élève trouvé" : "Aucun élève inscrit"}
+                {searchQuery || selectedClass !== 'all' || selectedSalle !== 'all' ? "Aucun élève trouvé" : "Aucun élève inscrit"}
               </h3>
               <p className="mt-1 max-w-[320px] text-center text-sm text-muted-foreground">
-                {searchQuery || selectedClass !== 'all'
+                {searchQuery || selectedClass !== 'all' || selectedSalle !== 'all'
                   ? "Modifiez vos critères de recherche."
                   : "Commencez par inscrire le premier élève pour cette année."}
               </p>
@@ -575,6 +684,7 @@ export default function StudentsManagementPage() {
                   >
                     Classe <SortIcon col="class" />
                   </TableHead>
+                  <TableHead className="font-semibold">Salle</TableHead>
                   <TableHead className="font-semibold">Statut</TableHead>
                   <TableHead className="pr-6 text-right font-semibold">Actions</TableHead>
                 </TableRow>
@@ -582,16 +692,26 @@ export default function StudentsManagementPage() {
               <TableBody>
                 {paginated.map(student => {
                   const nisuInvalid = !isNisuValid(student.nisu)
-                  const isInactive = student.status !== 'ACTIVE'
+                  const isActive = student.status === 'ACTIVE'
+                  const isDropped = student.status === 'DROPPED'
+                  const isCurrentYear = !!year && student.yearId === year.id
+                  const avatarSrc = student.promotionPhotoUrl ?? student.profilePhoto
 
                   return (
                     <TableRow
-                      key={student.enrollmentId}
-                      className={cn(isInactive && "opacity-60")}
+                      key={student.studentId}
+                      className={cn((!isActive && student.status) && "opacity-60")}
                     >
                       <TableCell className="pl-6">
-                        <Avatar className="h-9 w-9">
-                          <AvatarImage src={student.profilePhoto} />
+                        <Avatar
+                          className={cn(
+                            "h-9 w-9",
+                            student.promotionPhotoUrl &&
+                              "ring-2 ring-emerald-200 ring-offset-1 ring-offset-background"
+                          )}
+                          title={student.promotionPhotoUrl ? "Photo de promotion" : undefined}
+                        >
+                          <AvatarImage src={avatarSrc ?? undefined} />
                           <AvatarFallback className="bg-muted text-muted-foreground">
                             <UserIcon className="h-4 w-4" />
                           </AvatarFallback>
@@ -625,55 +745,85 @@ export default function StudentsManagementPage() {
                           <span className="text-xs text-muted-foreground">{student.firstname}</span>
                         </div>
                       </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {student.className}
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span className={cn(student.classTypeName ? "text-foreground" : "text-muted-foreground italic")}>
+                            {student.classTypeName ?? "Aucune classe"}
+                          </span>
+                          {student.yearString && (
+                            <span className="text-[11px] text-muted-foreground tabular-nums">
+                              {student.yearString}
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {student.salleLabel ? (
+                          <span className="inline-flex items-center justify-center rounded-md bg-muted px-2 py-0.5 font-mono text-xs font-semibold text-foreground">
+                            {student.salleLabel}
+                          </span>
+                        ) : (
+                          <span className="text-xs italic text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <StatusBadge status={student.status} />
                       </TableCell>
                       <TableCell className="pr-6 text-right">
-                        {!isArchived && (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8">
-                                <MoreHorizontalIcon className="h-4 w-4" />
-                                <span className="sr-only">Ouvrir le menu</span>
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48">
-                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                              <DropdownMenuSeparator />
-                              {isInactive ? (
-                                <DropdownMenuItem
-                                  onClick={() => handleReactivate(student.enrollmentId)}
-                                  className="text-emerald-600 focus:text-emerald-600"
-                                >
-                                  <UserRoundCheckIcon className="mr-2 h-4 w-4" />
-                                  Réactiver
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <MoreHorizontalIcon className="h-4 w-4" />
+                              <span className="sr-only">Ouvrir le menu</span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-56">
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem asChild>
+                              <Link href={`/admin/students/${student.studentId}/transcript`}>
+                                <FileTextIcon className="mr-2 h-4 w-4" />
+                                Voir le relevé de notes
+                              </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            {year && (
+                              <DropdownMenuItem onClick={() => setPhotoTarget(student)}>
+                                <CameraIcon className="mr-2 h-4 w-4" />
+                                {student.promotionPhotoUrl ? "Modifier la photo" : "Ajouter une photo"}
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem onClick={() => setEditingStudent(student)}>
+                              <PencilIcon className="mr-2 h-4 w-4" />
+                              Modifier le profil
+                            </DropdownMenuItem>
+                            {isActive && isCurrentYear && !isArchived && (
+                              <>
+                                <DropdownMenuItem onClick={() => setTransferringStudent(student)}>
+                                  <ArrowRightLeftIcon className="mr-2 h-4 w-4" />
+                                  Transférer de classe
                                 </DropdownMenuItem>
-                              ) : (
-                                <>
-                                  <DropdownMenuItem onClick={() => setEditingStudent(student)}>
-                                    <PencilIcon className="mr-2 h-4 w-4" />
-                                    Modifier
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => setTransferringStudent(student)}>
-                                    <ArrowRightLeftIcon className="mr-2 h-4 w-4" />
-                                    Transférer
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    onClick={() => { setDeactivatingId(student.enrollmentId); setDeactivationReason('') }}
-                                    className="text-destructive focus:text-destructive"
-                                  >
-                                    <UserRoundXIcon className="mr-2 h-4 w-4" />
-                                    Désactiver
-                                  </DropdownMenuItem>
-                                </>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        )}
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => { if (student.enrollmentId) { setDeactivatingId(student.enrollmentId); setDeactivationReason('') } }}
+                                  className="text-destructive focus:text-destructive"
+                                >
+                                  <UserRoundXIcon className="mr-2 h-4 w-4" />
+                                  Désactiver
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                            {isDropped && isCurrentYear && !isArchived && (
+                              <DropdownMenuItem
+                                onClick={() => student.enrollmentId && handleReactivate(student.enrollmentId)}
+                                className="text-emerald-600 focus:text-emerald-600"
+                              >
+                                <UserRoundCheckIcon className="mr-2 h-4 w-4" />
+                                Réactiver
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   )
@@ -826,7 +976,7 @@ export default function StudentsManagementPage() {
           open={!!transferringStudent}
           onOpenChange={open => !open && setTransferringStudent(null)}
           studentName={`${transferringStudent.firstname} ${transferringStudent.lastname}`}
-          currentClassName={transferringStudent.className}
+          currentClassName={transferringStudent.className ?? ""}
           sessions={sessions
             .filter(s => s.id !== transferringStudent.classSessionId)
             .map(s => {
@@ -838,6 +988,25 @@ export default function StudentsManagementPage() {
             })}
           submitting={transferSubmitting}
           onSubmit={handleTransfer}
+        />
+      )}
+
+      {/* Modal photo de promotion */}
+      {year && photoTarget && (
+        <PromotionPhotoModal
+          open={!!photoTarget}
+          onOpenChange={(o) => !o && setPhotoTarget(null)}
+          studentId={photoTarget.studentId}
+          studentName={`${photoTarget.firstname} ${photoTarget.lastname}`.trim()}
+          studentCode={photoTarget.studentCode}
+          academicYearId={year.id}
+          academicYearName={year.name}
+          currentPhotoUrl={photoTarget.promotionPhotoUrl ?? null}
+          onUploaded={(url) => {
+            setStudents((prev) =>
+              prev.map((s) => (s.studentId === photoTarget.studentId ? { ...s, promotionPhotoUrl: url } : s))
+            )
+          }}
         />
       )}
     </div>

@@ -130,21 +130,21 @@ export default function AdminDashboardPage() {
       label: "Saisir des notes",
       description: currentStep?.name ?? "Aucune étape",
       icon: ClipboardEditIcon,
-      href: `/admin/academic-year/${activeYear?.id}/grades`,
+      href: "/admin/grades",
       disabled: !activeYear,
     },
     {
       label: "Générer bulletins",
       description: currentStep?.name ?? "Aucune étape",
       icon: FileTextIcon,
-      href: `/admin/academic-year/${activeYear?.id}/reports`,
+      href: "/admin/reports",
       disabled: !activeYear,
     },
     {
       label: "Inscrire un élève",
       description: "Nouvelle inscription",
       icon: UserPlusIcon,
-      href: `/admin/academic-year/${activeYear?.id}/students`,
+      href: "/admin/all-students",
       disabled: !activeYear,
     },
   ]
@@ -424,11 +424,7 @@ export default function AdminDashboardPage() {
                               variant="ghost"
                               size="sm"
                               className="h-8 text-xs"
-                              onClick={() =>
-                                router.push(
-                                  `/admin/academic-year/${activeYear?.id}/grades`
-                                )
-                              }
+                              onClick={() => router.push("/admin/grades")}
                             >
                               Saisir notes
                               <ArrowRightIcon className="ml-1 h-3 w-3" />

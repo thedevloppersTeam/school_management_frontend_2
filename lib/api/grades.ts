@@ -1,3 +1,5 @@
+import { parseDecimal } from '@/lib/decimal'
+
 export interface ApiSubjectSection {
   id: string
   name: string
@@ -70,14 +72,14 @@ export async function fetchClassSubjects(classSessionId: string): Promise<ApiCla
 
   return data.map((cs: ApiClassSubject) => ({
     ...cs,
-    coefficientOverride: cs.coefficientOverride != null ? Number(cs.coefficientOverride) : null,
+    coefficientOverride: cs.coefficientOverride != null ? parseDecimal(cs.coefficientOverride) : null,
     subject: {
       ...cs.subject,
-      maxScore:    Number(cs.subject.maxScore),
-      coefficient: Number(cs.subject.coefficient),
+      maxScore:    parseDecimal(cs.subject.maxScore) ?? 0,
+      coefficient: parseDecimal(cs.subject.coefficient) ?? 1,
       sections: (cs.subject.sections || []).map(sec => ({
         ...sec,
-        maxScore: Number(sec.maxScore),
+        maxScore: parseDecimal(sec.maxScore) ?? 0,
       }))
     }
   }))
@@ -107,7 +109,7 @@ export async function fetchGradesForClassSubjectStep(
 
   return data.map((g: ApiGrade) => ({
     ...g,
-    studentScore: Number(g.studentScore),
+    studentScore: parseDecimal(g.studentScore) ?? 0,
   }))
 }
 

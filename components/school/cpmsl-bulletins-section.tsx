@@ -112,6 +112,36 @@ export function CPMSLBulletinsSection({
   // ── Sélections ───────────────────────────────────────────────────────────────
   const [selectedStep,    setSelectedStep]    = useState("")
   const [selectedSession, setSelectedSession] = useState("")
+  const [selectedClassTypeId, setSelectedClassTypeId] = useState("")
+
+  useEffect(() => {
+    if (!selectedSession) {
+      setSelectedClassTypeId("")
+      return
+    }
+    const s = sessions.find(x => x.id === selectedSession)
+    if (s) setSelectedClassTypeId(s.class.classType.id)
+  }, [selectedSession, sessions])
+
+  const classTypeOptions = useMemo(() => {
+    const map = new Map<string, { id: string; name: string }>()
+    sessions.forEach(s => {
+      const ct = s.class?.classType
+      if (ct && !map.has(ct.id)) map.set(ct.id, { id: ct.id, name: ct.name })
+    })
+    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name))
+  }, [sessions])
+
+  const salleOptions = useMemo(() => {
+    if (!selectedClassTypeId) return []
+    return sessions
+      .filter(s => s.class?.classType?.id === selectedClassTypeId)
+      .map(s => ({
+        sessionId: s.id,
+        label: s.class.track?.code ?? s.class.letter ?? "",
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label))
+  }, [sessions, selectedClassTypeId])
 
   // ── PDF Generator ─────────────────────────────────────────────────────────────
   const [pdfOpen,    setPdfOpen]    = useState(false)
@@ -417,10 +447,10 @@ export function CPMSLBulletinsSection({
         </CardHeader>
         <Separator />
         <CardContent className="p-4">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <Select value={selectedStep} onValueChange={setSelectedStep}>
               <SelectTrigger>
-                <SelectValue placeholder="Sélectionner une étape" />
+                <SelectValue placeholder="Étape" />
               </SelectTrigger>
               <SelectContent>
                 {steps.map(step => (
@@ -429,15 +459,31 @@ export function CPMSLBulletinsSection({
               </SelectContent>
             </Select>
 
-            <Select value={selectedSession} onValueChange={setSelectedSession}>
+            <Select
+              value={selectedClassTypeId}
+              onValueChange={(v) => { setSelectedClassTypeId(v); setSelectedSession("") }}
+            >
               <SelectTrigger>
-                <SelectValue placeholder="Sélectionner une classe" />
+                <SelectValue placeholder="Classe" />
               </SelectTrigger>
               <SelectContent>
-                {sessions.map(session => (
-                  <SelectItem key={session.id} value={session.id}>
-                    {getClassSessionName(session)}
-                  </SelectItem>
+                {classTypeOptions.map(ct => (
+                  <SelectItem key={ct.id} value={ct.id}>{ct.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={selectedSession}
+              onValueChange={setSelectedSession}
+              disabled={!selectedClassTypeId}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={selectedClassTypeId ? "Salle" : "Choisir d'abord une classe"} />
+              </SelectTrigger>
+              <SelectContent>
+                {salleOptions.map(opt => (
+                  <SelectItem key={opt.sessionId} value={opt.sessionId}>{opt.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -499,10 +545,20 @@ export function CPMSLBulletinsSection({
           <Card className="border bg-card shadow-sm">
             <CardContent className="flex flex-col items-start gap-3 p-4 sm:flex-row sm:items-center">
               <Button
-                onClick={handleOpenPreview}
-                disabled={isArchived || generatingLot || withNisu.length === 0}
+                asChild={!isArchived && !generatingLot && withNisu.length > 0 && !!selectedStep && !!selectedSession}
+                disabled={isArchived || generatingLot || withNisu.length === 0 || !selectedStep || !selectedSession}
+                className="bg-[#2C4A6E] text-white hover:bg-[#1F3856]"
               >
-                {generatingLot ? (
+                {!isArchived && !generatingLot && withNisu.length > 0 && selectedStep && selectedSession ? (
+                  <a
+                    href={`/admin/bulletins/lot/${selectedSession}/${selectedStep}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <LayersIcon className="mr-2 h-4 w-4" />
+                    Générer le lot ({withNisu.length} bulletin{withNisu.length > 1 ? 's' : ''})
+                  </a>
+                ) : generatingLot ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Génération {lotProgress.current} / {lotProgress.total}...
@@ -513,6 +569,15 @@ export function CPMSLBulletinsSection({
                     Générer le lot ({withNisu.length} bulletin{withNisu.length > 1 ? 's' : ''})
                   </>
                 )}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleOpenPreview}
+                disabled={isArchived || generatingLot || withNisu.length === 0}
+                title="Ancien mode (PDF rastérisé + archivage automatique)"
+                size="sm"
+              >
+                Mode classique
               </Button>
 
               {generatingLot && lotProgress.total > 0 && (
@@ -627,12 +692,25 @@ export function CPMSLBulletinsSection({
                           <TableCell className="pr-6 text-right">
                             <Button
                               size="sm"
-                              variant="outline"
-                              disabled={isArchived || !nisuOk}
-                              onClick={() => handleGenerateBulletin(student)}
+                              asChild={!!selectedStep && nisuOk && !isArchived}
+                              disabled={isArchived || !nisuOk || !selectedStep}
+                              className="bg-[#2C4A6E] text-white hover:bg-[#1F3856]"
                             >
-                              <FileTextIcon className="mr-1 h-3 w-3" />
-                              Générer
+                              {selectedStep && nisuOk && !isArchived ? (
+                                <a
+                                  href={`/admin/bulletins/${student.enrollmentId}/${selectedStep}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  <FileTextIcon className="mr-1 h-3 w-3" />
+                                  Voir le bulletin
+                                </a>
+                              ) : (
+                                <>
+                                  <FileTextIcon className="mr-1 h-3 w-3" />
+                                  Voir le bulletin
+                                </>
+                              )}
                             </Button>
                           </TableCell>
                         </TableRow>

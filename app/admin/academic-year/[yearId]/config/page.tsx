@@ -6,7 +6,8 @@ import Link from "next/link"
 import { CPMSLYearConfigTabs } from "@/components/school/cpmsl-year-config-tabs"
 import { useToast } from "@/components/ui/use-toast"
 import { Skeleton } from "@/components/ui/skeleton"
-import { ArrowLeftIcon } from "lucide-react"
+import { ArrowLeftIcon, BookOpenIcon } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import {
   fetchSteps,
   fetchClassSessions,
@@ -508,21 +509,30 @@ export default function AcademicYearConfigPage() {
 
   return (
     <div className="space-y-6">
-        <div>
-          <Link
-            href="/admin/academic-years"
-            className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ArrowLeftIcon className="h-4 w-4" />
-            Années Scolaires
-          </Link>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <Link
+              href="/admin/academic-years"
+              className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <ArrowLeftIcon className="h-4 w-4" />
+              Années Scolaires
+            </Link>
 
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">
-            Configuration — {year.name}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Configurez les étapes, classes et matières de l&apos;année
-          </p>
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">
+              Configuration — {year.name}
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Configurez les étapes, classes et matières de l&apos;année
+            </p>
+          </div>
+
+          <Button asChild variant="outline" size="sm">
+            <Link href="/admin/subjects">
+              <BookOpenIcon className="mr-2 h-4 w-4" />
+              Gérer les matières
+            </Link>
+          </Button>
         </div>
 
         <CPMSLYearConfigTabs

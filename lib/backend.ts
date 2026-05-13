@@ -23,17 +23,25 @@ export async function backendFetch(
   const cookie = request.headers.get('cookie')
   if (cookie) headers['cookie'] = cookie
 
-  let body: string | undefined
+  let body: ArrayBuffer | undefined
   if (method !== 'GET' && method !== 'HEAD') {
-    try {
-      const json = await request.json()
-      if (env.NODE_ENV === 'development') {
-        console.log(`[backendFetch] ${method} ${path}`, json)
+    // Read the raw bytes once. ArrayBuffer is binary-safe so multipart uploads
+    // (e.g. promotion photos) survive the proxy hop without corruption.
+    body = await request.arrayBuffer()
+    const incomingContentType = request.headers.get('content-type')
+    headers['content-type'] = incomingContentType ?? 'application/json'
+    if (env.NODE_ENV === 'development') {
+      const isJsonLike =
+        incomingContentType?.includes('application/json') ||
+        incomingContentType?.includes('text/')
+      if (isJsonLike && body.byteLength > 0 && body.byteLength < 2000) {
+        const preview = new TextDecoder().decode(body)
+        console.log(`[backendFetch] ${method} ${path} body=${preview}`)
+      } else if (body.byteLength === 0) {
+        console.log(`[backendFetch] ${method} ${path} body=<empty>`)
+      } else {
+        console.log(`[backendFetch] ${method} ${path} body=${body.byteLength} bytes (${incomingContentType || 'no content-type'})`)
       }
-      body = JSON.stringify(json)
-      headers['content-type'] = 'application/json'
-    } catch {
-      // no body
     }
   }
 
@@ -52,6 +60,9 @@ export async function backendFetch(
     })
 
     const data = await backendRes.json().catch(() => null)
+    if (env.NODE_ENV === 'development' && !backendRes.ok) {
+      console.log(`[backendFetch] ${method} ${path} → ${backendRes.status}`, data)
+    }
     return NextResponse.json(data, { status: backendRes.status })
   } catch (error: any) {
     if (error.name === 'AbortError') {

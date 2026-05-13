@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect, useCallback, useMemo } from "react"
-import { useParams } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -27,7 +26,7 @@ import {
   TrendingUpIcon,
   InboxIcon,
 } from "lucide-react"
-import { fetchClassSessions, fetchSteps, type AcademicYearStep, type ClassSession } from "@/lib/api/dashboard"
+import { fetchActiveAcademicYear, fetchClassSessions, fetchSteps, type AcademicYearStep, type ClassSession } from "@/lib/api/dashboard"
 import { fetchClassSubjects, fetchEnrollments, type ApiClassSubject, type ApiEnrollment } from "@/lib/api/grades"
 import { parseDecimal } from "@/lib/decimal"
 import { cn } from "@/lib/utils"
@@ -90,12 +89,6 @@ function getAppreciation(m: number | null): string {
   return 'E'
 }
 
-function sessionLabel(s: ClassSession): string {
-  const { classType, letter, track } = s.class
-  const base = `${classType.name} ${letter}`
-  return track ? `${base} — ${track.code}` : base
-}
-
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function GradesViewPage({
@@ -105,8 +98,6 @@ export default function GradesViewPage({
   initialSessionId?: string
   initialStepId?:    string
 }) {
-  const params  = useParams()
-  const yearId  = params.yearId as string
   const { toast } = useToast()
 
   const [sessions,   setSessions]   = useState<ClassSession[]>([])
@@ -116,6 +107,48 @@ export default function GradesViewPage({
 
   const [selectedSession, setSelectedSession] = useState(initialSessionId)
   const [selectedStep,    setSelectedStep]    = useState(initialStepId)
+  const [selectedClassTypeId, setSelectedClassTypeId] = useState<string>("")
+
+  // Sync classType when sessions arrive (or when initialSessionId is provided)
+  useEffect(() => {
+    if (!selectedSession) {
+      setSelectedClassTypeId("")
+      return
+    }
+    const s = sessions.find(x => x.id === selectedSession)
+    if (s) setSelectedClassTypeId(s.class.classType.id)
+  }, [selectedSession, sessions])
+
+  const classTypeOptions = useMemo(() => {
+    const map = new Map<string, { id: string; name: string }>()
+    sessions.forEach(s => {
+      const ct = s.class.classType
+      if (!map.has(ct.id)) map.set(ct.id, { id: ct.id, name: ct.name })
+    })
+    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name))
+  }, [sessions])
+
+  const salleOptions = useMemo(() => {
+    if (!selectedClassTypeId) return []
+    return sessions
+      .filter(s => s.class.classType.id === selectedClassTypeId)
+      .map(s => ({
+        sessionId: s.id,
+        // For tracked classes (NS3/NS4) the track code stands in as the "salle".
+        label: s.class.track?.code ?? s.class.letter,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label))
+  }, [sessions, selectedClassTypeId])
+
+  function handleClassTypeChange(classTypeId: string) {
+    setSelectedClassTypeId(classTypeId)
+    setSelectedSession("")
+    setGradeRows([])
+  }
+
+  function handleSalleChange(sessionId: string) {
+    setSelectedSession(sessionId)
+  }
 
   const [classSubjects, setClassSubjects] = useState<ApiClassSubject[]>([])
   const isLocked = useMemo(() => {
@@ -129,16 +162,19 @@ export default function GradesViewPage({
   useEffect(() => {
     async function init() {
       try {
-        const [sessionsData, stepsData, rubricsRes, yearRes] = await Promise.all([
-          fetchClassSessions(yearId),
-          fetchSteps(yearId),
+        const current = await fetchActiveAcademicYear()
+        if (!current) {
+          setLoadingCtx(false)
+          return
+        }
+        const [sessionsData, stepsData, rubricsRes] = await Promise.all([
+          fetchClassSessions(current.id),
+          fetchSteps(current.id),
           fetch('/api/subject-rubrics', { credentials: 'include' }),
-          fetch(`/api/academic-years/${yearId}`, { credentials: 'include' }),
         ])
         setSessions(sessionsData)
         setSteps([...stepsData].sort((a, b) => a.stepNumber - b.stepNumber))
         if (rubricsRes.ok) setRubrics(await rubricsRes.json())
-        
       } catch {
         toast({ title: "Erreur", description: "Impossible de charger le contexte", variant: "destructive" })
       } finally {
@@ -146,7 +182,7 @@ export default function GradesViewPage({
       }
     }
     init()
-  }, [yearId, toast])
+  }, [toast])
 
   // ── Chargement grille ─────────────────────────────────────────────────────
   const loadGrid = useCallback(async (sessionId: string, stepId: string) => {
@@ -339,21 +375,36 @@ export default function GradesViewPage({
         </CardHeader>
         <Separator />
         <CardContent className="p-4">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:max-w-2xl">
-            <Select value={selectedSession} onValueChange={setSelectedSession}>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:max-w-3xl">
+            <Select value={selectedClassTypeId} onValueChange={handleClassTypeChange}>
               <SelectTrigger>
-                <SelectValue placeholder="Sélectionner une classe" />
+                <SelectValue placeholder="Classe" />
               </SelectTrigger>
               <SelectContent>
-                {sessions.map(s => (
-                  <SelectItem key={s.id} value={s.id}>{sessionLabel(s)}</SelectItem>
+                {classTypeOptions.map(ct => (
+                  <SelectItem key={ct.id} value={ct.id}>{ct.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={selectedSession}
+              onValueChange={handleSalleChange}
+              disabled={!selectedClassTypeId}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={selectedClassTypeId ? "Salle" : "Choisir d'abord une classe"} />
+              </SelectTrigger>
+              <SelectContent>
+                {salleOptions.map(opt => (
+                  <SelectItem key={opt.sessionId} value={opt.sessionId}>{opt.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
 
             <Select value={selectedStep} onValueChange={setSelectedStep}>
               <SelectTrigger>
-                <SelectValue placeholder="Sélectionner une étape" />
+                <SelectValue placeholder="Étape" />
               </SelectTrigger>
               <SelectContent>
                 {steps.map(s => (

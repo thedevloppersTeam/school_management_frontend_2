@@ -1,13 +1,17 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useRef, useState } from "react"
+import { useToast } from "@/components/ui/use-toast"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
-import { UploadIcon, SaveIcon } from "lucide-react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import { UploadIcon, SaveIcon, BuildingIcon, ContactIcon, ImageOffIcon, Loader2Icon } from "lucide-react"
+import { toMessage } from "@/lib/errors"
 
 interface SchoolInfo {
   name: string
@@ -25,24 +29,71 @@ interface CPMSLSchoolInfoFormProps {
   loading?: boolean
 }
 
-export function CPMSLSchoolInfoForm({ schoolInfo, onSave, loading = false }: CPMSLSchoolInfoFormProps) {
-  const [editedInfo, setEditedInfo] = useState<SchoolInfo>(schoolInfo)
-  const [saving,     setSaving]     = useState(false)
+const ALLOWED_LOGO_TYPES = ["image/jpeg", "image/png", "image/webp", "image/svg+xml"]
+const MAX_LOGO_BYTES = 2 * 1024 * 1024
 
-  // Sync quand les données arrivent depuis l'API
+export function CPMSLSchoolInfoForm({ schoolInfo, onSave, loading = false }: CPMSLSchoolInfoFormProps) {
+  const { toast } = useToast()
+  const fileRef = useRef<HTMLInputElement | null>(null)
+  const [editedInfo, setEditedInfo] = useState<SchoolInfo>(schoolInfo)
+  const [uploadingLogo, setUploadingLogo] = useState(false)
+  const [saving, setSaving] = useState(false)
+
   useEffect(() => {
     setEditedInfo(schoolInfo)
   }, [schoolInfo])
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  async function handleLogoFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
+    e.target.value = ""
     if (!file) return
-    const reader = new FileReader()
-    reader.onloadend = () => setEditedInfo(prev => ({ ...prev, logo: reader.result as string }))
-    reader.readAsDataURL(file)
+
+    if (!ALLOWED_LOGO_TYPES.includes(file.type)) {
+      toast({
+        title: "Format non supporté",
+        description: "Acceptés : PNG, JPG, WEBP, SVG.",
+        variant: "destructive",
+      })
+      return
+    }
+    if (file.size > MAX_LOGO_BYTES) {
+      toast({
+        title: "Fichier trop volumineux",
+        description: "Maximum 2 Mo.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setUploadingLogo(true)
+    try {
+      const form = new FormData()
+      form.append("logo", file)
+      const res = await fetch("/api/school-info/upload-logo", {
+        method: "POST",
+        credentials: "include",
+        body: form,
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        throw new Error(data?.message || `Échec de l'envoi (HTTP ${res.status})`)
+      }
+      if (data?.logoUrl) {
+        setEditedInfo((prev) => ({ ...prev, logo: data.logoUrl }))
+        toast({ title: "Logo enregistré" })
+      }
+    } catch (err) {
+      toast({
+        title: "Erreur",
+        description: toMessage(err),
+        variant: "destructive",
+      })
+    } finally {
+      setUploadingLogo(false)
+    }
   }
 
-  const handleSave = async () => {
+  async function handleSave() {
     setSaving(true)
     try {
       await onSave(editedInfo)
@@ -51,174 +102,181 @@ export function CPMSLSchoolInfoForm({ schoolInfo, onSave, loading = false }: CPM
     }
   }
 
-  // ── Skeleton pendant le chargement ──────────────────────────────────────────
   if (loading) {
     return (
       <div className="space-y-6">
-        <div style={{ backgroundColor: "#FFFFFF", borderRadius: "10px", border: "1px solid #E5E7EB", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-          <div style={{ padding: "24px", borderBottom: "1px solid #E8E6E3" }}>
-            <Skeleton className="h-6 w-48" />
-          </div>
-          <div style={{ padding: "24px" }} className="space-y-5">
-            <Skeleton className="h-24 w-24 rounded-xl" />
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-1/4" />
-          </div>
-        </div>
-        <div style={{ backgroundColor: "#FFFFFF", borderRadius: "10px", border: "1px solid #E5E7EB", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-          <div style={{ padding: "24px", borderBottom: "1px solid #E8E6E3" }}>
-            <Skeleton className="h-6 w-40" />
-          </div>
-          <div style={{ padding: "24px" }} className="space-y-5">
-            <Skeleton className="h-20 w-full" />
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-          </div>
-        </div>
+        <Skeleton className="h-72 w-full rounded-xl" />
+        <Skeleton className="h-72 w-full rounded-xl" />
       </div>
     )
   }
 
+  const initials = (editedInfo.name || "École").trim().slice(0, 2).toUpperCase()
+
   return (
     <div className="space-y-6">
-
-      {/* Card 1 — Identité */}
-      <div style={{ backgroundColor: "#FFFFFF", borderRadius: "10px", border: "1px solid #E5E7EB", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-        <div style={{ padding: "24px", borderBottom: "1px solid #E8E6E3" }}>
-          <h3 style={{ fontFamily: "var(--font-serif)", fontSize: "18px", fontWeight: 600, color: "#2C4A6E", borderLeft: "3px solid #2C4A6E", paddingLeft: "12px", marginBottom: "8px" }}>
-            Identité de l'école
-          </h3>
-          <p style={{ fontFamily: "var(--font-sans)", fontSize: "13px", color: "hsl(var(--muted-foreground))", paddingLeft: "15px" }}>
-            Informations d'identification de l'établissement
-          </p>
-        </div>
-        <div style={{ padding: "24px" }} className="space-y-5">
-
+      <Card className="border bg-card shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base font-semibold">
+            <BuildingIcon className="h-4 w-4 text-[#2C4A6E]" />
+            Identité de l&apos;école
+          </CardTitle>
+          <CardDescription>Informations d&apos;identification de l&apos;établissement</CardDescription>
+        </CardHeader>
+        <Separator />
+        <CardContent className="space-y-5 p-6">
           {/* Logo */}
           <div className="space-y-2">
-            <Label style={{ fontSize: "13px", fontWeight: 500, color: "#1E1A17" }}>Logo</Label>
-            <div className="flex items-center gap-4" style={{ width: "60%" }}>
-              <Avatar className="h-24 w-24 rounded-xl">
+            <Label className="text-sm font-medium">Logo</Label>
+            <div className="flex items-center gap-4">
+              <Avatar className="h-24 w-24 rounded-xl ring-1 ring-border">
                 {editedInfo.logo ? (
                   <AvatarImage src={editedInfo.logo} alt="Logo" className="object-cover" />
                 ) : (
-                  <AvatarFallback className="rounded-xl text-xl font-bold" style={{ backgroundColor: "#F0F4F7", color: "#5A7085" }}>
-                    SL
+                  <AvatarFallback className="rounded-xl bg-muted text-xl font-bold text-muted-foreground">
+                    {initials || <ImageOffIcon className="h-8 w-8" />}
                   </AvatarFallback>
                 )}
               </Avatar>
-              <div className="flex-1">
-                <Label htmlFor="logo-upload" className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg border-2 border-dashed cursor-pointer"
-                  style={{ borderColor: "#B3C7D5" }}>
-                  <UploadIcon className="h-4 w-4" style={{ color: "#78756F" }} />
-                  <span style={{ fontSize: "13px", color: "#78756F" }}>Télécharger un logo</span>
-                </Label>
-                <input id="logo-upload" type="file" accept="image/png,image/jpeg,image/jpg" onChange={handleLogoUpload} className="hidden" />
-                <p style={{ fontSize: "11px", color: "#A8A5A2", marginTop: "4px" }}>PNG ou JPG, max 2 Mo</p>
+              <div className="flex-1 space-y-1">
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={uploadingLogo}
+                  className="inline-flex items-center gap-2 rounded-md border-2 border-dashed border-border bg-background px-4 py-2 text-sm text-muted-foreground transition-colors hover:border-[#2C4A6E] hover:bg-muted/30 disabled:opacity-60"
+                >
+                  {uploadingLogo ? (
+                    <Loader2Icon className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <UploadIcon className="h-4 w-4" />
+                  )}
+                  {uploadingLogo ? "Envoi du logo..." : editedInfo.logo ? "Remplacer le logo" : "Télécharger un logo"}
+                </button>
+                <input
+                  ref={fileRef}
+                  id="logo-upload"
+                  type="file"
+                  accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml"
+                  onChange={handleLogoFile}
+                  className="hidden"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  PNG, JPG, WEBP ou SVG &middot; 2 Mo max
+                </p>
               </div>
             </div>
           </div>
 
           {/* Nom */}
           <div className="space-y-2">
-            <Label style={{ fontSize: "13px", fontWeight: 500, color: "#1E1A17" }}>
-              Nom de l&apos;école <span style={{ color: "#C43C3C" }}>*</span>
+            <Label htmlFor="school-name" className="text-sm font-medium">
+              Nom de l&apos;école <span className="text-destructive">*</span>
             </Label>
             <Input
+              id="school-name"
               value={editedInfo.name}
-              onChange={e => setEditedInfo(prev => ({ ...prev, name: e.target.value }))}
-              style={{ borderColor: "#D1CECC", borderRadius: "8px" }}
+              onChange={(e) => setEditedInfo((prev) => ({ ...prev, name: e.target.value }))}
             />
           </div>
 
           {/* Devise */}
           <div className="space-y-2">
-            <Label style={{ fontSize: "13px", fontWeight: 500, color: "#1E1A17" }}>Devise</Label>
+            <Label htmlFor="school-motto" className="text-sm font-medium">
+              Devise
+            </Label>
             <Input
-              value={editedInfo.motto || ''}
-              onChange={e => setEditedInfo(prev => ({ ...prev, motto: e.target.value }))}
+              id="school-motto"
+              value={editedInfo.motto || ""}
+              onChange={(e) => setEditedInfo((prev) => ({ ...prev, motto: e.target.value }))}
               placeholder="Ex: L'excellence avant tout"
-              style={{ borderColor: "#D1CECC", borderRadius: "8px" }}
             />
           </div>
 
           {/* Fondée en */}
-          <div className="space-y-2" style={{ width: "25%" }}>
-            <Label style={{ fontSize: "13px", fontWeight: 500, color: "#1E1A17" }}>Fondée en</Label>
-            <Input
-              type="number"
-              value={editedInfo.foundedYear || ''}
-              onChange={e => setEditedInfo(prev => ({ ...prev, foundedYear: parseInt(e.target.value) || undefined }))}
-              style={{ borderColor: "#D1CECC", borderRadius: "8px" }}
-            />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="school-founded" className="text-sm font-medium">
+                Fondée en
+              </Label>
+              <Input
+                id="school-founded"
+                type="number"
+                min="1800"
+                max={new Date().getFullYear()}
+                value={editedInfo.foundedYear ?? ""}
+                onChange={(e) =>
+                  setEditedInfo((prev) => ({
+                    ...prev,
+                    foundedYear: e.target.value ? parseInt(e.target.value) : undefined,
+                  }))
+                }
+              />
+            </div>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
-      {/* Card 2 — Coordonnées */}
-      <div style={{ backgroundColor: "#FFFFFF", borderRadius: "10px", border: "1px solid #E5E7EB", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-        <div style={{ padding: "24px", borderBottom: "1px solid #E8E6E3" }}>
-          <h3 style={{ fontFamily: "var(--font-serif)", fontSize: "18px", fontWeight: 600, color: "#2C4A6E", borderLeft: "3px solid #2C4A6E", paddingLeft: "12px", marginBottom: "8px" }}>
+      <Card className="border bg-card shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base font-semibold">
+            <ContactIcon className="h-4 w-4 text-[#2C4A6E]" />
             Coordonnées
-          </h3>
-          <p style={{ fontFamily: "var(--font-sans)", fontSize: "13px", color: "hsl(var(--muted-foreground))", paddingLeft: "15px" }}>
-            Informations de contact de l'établissement
-          </p>
-        </div>
-        <div style={{ padding: "24px" }} className="space-y-5">
-
-          {/* Adresse */}
+          </CardTitle>
+          <CardDescription>Informations de contact de l&apos;établissement</CardDescription>
+        </CardHeader>
+        <Separator />
+        <CardContent className="space-y-5 p-6">
           <div className="space-y-2">
-            <Label style={{ fontSize: "13px", fontWeight: 500, color: "#1E1A17" }}>Adresse complète</Label>
+            <Label htmlFor="school-address" className="text-sm font-medium">
+              Adresse complète
+            </Label>
             <Textarea
-              value={editedInfo.address || ''}
-              onChange={e => setEditedInfo(prev => ({ ...prev, address: e.target.value }))}
+              id="school-address"
+              value={editedInfo.address || ""}
+              onChange={(e) => setEditedInfo((prev) => ({ ...prev, address: e.target.value }))}
               rows={2}
               className="resize-none"
-              style={{ borderColor: "#D1CECC", borderRadius: "8px" }}
             />
           </div>
 
-          {/* Téléphone */}
-          <div className="space-y-2">
-            <Label style={{ fontSize: "13px", fontWeight: 500, color: "#1E1A17" }}>Téléphone</Label>
-            <Input
-              type="tel"
-              value={editedInfo.phone || ''}
-              onChange={e => setEditedInfo(prev => ({ ...prev, phone: e.target.value }))}
-              style={{ borderColor: "#D1CECC", borderRadius: "8px" }}
-            />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="school-phone" className="text-sm font-medium">
+                Téléphone
+              </Label>
+              <Input
+                id="school-phone"
+                type="tel"
+                value={editedInfo.phone || ""}
+                onChange={(e) => setEditedInfo((prev) => ({ ...prev, phone: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="school-email" className="text-sm font-medium">
+                Email
+              </Label>
+              <Input
+                id="school-email"
+                type="email"
+                value={editedInfo.email || ""}
+                onChange={(e) => setEditedInfo((prev) => ({ ...prev, email: e.target.value }))}
+              />
+            </div>
           </div>
+        </CardContent>
+      </Card>
 
-          {/* Email */}
-          <div className="space-y-2">
-            <Label style={{ fontSize: "13px", fontWeight: 500, color: "#1E1A17" }}>Email</Label>
-            <Input
-              type="email"
-              value={editedInfo.email || ''}
-              onChange={e => setEditedInfo(prev => ({ ...prev, email: e.target.value }))}
-              style={{ borderColor: "#D1CECC", borderRadius: "8px" }}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Bouton Enregistrer */}
       <div className="flex justify-end">
         <Button
           onClick={handleSave}
           disabled={saving || !editedInfo.name.trim()}
-          style={{
-            backgroundColor: saving || !editedInfo.name.trim() ? '#9CA3AF' : '#2C4A6E',
-            color: "#FFFFFF", borderRadius: "8px",
-            paddingLeft: "24px", paddingRight: "24px",
-            display: "flex", alignItems: "center", gap: "8px"
-          }}
+          className="bg-[#2C4A6E] text-white hover:bg-[#1F3856]"
         >
-          {saving
-            ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
-            : <SaveIcon className="h-4 w-4" />}
+          {saving ? (
+            <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <SaveIcon className="mr-2 h-4 w-4" />
+          )}
           {saving ? "Enregistrement..." : "Enregistrer les modifications"}
         </Button>
       </div>
