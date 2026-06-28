@@ -1,0 +1,423 @@
+﻿Rubrique;Niveau;Matière;Code Matière;Coefficient;Max Score;Sous-matière;Code Sous-matière;Max Score Sous-matière
+R1;1ère AF;Mathématiques;MATHEMA1AF;1;210.0;Opérations;OPERATIONS;30.0
+R1;1ère AF;Mathématiques;MATHEMA1AF;1;210.0;Géométrie;GEOMETRIE;30.0
+R1;1ère AF;Mathématiques;MATHEMA1AF;1;210.0;Mesures;MESURES;30.0
+R1;1ère AF;Mathématiques;MATHEMA1AF;1;210.0;Résolution de problèmes;RESOLUTION;30.0
+R1;1ère AF;Mathématiques;MATHEMA1AF;1;210.0;Éveil;EVEIL;30.0
+R1;1ère AF;Mathématiques;MATHEMA1AF;1;210.0;Calcul Mental;CALCULMENT;30.0
+R1;1ère AF;Mathématiques;MATHEMA1AF;1;210.0;Numération;NUMERATION;30.0
+R1;1ère AF;Communication Française;COMMUNI1AF;1;210.0;Communication Orale/Exposés;COMMUNICAT;30.0
+R1;1ère AF;Communication Française;COMMUNI1AF;1;210.0;Lecture;LECTURE;30.0
+R1;1ère AF;Communication Française;COMMUNI1AF;1;210.0;Orthographe/Copie;ORTHOGRAPH;30.0
+R1;1ère AF;Communication Française;COMMUNI1AF;1;210.0;Grammaire;GRAMMAIRE;30.0
+R1;1ère AF;Communication Française;COMMUNI1AF;1;210.0;Conjugaison;CONJUGAISO;30.0
+R1;1ère AF;Communication Française;COMMUNI1AF;1;210.0;Production d'écrits;PRODUCTION;30.0
+R1;1ère AF;Communication Française;COMMUNI1AF;1;210.0;Vocabulaire;VOCABULAIR;30.0
+R1;1ère AF;Communication Créole;COMMUN21AF;1;150.0;Communication Orale/Exposés;COMMUNICAT;30.0
+R1;1ère AF;Communication Créole;COMMUN21AF;1;150.0;Lecture/Vocabulaire;LECTUREVOC;30.0
+R1;1ère AF;Communication Créole;COMMUN21AF;1;150.0;Orthographe/Copie;ORTHOGRAPH;30.0
+R1;1ère AF;Communication Créole;COMMUN21AF;1;150.0;Grammaire/Conjugaison;GRAMMAIREC;30.0
+R1;1ère AF;Communication Créole;COMMUN21AF;1;150.0;Production d'écrits;PRODUCTION;30.0
+R2;1ère AF;Sciences Sociales;SCIENCE1AF;1;60.0;Histoire Nationale;HISTOIRENA;30.0
+R2;1ère AF;Sciences Sociales;SCIENCE1AF;1;60.0;Géographie d'Haïti;GEOGRAPHIE;30.0
+R2;1ère AF;Sciences Sociales;SCIENCE1AF;1;60.0;Éducation à la Citoyenneté;EDUCATIONA;20.0
+R2;1ère AF;TIC;TIC1AF;1;20.0;Informatique;INFORMATIQ;20.0
+R2;1ère AF;Sciences Expérimentales;SCIENC21AF;1;80.0;Éducation à la Santé;EDUCATIONA;20.0
+R2;1ère AF;Sciences Expérimentales;SCIENC21AF;1;80.0;Éducation à l'Environnement;EDUCATION2;20.0
+R2;1ère AF;Sciences Expérimentales;SCIENC21AF;1;80.0;Éducation à la Technologie;EDUCATION3;20.0
+R2;1ère AF;Sciences Expérimentales;SCIENC21AF;1;80.0;ETAP;ETAP;20.0
+R3;1ère AF;Autres;AUTRES1AF;1;20.0;Écriture (motricité fine);ECRITUREMO;20.0
+R3;1ère AF;Éducation Morale et Religieuse;EDUCATI1AF;1;10.0;Histoire Biblique;HISTOIREBI;10.0
+R3;1ère AF;Arts;ARTS1AF;1;60.0;Broderie;BRODERIE;10.0
+R3;1ère AF;Arts;ARTS1AF;1;60.0;Dessin;DESSIN;10.0
+R3;1ère AF;Arts;ARTS1AF;1;60.0;Poterie/Céramique;POTERIECER;10.0
+R3;1ère AF;Arts;ARTS1AF;1;60.0;Solfège/Chant;SOLFEGECHA;10.0
+R3;1ère AF;Arts;ARTS1AF;1;60.0;Flûte à Bec;FLUTEABEC;10.0
+R3;1ère AF;Arts;ARTS1AF;1;60.0;Culture Musicale;CULTUREMUS;10.0
+R3;1ère AF;Enseignements Artistiques;ENSEIGN1AF;1;20.0;Éducation physique et sportive (EPS);EDUCATIONP;20.0
+R3;1ère AF;Langues étrangères;LANGUES1AF;1;20.0;Anglais (communication orale);ANGLAISCOM;10.0
+R3;1ère AF;Langues étrangères;LANGUES1AF;1;20.0;Espagnol (communication orale);ESPAGNOLCO;10.0
+R1;2ème AF;Mathématiques;MATHEMA2AF;1;180.0;Numération;NUMERATION;30.0
+R1;2ème AF;Mathématiques;MATHEMA2AF;1;180.0;Opérations;OPERATIONS;30.0
+R1;2ème AF;Mathématiques;MATHEMA2AF;1;180.0;Calcul Mental;CALCULMENT;30.0
+R1;2ème AF;Mathématiques;MATHEMA2AF;1;180.0;Géométrie;GEOMETRIE;30.0
+R1;2ème AF;Mathématiques;MATHEMA2AF;1;180.0;Mesures;MESURES;30.0
+R1;2ème AF;Mathématiques;MATHEMA2AF;1;180.0;Résolution de Problèmes;RESOLUTION;30.0
+R1;2ème AF;Communication Française;COMMUNI2AF;1;210.0;Communication Orale/Exposés;COMMUNICAT;30.0
+R1;2ème AF;Communication Française;COMMUNI2AF;1;210.0;Lecture;LECTURE;30.0
+R1;2ème AF;Communication Française;COMMUNI2AF;1;210.0;Vocabulaire;VOCABULAIR;30.0
+R1;2ème AF;Communication Française;COMMUNI2AF;1;210.0;Orthographe/Copie;ORTHOGRAPH;30.0
+R1;2ème AF;Communication Française;COMMUNI2AF;1;210.0;Grammaire;GRAMMAIRE;30.0
+R1;2ème AF;Communication Française;COMMUNI2AF;1;210.0;Conjugaison;CONJUGAISO;30.0
+R1;2ème AF;Communication Française;COMMUNI2AF;1;210.0;Production d'écrits;PRODUCTION;30.0
+R1;2ème AF;Communication Créole;COMMUN22AF;1;90.0;Communication Orale/Exposés;COMMUNICAT;30.0
+R1;2ème AF;Communication Créole;COMMUN22AF;1;90.0;Lecture/Vocabulaire;LECTUREVOC;30.0
+R1;2ème AF;Communication Créole;COMMUN22AF;1;90.0;Orthographe/Copie;ORTHOGRAPH;30.0
+R2;2ème AF;Sciences Sociales;SCIENCE2AF;1;80.0;Éducation à la Citoyenneté;EDUCATIONA;20.0
+R2;2ème AF;Sciences Sociales;SCIENCE2AF;1;80.0;Histoire Nationale;HISTOIRENA;20.0
+R2;2ème AF;Sciences Sociales;SCIENCE2AF;1;80.0;Géographie d'Haïti;GEOGRAPHIE;20.0
+R2;2ème AF;Sciences Sociales;SCIENCE2AF;1;80.0;Géographie Générale;GEOGRAPHI2;20.0
+R2;2ème AF;TIC;TIC2AF;1;20.0;Informatique;INFORMATIQ;20.0
+R2;2ème AF;Sciences Expérimentales;SCIENC22AF;1;60.0;Éducation à la Technologie;EDUCATIONA;20.0
+R2;2ème AF;Sciences Expérimentales;SCIENC22AF;1;60.0;Éducation à la Santé;EDUCATION2;20.0
+R2;2ème AF;Sciences Expérimentales;SCIENC22AF;1;60.0;Éducation à l'Environnement;EDUCATION3;20.0
+R2;2ème AF;Sciences Expérimentales;SCIENC22AF;1;60.0;ETAP;ETAP;20.0
+R3;2ème AF;Autres;AUTRES2AF;1;20.0;Écriture (motricité fine);ECRITUREMO;20.0
+R3;2ème AF;Enseignements Artistiques;ENSEIGN2AF;1;20.0;Éducation physique et sportive (EPS);EDUCATIONP;20.0
+R3;2ème AF;Éducation Morale et Religieuse;EDUCATI2AF;1;10.0;Histoire Biblique;HISTOIREBI;10.0
+R3;2ème AF;Arts;ARTS2AF;1;50.0;Poésie/Création Libre;POESIECREA;10.0
+R3;2ème AF;Arts;ARTS2AF;1;50.0;Broderie;BRODERIE;10.0
+R3;2ème AF;Arts;ARTS2AF;1;50.0;Dessin;DESSIN;10.0
+R3;2ème AF;Arts;ARTS2AF;1;50.0;Poterie/Céramique;POTERIECER;10.0
+R3;2ème AF;Arts;ARTS2AF;1;50.0;Flûte à Bec;FLUTEABEC;10.0
+R3;2ème AF;Langues étrangères;LANGUES2AF;1;10.0;Anglais (communication orale);ANGLAISCOM;10.0
+R1;3ème AF;Mathématiques;MATHEMA3AF;1;180.0;Numération;NUMERATION;30.0
+R1;3ème AF;Mathématiques;MATHEMA3AF;1;180.0;Opérations;OPERATIONS;30.0
+R1;3ème AF;Mathématiques;MATHEMA3AF;1;180.0;Calcul Mental;CALCULMENT;30.0
+R1;3ème AF;Mathématiques;MATHEMA3AF;1;180.0;Géométrie;GEOMETRIE;30.0
+R1;3ème AF;Mathématiques;MATHEMA3AF;1;180.0;Mesures;MESURES;30.0
+R1;3ème AF;Mathématiques;MATHEMA3AF;1;180.0;Résolution de Problèmes;RESOLUTION;30.0
+R1;3ème AF;Communication Française;COMMUNI3AF;1;210.0;Communication Orale/Exposés;COMMUNICAT;30.0
+R1;3ème AF;Communication Française;COMMUNI3AF;1;210.0;Lecture;LECTURE;30.0
+R1;3ème AF;Communication Française;COMMUNI3AF;1;210.0;Vocabulaire;VOCABULAIR;30.0
+R1;3ème AF;Communication Française;COMMUNI3AF;1;210.0;Orthographe/Copie;ORTHOGRAPH;30.0
+R1;3ème AF;Communication Française;COMMUNI3AF;1;210.0;Grammaire;GRAMMAIRE;30.0
+R1;3ème AF;Communication Française;COMMUNI3AF;1;210.0;Conjugaison;CONJUGAISO;30.0
+R1;3ème AF;Communication Française;COMMUNI3AF;1;210.0;Production d'écrits;PRODUCTION;30.0
+R1;3ème AF;Communication Créole;COMMUN23AF;1;120.0;Communication Orale/Exposés;COMMUNICAT;30.0
+R1;3ème AF;Communication Créole;COMMUN23AF;1;120.0;Lecture/Vocabulaire;LECTUREVOC;30.0
+R1;3ème AF;Communication Créole;COMMUN23AF;1;120.0;Orthographe/Copie;ORTHOGRAPH;30.0
+R1;3ème AF;Communication Créole;COMMUN23AF;1;120.0;Grammaire/Conjugaison;GRAMMAIREC;30.0
+R2;3ème AF;Sciences Sociales;SCIENCE3AF;1;80.0;Histoire Nationale;HISTOIRENA;20.0
+R2;3ème AF;Sciences Sociales;SCIENCE3AF;1;80.0;Géographie d'Haïti;GEOGRAPHIE;20.0
+R2;3ème AF;Sciences Sociales;SCIENCE3AF;1;80.0;Géographie Générale;GEOGRAPHI2;20.0
+R2;3ème AF;Sciences Sociales;SCIENCE3AF;1;80.0;Éducation à la Citoyenneté;EDUCATIONA;20.0
+R2;3ème AF;TIC;TIC3AF;1;20.0;Informatique;INFORMATIQ;20.0
+R2;3ème AF;Sciences Expérimentales;SCIENC23AF;1;80.0;Éducation à la Santé;EDUCATIONA;20.0
+R2;3ème AF;Sciences Expérimentales;SCIENC23AF;1;80.0;Éducation à l'Environnement;EDUCATION2;20.0
+R2;3ème AF;Sciences Expérimentales;SCIENC23AF;1;80.0;Éducation à la Technologie;EDUCATION3;20.0
+R2;3ème AF;Sciences Expérimentales;SCIENC23AF;1;80.0;ETAP;ETAP;20.0
+R3;3ème AF;Autres;AUTRES3AF;1;20.0;Écriture (motricité fine);ECRITUREMO;20.0
+R3;3ème AF;Enseignements Artistiques;ENSEIGN3AF;1;20.0;Éducation physique et sportive (EPS);EDUCATIONP;20.0
+R3;3ème AF;Éducation Morale et Religieuse;EDUCATI3AF;1;10.0;Histoire Biblique;HISTOIREBI;10.0
+R3;3ème AF;Arts;ARTS3AF;1;50.0;Poésie/Création Libre;POESIECREA;10.0
+R3;3ème AF;Arts;ARTS3AF;1;50.0;Broderie;BRODERIE;10.0
+R3;3ème AF;Arts;ARTS3AF;1;50.0;Dessin;DESSIN;10.0
+R3;3ème AF;Arts;ARTS3AF;1;50.0;Solfège/Chant;SOLFEGECHA;10.0
+R3;3ème AF;Arts;ARTS3AF;1;50.0;Flûte à Bec;FLUTEABEC;10.0
+R3;3ème AF;Langues étrangères;LANGUES3AF;1;20.0;Anglais (communication orale);ANGLAISCOM;10.0
+R3;3ème AF;Langues étrangères;LANGUES3AF;1;20.0;Espagnol (communication orale);ESPAGNOLCO;10.0
+R1;4ème AF;Mathématiques;MATHEMA4AF;1;340.0;Numération/Opération;NUMERATION;60.0
+R1;4ème AF;Mathématiques;MATHEMA4AF;1;340.0;Calcul Mental;CALCULMENT;60.0
+R1;4ème AF;Mathématiques;MATHEMA4AF;1;340.0;Géométrie/Mesure;GEOMETRIEM;60.0
+R1;4ème AF;Mathématiques;MATHEMA4AF;1;340.0;Proportionnalité;PROPORTION;60.0
+R1;4ème AF;Mathématiques;MATHEMA4AF;1;340.0;Résolution de Problèmes;RESOLUTION;100.0
+R1;4ème AF;Communication Française;COMMUNI4AF;1;340.0;Communication Orale/Exposés;COMMUNICAT;60.0
+R1;4ème AF;Communication Française;COMMUNI4AF;1;340.0;Lecture/Vocabulaire;LECTUREVOC;60.0
+R1;4ème AF;Communication Française;COMMUNI4AF;1;340.0;Orthographe/Copie;ORTHOGRAPH;60.0
+R1;4ème AF;Communication Française;COMMUNI4AF;1;340.0;Grammaire/Conjugaison;GRAMMAIREC;60.0
+R1;4ème AF;Communication Française;COMMUNI4AF;1;340.0;Productions d'écrits;PRODUCTION;100.0
+R1;4ème AF;Communication Créole;COMMUN24AF;1;180.0;Communication Orale/Exposés;COMMUNICAT;60.0
+R1;4ème AF;Communication Créole;COMMUN24AF;1;180.0;Lecture/Vocabulaire;LECTUREVOC;60.0
+R1;4ème AF;Communication Créole;COMMUN24AF;1;180.0;Orthographe/Copie;ORTHOGRAPH;60.0
+R2;4ème AF;Sciences Sociales;SCIENCE4AF;1;120.0;Histoire Nationale;HISTOIRENA;30.0
+R2;4ème AF;Sciences Sociales;SCIENCE4AF;1;120.0;Géographie d'Haïti;GEOGRAPHIE;30.0
+R2;4ème AF;Sciences Sociales;SCIENCE4AF;1;120.0;Géographie Générale;GEOGRAPHI2;30.0
+R2;4ème AF;Sciences Sociales;SCIENCE4AF;1;120.0;Éducation à la Citoyenneté;EDUCATIONA;30.0
+R2;4ème AF;TIC;TIC4AF;1;30.0;Informatique;INFORMATIQ;30.0
+R2;4ème AF;Sciences Expérimentales;SCIENC24AF;1;120.0;Éducation à la Santé;EDUCATIONA;30.0
+R2;4ème AF;Sciences Expérimentales;SCIENC24AF;1;120.0;Éducation à l'Environnement;EDUCATION2;30.0
+R2;4ème AF;Sciences Expérimentales;SCIENC24AF;1;120.0;Éducation à la Technologie;EDUCATION3;30.0
+R2;4ème AF;Sciences Expérimentales;SCIENC24AF;1;120.0;ETAP;ETAP;30.0
+R3;4ème AF;Autres;AUTRES4AF;1;20.0;Écriture (motricité fine);ECRITUREMO;20.0
+R3;4ème AF;Enseignements Artistiques;ENSEIGN4AF;1;20.0;Éducation physique et sportive (EPS);EDUCATIONP;20.0
+R3;4ème AF;Éducation Morale et Religieuse;EDUCATI4AF;1;10.0;Histoire Biblique;HISTOIREBI;10.0
+R3;4ème AF;Arts;ARTS4AF;1;50.0;Poésie/Création Libre;POESIECREA;10.0
+R3;4ème AF;Arts;ARTS4AF;1;50.0;Broderie;BRODERIE;10.0
+R3;4ème AF;Arts;ARTS4AF;1;50.0;Dessin;DESSIN;10.0
+R3;4ème AF;Arts;ARTS4AF;1;50.0;Poterie/Céramique;POTERIECER;10.0
+R3;4ème AF;Arts;ARTS4AF;1;50.0;Solfège/Chant;SOLFEGECHA;10.0
+R3;4ème AF;Langues étrangères;LANGUES4AF;1;20.0;Anglais (communication orale);ANGLAISCOM;10.0
+R3;4ème AF;Langues étrangères;LANGUES4AF;1;20.0;Espagnol (communication orale);ESPAGNOLCO;10.0
+R1;5ème AF;Mathématiques;MATHEMA5AF;1;340.0;Numération/Opération;NUMERATION;60.0
+R1;5ème AF;Mathématiques;MATHEMA5AF;1;340.0;Calcul Mental;CALCULMENT;60.0
+R1;5ème AF;Mathématiques;MATHEMA5AF;1;340.0;Géométrie/Mesure;GEOMETRIEM;60.0
+R1;5ème AF;Mathématiques;MATHEMA5AF;1;340.0;Proportionnalité;PROPORTION;60.0
+R1;5ème AF;Mathématiques;MATHEMA5AF;1;340.0;Résolution de Problèmes;RESOLUTION;100.0
+R1;5ème AF;Communication Française;COMMUNI5AF;1;340.0;Communication Orale/Exposés;COMMUNICAT;60.0
+R1;5ème AF;Communication Française;COMMUNI5AF;1;340.0;Lecture/Vocabulaire;LECTUREVOC;60.0
+R1;5ème AF;Communication Française;COMMUNI5AF;1;340.0;Orthographe/Copie;ORTHOGRAPH;60.0
+R1;5ème AF;Communication Française;COMMUNI5AF;1;340.0;Grammaire/Conjugaison;GRAMMAIREC;60.0
+R1;5ème AF;Communication Française;COMMUNI5AF;1;340.0;Productions d'écrits;PRODUCTION;100.0
+R1;5ème AF;Communication Créole;COMMUN25AF;1;340.0;Communication Orale/Exposés;COMMUNICAT;60.0
+R1;5ème AF;Communication Créole;COMMUN25AF;1;340.0;Lecture/Vocabulaire;LECTUREVOC;60.0
+R1;5ème AF;Communication Créole;COMMUN25AF;1;340.0;Orthographe/Copie;ORTHOGRAPH;60.0
+R1;5ème AF;Communication Créole;COMMUN25AF;1;340.0;Grammaire/Conjugaison;GRAMMAIREC;60.0
+R1;5ème AF;Communication Créole;COMMUN25AF;1;340.0;Productions d'écrits;PRODUCTION;100.0
+R2;5ème AF;Sciences Sociales;SCIENCE5AF;1;120.0;Histoire Nationale;HISTOIRENA;30.0
+R2;5ème AF;Sciences Sociales;SCIENCE5AF;1;120.0;Géographie Nationale;GEOGRAPHIE;30.0
+R2;5ème AF;Sciences Sociales;SCIENCE5AF;1;120.0;Géographie Générale;GEOGRAPHI2;30.0
+R2;5ème AF;Sciences Sociales;SCIENCE5AF;1;120.0;Connaissances Générales;CONNAISSAN;30.0
+R2;5ème AF;TIC;TIC5AF;1;30.0;Informatique;INFORMATIQ;30.0
+R2;5ème AF;Sciences Expérimentales;SCIENC25AF;1;120.0;Éducation à la Santé;EDUCATIONA;30.0
+R2;5ème AF;Sciences Expérimentales;SCIENC25AF;1;120.0;Éducation à l'Environnement;EDUCATION2;30.0
+R2;5ème AF;Sciences Expérimentales;SCIENC25AF;1;120.0;Éducation à la Technologie;EDUCATION3;30.0
+R2;5ème AF;Sciences Expérimentales;SCIENC25AF;1;120.0;ETAP;ETAP;30.0
+R3;5ème AF;Autres;AUTRES5AF;1;20.0;Écriture (motricité fine);ECRITUREMO;20.0
+R3;5ème AF;Enseignements Artistiques;ENSEIGN5AF;1;20.0;Éducation physique et sportive (EPS);EDUCATIONP;20.0
+R3;5ème AF;Éducation Morale et Religieuse;EDUCATI5AF;1;10.0;Histoire Biblique;HISTOIREBI;10.0
+R3;5ème AF;Arts;ARTS5AF;1;50.0;Poésie/Création Libre;POESIECREA;10.0
+R3;5ème AF;Arts;ARTS5AF;1;50.0;Broderie;BRODERIE;10.0
+R3;5ème AF;Arts;ARTS5AF;1;50.0;Dessin;DESSIN;10.0
+R3;5ème AF;Arts;ARTS5AF;1;50.0;Solfège/Chant;SOLFEGECHA;10.0
+R3;5ème AF;Arts;ARTS5AF;1;50.0;Flûte à Bec;FLUTEABEC;10.0
+R3;5ème AF;Langues étrangères;LANGUES5AF;1;20.0;Anglais (communication orale);ANGLAISCOM;10.0
+R3;5ème AF;Langues étrangères;LANGUES5AF;1;20.0;Espagnol (communication orale);ESPAGNOLCO;10.0
+R1;6ème AF;Mathématiques;MATHEMA6AF;1;340.0;Numération/Opération;NUMERATION;60.0
+R1;6ème AF;Mathématiques;MATHEMA6AF;1;340.0;Calcul Mental;CALCULMENT;60.0
+R1;6ème AF;Mathématiques;MATHEMA6AF;1;340.0;Géométrie/Mesure;GEOMETRIEM;60.0
+R1;6ème AF;Mathématiques;MATHEMA6AF;1;340.0;Proportionnalité;PROPORTION;60.0
+R1;6ème AF;Mathématiques;MATHEMA6AF;1;340.0;Résolution de Problèmes;RESOLUTION;100.0
+R1;6ème AF;Communication Française;COMMUNI6AF;1;340.0;Communication Orale/Exposés;COMMUNICAT;60.0
+R1;6ème AF;Communication Française;COMMUNI6AF;1;340.0;Lecture/Vocabulaire;LECTUREVOC;60.0
+R1;6ème AF;Communication Française;COMMUNI6AF;1;340.0;Orthographe/Copie;ORTHOGRAPH;60.0
+R1;6ème AF;Communication Française;COMMUNI6AF;1;340.0;Grammaire/Conjugaison;GRAMMAIREC;60.0
+R1;6ème AF;Communication Française;COMMUNI6AF;1;340.0;Productions d'écrits;PRODUCTION;100.0
+R1;6ème AF;Communication Créole;COMMUN26AF;1;340.0;Communication Orale/Exposés;COMMUNICAT;60.0
+R1;6ème AF;Communication Créole;COMMUN26AF;1;340.0;Lecture/Vocabulaire;LECTUREVOC;60.0
+R1;6ème AF;Communication Créole;COMMUN26AF;1;340.0;Orthographe/Copie;ORTHOGRAPH;60.0
+R1;6ème AF;Communication Créole;COMMUN26AF;1;340.0;Grammaire/Conjugaison;GRAMMAIREC;60.0
+R1;6ème AF;Communication Créole;COMMUN26AF;1;340.0;Productions d'écrits;PRODUCTION;100.0
+R2;6ème AF;Sciences Sociales;SCIENCE6AF;1;120.0;Histoire Nationale;HISTOIRENA;30.0
+R2;6ème AF;Sciences Sociales;SCIENCE6AF;1;120.0;Géographie d'Haïti;GEOGRAPHIE;30.0
+R2;6ème AF;Sciences Sociales;SCIENCE6AF;1;120.0;Géographie Générale;GEOGRAPHI2;30.0
+R2;6ème AF;Sciences Sociales;SCIENCE6AF;1;120.0;Éducation à la Citoyenneté;EDUCATIONA;30.0
+R2;6ème AF;TIC;TIC6AF;1;30.0;Informatique;INFORMATIQ;30.0
+R2;6ème AF;Sciences Expérimentales;SCIENC26AF;1;120.0;Éducation à la Santé;EDUCATIONA;30.0
+R2;6ème AF;Sciences Expérimentales;SCIENC26AF;1;120.0;Éducation à l'Environnement;EDUCATION2;30.0
+R2;6ème AF;Sciences Expérimentales;SCIENC26AF;1;120.0;Éducation à la Technologie;EDUCATION3;30.0
+R2;6ème AF;Sciences Expérimentales;SCIENC26AF;1;120.0;ETAP;ETAP;30.0
+R3;6ème AF;Autres;AUTRES6AF;1;20.0;Écriture (motricité fine);ECRITUREMO;20.0
+R3;6ème AF;Enseignements Artistiques;ENSEIGN6AF;1;20.0;Éducation physique et sportive (EPS);EDUCATIONP;20.0
+R3;6ème AF;Éducation Morale et Religieuse;EDUCATI6AF;1;10.0;Histoire Biblique;HISTOIREBI;10.0
+R3;6ème AF;Arts;ARTS6AF;1;60.0;Poésie/Création Libre;POESIECREA;10.0
+R3;6ème AF;Arts;ARTS6AF;1;60.0;Broderie;BRODERIE;10.0
+R3;6ème AF;Arts;ARTS6AF;1;60.0;Dessin;DESSIN;10.0
+R3;6ème AF;Arts;ARTS6AF;1;60.0;Solfège/Chant;SOLFEGECHA;10.0
+R3;6ème AF;Arts;ARTS6AF;1;60.0;Flûte à Bec;FLUTEABEC;10.0
+R3;6ème AF;Arts;ARTS6AF;1;60.0;Culture Musicale;CULTUREMUS;10.0
+R3;6ème AF;Langues étrangères;LANGUES6AF;1;20.0;Anglais (communication orale);ANGLAISCOM;10.0
+R3;6ème AF;Langues étrangères;LANGUES6AF;1;20.0;Espagnol (communication orale);ESPAGNOLCO;10.0
+R1;7ème AF;Mathématiques;MATHEMA7AF;1;240.0;Nombres et Calculs/Algèbre;NOMBRESETC;60.0
+R1;7ème AF;Mathématiques;MATHEMA7AF;1;240.0;Calcul Mental;CALCULMENT;60.0
+R1;7ème AF;Mathématiques;MATHEMA7AF;1;240.0;Grandeurs et Mesures;GRANDEURSE;60.0
+R1;7ème AF;Mathématiques;MATHEMA7AF;1;240.0;Organisation et Gestion de données;ORGANISATI;60.0
+R1;7ème AF;Communication Française;COMMUNI7AF;1;340.0;Communication Orale/Exposés;COMMUNICAT;60.0
+R1;7ème AF;Communication Française;COMMUNI7AF;1;340.0;Lecture (compréhension de l'écrit et de l'image);LECTURECOM;60.0
+R1;7ème AF;Communication Française;COMMUNI7AF;1;340.0;Orthographe/Vocabulaire;ORTHOGRAPH;60.0
+R1;7ème AF;Communication Française;COMMUNI7AF;1;340.0;Grammaire/Conjugaison;GRAMMAIREC;60.0
+R1;7ème AF;Communication Française;COMMUNI7AF;1;340.0;Production d'écrits;PRODUCTION;100.0
+R1;7ème AF;Communication Créole;COMMUN27AF;1;340.0;Communication Orale/Exposés;COMMUNICAT;60.0
+R1;7ème AF;Communication Créole;COMMUN27AF;1;340.0;Lecture/Vocabulaire;LECTUREVOC;60.0
+R1;7ème AF;Communication Créole;COMMUN27AF;1;340.0;Orthographe/Copie;ORTHOGRAPH;60.0
+R1;7ème AF;Communication Créole;COMMUN27AF;1;340.0;Grammaire/Conjugaison;GRAMMAIREC;60.0
+R1;7ème AF;Communication Créole;COMMUN27AF;1;340.0;Production d'écrits;PRODUCTION;100.0
+R2;7ème AF;Sciences Sociales;SCIENCE7AF;1;90.0;Histoire;HISTOIRE;30.0
+R2;7ème AF;Sciences Sociales;SCIENCE7AF;1;90.0;Géographie;GEOGRAPHIE;30.0
+R2;7ème AF;Sciences Sociales;SCIENCE7AF;1;90.0;Éducation à la Citoyenneté;EDUCATIONA;30.0
+R2;7ème AF;TIC;TIC7AF;1;30.0;Algorithme et Programmation;ALGORITHME;30.0
+R2;7ème AF;Sciences de la vie et de la terre (SVT);SCIENC27AF;1;30.0;Biologie;BIOLOGIE;30.0
+R2;7ème AF;Sciences Expérimentales;SCIENC37AF;1;60.0;Sciences Physiques;SCIENCESPH;30.0
+R2;7ème AF;Sciences Expérimentales;SCIENC37AF;1;60.0;ETAP;ETAP;30.0
+R3;7ème AF;Autres;AUTRES7AF;1;20.0;Écriture (motricité fine);ECRITUREMO;20.0
+R3;7ème AF;Langues étrangères ou culture;LANGUES7AF;1;20.0;Espagnol;ESPAGNOL;10.0
+R3;7ème AF;Langues étrangères ou culture;LANGUES7AF;1;20.0;Anglais;ANGLAIS;10.0
+R3;7ème AF;Enseignements Artistiques;ENSEIGN7AF;1;60.0;Arts Plastiques et Visuels;ARTSPLASTI;10.0
+R3;7ème AF;Enseignements Artistiques;ENSEIGN7AF;1;60.0;Écriture/Création Littéraire;ECRITURECR;10.0
+R3;7ème AF;Enseignements Artistiques;ENSEIGN7AF;1;60.0;Chant/Solfège;CHANTSOLFE;10.0
+R3;7ème AF;Enseignements Artistiques;ENSEIGN7AF;1;60.0;Éducation Musicale/Flûte;EDUCATIONM;10.0
+R3;7ème AF;Enseignements Artistiques;ENSEIGN7AF;1;60.0;Éducation physique et sportive (EPS);EDUCATIONP;20.0
+R3;7ème AF;Enseignement moral et civique;ENSEIG27AF;1;10.0;Histoire Biblique;HISTOIREBI;10.0
+R1;8ème AF;Mathématiques;MATHEMA8AF;1;300.0;Nombres et Calculs/Algèbre;NOMBRESETC;60.0
+R1;8ème AF;Mathématiques;MATHEMA8AF;1;300.0;Calcul Mental;CALCULMENT;60.0
+R1;8ème AF;Mathématiques;MATHEMA8AF;1;300.0;Grandeurs et Mesures;GRANDEURSE;60.0
+R1;8ème AF;Mathématiques;MATHEMA8AF;1;300.0;Fonctions;FONCTIONS;60.0
+R1;8ème AF;Mathématiques;MATHEMA8AF;1;300.0;Organisation et Gestion de Données;ORGANISATI;60.0
+R1;8ème AF;Littérature/Création;LITTERA8AF;1;100.0;Littérature/Création;LITTERATUR;10.0
+R1;8ème AF;Communication Française;COMMUNI8AF;1;340.0;Communication Orale/Exposés;COMMUNICAT;60.0
+R1;8ème AF;Communication Française;COMMUNI8AF;1;340.0;Lecture (compréhension de l'écrit et de l'image);LECTURECOM;60.0
+R1;8ème AF;Communication Française;COMMUNI8AF;1;340.0;Orthographe/Vocabulaire;ORTHOGRAPH;60.0
+R1;8ème AF;Communication Française;COMMUNI8AF;1;340.0;Grammaire/Conjugaison;GRAMMAIREC;60.0
+R1;8ème AF;Communication Française;COMMUNI8AF;1;340.0;Production d'écrits;PRODUCTION;100.0
+R1;8ème AF;Communication Créole;COMMUN28AF;1;340.0;Communication Orale/Exposés;COMMUNICAT;60.0
+R1;8ème AF;Communication Créole;COMMUN28AF;1;340.0;Lecture/Vocabulaire;LECTUREVOC;60.0
+R1;8ème AF;Communication Créole;COMMUN28AF;1;340.0;Orthographe/Copie;ORTHOGRAPH;60.0
+R1;8ème AF;Communication Créole;COMMUN28AF;1;340.0;Grammaire/Conjugaison;GRAMMAIREC;60.0
+R1;8ème AF;Communication Créole;COMMUN28AF;1;340.0;Production d'écrits;PRODUCTION;100.0
+R2;8ème AF;Sciences Sociales;SCIENCE8AF;1;90.0;Histoire;HISTOIRE;30.0
+R2;8ème AF;Sciences Sociales;SCIENCE8AF;1;90.0;Géographie;GEOGRAPHIE;30.0
+R2;8ème AF;Sciences Sociales;SCIENCE8AF;1;90.0;Éducation à la Citoyenneté;EDUCATIONA;30.0
+R2;8ème AF;TIC;TIC8AF;1;30.0;Algorithme et Programmation;ALGORITHME;30.0
+R2;8ème AF;Sciences de la vie et de la terre (SVT);SCIENC28AF;1;30.0;Biologie;BIOLOGIE;30.0
+R2;8ème AF;Sciences de la vie et de la terre (SVT);SCIENC28AF;1;30.0;Géologie;GEOLOGIE;30.0
+R2;8ème AF;Sciences Expérimentales;SCIENC38AF;1;60.0;Sciences Physiques;SCIENCESPH;30.0
+R2;8ème AF;Sciences Expérimentales;SCIENC38AF;1;60.0;ETAP;ETAP;30.0
+R3;8ème AF;Autres;AUTRES8AF;1;20.0;Écriture (motricité fine);ECRITUREMO;20.0
+R3;8ème AF;Langues étrangères ou culture;LANGUES8AF;1;20.0;Anglais;ANGLAIS;10.0
+R3;8ème AF;Langues étrangères ou culture;LANGUES8AF;1;20.0;Espagnol;ESPAGNOL;10.0
+R3;8ème AF;Enseignements Artistiques;ENSEIGN8AF;1;60.0;Arts plastiques et Visuels;ARTSPLASTI;10.0
+R3;8ème AF;Enseignements Artistiques;ENSEIGN8AF;1;60.0;Écriture/Création Littéraire;ECRITURECR;10.0
+R3;8ème AF;Enseignements Artistiques;ENSEIGN8AF;1;60.0;Chant/Solfège;CHANTSOLFE;10.0
+R3;8ème AF;Enseignements Artistiques;ENSEIGN8AF;1;60.0;Flûte/Piano;FLUTEPIANO;10.0
+R3;8ème AF;Enseignements Artistiques;ENSEIGN8AF;1;60.0;Éducation physique et sportive (EPS);EDUCATIONP;20.0
+R3;8ème AF;Enseignement moral et civique;ENSEIG28AF;1;10.0;Histoire Biblique;HISTOIREBI;10.0
+R1;9ème AF;Mathématiques;MATHEMA9AF;1;300.0;Nombres et Calculs/Algèbre;NOMBRESETC;60.0
+R1;9ème AF;Mathématiques;MATHEMA9AF;1;300.0;Calcul Mental;CALCULMENT;60.0
+R1;9ème AF;Mathématiques;MATHEMA9AF;1;300.0;Espace et Géométrie;ESPACEETGE;60.0
+R1;9ème AF;Mathématiques;MATHEMA9AF;1;300.0;Grandeurs et Mesures;GRANDEURSE;60.0
+R1;9ème AF;Mathématiques;MATHEMA9AF;1;300.0;Organisation et Gestion de Données;ORGANISATI;60.0
+R1;9ème AF;Littérature/Création;LITTERA9AF;1;100.0;Littérature/Création;LITTERATUR;10.0
+R1;9ème AF;Communication Française;COMMUNI9AF;1;340.0;Communication Orale/Exposés;COMMUNICAT;60.0
+R1;9ème AF;Communication Française;COMMUNI9AF;1;340.0;Lecture (compréhension de l'écrit et de l'image);LECTURECOM;60.0
+R1;9ème AF;Communication Française;COMMUNI9AF;1;340.0;Orthographe/Vocabulaire;ORTHOGRAPH;60.0
+R1;9ème AF;Communication Française;COMMUNI9AF;1;340.0;Grammaire/Conjugaison;GRAMMAIREC;60.0
+R1;9ème AF;Communication Française;COMMUNI9AF;1;340.0;Production d'écrits;PRODUCTION;100.0
+R1;9ème AF;Communication Créole;COMMUN29AF;1;340.0;Communication Orale/Exposés;COMMUNICAT;60.0
+R1;9ème AF;Communication Créole;COMMUN29AF;1;340.0;Lecture/Vocabulaire;LECTUREVOC;60.0
+R1;9ème AF;Communication Créole;COMMUN29AF;1;340.0;Orthographe/Copie;ORTHOGRAPH;60.0
+R1;9ème AF;Communication Créole;COMMUN29AF;1;340.0;Grammaire/Conjugaison;GRAMMAIREC;60.0
+R1;9ème AF;Communication Créole;COMMUN29AF;1;340.0;Production d'écrits;PRODUCTION;100.0
+R2;9ème AF;Sciences Sociales;SCIENCE9AF;1;90.0;Histoire;HISTOIRE;30.0
+R2;9ème AF;Sciences Sociales;SCIENCE9AF;1;90.0;Géographie;GEOGRAPHIE;30.0
+R2;9ème AF;Sciences Sociales;SCIENCE9AF;1;90.0;Éducation à la Citoyenneté;EDUCATIONA;30.0
+R2;9ème AF;TIC;TIC9AF;1;30.0;Algorithme et Programmation;ALGORITHME;30.0
+R2;9ème AF;Sciences Expérimentales;SCIENC29AF;1;90.0;Biologie;BIOLOGIE;30.0
+R2;9ème AF;Sciences Expérimentales;SCIENC29AF;1;90.0;Physique;PHYSIQUE;30.0
+R2;9ème AF;Sciences Expérimentales;SCIENC29AF;1;90.0;ETAP (Éducation à la technologie et aux activités productives);ETAPEDUCAT;30.0
+R2;9ème AF;SVTE/Sciences Physiques;SVTESCI9AF;1;30.0;SVTE/Sciences Physiques;SVTESCIENC;30.0
+R3;9ème AF;Autres;AUTRES9AF;1;20.0;Écriture (motricité fine);ECRITUREMO;20.0
+R3;9ème AF;Langues étrangères ou culture;LANGUES9AF;1;20.0;Anglais;ANGLAIS;10.0
+R3;9ème AF;Langues étrangères ou culture;LANGUES9AF;1;20.0;Espagnol;ESPAGNOL;10.0
+R3;9ème AF;Enseignements Artistiques;ENSEIGN9AF;1;60.0;Arts plastiques et Visuels;ARTSPLASTI;10.0
+R3;9ème AF;Enseignements Artistiques;ENSEIGN9AF;1;60.0;Écriture/Création Littéraire;ECRITURECR;10.0
+R3;9ème AF;Enseignements Artistiques;ENSEIGN9AF;1;60.0;Chant/Solfège;CHANTSOLFE;10.0
+R3;9ème AF;Enseignements Artistiques;ENSEIGN9AF;1;60.0;Éducation Musicale/Flûte;EDUCATIONM;10.0
+R3;9ème AF;Enseignements Artistiques;ENSEIGN9AF;1;60.0;Éducation physique et sportive (EPS);EDUCATIONP;20.0
+R3;9ème AF;Enseignement moral et civique;ENSEIG29AF;1;10.0;Histoire Biblique;HISTOIREBI;10.0
+R1;NS2;Mathématiques;MATHEMANS2;1;360.0;Analyse Linéaire;ANALYSELIN;60.0
+R1;NS2;Mathématiques;MATHEMANS2;1;360.0;Algèbre;ALGEBRE;60.0
+R1;NS2;Mathématiques;MATHEMANS2;1;360.0;Géométrie;GEOMETRIE;60.0
+R1;NS2;Mathématiques;MATHEMANS2;1;360.0;Trigonométrie;TRIGONOMET;60.0
+R1;NS2;Mathématiques;MATHEMANS2;1;360.0;Statistiques et Probabilités;STATISTIQU;60.0
+R1;NS2;Mathématiques;MATHEMANS2;1;360.0;Suites Numériques;SUITESNUME;60.0
+R1;NS2;Littérature/Création;LITTERANS2;1;100.0;Littérature/Création;LITTERATUR;100.0
+R1;NS2;Communication Française;COMMUNINS2;1;340.0;Communication Orale/Exposés;COMMUNICAT;60.0
+R1;NS2;Communication Française;COMMUNINS2;1;340.0;Lecture (compréhension de l'écrit et de l'image);LECTURECOM;60.0
+R1;NS2;Communication Française;COMMUNINS2;1;340.0;Orthographe/Vocabulaire;ORTHOGRAPH;60.0
+R1;NS2;Communication Française;COMMUNINS2;1;340.0;Grammaire/Conjugaison;GRAMMAIREC;60.0
+R1;NS2;Communication Française;COMMUNINS2;1;340.0;Production d'écrits;PRODUCTION;100.0
+R1;NS2;Communication Créole;COMMUN2NS2;1;340.0;Communication Orale/Exposés;COMMUNICAT;60.0
+R1;NS2;Communication Créole;COMMUN2NS2;1;340.0;Lecture/Vocabulaire;LECTUREVOC;60.0
+R1;NS2;Communication Créole;COMMUN2NS2;1;340.0;Orthographe/Copie;ORTHOGRAPH;60.0
+R1;NS2;Communication Créole;COMMUN2NS2;1;340.0;Grammaire/Conjugaison;GRAMMAIREC;60.0
+R1;NS2;Communication Créole;COMMUN2NS2;1;340.0;Production d'écrits;PRODUCTION;100.0
+R2;NS2;TIC;TICNS2;1;30.0;Algorithme et Programmation;ALGORITHME;30.0
+R2;NS2;Sciences;SCIENCENS2;1;270.0;Économie;ECONOMIE;30.0
+R2;NS2;Sciences;SCIENCENS2;1;270.0;Méthodologie;METHODOLOG;30.0
+R2;NS2;Sciences;SCIENCENS2;1;270.0;Biologie;BIOLOGIE;30.0
+R2;NS2;Sciences;SCIENCENS2;1;270.0;Chimie;CHIMIE;30.0
+R2;NS2;Sciences;SCIENCENS2;1;270.0;Physiques;PHYSIQUES;30.0
+R2;NS2;Sciences;SCIENCENS2;1;270.0;Éducation aux médias et à l'information;EDUCATIONA;30.0
+R2;NS2;Sciences;SCIENCENS2;1;270.0;Histoire;HISTOIRE;30.0
+R2;NS2;Sciences;SCIENCENS2;1;270.0;Géographie;GEOGRAPHIE;30.0
+R2;NS2;Sciences;SCIENCENS2;1;270.0;Éducation à la Citoyenneté;EDUCATION2;30.0
+R3;NS2;Autres;AUTRESNS2;1;20.0;Écriture (motricité fine);ECRITUREMO;20.0
+R3;NS2;Langues étrangères ou culture;LANGUESNS2;1;30.0;Anglais;ANGLAIS;10.0
+R3;NS2;Langues étrangères ou culture;LANGUESNS2;1;30.0;Espagnol;ESPAGNOL;10.0
+R3;NS2;Langues étrangères ou culture;LANGUESNS2;1;30.0;Latin;LATIN;10.0
+R3;NS2;Enseignements Artistiques;ENSEIGNNS2;1;60.0;Écriture/Création Littéraire;ECRITURECR;10.0
+R3;NS2;Enseignements Artistiques;ENSEIGNNS2;1;60.0;Arts plastiques et visuels;ARTSPLASTI;10.0
+R3;NS2;Enseignements Artistiques;ENSEIGNNS2;1;60.0;Chant/Solfège;CHANTSOLFE;10.0
+R3;NS2;Enseignements Artistiques;ENSEIGNNS2;1;60.0;Histoire de l'Art;HISTOIREDE;10.0
+R3;NS2;Enseignements Artistiques;ENSEIGNNS2;1;60.0;Éducation physique et sportive (EPS);EDUCATIONP;20.0
+R3;NS2;Enseignement moral et civique;ENSEIG2NS2;1;30.0;Histoire Biblique;HISTOIREBI;30.0
+R1;NS3;Mathématiques;MATHEMANS3;1;360.0;Suites Numériques;SUITESNUME;60.0
+R1;NS3;Mathématiques;MATHEMANS3;1;360.0;Analyse;ANALYSE;60.0
+R1;NS3;Mathématiques;MATHEMANS3;1;360.0;Analyse Linéaire;ANALYSELIN;60.0
+R1;NS3;Mathématiques;MATHEMANS3;1;360.0;Analyse Combinatoire;ANALYSECOM;60.0
+R1;NS3;Mathématiques;MATHEMANS3;1;360.0;Géométrie Analytique;GEOMETRIEA;60.0
+R1;NS3;Mathématiques;MATHEMANS3;1;360.0;Statistiques;STATISTIQU;60.0
+R1;NS3;Mathématiques;MATHEMANS3;1;360.0;Trigonométrie;TRIGONOMET;60.0
+R1;NS3;Mathématiques;MATHEMANS3;1;360.0;Probabilités;PROBABILIT;60.0
+R1;NS3;Communication Française;COMMUNINS3;1;360.0;Communication Orale/Exposés;COMMUNICAT;60.0
+R1;NS3;Communication Française;COMMUNINS3;1;360.0;Littérature;LITTERATUR;60.0
+R1;NS3;Communication Française;COMMUNINS3;1;360.0;Outils de la langue;OUTILSDELA;60.0
+R1;NS3;Communication Française;COMMUNINS3;1;360.0;Dissertation;DISSERTATI;100.0
+R1;NS3;Communication Française;COMMUNINS3;1;360.0;Communication Française;COMMUNICA2;60.0
+R1;NS3;Communication Créole;COMMUN2NS3;1;360.0;Communication Orale/Exposés;COMMUNICAT;60.0
+R1;NS3;Communication Créole;COMMUN2NS3;1;360.0;Littérature;LITTERATUR;60.0
+R1;NS3;Communication Créole;COMMUN2NS3;1;360.0;Outils de la langue;OUTILSDELA;60.0
+R1;NS3;Communication Créole;COMMUN2NS3;1;360.0;Dissertation;DISSERTATI;100.0
+R2;NS3;TIC;TICNS3;1;30.0;Algorithme/Programmation;ALGORITHME;30.0
+R2;NS3;Sciences;SCIENCENS3;1;240.0;Sciences Sociales;SCIENCESSO;30.0
+R2;NS3;Sciences;SCIENCENS3;1;240.0;Chimie;CHIMIE;30.0
+R2;NS3;Sciences;SCIENCENS3;1;240.0;Histoire;HISTOIRE;30.0
+R2;NS3;Sciences;SCIENCENS3;1;240.0;Géographie;GEOGRAPHIE;30.0
+R2;NS3;Sciences;SCIENCENS3;1;240.0;Sciences de la Vie et de la Terre;SCIENCESDE;30.0
+R2;NS3;Sciences;SCIENCENS3;1;240.0;Éducation à la Citoyenneté;EDUCATIONA;30.0
+R2;NS3;Sciences;SCIENCENS3;1;240.0;Physiques;PHYSIQUES;30.0
+R2;NS3;Sciences;SCIENCENS3;1;240.0;Optique;OPTIQUE;30.0
+R2;NS3;Économie;ECONOMINS3;1;30.0;Économie;ECONOMIE;30.0
+R2;NS3;Méthodologie;METHODONS3;1;30.0;Méthodologie/Culture Générale;METHODOLOG;30.0
+R2;NS3;Éducation aux médias et à l'information;EDUCATINS3;1;30.0;Éducation aux médias et à l'information;EDUCATIONA;30.0
+R3;NS3;Autres;AUTRESNS3;1;50.0;Histoire de l'Art;HISTOIREDE;30.0
+R3;NS3;Autres;AUTRESNS3;1;50.0;Écriture (motricité fine);ECRITUREMO;20.0
+R3;NS3;Langues étrangères ou culture;LANGUESNS3;1;30.0;Anglais;ANGLAIS;10.0
+R3;NS3;Langues étrangères ou culture;LANGUESNS3;1;30.0;Espagnol;ESPAGNOL;10.0
+R3;NS3;Langues étrangères ou culture;LANGUESNS3;1;30.0;Latin;LATIN;10.0
+R3;NS3;Enseignements Artistiques;ENSEIGNNS3;1;40.0;Arts Plastiques et Visuels;ARTSPLASTI;10.0
+R3;NS3;Enseignements Artistiques;ENSEIGNNS3;1;40.0;Écriture/Création Littéraire;ECRITURECR;10.0
+R3;NS3;Enseignements Artistiques;ENSEIGNNS3;1;40.0;Chant/Solfège;CHANTSOLFE;10.0
+R3;NS3;Enseignements Artistiques;ENSEIGNNS3;1;40.0;Éducation Musicale;EDUCATIONM;10.0
+R3;NS3;Enseignements Artistiques;ENSEIGNNS3;1;40.0;Éducation Physique et Sportive (EPS);EDUCATIONP;20.0
+R3;NS3;Enseignement moral et civique;ENSEIG2NS3;1;30.0;Histoire Biblique;HISTOIREBI;30.0
+R1;NS4;Mathématiques;MATHEMANS4;1;360.0;Suites Numériques;SUITESNUME;60.0
+R1;NS4;Mathématiques;MATHEMANS4;1;360.0;Analyse;ANALYSE;60.0
+R1;NS4;Mathématiques;MATHEMANS4;1;360.0;Algèbre;ALGEBRE;60.0
+R1;NS4;Mathématiques;MATHEMANS4;1;360.0;Arithmétique;ARITHMETIQ;60.0
+R1;NS4;Mathématiques;MATHEMANS4;1;360.0;Probabilité;PROBABILIT;60.0
+R1;NS4;Mathématiques;MATHEMANS4;1;360.0;Statistique;STATISTIQU;60.0
+R1;NS4;Mathématiques;MATHEMANS4;1;360.0;Nombres Complexes;NOMBRESCOM;60.0
+R1;NS4;Philosophie;PHILOSONS4;1;60.0;Philosophie;PHILOSOPHI;60.0
+R1;NS4;Communication Française;COMMUNINS4;1;420.0;Littérature;LITTERATUR;60.0
+R1;NS4;Communication Française;COMMUNINS4;1;420.0;Philosophie;PHILOSOPHI;60.0
+R1;NS4;Communication Française;COMMUNINS4;1;420.0;Dissertation;DISSERTATI;60.0
+R1;NS4;Communication Française;COMMUNINS4;1;420.0;Outils de la langue;OUTILSDELA;60.0
+R1;NS4;Communication Française;COMMUNINS4;1;420.0;Littérature (section 2);LITTERATU2;60.0
+R1;NS4;Communication Française;COMMUNINS4;1;420.0;Communication orale;COMMUNICAT;60.0
+R1;NS4;Communication Française;COMMUNINS4;1;420.0;Communication Française;COMMUNICA2;60.0
+R1;NS4;Communication Créole;COMMUN2NS4;1;300.0;Dissertation;DISSERTATI;60.0
+R1;NS4;Communication Créole;COMMUN2NS4;1;300.0;Outils de la langue;OUTILSDELA;60.0
+R1;NS4;Communication Créole;COMMUN2NS4;1;300.0;Littérature;LITTERATUR;60.0
+R1;NS4;Communication Créole;COMMUN2NS4;1;300.0;Communication orale;COMMUNICAT;60.0
+R1;NS4;Communication Créole;COMMUN2NS4;1;300.0;Créole;CREOLE;60.0
+R2;NS4;TIC;TICNS4;1;30.0;Algorithme/Programmation;ALGORITHME;30.0
+R2;NS4;Sciences;SCIENCENS4;1;270.0;Chimie;CHIMIE;30.0
+R2;NS4;Sciences;SCIENCENS4;1;270.0;Économie;ECONOMIE;30.0
+R2;NS4;Sciences;SCIENCENS4;1;270.0;Éducation à la Citoyenneté;EDUCATIONA;30.0
+R2;NS4;Sciences;SCIENCENS4;1;270.0;Géographie;GEOGRAPHIE;30.0
+R2;NS4;Sciences;SCIENCENS4;1;270.0;Histoire Nationale;HISTOIRENA;30.0
+R2;NS4;Sciences;SCIENCENS4;1;270.0;Méthodologie;METHODOLOG;30.0
+R2;NS4;Sciences;SCIENCENS4;1;270.0;Physiques;PHYSIQUES;30.0
+R2;NS4;Sciences;SCIENCENS4;1;270.0;Sciences de la Vie et de la Terre (SVT);SCIENCESDE;30.0
+R2;NS4;Sciences;SCIENCENS4;1;270.0;Histoire Universelle;HISTOIREUN;30.0
+R2;NS4;Physique;PHYSIQUNS4;1;60.0;Physique;PHYSIQUE;60.0
+R2;NS4;Économie;ECONOMINS4;1;30.0;Économie;ECONOMIE;30.0
+R3;NS4;Autres;AUTRESNS4;1;20.0;Écriture (motricité fine);ECRITUREMO;20.0
+R3;NS4;Enseignements Artistiques;ENSEIGNNS4;1;20.0;Éducation physique et sportive (EPS);EDUCATIONP;20.0
+R3;NS4;Arts;ARTSNS4;1;20.0;Arts Plastiques et Visuels;ARTSPLASTI;10.0
+R3;NS4;Arts;ARTSNS4;1;20.0;Écriture/Création Littéraire;ECRITURECR;10.0
+R3;NS4;Langues étrangères;LANGUESNS4;1;20.0;Anglais;ANGLAIS;10.0
+R3;NS4;Langues étrangères;LANGUESNS4;1;20.0;Espagnol;ESPAGNOL;10.0
+R3;NS4;Langues;LANGUE2NS4;1;20.0;Anglais;ANGLAIS;10.0
+R3;NS4;Langues;LANGUE2NS4;1;20.0;Espagnol;ESPAGNOL;10.0
