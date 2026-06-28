@@ -67,6 +67,7 @@ import {
   ArchiveIcon,
   UserPlusIcon,
   UploadIcon,
+  BookOpenIcon
 } from "lucide-react";
 
 import { getMe, logout, type AuthUser } from "@/lib/data/auth-data";
@@ -77,7 +78,7 @@ import {
 import { cn } from "@/lib/utils";
 import { NotificationPanel } from "@/components/school/notification-panel";
 import { ProfileDialog } from "@/components/school/profile-dialog";
-import { Toaster } from "@/components/ui/toaster";
+
 
 /* ─────────────────────────── Nav config ─────────────────────────── */
 
@@ -112,19 +113,9 @@ const navItems: NavItem[] = [
     icon: UserPlusIcon,
     children: [
       {
-        label: "Tous les élèves",
+        label: "Élève",
         href: "/admin/all-students",
         icon: UsersIcon,
-      },
-      {
-        label: "Nouvelle inscription",
-        href: "/admin/inscription-form",
-        icon: UserPlusIcon,
-      },
-      {
-        label: "Import inscriptions",
-        href: "/admin/inscription-import",
-        icon: UploadIcon,
       },
     ],
   },
@@ -134,7 +125,7 @@ const navItems: NavItem[] = [
     children: [
       {
         label: "Élèves inscrits",
-        href: "/admin/academic-year/:yearId/students",
+        href: "/admin/students",
         icon: UserIcon,
       },
       {
@@ -144,7 +135,7 @@ const navItems: NavItem[] = [
       },
       {
         label: "Bulletins",
-        href: "/admin/academic-year/:yearId/reports",
+        href: "/admin/reports",
         icon: FileTextIcon,
       },
     ],
@@ -186,11 +177,14 @@ function isNavGroup(item: NavItem): item is NavGroup {
 
 const breadcrumbMap: Record<string, string> = {
   "/admin/dashboard": "Dashboard",
-  "/admin/all-students": "Tous les élèves",
-  "/admin/inscription-form": "Nouvelle inscription",
+  "/admin/all-students": "Élève",
+  "/admin/inscription-form": "Configuration du formulaire",
   "/admin/inscription-import": "Import inscriptions",
+  "/admin/students": "Élèves inscrits",
   "/admin/grades": "Notes",
   "/admin/grades/view": "Consultation des notes",
+  "/admin/reports": "Bulletins",
+  "/admin/subjects": "Matières",
   "/admin/academic-years": "Années Scolaires",
   "/admin/settings": "Établissement",
   "/admin/archives": "Bulletins archivés",
@@ -198,17 +192,16 @@ const breadcrumbMap: Record<string, string> = {
 
 function getBreadcrumbLabel(pathname: string): string {
   if (breadcrumbMap[pathname]) return breadcrumbMap[pathname];
-
-  if (pathname.includes("/all-students")) return "Tous les élèves";
-  if (pathname.includes("/inscription-form")) return "Nouvelle inscription";
+  if (pathname.includes("/all-students")) return "Élève";
+  if (pathname.includes("/inscription-form")) return "Configuration du formulaire";
   if (pathname.includes("/inscription-import")) return "Import inscriptions";
   if (pathname.includes("/students")) return "Élèves inscrits";
+  if (pathname.includes("/subjects")) return "Matières";
   if (pathname.includes("/grades")) return "Notes";
   if (pathname.includes("/reports")) return "Bulletins";
   if (pathname.includes("/bulletins")) return "Bulletin";
   if (pathname.includes("/archives")) return "Archives";
   if (pathname.includes("/config")) return "Configuration";
-
   return "Page";
 }
 
@@ -675,7 +668,7 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
         />
       )}
 
-      <Toaster />
+    
     </SidebarProvider>
   );
 }
