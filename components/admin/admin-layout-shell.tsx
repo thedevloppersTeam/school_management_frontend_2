@@ -65,7 +65,9 @@ import {
   UserIcon,
   LockIcon,
   ArchiveIcon,
-  CheckIcon,
+  UserPlusIcon,
+  BookOpenIcon,
+  UploadIcon,
 } from "lucide-react";
 // SEC-A01-004 : ajout de `logout` à l'import
 import { getMe, logout, type AuthUser } from "@/lib/data/auth-data";
@@ -101,24 +103,54 @@ interface NavLink {
 type NavItem = NavLink | NavGroup;
 
 const navItems: NavItem[] = [
-  { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboardIcon },
+  {
+    label: "Dashboard",
+    href: "/admin/dashboard",
+    icon: LayoutDashboardIcon,
+  },
+  {
+    label: "Inscription",
+    icon: UserPlusIcon,
+    children: [
+      {
+        label: "Tous les élèves",
+        href: "/admin/all-students",
+        icon: UsersIcon,
+      },
+      {
+        label: "Nouvelle inscription",
+        href: "/admin/inscription-form",
+        icon: UserPlusIcon,
+      },
+      {
+        label: "Import inscriptions",
+        href: "/admin/inscription-import",
+        icon: UploadIcon,
+      },
+    ],
+  },
   {
     label: "Gestion Scolaire",
     icon: SchoolIcon,
     children: [
       {
-        label: "Élèves",
-        href: "/admin/academic-year/:yearId/students",
-        icon: UsersIcon,
+        label: "Élèves inscrits",
+        href: "/admin/students",
+        icon: UserIcon,
+      },
+      {
+        label: "Matières",
+        href: "/admin/subjects",
+        icon: BookOpenIcon,
       },
       {
         label: "Notes",
-        href: "/admin/academic-year/:yearId/grades",
+        href: "/admin/grades",
         icon: ClipboardEditIcon,
       },
       {
         label: "Bulletins",
-        href: "/admin/academic-year/:yearId/reports",
+        href: "/admin/reports",
         icon: FileTextIcon,
       },
     ],
@@ -138,7 +170,11 @@ const navItems: NavItem[] = [
     label: "Paramétrage",
     icon: SettingsIcon,
     children: [
-      { label: "Établissement", href: "/admin/settings", icon: BuildingIcon },
+      {
+        label: "Établissement",
+        href: "/admin/settings",
+        icon: BuildingIcon,
+      },
       {
         label: "Années Scolaires",
         href: "/admin/academic-years",
@@ -147,7 +183,6 @@ const navItems: NavItem[] = [
     ],
   },
 ];
-
 function isNavGroup(item: NavItem): item is NavGroup {
   return "children" in item;
 }
@@ -156,6 +191,15 @@ function isNavGroup(item: NavItem): item is NavGroup {
 
 const breadcrumbMap: Record<string, string> = {
   "/admin/dashboard": "Dashboard",
+  "/admin/all-students": "Tous les élèves",
+  "/admin/inscription-form": "Nouvelle inscription",
+  "/admin/inscription-import": "Import inscriptions",
+  "/admin/students": "Élèves inscrits",
+  "/admin/subjects": "Matières",
+  "/admin/grades": "Notes",
+  "/admin/grades/view": "Consultation des notes",
+  "/admin/reports": "Bulletins",
+  "/admin/bulletins": "Bulletins",
   "/admin/academic-years": "Années Scolaires",
   "/admin/settings": "Établissement",
   "/admin/archives": "Bulletins archivés",
@@ -163,9 +207,15 @@ const breadcrumbMap: Record<string, string> = {
 
 function getBreadcrumbLabel(pathname: string): string {
   if (breadcrumbMap[pathname]) return breadcrumbMap[pathname];
-  if (pathname.includes("/students")) return "Élèves";
+  if (pathname.includes("/all-students")) return "Tous les élèves";
+  if (pathname.includes("/inscription-form")) return "Nouvelle inscription";
+  if (pathname.includes("/inscription-import")) return "Import inscriptions";
+  if (pathname.includes("/students")) return "Élèves inscrits";
+  if (pathname.includes("/subjects")) return "Matières";
   if (pathname.includes("/grades")) return "Notes";
   if (pathname.includes("/reports")) return "Bulletins";
+  if (pathname.includes("/bulletins")) return "Bulletin";
+  if (pathname.includes("/archives")) return "Archives";
   if (pathname.includes("/config")) return "Configuration";
   return "Page";
 }

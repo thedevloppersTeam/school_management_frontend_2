@@ -1,34 +1,69 @@
 /**
  * lib/env.ts
  *
- * Validation centralisée des variables d'environnement (FF1).
+ * Validation centralisée des variables d'environnement.
  *
- * Avantages :
- *  - Validation au démarrage : si BACKEND_URL manque ou est invalide,
- *    `npm run dev` / `npm run build` plante avec un message clair.
- *  - Type-safety : env.BACKEND_URL est garanti string (pas string|undefined).
- *  - Séparation server/client : impossible d'exposer un secret server au navigateur.
+ * Politique sécurité :
+ *  - Production : BACKEND_URL doit obligatoirement être en HTTPS.
+ *  - Développement/Test : HTTP autorisé uniquement pour localhost / 127.0.0.1 / ::1.
+ *  - Aucun backend HTTP distant n’est autorisé, même en développement.
  *
- * Pour ajouter une nouvelle variable :
- *  1. Ajouter au schema (server: ou client:)
- *  2. Ajouter dans runtimeEnv
- *  3. Importer depuis '@/lib/env' partout au lieu de process.env
+ * Exemples acceptés :
+ *  - https://api.example.com
+ *  - http://localhost:3001 en développement
+ *  - http://127.0.0.1:3001 en développement
+ *
+ * Exemples refusés :
+ *  - http://api.example.com
+ *  - http://192.168.1.20:3001
+ *  - http://dev-api.company.local
  */
 
 import { createEnv } from "@t3-oss/env-nextjs"
 import { z } from "zod"
 
+const LOCAL_HTTP_HOSTS = new Set([
+  "localhost",
+  "127.0.0.1",
+  "::1",
+  "[::1]",
+])
+
+function isSecureBackendUrl(value: string): boolean {
+  try {
+    const url = new URL(value)
+
+    if (url.protocol === "https:") {
+      return true
+    }
+
+    const isLocalRuntime =
+      process.env.NODE_ENV === "development" ||
+      process.env.NODE_ENV === "test"
+
+    const isLocalHttpBackend =
+      url.protocol === "http:" &&
+      LOCAL_HTTP_HOSTS.has(url.hostname)
+
+    return isLocalRuntime && isLocalHttpBackend
+  } catch {
+    return false
+  }
+}
+
 export const env = createEnv({
   /**
    * Variables côté serveur uniquement.
-   * JAMAIS exposées au navigateur. Si vous tentez de les utiliser
-   * dans un Client Component, TypeScript refusera de compiler.
+   * JAMAIS exposées au navigateur.
    */
   server: {
     BACKEND_URL: z
       .string()
       .url("BACKEND_URL doit être une URL valide")
-      .startsWith("https://", "BACKEND_URL doit commencer par https:// (HTTP non autorisé)"),
+      .refine(isSecureBackendUrl, {
+        message:
+          "BACKEND_URL doit être en HTTPS. HTTP est autorisé uniquement en développement/test sur localhost, 127.0.0.1 ou ::1.",
+      }),
 
     NODE_ENV: z
       .enum(["development", "test", "production"])
@@ -36,15 +71,13 @@ export const env = createEnv({
   },
 
   /**
-   * Variables exposées au client (navigateur).
-   * Doivent commencer par NEXT_PUBLIC_ par convention Next.js.
-   * Vide pour l'instant — aucune variable client à valider.
+   * Variables exposées au client.
+   * Aucune pour l’instant.
    */
   client: {},
 
   /**
-   * Mapping runtime — Next.js a besoin de cette indirection pour
-   * que les variables soient remplacées au build pour le client.
+   * Mapping runtime.
    */
   runtimeEnv: {
     BACKEND_URL: process.env.BACKEND_URL,
@@ -52,15 +85,13 @@ export const env = createEnv({
   },
 
   /**
-   * Optionnel : permet à `npm run build` de passer même si .env.local
-   * n'existe pas (utile pour les builds CI). Mettre à false si vous
-   * voulez que le build CI échoue sans .env.
+   * À utiliser uniquement si nécessaire en CI.
+   * Éviter de mettre SKIP_ENV_VALIDATION=true en production.
    */
   skipValidation: process.env.SKIP_ENV_VALIDATION === "true",
 
   /**
-   * Validation stricte des chaînes vides — Zod par défaut accepte ""
-   * pour string(). On force le rejet ici (plus sûr).
+   * Rejette les chaînes vides.
    */
   emptyStringAsUndefined: true,
 })
