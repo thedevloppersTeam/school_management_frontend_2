@@ -24,6 +24,8 @@ export interface ComportementData {
   retards:         string;
   devoirsNonRemis: string;
   leconsNonSues:   string;
+  uniforme?:       string;
+  discipline?:     string;
   items:           ComportementItem[];
   pointsForts:     string;
   defis:           string;

@@ -131,6 +131,44 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
 
   const [selectedSessionId, setSelectedSessionId] = useState("")
   const [selectedStepId,    setSelectedStepId]    = useState("")
+  const [selectedClassTypeId, setSelectedClassTypeId] = useState("")
+
+  // Sync classType when sessions arrive or the session changes externally
+  useEffect(() => {
+    if (!selectedSessionId) {
+      setSelectedClassTypeId("")
+      return
+    }
+    const s = sessions.find(x => x.id === selectedSessionId)
+    if (s) setSelectedClassTypeId(s.class.classType.id)
+  }, [selectedSessionId, sessions])
+
+  const classTypeOptions = useMemo(() => {
+    const map = new Map<string, { id: string; name: string }>()
+    sessions.forEach(s => {
+      const ct = s.class?.classType
+      if (ct && !map.has(ct.id)) map.set(ct.id, { id: ct.id, name: ct.name })
+    })
+    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name))
+  }, [sessions])
+
+  const salleOptions = useMemo(() => {
+    if (!selectedClassTypeId) return []
+    return sessions
+      .filter(s => s.class?.classType?.id === selectedClassTypeId)
+      .map(s => ({
+        sessionId: s.id,
+        // For tracked classes (NS3/NS4) the track code stands in as the "salle".
+        label: s.class.track?.code ?? s.class.letter ?? "",
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label))
+  }, [sessions, selectedClassTypeId])
+
+  function handleClassTypeChange(ctId: string) {
+    setSelectedClassTypeId(ctId)
+    setSelectedSessionId("")
+    setSelectedStepId("")
+  }
 
   const [attitudes,   setAttitudes]   = useState<ApiAttitude[]>([])
   const [enrollments, setEnrollments] = useState<ApiEnrollment[]>([])
@@ -421,16 +459,29 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
         </CardHeader>
         <Separator />
         <CardContent className="p-4">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Select value={selectedSessionId} onValueChange={v => { setSelectedSessionId(v); setSelectedStepId("") }}>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <Select value={selectedClassTypeId} onValueChange={handleClassTypeChange}>
               <SelectTrigger>
-                <SelectValue placeholder="Sélectionner une classe" />
+                <SelectValue placeholder="Classe" />
               </SelectTrigger>
               <SelectContent>
-                {sessions.map(s => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {`${s.class?.classType?.name ?? ""} ${s.class?.letter ?? ""}`.trim()}
-                  </SelectItem>
+                {classTypeOptions.map(ct => (
+                  <SelectItem key={ct.id} value={ct.id}>{ct.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={selectedSessionId}
+              onValueChange={v => { setSelectedSessionId(v); setSelectedStepId("") }}
+              disabled={!selectedClassTypeId}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={selectedClassTypeId ? "Salle" : "Choisir d'abord une classe"} />
+              </SelectTrigger>
+              <SelectContent>
+                {salleOptions.map(opt => (
+                  <SelectItem key={opt.sessionId} value={opt.sessionId}>{opt.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -439,7 +490,7 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
               <SelectTrigger>
                 <div className="flex items-center gap-2">
                   {isLocked && <LockIcon className="h-4 w-4 text-amber-600" />}
-                  <SelectValue placeholder="Sélectionner une étape" />
+                  <SelectValue placeholder="Étape" />
                 </div>
               </SelectTrigger>
               <SelectContent>
