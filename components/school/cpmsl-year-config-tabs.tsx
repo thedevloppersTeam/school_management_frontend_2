@@ -45,7 +45,6 @@ import { EditSubjectParentModal } from "@/components/school/edit-subject-parent-
 import { DeleteSubjectParentModal } from "@/components/school/delete-subject-parent-modal";
 import { EditSubjectChildModal } from "@/components/school/edit-subject-child-modal";
 import { DeleteSubjectChildModal } from "@/components/school/delete-subject-child-modal";
-import { clientFetch, ApiError } from "@/lib/client-fetch";
 import { toMessage } from "@/lib/errors";
 import {
   computeClassroomStatuses,
@@ -106,6 +105,7 @@ interface SubjectParent {
   name: string;
   rubrique: "R1" | "R2" | "R3";
   coefficient: number;
+  classTypeId?: string | null;
 }
 interface SubjectChild {
   id: string;
@@ -136,6 +136,11 @@ interface CPMSLYearConfigTabsProps {
   }) => void;
   onClosePeriod?: (periodId: string) => void;
   onReopenPeriod?: (periodId: string, reason: string) => void;
+  onMergePeriods?: (
+    sourceId: string,
+    targetId: string,
+    newName?: string,
+  ) => Promise<void> | void;
   onAddLevel?: (data: {
     niveau: "Fondamentale" | "Nouveau Secondaire";
     name: string;
@@ -155,6 +160,7 @@ interface CPMSLYearConfigTabsProps {
       code: string;
       type: "L" | "C" | "N" | "P" | "T";
       coefficient: number;
+      maxScore?: number;
     },
   ) => void;
   onEditSubjectParent?: (
@@ -199,6 +205,7 @@ export function CPMSLYearConfigTabs({
   onAddPeriod,
   onClosePeriod,
   onReopenPeriod,
+  onMergePeriods,
   onAddLevel,
   onAddSubjectParent,
   onAddSubjectChild,
@@ -272,6 +279,7 @@ export function CPMSLYearConfigTabs({
       rubriqueCode?: string;
       coefficient: number;
       coefficientOverride: number | null;
+      subjectMaxScore: number;
     }>
   >([]);
   const [loadingClassSubjects, setLoadingClassSubjects] = useState(false);
@@ -289,11 +297,14 @@ export function CPMSLYearConfigTabs({
   const [editCoeffModalOpen, setEditCoeffModalOpen] = useState(false);
   const [editCoeffClassSubject, setEditCoeffClassSubject] = useState<{
     id: string;
+    subjectId: string;
     subjectName: string;
     coefficient: number;
     coefficientOverride: number | null;
+    subjectMaxScore: number;
   } | null>(null);
   const [editCoeffValue, setEditCoeffValue] = useState("");
+  const [editMaxScoreGlobalValue, setEditMaxScoreGlobalValue] = useState("");
   const [editCoeffSubmitting, setEditCoeffSubmitting] = useState(false);
 
   // ── Helpers ──────────────────────────────────────────────────────────────
@@ -348,6 +359,60 @@ export function CPMSLYearConfigTabs({
   const handleReopenPeriod = (p: Period) => {
     setSelectedPeriod(p);
     setReopenPeriodModalOpen(true);
+  };
+
+  // ── Fusion d'étapes (fonction CPMSL, optionnelle) ─────────────────────────
+  const [mergeSource, setMergeSource] = useState<Period | null>(null);
+  const [mergeTargetId, setMergeTargetId] = useState("");
+  const [mergeNewName, setMergeNewName] = useState("");
+  const [mergeSubmitting, setMergeSubmitting] = useState(false);
+
+  const mergeAutoName = React.useMemo(() => {
+    if (!mergeSource || !mergeTargetId) return "";
+    const target = periods.find((p) => p.id === mergeTargetId);
+    if (!target) return "";
+    const collectNumbers = (value: string) =>
+      Array.from(value.matchAll(/\d+/g)).map((match) => Number(match[0]));
+    const numbers = new Set<number>([
+      ...collectNumbers(mergeSource.name),
+      ...collectNumbers(target.name),
+    ]);
+    if (numbers.size === 0) return "";
+    return `Étape ${Array.from(numbers).sort((a, b) => a - b).join(" & ")}`;
+  }, [mergeSource, mergeTargetId, periods]);
+
+  const openMergeDialog = (period: Period) => {
+    setMergeSource(period);
+    setMergeTargetId("");
+    setMergeNewName("");
+  };
+
+  const closeMergeDialog = () => {
+    setMergeSource(null);
+    setMergeTargetId("");
+    setMergeNewName("");
+  };
+
+  const runMerge = async () => {
+    if (!mergeSource || !mergeTargetId || !onMergePeriods) return;
+    setMergeSubmitting(true);
+    try {
+      await onMergePeriods(
+        mergeSource.id,
+        mergeTargetId,
+        mergeNewName.trim() || undefined,
+      );
+      closeMergeDialog();
+    } catch (err) {
+      console.error("[merge-periods]", err);
+      toast({
+        title: "Erreur",
+        description: toMessage(err, "lors de la fusion des étapes"),
+        variant: "destructive",
+      });
+    } finally {
+      setMergeSubmitting(false);
+    }
   };
 
   // ── Handlers classes ─────────────────────────────────────────────────────
@@ -416,6 +481,7 @@ export function CPMSLYearConfigTabs({
               code?: string;
               rubric?: { code?: string };
               coefficient?: { d?: number[] } | number;
+              maxScore?: { d?: number[] } | number;
             };
             coefficientOverride?: { d?: number[] } | number | null;
           }) => ({
@@ -436,6 +502,11 @@ export function CPMSLYearConfigTabs({
                       cs.coefficientOverride,
                   )
                 : null,
+            subjectMaxScore:
+              Number(
+                (cs.subject?.maxScore as { d?: number[] })?.d?.[0] ??
+                  cs.subject?.maxScore,
+              ) || 0,
           }),
         ),
       );
@@ -465,12 +536,17 @@ export function CPMSLYearConfigTabs({
   const openEditCoeffModal = (cs: (typeof classSubjects)[0]) => {
     setEditCoeffClassSubject({
       id: cs.id,
+      subjectId: cs.subjectId,
       subjectName: cs.subjectName,
       coefficient: cs.coefficient,
       coefficientOverride: cs.coefficientOverride ?? null,
+      subjectMaxScore: cs.subjectMaxScore,
     });
     setEditCoeffValue(
       cs.coefficientOverride != null ? String(cs.coefficientOverride) : "",
+    );
+    setEditMaxScoreGlobalValue(
+      cs.subjectMaxScore > 0 ? String(cs.subjectMaxScore) : "",
     );
     setEditCoeffModalOpen(true);
   };
@@ -479,21 +555,77 @@ export function CPMSLYearConfigTabs({
     if (!editCoeffClassSubject) return;
     setEditCoeffSubmitting(true);
     try {
-      const res = await fetch(
-        `/api/class-subjects/update/${editCoeffClassSubject.id}`,
-        {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            coefficientOverride:
-              editCoeffValue !== "" ? parseFloat(editCoeffValue) : null,
-          }),
-        },
-      );
-      if (!res.ok)
-        throw new Error(`Échec de la mise à jour (HTTP ${res.status})`);
-      toast({ title: "Coefficient modifié" });
+      const rawMaxScore = editMaxScoreGlobalValue.trim();
+      const newGlobalMaxScore =
+        rawMaxScore !== "" ? Number.parseFloat(rawMaxScore) : Number.NaN;
+      const globalMaxScoreChanged =
+        Number.isFinite(newGlobalMaxScore) &&
+        newGlobalMaxScore >= 0 &&
+        newGlobalMaxScore !== editCoeffClassSubject.subjectMaxScore;
+
+      if (rawMaxScore !== "" && !Number.isFinite(newGlobalMaxScore)) {
+        throw new Error("La note globale doit être un nombre valide.");
+      }
+
+      if (globalMaxScoreChanged) {
+        const globalRes = await fetch(
+          `/api/subjects/update/${editCoeffClassSubject.subjectId}`,
+          {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ maxScore: newGlobalMaxScore }),
+          },
+        );
+        if (!globalRes.ok) {
+          throw new Error(
+            `Échec de la mise à jour de la note globale (HTTP ${globalRes.status})`,
+          );
+        }
+      }
+
+      const rawOverride = editCoeffValue.trim();
+      const newOverride =
+        rawOverride !== "" ? Number.parseFloat(rawOverride) : null;
+
+      if (rawOverride !== "" && !Number.isFinite(newOverride)) {
+        throw new Error("Le coefficient override doit être un nombre valide.");
+      }
+
+      const overrideChanged =
+        newOverride !== editCoeffClassSubject.coefficientOverride;
+
+      if (overrideChanged) {
+        const res = await fetch(
+          `/api/class-subjects/update/${editCoeffClassSubject.id}`,
+          {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ coefficientOverride: newOverride }),
+          },
+        );
+        if (!res.ok) {
+          throw new Error(`Échec de la mise à jour (HTTP ${res.status})`);
+        }
+      }
+
+      if (!globalMaxScoreChanged && !overrideChanged) {
+        toast({ title: "Aucun changement" });
+      } else {
+        toast({
+          title:
+            globalMaxScoreChanged && overrideChanged
+              ? "Note globale et coefficient modifiés"
+              : globalMaxScoreChanged
+                ? "Note globale modifiée"
+                : "Coefficient modifié",
+          description: globalMaxScoreChanged
+            ? "La note globale s'applique à toutes les classes qui utilisent cette matière."
+            : undefined,
+        });
+      }
+
       setEditCoeffModalOpen(false);
       if (selectedSessionForAssign)
         await loadClassSubjects(selectedSessionForAssign);
@@ -517,6 +649,21 @@ export function CPMSLYearConfigTabs({
     setAssignModalOpen(true);
   };
 
+  const handleAssignSubjectChange = (subjectId: string) => {
+    const subject = subjectParents.find((s) => s.id === subjectId);
+    setAssignSubjectId(subjectId);
+    setAssignSelectedSessions((prev) => {
+      const compatibleIds = new Set(
+        classrooms
+          .filter((classroom) =>
+            !subject?.classTypeId || classroom.levelId === subject.classTypeId,
+          )
+          .map((classroom) => classroom.id),
+      );
+      return new Set(Array.from(prev).filter((id) => compatibleIds.has(id)));
+    });
+  };
+
   const toggleAssignSession = (sessionId: string) => {
     setAssignSelectedSessions((prev) => {
       const n = new Set(prev);
@@ -527,10 +674,20 @@ export function CPMSLYearConfigTabs({
   };
 
   const toggleSelectAll = () => {
-    if (assignSelectedSessions.size === classrooms.length) {
-      setAssignSelectedSessions(new Set());
+    if (assignableClassrooms.length === 0) return;
+    const allCompatibleSelected = assignableClassrooms.every((classroom) =>
+      assignSelectedSessions.has(classroom.id),
+    );
+    if (allCompatibleSelected) {
+      setAssignSelectedSessions((prev) => {
+        const next = new Set(prev);
+        assignableClassrooms.forEach((classroom) => next.delete(classroom.id));
+        return next;
+      });
     } else {
-      setAssignSelectedSessions(new Set(classrooms.map((c) => c.id)));
+      setAssignSelectedSessions(
+        new Set(assignableClassrooms.map((classroom) => classroom.id)),
+      );
     }
   };
 
@@ -544,8 +701,8 @@ export function CPMSLYearConfigTabs({
             classSessionId: sessionId,
             subjectId: assignSubjectId,
             teacherId: null,
-            coefficientOverride: assignCoeffOverride
-              ? parseFloat(assignCoeffOverride)
+            coefficientOverride: assignCoeffOverride.trim()
+              ? Number.parseFloat(assignCoeffOverride)
               : null,
           };
           const res = await fetch("/api/class-subjects/create", {
@@ -589,6 +746,16 @@ export function CPMSLYearConfigTabs({
   const assignSelectedSubject = subjectParents.find(
     (s) => s.id === assignSubjectId,
   );
+  const assignableClassrooms = assignSelectedSubject?.classTypeId
+    ? classrooms.filter(
+        (classroom) => classroom.levelId === assignSelectedSubject.classTypeId,
+      )
+    : classrooms;
+  const allCompatibleClassesSelected =
+    assignableClassrooms.length > 0 &&
+    assignableClassrooms.every((classroom) =>
+      assignSelectedSessions.has(classroom.id),
+    );
 
   // ─────────────────────────────────────────────────────────────────────────
   // RENDER
@@ -717,17 +884,36 @@ export function CPMSLYearConfigTabs({
                       </td>
                       <td className="px-4 py-3 text-center">
                         {!isArchived && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              period.status === "open"
-                                ? handleClosePeriod(period)
-                                : handleReopenPeriod(period)
-                            }
-                            className={`${LINK_BTN_CLASS} text-primary-500 focus-visible:outline-primary-500`}
-                          >
-                            {period.status === "open" ? "Clôturer" : "Réouvrir"}
-                          </button>
+                          <div className="inline-flex items-center justify-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                period.status === "open"
+                                  ? handleClosePeriod(period)
+                                  : handleReopenPeriod(period)
+                              }
+                              className={`${LINK_BTN_CLASS} text-primary-500 focus-visible:outline-primary-500`}
+                            >
+                              {period.status === "open" ? "Clôturer" : "Réouvrir"}
+                            </button>
+                            {periods.length >= 2 && onMergePeriods && (
+                              <>
+                                <span
+                                  className="text-neutral-300"
+                                  aria-hidden="true"
+                                >
+                                  |
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => openMergeDialog(period)}
+                                  className={`${LINK_BTN_CLASS} text-violet-700 focus-visible:outline-violet-700`}
+                                >
+                                  Fusionner
+                                </button>
+                              </>
+                            )}
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -1349,7 +1535,7 @@ export function CPMSLYearConfigTabs({
                           scope="col"
                           className={`${TH_CLASS} px-4 py-2.5 text-left`}
                         >
-                          Coeff. global
+                          Coeff. global / note
                         </th>
                         <th
                           scope="col"
@@ -1401,7 +1587,12 @@ export function CPMSLYearConfigTabs({
                                 )}
                               </td>
                               <td className="px-4 py-3 text-sm text-neutral-900">
-                                {cs.coefficient}
+                                <div className="flex flex-col">
+                                  <span>{cs.coefficient}</span>
+                                  <span className="text-xs text-neutral-500">
+                                    /{cs.subjectMaxScore || "—"}
+                                  </span>
+                                </div>
                               </td>
                               <td
                                 className={`px-4 py-3 text-sm ${cs.coefficientOverride ? "text-info font-semibold" : "text-neutral-400"}`}
@@ -1457,6 +1648,29 @@ export function CPMSLYearConfigTabs({
                 </p>
                 <p className="text-base font-bold text-primary-800">
                   {editCoeffClassSubject.coefficient}
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="global-max-score" className={FIELD_LABEL_CLASS}>
+                  Note globale
+                  <span className="ml-2 text-xs text-warning font-normal">
+                    (impacte toutes les classes utilisant cette matière)
+                  </span>
+                </Label>
+                <Input
+                  id="global-max-score"
+                  type="number"
+                  step="1"
+                  min="0"
+                  inputMode="decimal"
+                  value={editMaxScoreGlobalValue}
+                  onChange={(e) => setEditMaxScoreGlobalValue(e.target.value)}
+                  placeholder="Ex: 30, 100, 200"
+                  className={INPUT_CLASS}
+                />
+                <p className="text-xs text-neutral-500">
+                  C&apos;est la note maximum de la matière sur le bulletin.
                 </p>
               </div>
 
@@ -1533,7 +1747,7 @@ export function CPMSLYearConfigTabs({
               <select
                 id="assign-subject-select"
                 value={assignSubjectId}
-                onChange={(e) => setAssignSubjectId(e.target.value)}
+                onChange={(e) => handleAssignSubjectChange(e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border border-neutral-300 text-sm text-neutral-900 bg-white focus-visible:border-primary-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/20"
                 required
                 aria-required="true"
@@ -1545,6 +1759,12 @@ export function CPMSLYearConfigTabs({
                   </option>
                 ))}
               </select>
+              {assignSelectedSubject?.classTypeId && (
+                <p className="text-xs text-neutral-500 mt-1.5">
+                  Cette matière est liée à un type de classe. Seules les classes
+                  compatibles seront proposées.
+                </p>
+              )}
             </div>
 
             <div className="space-y-1.5">
@@ -1588,9 +1808,10 @@ export function CPMSLYearConfigTabs({
                 <button
                   type="button"
                   onClick={toggleSelectAll}
-                  className="text-xs text-primary-800 font-medium hover:underline focus-visible:outline-2 focus-visible:outline-primary-800"
+                  className="text-xs text-primary-800 font-medium hover:underline disabled:text-neutral-400 disabled:no-underline focus-visible:outline-2 focus-visible:outline-primary-800"
+                  disabled={assignableClassrooms.length === 0}
                 >
-                  {assignSelectedSessions.size === classrooms.length
+                  {allCompatibleClassesSelected
                     ? "Tout désélectionner"
                     : "Tout sélectionner"}
                 </button>
@@ -1601,8 +1822,12 @@ export function CPMSLYearConfigTabs({
                   <p className="p-4 text-center text-sm text-neutral-500">
                     Aucune classe dans cette année
                   </p>
+                ) : assignSubjectId && assignableClassrooms.length === 0 ? (
+                  <p className="p-4 text-center text-sm text-neutral-500">
+                    Aucune classe compatible avec cette matière
+                  </p>
                 ) : (
-                  classrooms.map((classroom, i) => {
+                  assignableClassrooms.map((classroom, i) => {
                     const checked = assignSelectedSessions.has(classroom.id);
                     const inputId = `assign-classroom-${classroom.id}`;
                     return (
@@ -1656,6 +1881,104 @@ export function CPMSLYearConfigTabs({
               {assignSubmitting
                 ? "Assignation..."
                 : `Assigner à ${assignSelectedSessions.size} classe${assignSelectedSessions.size > 1 ? "s" : ""}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+
+      {/* ═══════════════════ Modal Fusion d'étapes ════════════════════════════ */}
+      <Dialog
+        open={!!mergeSource}
+        onOpenChange={(open) => {
+          if (!open) closeMergeDialog();
+        }}
+      >
+        <DialogContent className="bg-white rounded-xl max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="font-serif text-xl font-bold text-primary-800">
+              Fusionner une étape
+            </DialogTitle>
+            <DialogDescription>
+              Les notes, comportements et bulletins archivés de l&apos;étape source
+              seront déplacés vers l&apos;étape cible. Cette opération doit être
+              utilisée seulement si deux étapes doivent devenir une seule période
+              métier.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label className={FIELD_LABEL_CLASS}>Étape source</Label>
+              <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm font-semibold text-neutral-900">
+                {mergeSource?.name ?? "—"}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="merge-target-period" className={FIELD_LABEL_CLASS}>
+                Étape cible <span className="text-error">*</span>
+              </Label>
+              <select
+                id="merge-target-period"
+                value={mergeTargetId}
+                onChange={(e) => setMergeTargetId(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-neutral-300 text-sm text-neutral-900 bg-white focus-visible:border-primary-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/20"
+              >
+                <option value="">Sélectionner une étape cible</option>
+                {periods
+                  .filter((period) => period.id !== mergeSource?.id)
+                  .map((period) => (
+                    <option key={period.id} value={period.id}>
+                      {period.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="merge-new-name" className={FIELD_LABEL_CLASS}>
+                Nouveau nom de la cible
+                <span className="ml-2 text-xs text-neutral-500 font-normal">
+                  (optionnel)
+                </span>
+              </Label>
+              <Input
+                id="merge-new-name"
+                value={mergeNewName}
+                onChange={(e) => setMergeNewName(e.target.value)}
+                placeholder={mergeAutoName || "Laisser vide pour conserver"}
+                className={INPUT_CLASS}
+              />
+              {mergeAutoName && (
+                <p className="text-xs text-neutral-500">
+                  Nom automatique suggéré : {mergeAutoName}
+                </p>
+              )}
+            </div>
+
+            <div className="rounded-lg border border-warning/30 bg-warning-soft px-3 py-2 text-xs text-warning">
+              Attention : la fusion d&apos;étapes est une action sensible. Vérifiez
+              que l&apos;étape source et l&apos;étape cible correspondent bien à la même
+              période métier avant de confirmer.
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={closeMergeDialog}
+              disabled={mergeSubmitting}
+              className={BTN_OUTLINE_CLASS}
+            >
+              Annuler
+            </Button>
+            <Button
+              onClick={runMerge}
+              disabled={mergeSubmitting || !mergeTargetId}
+              className={BTN_DIALOG_PRIMARY_CLASS}
+            >
+              {mergeSubmitting ? "Fusion..." : "Fusionner"}
             </Button>
           </DialogFooter>
         </DialogContent>
