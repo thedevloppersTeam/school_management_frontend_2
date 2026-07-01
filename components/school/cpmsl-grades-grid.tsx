@@ -25,7 +25,17 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination"
-import { SaveIcon, LockIcon, SearchIcon, InboxIcon, SettingsIcon, MinusCircleIcon } from "lucide-react"
+import {
+  ArrowDownIcon,
+  ArrowUpDownIcon,
+  ArrowUpIcon,
+  SaveIcon,
+  LockIcon,
+  SearchIcon,
+  InboxIcon,
+  SettingsIcon,
+  MinusCircleIcon,
+} from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useToast } from "@/components/ui/use-toast"
@@ -49,6 +59,14 @@ interface GradeEntry {
   value:        string
   isValid:      boolean
   error?:       string
+}
+
+type SortDirection = 'asc' | 'desc' | null
+type SortKey = 'lastName' | 'firstName' | 'studentCode' | 'status' | 'globalNote' | 'sectionTotal'
+
+interface SortConfig {
+  key: SortKey | null
+  direction: SortDirection
 }
 
 interface CPMSLGradesGridProps {
@@ -75,6 +93,28 @@ function sessionLabel(session: ApiClassSession): string {
   const { classType, letter, track } = session.class
   const base = `${classType.name} ${letter}`
   return track ? `${base} ${track.code}` : base
+}
+
+const frenchCollator = new Intl.Collator('fr', {
+  numeric: true,
+  sensitivity: 'base',
+})
+
+function compareTextValues(a: string | null | undefined, b: string | null | undefined) {
+  return frenchCollator.compare(a?.trim() ?? '', b?.trim() ?? '')
+}
+
+function compareNullableNumbers(
+  a: number | null | undefined,
+  b: number | null | undefined,
+  direction: Exclude<SortDirection, null>
+) {
+  const aMissing = a === null || a === undefined || Number.isNaN(a)
+  const bMissing = b === null || b === undefined || Number.isNaN(b)
+  if (aMissing && bMissing) return 0
+  if (aMissing) return 1
+  if (bMissing) return -1
+  return direction === 'asc' ? a - b : b - a
 }
 
 // ── Composant ─────────────────────────────────────────────────────────────────
@@ -113,6 +153,7 @@ export function CPMSLGradesGrid({
   const [currentPage,  setCurrentPage]  = useState(1)
   const [searchQuery,  setSearchQuery]  = useState("")
   const [itemsPerPage, setItemsPerPage] = useState(15)
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: null, direction: null })
   const PAGE_SIZE_OPTIONS = [15, 25, 50, 100]
 
   // ── Classe / Salle split ────────────────────────────────────────────────
@@ -310,48 +351,6 @@ export function CPMSLGradesGrid({
       setSavingExclusions(false)
     }
   }
-
-  // ── Tri alphabétique + recherche ──────────────────────────────────────────
-
-  const sortedEnrollments = useMemo(
-    () =>
-      [...enrollments].sort((a, b) =>
-        `${a.student.user.lastname} ${a.student.user.firstname}`.localeCompare(
-          `${b.student.user.lastname} ${b.student.user.firstname}`
-        )
-      ),
-    [enrollments]
-  )
-
-  const filteredEnrollments = useMemo(() => {
-    if (!searchQuery.trim()) return sortedEnrollments
-    const q = searchQuery.toLowerCase()
-    return sortedEnrollments.filter(e => {
-      const first = e.student.user.firstname?.toLowerCase() ?? ""
-      const last  = e.student.user.lastname?.toLowerCase()  ?? ""
-      const code  = e.student.studentCode?.toLowerCase()    ?? ""
-      return first.includes(q) || last.includes(q) || code.includes(q)
-    })
-  }, [sortedEnrollments, searchQuery])
-
-  const totalPages           = Math.max(1, Math.ceil(filteredEnrollments.length / itemsPerPage))
-  const paginatedEnrollments = filteredEnrollments.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  )
-
-  // Pagination window helper
-  const paginationWindow = useMemo(() => {
-    if (totalPages <= 5) return Array.from({ length: totalPages }, (_, i) => i + 1)
-    if (currentPage <= 3) return [1, 2, 3, 4, 'ellipsis-right', totalPages]
-    if (currentPage >= totalPages - 2) {
-      return [1, 'ellipsis-left', totalPages - 3, totalPages - 2, totalPages - 1, totalPages]
-    }
-    return [1, 'ellipsis-left', currentPage - 1, currentPage, currentPage + 1, 'ellipsis-right', totalPages]
-  }, [currentPage, totalPages])
-
-  // Reset page when search changes
-  useEffect(() => { setCurrentPage(1) }, [searchQuery])
 
   // ── Validation BR-002 : multiples de 0.25 ────────────────────────────────
 
@@ -650,6 +649,159 @@ useUnsavedChangesWarning(hasUnsavedChanges)
     }
   }
 
+  // ── Recherche + tri stable ────────────────────────────────────────────────
+
+  const initialSortedEnrollments = useMemo(() => {
+    return enrollments
+      .map((enrollment, index) => ({ enrollment, index }))
+      .sort((a, b) => {
+        const byLastName = compareTextValues(a.enrollment.student.user.lastname, b.enrollment.student.user.lastname)
+        if (byLastName !== 0) return byLastName
+        const byFirstName = compareTextValues(a.enrollment.student.user.firstname, b.enrollment.student.user.firstname)
+        if (byFirstName !== 0) return byFirstName
+        return a.index - b.index
+      })
+      .map(({ enrollment }, index) => ({ enrollment, index }))
+  }, [enrollments])
+
+  const filteredEnrollmentsBeforeSort = useMemo(() => {
+    const q = searchQuery.trim().toLocaleLowerCase('fr')
+    if (!q) return initialSortedEnrollments
+    return initialSortedEnrollments.filter(({ enrollment }) => {
+      const first = enrollment.student.user.firstname?.toLocaleLowerCase('fr') ?? ""
+      const last  = enrollment.student.user.lastname?.toLocaleLowerCase('fr')  ?? ""
+      const code  = enrollment.student.studentCode?.toLocaleLowerCase('fr')    ?? ""
+      return first.includes(q) || last.includes(q) || code.includes(q)
+    })
+  }, [initialSortedEnrollments, searchQuery])
+
+  const sortedEnrollments = (() => {
+    const direction = sortConfig.direction
+    if (!sortConfig.key || !direction) {
+      return filteredEnrollmentsBeforeSort.map(({ enrollment }) => enrollment)
+    }
+
+    const statusOrder: Record<BadgeKind, number> = {
+      empty: 0,
+      entered: 2,
+      modified: 3,
+      saved: 4,
+    }
+
+    return [...filteredEnrollmentsBeforeSort]
+      .sort((a, b) => {
+        const enrollmentA = a.enrollment
+        const enrollmentB = b.enrollment
+        let comparison = 0
+
+        switch (sortConfig.key) {
+          case 'lastName':
+            comparison = compareTextValues(enrollmentA.student.user.lastname, enrollmentB.student.user.lastname)
+            break
+          case 'firstName':
+            comparison = compareTextValues(enrollmentA.student.user.firstname, enrollmentB.student.user.firstname)
+            break
+          case 'studentCode':
+            comparison = compareTextValues(enrollmentA.student.studentCode, enrollmentB.student.studentCode)
+            break
+          case 'status':
+            comparison = statusOrder[getBadgeKind(enrollmentA.id)] - statusOrder[getBadgeKind(enrollmentB.id)]
+            break
+          case 'globalNote': {
+            const scoreA = gradeEntries.get(enrollmentA.id)?.value
+            const scoreB = gradeEntries.get(enrollmentB.id)?.value
+            comparison = compareNullableNumbers(
+              scoreA?.trim() ? parseFloat(scoreA) : null,
+              scoreB?.trim() ? parseFloat(scoreB) : null,
+              direction
+            )
+            break
+          }
+          case 'sectionTotal': {
+            const totalA = sectionRowTotal(enrollmentA.id)
+            const totalB = sectionRowTotal(enrollmentB.id)
+            comparison = compareNullableNumbers(
+              totalA.complete || totalA.raw > 0 ? totalA.raw : null,
+              totalB.complete || totalB.raw > 0 ? totalB.raw : null,
+              direction
+            )
+            break
+          }
+        }
+
+        if (comparison === 0) return a.index - b.index
+        return direction === 'asc' || sortConfig.key === 'globalNote' || sortConfig.key === 'sectionTotal'
+          ? comparison
+          : -comparison
+      })
+      .map(({ enrollment }) => enrollment)
+  })()
+
+  const filteredEnrollments = sortedEnrollments
+  const totalPages = Math.max(1, Math.ceil(filteredEnrollments.length / itemsPerPage))
+  const paginatedEnrollments = filteredEnrollments.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  )
+
+  const paginationWindow = useMemo(() => {
+    if (totalPages <= 5) return Array.from({ length: totalPages }, (_, i) => i + 1)
+    if (currentPage <= 3) return [1, 2, 3, 4, 'ellipsis-right', totalPages]
+    if (currentPage >= totalPages - 2) {
+      return [1, 'ellipsis-left', totalPages - 3, totalPages - 2, totalPages - 1, totalPages]
+    }
+    return [1, 'ellipsis-left', currentPage - 1, currentPage, currentPage + 1, 'ellipsis-right', totalPages]
+  }, [currentPage, totalPages])
+
+  function handleSort(key: SortKey) {
+    setCurrentPage(1)
+    setSortConfig(prev => {
+      if (prev.key !== key) return { key, direction: 'asc' }
+      if (prev.direction === 'asc') return { key, direction: 'desc' }
+      return { key: null, direction: null }
+    })
+  }
+
+  function renderSortableHead(
+    key: SortKey,
+    label: string,
+    className?: string,
+    align: 'left' | 'center' = 'left',
+    description?: string
+  ) {
+    const activeDirection = sortConfig.key === key ? sortConfig.direction : null
+    const ariaSort = activeDirection === 'asc' ? 'ascending' : activeDirection === 'desc' ? 'descending' : 'none'
+    const Icon = activeDirection === 'asc'
+      ? ArrowUpIcon
+      : activeDirection === 'desc'
+        ? ArrowDownIcon
+        : ArrowUpDownIcon
+
+    return (
+      <TableHead aria-sort={ariaSort} className={cn("h-12 bg-muted/60 font-semibold", className)}>
+        <button
+          type="button"
+          onClick={() => handleSort(key)}
+          className={cn(
+            "inline-flex w-full items-center gap-1.5 rounded-sm py-1 text-left transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+            align === 'center' && "justify-center text-center",
+            activeDirection ? "text-foreground" : "text-muted-foreground"
+          )}
+          aria-label={`${description ?? `Trier par ${label}`}. ${
+            activeDirection === 'asc'
+              ? 'Tri ascendant actif, activer le tri descendant.'
+              : activeDirection === 'desc'
+                ? "Tri descendant actif, réinitialiser le tri."
+                : 'Activer le tri ascendant.'
+          }`}
+        >
+          <span>{label}</span>
+          <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        </button>
+      </TableHead>
+    )
+  }
+
   // ── Table row ─────────────────────────────────────────────────────────────
 
   function renderTableRow(enrollment: ApiEnrollment) {
@@ -658,27 +810,28 @@ useUnsavedChangesWarning(hasUnsavedChanges)
     const hasError = hasValue && entry && !entry.isValid
 
     return (
-      <TableRow key={enrollment.id}>
-        <TableCell className="pl-6 font-medium text-foreground">
+      <TableRow key={enrollment.id} className="group">
+        <TableCell className="min-w-[160px] pl-6 font-semibold text-foreground">
           {enrollment.student.user.lastname}
         </TableCell>
-        <TableCell className="text-foreground">
+        <TableCell className="min-w-[150px] text-foreground">
           {enrollment.student.user.firstname}
         </TableCell>
-        <TableCell>
+        <TableCell className="min-w-[116px]">
           <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
             {enrollment.student.studentCode}
           </code>
         </TableCell>
-        <TableCell>
+        <TableCell className="min-w-[156px]">
           <div className="flex flex-col items-center gap-1">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 rounded-lg bg-muted/40 px-2 py-1">
               <Input
                 type="number" min="0" max={String(maxScore)} step="0.25"
                 value={entry?.value || ''} placeholder="—" disabled={isLocked}
                 onChange={e => handleGradeChange(enrollment.id, e.target.value)}
                 className={cn(
-                  "w-20 text-center tabular-nums",
+                  "h-10 w-28 border-input bg-background text-center text-base font-semibold tabular-nums shadow-sm",
+                  hasValue && !hasError && "border-emerald-300 bg-emerald-50/60 text-emerald-900",
                   hasError && "border-destructive focus-visible:ring-destructive"
                 )}
                 onKeyDown={e => {
@@ -692,7 +845,7 @@ useUnsavedChangesWarning(hasUnsavedChanges)
                 }}
                 data-enrollment-id={enrollment.id}
               />
-              <span className="text-xs text-muted-foreground">/ {maxScore}</span>
+              <span className="text-xs font-medium text-muted-foreground">/ {maxScore}</span>
             </div>
             {hasError && entry?.error && (
               <p className="text-[11px] text-destructive">{entry.error}</p>
@@ -712,8 +865,8 @@ useUnsavedChangesWarning(hasUnsavedChanges)
     const excluded = exclusionsByEnrollment.get(enrollment.id) ?? new Set<string>()
     const excludedHere = subjectSections.filter((sec) => excluded.has(sec.id)).length
     return (
-      <TableRow key={enrollment.id}>
-        <TableCell className="pl-6 font-medium text-foreground">
+      <TableRow key={enrollment.id} className="group">
+        <TableCell className="min-w-[170px] pl-6 font-semibold text-foreground">
           <div className="flex items-center gap-1.5">
             <button
               type="button"
@@ -732,10 +885,10 @@ useUnsavedChangesWarning(hasUnsavedChanges)
             )}
           </div>
         </TableCell>
-        <TableCell className="text-foreground">
+        <TableCell className="min-w-[150px] text-foreground">
           {enrollment.student.user.firstname}
         </TableCell>
-        <TableCell>
+        <TableCell className="min-w-[118px]">
           <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
             {enrollment.student.studentCode}
           </code>
@@ -746,7 +899,7 @@ useUnsavedChangesWarning(hasUnsavedChanges)
           const hasValue = !!entry?.value?.trim()
           const hasError = hasValue && entry && !entry.isValid
           return (
-            <TableCell key={sec.id} className={cn("align-top", isExcluded && "bg-muted/30")}>
+            <TableCell key={sec.id} className={cn("min-w-[156px] align-top", isExcluded && "bg-muted/30")}>
               {isExcluded ? (
                 <div className="flex flex-col items-center gap-0.5">
                   <span className="inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground">
@@ -756,17 +909,18 @@ useUnsavedChangesWarning(hasUnsavedChanges)
                 </div>
               ) : (
                 <div className="flex flex-col items-center gap-1">
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-2 rounded-lg bg-muted/40 px-2 py-1">
                     <Input
                       type="number" min="0" max={String(sec.maxScore)} step="0.25"
                       value={entry?.value || ''} placeholder="—" disabled={isLocked}
                       onChange={e => handleSectionGradeChange(enrollment.id, sec.id, e.target.value)}
                       className={cn(
-                        "w-16 text-center tabular-nums",
+                        "h-10 w-24 border-input bg-background text-center text-base font-semibold tabular-nums shadow-sm",
+                        hasValue && !hasError && "border-emerald-300 bg-emerald-50/60 text-emerald-900",
                         hasError && "border-destructive focus-visible:ring-destructive"
                       )}
                     />
-                    <span className="text-[10px] text-muted-foreground tabular-nums">/ {sec.maxScore}</span>
+                    <span className="text-[11px] font-medium text-muted-foreground tabular-nums">/ {sec.maxScore}</span>
                   </div>
                   {hasError && entry?.error && (
                     <p className="text-[10px] text-destructive">{entry.error}</p>
@@ -776,11 +930,12 @@ useUnsavedChangesWarning(hasUnsavedChanges)
             </TableCell>
           )
         })}
-        <TableCell className="text-center">
+        <TableCell className="min-w-[124px] text-center">
           {total.raw > 0 || total.complete ? (
             <span
               className={cn(
-                "tabular-nums text-sm font-semibold",
+                "inline-flex min-w-[104px] items-center justify-center rounded-lg border px-2 py-1 tabular-nums text-sm font-bold",
+                total.complete ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50",
                 total.complete ? "text-emerald-700" : "text-amber-700"
               )}
               title={total.complete ? "Total complet" : "Total partiel (toutes les sections ne sont pas saisies)"}
@@ -791,7 +946,7 @@ useUnsavedChangesWarning(hasUnsavedChanges)
             <span className="text-xs text-muted-foreground">—</span>
           )}
         </TableCell>
-        <TableCell className="pr-6 text-center">
+        <TableCell className="min-w-[126px] pr-6 text-center">
           {renderBadge(enrollment.id)}
         </TableCell>
       </TableRow>
@@ -900,7 +1055,7 @@ useUnsavedChangesWarning(hasUnsavedChanges)
                 <CardTitle className="text-base font-semibold">Saisie des notes</CardTitle>
                 <CardDescription className="flex flex-wrap items-center gap-2">
                   <span>
-                  {headerLabel} &middot; {enteredCount} / {sortedEnrollments.length} notes saisies
+                  {headerLabel} &middot; {enteredCount} / {enrollments.length} notes saisies
                   </span>
                   {hasUnsavedChanges && (
                 <Badge
@@ -924,10 +1079,28 @@ useUnsavedChangesWarning(hasUnsavedChanges)
             <Input
               placeholder="Rechercher par nom ou code..."
               value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
+              onChange={e => {
+                setSearchQuery(e.target.value)
+                setCurrentPage(1)
+              }}
               className="pl-9"
             />
           </div>
+          {sortConfig.direction && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setSortConfig({ key: null, direction: null })
+                setCurrentPage(1)
+              }}
+              className="shrink-0"
+            >
+              <ArrowUpDownIcon className="mr-2 h-4 w-4" />
+              Réinitialiser le tri
+            </Button>
+          )}
           {subjectHasSections && (
             <div className="flex items-center gap-2">
               <span className="text-xs font-medium text-muted-foreground">Mode :</span>
@@ -978,27 +1151,22 @@ useUnsavedChangesWarning(hasUnsavedChanges)
             </div>
           ) : entryMode === 'sections' ? (
             <div className="overflow-x-auto">
-              <Table>
+              <Table style={{ minWidth: `${580 + subjectSections.length * 168}px` }}>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
-                    <TableHead className="pl-6 font-semibold">Nom</TableHead>
-                    <TableHead className="font-semibold">Prénom</TableHead>
-                    <TableHead className="font-semibold">Code</TableHead>
+                    {renderSortableHead('lastName', 'Nom', 'pl-6', 'left', 'Trier par nom')}
+                    {renderSortableHead('firstName', 'Prénom', undefined, 'left', 'Trier par prénom')}
+                    {renderSortableHead('studentCode', 'Code', undefined, 'left', 'Trier par code élève')}
                     {subjectSections.map(sec => (
-                      <TableHead key={sec.id} className="text-center font-semibold">
+                      <TableHead key={sec.id} className="min-w-[156px] bg-muted/60 text-center font-semibold">
                         <div className="flex flex-col items-center gap-0.5">
                           <span>{sec.name}</span>
                           <span className="text-[10px] font-normal text-muted-foreground">/ {sec.maxScore}</span>
                         </div>
                       </TableHead>
                     ))}
-                    <TableHead className="text-center font-semibold">
-                      <div className="flex flex-col items-center gap-0.5">
-                        <span>Total</span>
-                        <span className="text-[10px] font-normal text-muted-foreground">/ {maxScore}</span>
-                      </div>
-                    </TableHead>
-                    <TableHead className="pr-6 text-center font-semibold">Statut</TableHead>
+                    {renderSortableHead('sectionTotal', `Total / ${maxScore}`, 'min-w-[124px]', 'center', 'Trier par total')}
+                    {renderSortableHead('status', 'Statut', 'min-w-[126px] pr-6', 'center', 'Trier par statut de saisie')}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1007,14 +1175,14 @@ useUnsavedChangesWarning(hasUnsavedChanges)
               </Table>
             </div>
           ) : (
-            <Table>
+            <Table style={{ minWidth: "720px" }}>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="pl-6 font-semibold">Nom</TableHead>
-                  <TableHead className="font-semibold">Prénom</TableHead>
-                  <TableHead className="font-semibold">Code</TableHead>
-                  <TableHead className="text-center font-semibold">Note / {maxScore}</TableHead>
-                  <TableHead className="pr-6 text-center font-semibold">Statut</TableHead>
+                  {renderSortableHead('lastName', 'Nom', 'pl-6', 'left', 'Trier par nom')}
+                  {renderSortableHead('firstName', 'Prénom', undefined, 'left', 'Trier par prénom')}
+                  {renderSortableHead('studentCode', 'Code', undefined, 'left', 'Trier par code élève')}
+                  {renderSortableHead('globalNote', `Note / ${maxScore}`, 'min-w-[156px]', 'center', 'Trier par note')}
+                  {renderSortableHead('status', 'Statut', 'min-w-[126px] pr-6', 'center', 'Trier par statut de saisie')}
                 </TableRow>
               </TableHeader>
               <TableBody>

@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useToast } from "@/components/ui/use-toast"
 import { clientFetch as apiFetch } from "@/lib/client-fetch"
 import { buildBulletinData } from "@/lib/api/bulletin"
+import { fetchSteps } from "@/lib/api/dashboard"
 import { toMessage } from "@/lib/errors"
 import { BulletinPrintable } from "@/components/school/bulletin-printable"
 import type { BulletinData } from "@/components/BulletinScolaire"
@@ -42,6 +43,7 @@ export default function BulletinPrintPage() {
   const [bulletin, setBulletin] = useState<BulletinData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [reportsHref, setReportsHref] = useState("/admin/dashboard")
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -52,11 +54,21 @@ export default function BulletinPrintPage() {
       const trackSuffix = cls?.track?.code ? ` — ${cls.track.code}` : ""
       const className = `${cls?.classType?.name ?? ""} ${cls?.letter ?? ""}${trackSuffix}`.trim()
       const yearId = enrollment.classSession?.academicYear?.id
-      const step = enrollment.classSession?.academicYear?.steps?.find((s) => s.id === stepId)
-      const stepName = step?.name ?? "Étape"
+      let stepName = enrollment.classSession?.academicYear?.steps?.find((s) => s.id === stepId)?.name
 
       if (!yearId) {
         throw new Error("Année scolaire introuvable pour cet enrôlement")
+      }
+
+      setReportsHref(`/admin/academic-year/${yearId}/reports`)
+
+      if (!stepName) {
+        try {
+          const steps = await fetchSteps(yearId)
+          stepName = steps.find((s) => s.id === stepId)?.name
+        } catch {
+          /* best-effort */
+        }
       }
 
       const data = await buildBulletinData({
@@ -64,7 +76,7 @@ export default function BulletinPrintPage() {
         studentId: enrollment.studentId,
         classSessionId: enrollment.classSessionId,
         stepId,
-        stepName,
+        stepName: stepName ?? "Étape",
         className,
         yearId,
       })
@@ -79,7 +91,7 @@ export default function BulletinPrintPage() {
   }, [enrollmentId, stepId, toast])
 
   useEffect(() => {
-    load()
+    void Promise.resolve().then(load)
   }, [load])
 
   const handlePrint = () => window.print()
@@ -89,7 +101,7 @@ export default function BulletinPrintPage() {
       {/* Print rules — strip everything except the bulletin and reset margins */}
       <style jsx global>{`
         @page {
-          size: A4;
+          size: 8.5in 11in;
           margin: 0;
         }
         @media print {
@@ -115,7 +127,7 @@ export default function BulletinPrintPage() {
         <div className="no-print sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b bg-white px-4 py-3 shadow-sm">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" asChild>
-              <Link href="/admin/reports">
+              <Link href={reportsHref}>
                 <ArrowLeftIcon className="mr-2 h-4 w-4" />
                 Retour aux bulletins
               </Link>
@@ -146,7 +158,7 @@ export default function BulletinPrintPage() {
         {/* Document area */}
         <div className="px-4 py-6 print:p-0">
           {loading ? (
-            <div className="mx-auto max-w-[210mm] space-y-4 rounded-md bg-white p-6 shadow-md">
+            <div className="mx-auto max-w-[8.5in] space-y-4 rounded-md bg-white p-6 shadow-md">
               <Skeleton className="h-24 w-full" />
               <Skeleton className="h-10 w-2/3" />
               <Skeleton className="h-72 w-full" />

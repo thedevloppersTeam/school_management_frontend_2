@@ -14,6 +14,7 @@ import { fetchSteps } from "@/lib/api/dashboard"
 import { toMessage } from "@/lib/errors"
 import { BulletinPrintable } from "@/components/school/bulletin-printable"
 import type { BulletinData } from "@/components/BulletinScolaire"
+import { isNisuValid } from "@/lib/nisu"
 
 interface ApiEnrollmentRow {
   id: string
@@ -41,14 +42,6 @@ interface BulletinSlot {
   studentLabel: string
   data: BulletinData | null
   error: string | null
-}
-
-// NISU is optional: a student without one is still eligible for the batch
-// bulletin (the document leaves the NISU line blank). Only a NISU that is
-// PRESENT but malformed excludes the student.
-function isNisuValid(nisu: string | undefined): boolean {
-  if (!nisu || !nisu.trim()) return true
-  return /^[A-Z0-9]{20}$/.test(nisu.trim())
 }
 
 // Run an async producer over a list with a small concurrency cap so the
@@ -90,7 +83,7 @@ export default function BulletinLotPrintPage() {
   const [error, setError] = useState<string | null>(null)
   const [className, setClassName] = useState<string>("")
   const [stepName, setStepName] = useState<string>("Étape")
-  const [yearString, setYearString] = useState<string>("")
+  const [reportsHref, setReportsHref] = useState("/admin/dashboard")
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -115,18 +108,21 @@ export default function BulletinLotPrintPage() {
       const trackSuffix = cls?.track?.code ? ` — ${cls.track.code}` : ""
       const computedClassName = `${cls?.classType?.name ?? ""} ${cls?.letter ?? ""}${trackSuffix}`.trim()
       const yearId = first.classSession?.academicYear?.id ?? ""
+      let resolvedStepName = "Étape"
 
       setClassName(computedClassName)
+      if (yearId) setReportsHref(`/admin/academic-year/${yearId}/reports`)
 
       if (yearId) {
         try {
           const steps = await fetchSteps(yearId)
           const step = steps.find((s) => s.id === stepId)
-          if (step) setStepName(step.name)
+          if (step) resolvedStepName = step.name
         } catch {
           /* best-effort */
         }
       }
+      setStepName(resolvedStepName)
 
       // 3. Construire chaque bulletin (concurrence limitée à 4)
       setProgress({ current: 0, total: eligible.length })
@@ -141,11 +137,10 @@ export default function BulletinLotPrintPage() {
               studentId: e.studentId,
               classSessionId: e.classSessionId,
               stepId,
-              stepName: stepName, // updated again below if needed
+              stepName: resolvedStepName,
               className: computedClassName,
               yearId,
             })
-            if (!yearString && data.anneeScolaire) setYearString(data.anneeScolaire)
             return { enrollmentId: e.id, studentLabel: label, data, error: null }
           } catch (err) {
             return {
@@ -167,12 +162,11 @@ export default function BulletinLotPrintPage() {
     } finally {
       setLoading(false)
     }
-  }, [classSessionId, stepId, stepName, yearString, toast])
+  }, [classSessionId, stepId, toast])
 
   useEffect(() => {
-    load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [classSessionId, stepId])
+    void Promise.resolve().then(load)
+  }, [load])
 
   const handlePrint = () => window.print()
 
@@ -183,7 +177,7 @@ export default function BulletinLotPrintPage() {
     <>
       <style jsx global>{`
         @page {
-          size: A4;
+          size: 8.5in 11in;
           margin: 0;
         }
         @media print {
@@ -214,7 +208,7 @@ export default function BulletinLotPrintPage() {
         <div className="no-print sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b bg-white px-4 py-3 shadow-sm">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" asChild>
-              <Link href="/admin/reports">
+              <Link href={reportsHref}>
                 <ArrowLeftIcon className="mr-2 h-4 w-4" />
                 Retour aux bulletins
               </Link>
@@ -253,7 +247,7 @@ export default function BulletinLotPrintPage() {
 
         {/* Loading state with progress */}
         {loading && (
-          <div className="no-print mx-auto max-w-[210mm] space-y-4 px-4 py-6">
+          <div className="no-print mx-auto max-w-[8.5in] space-y-4 px-4 py-6">
             <div className="rounded-md bg-white p-6 shadow-md">
               <div className="flex items-center gap-3 text-sm text-muted-foreground">
                 <Loader2Icon className="h-4 w-4 animate-spin" />
@@ -290,7 +284,7 @@ export default function BulletinLotPrintPage() {
           <div className="no-print mx-auto mt-6 max-w-md rounded-xl border bg-white p-6 text-center shadow-sm">
             <p className="text-sm font-medium text-foreground">Aucun bulletin éligible</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Aucun élève inscrit avec un NISU valide n&apos;a été trouvé pour cette classe.
+              Aucun élève imprimable n&apos;a été trouvé pour cette classe.
             </p>
           </div>
         )}

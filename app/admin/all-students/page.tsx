@@ -70,6 +70,7 @@ import { normalizeUploadUrl } from "@/lib/upload-url"
 import { StatCard } from "@/components/school/stat-card"
 import { fetchActiveAcademicYear, fetchClassSessions, type AcademicYear, type ClassSession } from "@/lib/api/dashboard"
 import { cn } from "@/lib/utils"
+import { isNisuValid, NISU_RULE_LABEL } from "@/lib/nisu"
 
 // ── Types locaux ──────────────────────────────────────────────────────────────
 
@@ -103,10 +104,6 @@ interface StudentRow {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function isNisuValid(nisu: string): boolean {
-  return !!nisu && /^[A-Z0-9]{20}$/.test(nisu.trim())
-}
 
 function deriveYearStatus(year: AcademicYear): 'active' | 'preparation' | 'archived' {
   if (year.isCurrent) return 'active'
@@ -443,7 +440,7 @@ export default function StudentsManagementPage() {
 
   // ── Modification profil ────────────────────────────────────────────────────
   const handleEditStudent = async (data: {
-    nisu: string; address: string; motherName: string; fatherName: string
+    address: string; motherName: string; fatherName: string
     phone1: string; phone2: string; parentsEmail: string
   }) => {
     if (!editingStudent) return
@@ -872,7 +869,7 @@ export default function StudentsManagementPage() {
                           </span>
                           {nisuInvalid && (
                             <span className="text-[11px] text-destructive">
-                              20 caractères alphanumériques exactement
+                              {NISU_RULE_LABEL}
                             </span>
                           )}
                         </div>
@@ -926,7 +923,7 @@ export default function StudentsManagementPage() {
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem asChild>
-                              <Link href={`/admin/students/${student.studentId}/transcript`}>
+                              <Link href={`/admin/all-students/${student.studentId}/transcript`}>
                                 <FileTextIcon className="mr-2 h-4 w-4" />
                                 Voir le relevé de notes
                               </Link>
@@ -1165,7 +1162,6 @@ export default function StudentsManagementPage() {
           studentName={`${editingStudent.firstname} ${editingStudent.lastname}`}
           studentCode={editingStudent.studentCode}
           initialData={{
-            nisu:         editingStudent.nisu,
             address:      editingStudent.address,
             motherName:   editingStudent.motherName,
             fatherName:   editingStudent.fatherName,

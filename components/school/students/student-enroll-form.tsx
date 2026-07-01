@@ -14,6 +14,9 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Select,
   SelectContent,
@@ -32,6 +35,12 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toMessage } from "@/lib/errors";
+import { isNisuValid, normalizeNisu, NISU_RULE_LABEL } from "@/lib/nisu";
+import {
+  type ApiCustomField,
+  type ApiFieldGroup,
+  type CustomValuePayload,
+} from "@/lib/api/student-form";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -81,7 +90,7 @@ const EMPTY_FORM: FormState = {
 // ─── Constantes photo ──────────────────────────────────────────────────────
 const PHOTO_MAX_SIZE_MB = 2;
 const PHOTO_MAX_SIZE_BYTES = PHOTO_MAX_SIZE_MB * 1024 * 1024;
-const PHOTO_ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/jpg"];
+const PHOTO_ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
 
 // ─── Classes partagées ─────────────────────────────────────────────────────
 const SECTION_TITLE_CLASS =
@@ -107,8 +116,31 @@ export function StudentEnrollForm({
   const [apiError, setApiError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoSubmitting, setPhotoSubmitting] = useState(false);
   const [classSessions, setClassSessions] = useState<ClassSessionOption[]>([]);
   const [loadingClasses, setLoadingClasses] = useState(false);
+  const [customGroups, setCustomGroups] = useState<ApiFieldGroup[]>([]);
+  const [customValues, setCustomValues] = useState<Record<string, unknown>>({});
+  const [customErrors, setCustomErrors] = useState<Record<string, string>>({});
+  const [customImageWarning, setCustomImageWarning] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!open) {
+      setPhotoFile(null);
+      setCustomGroups([]);
+      setCustomValues({});
+      setCustomErrors({});
+      setCustomImageWarning({});
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    apiFetch<ApiFieldGroup[]>("/api/student-form-fields")
+      .then((data) => setCustomGroups(Array.isArray(data) ? data : []))
+      .catch(() => setCustomGroups([]));
+  }, [open]);
 
   useEffect(() => {
     if (!open || !academicYearId) return;
@@ -146,6 +178,84 @@ export function StudentEnrollForm({
     (field: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement>) =>
       setForm((f) => ({ ...f, [field]: e.target.value }));
 
+  const setCustomValue = (fieldId: string, value: unknown) => {
+    setCustomValues((prev) => ({ ...prev, [fieldId]: value }));
+    setCustomErrors((prev) => {
+      if (!prev[fieldId]) return prev;
+      const next = { ...prev };
+      delete next[fieldId];
+      return next;
+    });
+  };
+
+  const isFieldVisible = (field: ApiCustomField, depth = 0): boolean => {
+    if (!field.parentFieldId) return true;
+    if (depth > 10) return true;
+    const parent = customGroups
+      .flatMap((group) => group.fields)
+      .find((candidate) => candidate.id === field.parentFieldId);
+    if (!parent) return true;
+    if (!isFieldVisible(parent, depth + 1)) return false;
+    const parentValue = customValues[parent.id];
+    if (parentValue !== true && parentValue !== false) return false;
+    return parentValue === !!field.showWhenTrue;
+  };
+
+  const buildCustomPayload = (): CustomValuePayload[] | null => {
+    const out: CustomValuePayload[] = [];
+    const errors: Record<string, string> = {};
+
+    for (const group of customGroups) {
+      for (const field of group.fields) {
+        if (!isFieldVisible(field)) continue;
+        const raw = customValues[field.id];
+        const checkboxAnswered = raw === true || raw === false;
+        const empty =
+          field.type === "CHECKBOX"
+            ? !checkboxAnswered
+            : raw == null || raw === "" || (Array.isArray(raw) && raw.length === 0);
+
+        if (field.required && empty) {
+          errors[field.id] = "Champ obligatoire";
+          continue;
+        }
+        if (empty || raw instanceof File) continue;
+
+        const entry: CustomValuePayload = { fieldId: field.id };
+        switch (field.type) {
+          case "TEXT":
+          case "TEXTAREA":
+          case "SELECT":
+          case "RADIO":
+            entry.textValue = String(raw);
+            break;
+          case "NUMBER": {
+            const value = Number(raw);
+            if (!Number.isFinite(value)) {
+              errors[field.id] = "Nombre invalide";
+              continue;
+            }
+            entry.numberValue = value;
+            break;
+          }
+          case "DATE":
+            entry.dateValue = String(raw);
+            break;
+          case "CHECKBOX":
+            entry.boolValue = raw === true;
+            break;
+          case "MULTI_CHECKBOX":
+            entry.jsonValue = Array.isArray(raw) ? raw : [];
+            break;
+        }
+        out.push(entry);
+      }
+    }
+
+    setCustomErrors(errors);
+    return Object.keys(errors).length > 0 ? null : out;
+  };
+
   // ─── Handlers photo ──────────────────────────────────────────────────────
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     setPhotoError(null);
@@ -166,7 +276,8 @@ export function StudentEnrollForm({
       return;
     }
 
-    // Encodage base64
+    setPhotoFile(file);
+    // Aperçu local uniquement ; l'enregistrement passe par l'upload backend.
     const reader = new FileReader();
     reader.onloadend = () => {
       setForm((f) => ({ ...f, photo: reader.result as string }));
@@ -179,6 +290,7 @@ export function StudentEnrollForm({
 
   const handlePhotoRemove = () => {
     setForm((f) => ({ ...f, photo: null }));
+    setPhotoFile(null);
     setPhotoError(null);
     // Reset l'input file (sinon re-uploader le même fichier ne déclenche pas onChange)
     const input = document.getElementById(
@@ -192,7 +304,7 @@ export function StudentEnrollForm({
     (form.firstName.trim()[0] || "") + (form.lastName.trim()[0] || "");
 
   // ─── Validation ──────────────────────────────────────────────────────────
-  const nisuValid = /^[A-Z0-9]{14}$/i.test(form.nisu);
+  const nisuValid = isNisuValid(form.nisu);
 
   const canSubmit =
     nisuValid &&
@@ -204,19 +316,54 @@ export function StudentEnrollForm({
     form.motherName.trim() !== "" &&
     form.phone1.trim() !== "";
 
+  const uploadPromotionPhoto = async (studentId: string, file: File): Promise<void> => {
+    const fd = new FormData();
+    fd.append("photo", file);
+    fd.append("studentId", studentId);
+    fd.append("academicYearId", academicYearId);
+    const res = await fetch("/api/promotion-photos/upload", {
+      method: "POST",
+      credentials: "include",
+      body: fd,
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.message || `Échec de l'envoi de la photo (HTTP ${res.status})`);
+  };
+
+  const uploadCustomImage = async (file: File): Promise<string> => {
+    const fd = new FormData();
+    fd.append("image", file);
+    const res = await fetch("/api/student-form-fields/values/upload-image", {
+      method: "POST",
+      credentials: "include",
+      body: fd,
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.message || `Échec de l'envoi (HTTP ${res.status})`);
+    return data?.photoUrl ?? data?.imageUrl ?? "";
+  };
+
   // ─── Submit — un seul appel, transaction atomique côté backend ───────────
   const handleSubmit = async () => {
     if (!canSubmit) return;
+    const customPayloadBase = buildCustomPayload();
+    if (customPayloadBase === null) {
+      setApiError("Un ou plusieurs champs personnalis?s obligatoires sont vides.");
+      return;
+    }
+
     setSubmitting(true);
     setApiError(null);
     setSuccessMsg(null);
 
     try {
-      await apiFetch("/api/students/enroll", {
+      const result = await apiFetch<{
+        enrollment?: { student?: { id?: string } };
+      }>("/api/students/enroll", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          nisu: form.nisu.toUpperCase(),
+          nisu: normalizeNisu(form.nisu),
           firstName: form.firstName.trim(),
           lastName: form.lastName.trim(),
           birthDate: form.birthDate,
@@ -227,20 +374,207 @@ export function StudentEnrollForm({
           phone2: form.phone2.trim(),
           address: form.address.trim(),
           parentsEmail: form.parentsEmail.trim(),
-          photo: form.photo, // base64 ou null
         }),
       });
 
-      setSuccessMsg(
-        `${form.firstName} ${form.lastName} inscrit(e) avec succès.`,
-      );
+      const studentId = result?.enrollment?.student?.id;
+      if (!studentId) {
+        throw new Error("Le serveur n'a pas retourn? l'identifiant de l'?l?ve.");
+      }
+
+      if (photoFile) {
+        setPhotoSubmitting(true);
+        await uploadPromotionPhoto(studentId, photoFile);
+        setPhotoSubmitting(false);
+      }
+
+      const finalPayload: CustomValuePayload[] = [...customPayloadBase];
+      for (const group of customGroups) {
+        for (const field of group.fields) {
+          if (field.type !== "IMAGE" || !isFieldVisible(field)) continue;
+          const raw = customValues[field.id];
+          if (!(raw instanceof File)) continue;
+          const imageUrl = await uploadCustomImage(raw);
+          if (imageUrl) finalPayload.push({ fieldId: field.id, imageUrl });
+        }
+      }
+
+      if (finalPayload.length > 0) {
+        await apiFetch("/api/student-form-fields/values/save", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ studentId, values: finalPayload }),
+        });
+      }
+
+      setSuccessMsg(`${form.firstName} ${form.lastName} inscrit(e) avec succ?s.`);
       setForm(EMPTY_FORM);
+      setPhotoFile(null);
+      setCustomValues({});
       onSuccess();
     } catch (err) {
-      setApiError(toMessage(err, "lors de l'inscription de l'élève"));
+      setApiError(toMessage(err, "lors de l'inscription de l'?l?ve"));
     } finally {
+      setPhotoSubmitting(false);
       setSubmitting(false);
     }
+  };
+
+  const renderCustomField = (field: ApiCustomField) => {
+    if (!isFieldVisible(field)) return null;
+    const raw = customValues[field.id];
+    const error = customErrors[field.id];
+    const fieldId = `custom-${field.id}`;
+    const common = {
+      id: fieldId,
+      "aria-invalid": !!error,
+      "aria-describedby": error ? `${fieldId}-error` : undefined,
+    };
+
+    return (
+      <div key={field.id} className="space-y-1.5">
+        <Label htmlFor={fieldId} className={FIELD_LABEL_CLASS}>
+          {field.label}
+          {field.required ? <span className="text-error"> *</span> : <span className={FIELD_HINT_CLASS}>optionnel</span>}
+        </Label>
+
+        {field.type === "TEXT" && (
+          <Input
+            {...common}
+            value={typeof raw === "string" ? raw : ""}
+            placeholder={field.placeholder ?? undefined}
+            onChange={(e) => setCustomValue(field.id, e.target.value)}
+            className={INPUT_CLASS}
+          />
+        )}
+
+        {field.type === "TEXTAREA" && (
+          <Textarea
+            {...common}
+            value={typeof raw === "string" ? raw : ""}
+            placeholder={field.placeholder ?? undefined}
+            onChange={(e) => setCustomValue(field.id, e.target.value)}
+            className="min-h-20 resize-y rounded-lg border-neutral-300"
+          />
+        )}
+
+        {field.type === "NUMBER" && (
+          <Input
+            {...common}
+            type="number"
+            min={field.config?.min}
+            max={field.config?.max}
+            step={field.config?.step ?? "any"}
+            value={typeof raw === "number" || typeof raw === "string" ? String(raw) : ""}
+            placeholder={field.placeholder ?? undefined}
+            onChange={(e) => setCustomValue(field.id, e.target.value)}
+            className={INPUT_CLASS}
+          />
+        )}
+
+        {field.type === "DATE" && (
+          <Input
+            {...common}
+            type="date"
+            value={typeof raw === "string" ? raw : ""}
+            onChange={(e) => setCustomValue(field.id, e.target.value)}
+            className={INPUT_CLASS}
+          />
+        )}
+
+        {field.type === "SELECT" && (
+          <Select value={typeof raw === "string" ? raw : ""} onValueChange={(v) => setCustomValue(field.id, v)}>
+            <SelectTrigger id={fieldId} className={INPUT_CLASS}>
+              <SelectValue placeholder={field.placeholder ?? "S?lectionner"} />
+            </SelectTrigger>
+            <SelectContent>
+              {(field.config?.options ?? []).map((option) => (
+                <SelectItem key={option} value={option}>{option}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
+        {field.type === "RADIO" && (
+          <RadioGroup value={typeof raw === "string" ? raw : ""} onValueChange={(v) => setCustomValue(field.id, v)} className="gap-2">
+            {(field.config?.options ?? []).map((option) => (
+              <label key={option} className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+                <RadioGroupItem value={option} />
+                {option}
+              </label>
+            ))}
+          </RadioGroup>
+        )}
+
+        {field.type === "CHECKBOX" && (
+          <div className="flex flex-wrap gap-2">
+            <label className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+              <Checkbox checked={raw === true} onCheckedChange={(v) => setCustomValue(field.id, v === true ? true : null)} />
+              Oui
+            </label>
+            <label className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+              <Checkbox checked={raw === false} onCheckedChange={(v) => setCustomValue(field.id, v === true ? false : null)} />
+              Non
+            </label>
+          </div>
+        )}
+
+        {field.type === "MULTI_CHECKBOX" && (
+          <div className="space-y-1.5 rounded-md border p-2">
+            {(field.config?.options ?? []).map((option) => {
+              const selected = Array.isArray(raw) && raw.includes(option);
+              return (
+                <label key={option} className="flex items-center gap-2 text-sm">
+                  <Checkbox
+                    checked={selected}
+                    onCheckedChange={(v) => {
+                      const current = Array.isArray(raw) ? raw as string[] : [];
+                      setCustomValue(
+                        field.id,
+                        v === true ? [...new Set([...current, option])] : current.filter((item) => item !== option),
+                      );
+                    }}
+                  />
+                  {option}
+                </label>
+              );
+            })}
+          </div>
+        )}
+
+        {field.type === "IMAGE" && (
+          <div className="space-y-1.5">
+            <Input
+              {...common}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                setCustomImageWarning((prev) => ({ ...prev, [field.id]: "" }));
+                if (!PHOTO_ACCEPTED_TYPES.includes(file.type)) {
+                  setCustomImageWarning((prev) => ({ ...prev, [field.id]: "Format non support? (JPG, PNG, WEBP)." }));
+                  e.target.value = "";
+                  return;
+                }
+                if (file.size > PHOTO_MAX_SIZE_BYTES) {
+                  setCustomImageWarning((prev) => ({ ...prev, [field.id]: `Fichier trop volumineux (${PHOTO_MAX_SIZE_MB} Mo max).` }));
+                  e.target.value = "";
+                  return;
+                }
+                setCustomValue(field.id, file);
+              }}
+              className={INPUT_CLASS}
+            />
+            {raw instanceof File && <p className="text-xs text-neutral-500">{raw.name}</p>}
+            {customImageWarning[field.id] && <p className="text-xs text-error">{customImageWarning[field.id]}</p>}
+          </div>
+        )}
+
+        {field.helpText && <p className="text-xs text-neutral-500">{field.helpText}</p>}
+        {error && <p id={`${fieldId}-error`} className="text-xs text-error">{error}</p>}
+      </div>
+    );
   };
 
   const handleClose = (v: boolean) => {
@@ -385,11 +719,8 @@ export function StudentEnrollForm({
               <div className="space-y-1.5">
                 <Label htmlFor="enroll-nisu" className={FIELD_LABEL_CLASS}>
                   NISU{" "}
-                  <span className="text-error" aria-label="obligatoire">
-                    *
-                  </span>
                   <span className={FIELD_HINT_CLASS} id="enroll-nisu-hint">
-                    14 caractères alphanumériques
+                    optionnel · {NISU_RULE_LABEL}
                   </span>
                 </Label>
                 <Input
@@ -400,7 +731,7 @@ export function StudentEnrollForm({
                   onChange={(e) =>
                     setForm((f) => ({
                       ...f,
-                      nisu: e.target.value.toUpperCase(),
+                      nisu: normalizeNisu(e.target.value),
                     }))
                   }
                   className={cn(
@@ -408,21 +739,19 @@ export function StudentEnrollForm({
                     "font-mono tracking-wider",
                     form.nisu && !nisuValid && "border-error",
                   )}
-                  maxLength={14}
+                  maxLength={20}
                   inputMode="text"
                   autoCapitalize="characters"
-                  required
-                  aria-required="true"
                   aria-invalid={form.nisu !== "" && !nisuValid}
                   aria-describedby="enroll-nisu-hint enroll-nisu-status"
                 />
                 <div id="enroll-nisu-status" aria-live="polite">
                   {form.nisu && !nisuValid && (
                     <p className="text-xs text-error">
-                      14 caractères alphanumériques requis
+                      {NISU_RULE_LABEL} requis
                     </p>
                   )}
-                  {nisuValid && (
+                  {form.nisu && nisuValid && (
                     <p className="text-xs text-success">✓ NISU valide</p>
                   )}
                 </div>
@@ -667,20 +996,45 @@ export function StudentEnrollForm({
               </div>
             </div>
           </div>
+
+          {customGroups.length > 0 && (
+            <div className="space-y-3">
+              <h3 className={SECTION_TITLE_CLASS}>Informations compl?mentaires</h3>
+              <div className="space-y-4">
+                {customGroups.map((group) => {
+                  const visibleFields = group.fields.filter((field) => isFieldVisible(field));
+                  if (visibleFields.length === 0) return null;
+                  return (
+                    <div key={group.id} className="space-y-3 rounded-lg border border-neutral-200 p-3">
+                      <div>
+                        <p className="text-sm font-semibold text-neutral-900">{group.name}</p>
+                        {group.description && (
+                          <p className="text-xs text-neutral-500">{group.description}</p>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                        {visibleFields.map((field) => renderCustomField(field))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         <DialogFooter>
           <Button
             variant="outline"
             onClick={() => handleClose(false)}
-            disabled={submitting}
+            disabled={submitting || photoSubmitting}
             className="border-neutral-300 text-neutral-600 rounded-lg"
           >
             Annuler
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={!canSubmit || submitting}
+            disabled={!canSubmit || submitting || photoSubmitting}
             title={
               !canSubmit && !submitting
                 ? "Remplissez tous les champs obligatoires (*)"
@@ -688,7 +1042,16 @@ export function StudentEnrollForm({
             }
             className="bg-primary-800 hover:bg-primary-700 text-white rounded-lg disabled:bg-neutral-400 disabled:cursor-not-allowed"
           >
-            {submitting ? (
+            {photoSubmitting ? (
+              <>
+                <LoaderIcon
+                  className="h-4 w-4 mr-2 animate-spin"
+                  role="status"
+                  aria-label="Envoi de la photo"
+                />
+                Envoi de la photo...
+              </>
+            ) : submitting ? (
               <>
                 <LoaderIcon
                   className="h-4 w-4 mr-2 animate-spin"

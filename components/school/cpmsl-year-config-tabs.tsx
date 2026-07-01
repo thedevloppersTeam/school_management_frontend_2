@@ -314,10 +314,26 @@ export function CPMSLYearConfigTabs({
     students.filter((s) => s.classroomId === classroomId).length;
   const getTotalStudentCountForLevel = (levelId: string) =>
     students.filter((s) => s.levelId === levelId).length;
+  const didAutoExpandClassLevels = React.useRef(false);
   const totalClassrooms = classrooms.length;
   const r1Count = subjectParents.filter((s) => s.rubrique === "R1").length;
   const r2Count = subjectParents.filter((s) => s.rubrique === "R2").length;
   const r3Count = subjectParents.filter((s) => s.rubrique === "R3").length;
+
+  React.useEffect(() => {
+    if (didAutoExpandClassLevels.current || classrooms.length === 0) return;
+
+    didAutoExpandClassLevels.current = true;
+    setExpandedLevels(
+      new Set(
+        levels
+          .filter((level) =>
+            classrooms.some((classroom) => classroom.levelId === level.id),
+          )
+          .map((level) => level.id),
+      ),
+    );
+  }, [classrooms, levels]);
 
   const toggleLevelExpansion = (levelId: string) => {
     setExpandedLevels((prev) => {
@@ -2053,9 +2069,8 @@ export function CPMSLYearConfigTabs({
             classroom={selectedClassroom}
             level={selectedLevel}
             studentCount={getStudentCountForClassroom(selectedClassroom.id)}
-            onConfirm={() => {
-              onDeleteClassroom?.(selectedClassroom.id);
-              setDeleteClassroomModalOpen(false);
+            onConfirm={async () => {
+              await onDeleteClassroom?.(selectedClassroom.id);
             }}
           />
         </>

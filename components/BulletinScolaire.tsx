@@ -60,16 +60,19 @@ export interface BulletinData {
   rubrique1Poids: string;   // ex. "70%"
   rubrique1:      RubriqueEntry[];
   moyR1:          number | null;
+  moyClasseR1?:   number | null;
 
   rubrique2Name:  string;
   rubrique2Poids: string;
   rubrique2:      RubriqueEntry[];
   moyR2:          number | null;
+  moyClasseR2?:   number | null;
 
   rubrique3Name:  string;
   rubrique3Poids: string;
   rubrique3:      RubriqueEntry[];
   moyR3:          number | null;
+  moyClasseR3?:   number | null;
 
   // Résultats
   moyenneEtape:  string;
@@ -223,9 +226,10 @@ export default function BulletinScolaire({ data }: Readonly<{ data: BulletinData
       fontFamily: "'Times New Roman', Times, serif",
       fontSize: '9pt',
       background: 'white',
-      width: '210mm',
+      width: '8.5in',
+      minHeight: '11in',
       margin: '0 auto',
-      padding: '8mm',
+      padding: '.25in .42in .22in',
       color: '#000',
       boxSizing: 'border-box',
       border: '1px solid #bbb',
@@ -249,12 +253,18 @@ export default function BulletinScolaire({ data }: Readonly<{ data: BulletinData
           flexShrink: 0, background: '#f5f5f5',
           overflow: 'hidden',
         }}>
-          <Image
-            src={etab.logoUrl || '/test.jpeg'}
-            alt={`Logo ${etab.nomLigne2}`}
-            width={64} height={64}
-            style={{ objectFit: 'contain' }}
-          />
+          {etab.logoUrl ? (
+            <Image
+              src={etab.logoUrl}
+              alt={`Logo ${etab.nomLigne2}`}
+              width={64} height={64}
+              style={{ objectFit: 'contain' }}
+            />
+          ) : (
+            <span style={{ fontSize: '6.5pt', color: '#777', textAlign: 'center' }}>
+              Logo
+            </span>
+          )}
         </div>
 
         {/* Titre */}
@@ -450,7 +460,7 @@ export default function BulletinScolaire({ data }: Readonly<{ data: BulletinData
                         <span style={{ color: '#cc6600', fontWeight: 'bold' }}>51-59 : D Déficient</span> &nbsp;|&nbsp;
             <span style={{ color: '#c0392b', fontWeight: 'bold' }}>≤50 : E Échec</span>{/*
             */}<br />
-            Seuil de promotion : 7.00 / 10 &nbsp;—&nbsp; Formule : 70% R1 + 25% R2 + 5% R3
+            Seuil de promotion : 7.00 / 10 &nbsp;—&nbsp; Formule : 70% Rubrique 1 + 25% Rubrique 2 + 5% Rubrique 3
           </div>
           <div style={{ fontSize: '6pt', color: '#555', lineHeight: '1.6' }}>
             {etab.adresse} &nbsp;|&nbsp; Tél : {etab.telephone}<br />

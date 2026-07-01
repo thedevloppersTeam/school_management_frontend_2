@@ -41,6 +41,12 @@ interface Classroom {
   capacity: number
 }
 
+interface ConfigStudent {
+  id: string
+  classroomId: string
+  levelId: string
+}
+
 interface SubjectParent {
   id: string
   code: string
@@ -81,6 +87,7 @@ export default function AcademicYearConfigPage() {
   const [periods,         setPeriods]         = useState<Period[]>([])
   const [levels,          setLevels]          = useState<Level[]>([])
   const [classrooms,      setClassrooms]      = useState<Classroom[]>([])
+  const [students,        setStudents]        = useState<ConfigStudent[]>([])
   const [subjectParents,  setSubjectParents]  = useState<SubjectParent[]>([])
   const [subjectChildren, setSubjectChildren] = useState<SubjectChild[]>([])
   const [tracks,          setTracks]          = useState<Array<{ id: string; code: string; name: string }>>([])
@@ -109,7 +116,7 @@ export default function AcademicYearConfigPage() {
       // 3. Sessions de classe → classrooms
       // FIX W1-06 : NS3/NS4 utilisent la filière comme label (pas la lettre)
       const sessionsData = await fetchClassSessions(yearId)
-      setClassrooms(sessionsData.map(s => {
+      const classroomRows = sessionsData.map(s => {
         const name = s.class.track
           ? `${s.class.classType.name} ${s.class.track.code}`   // NS3 LLA ✅
           : `${s.class.classType.name} ${s.class.letter}`       // 7e A   ✅
@@ -119,7 +126,36 @@ export default function AcademicYearConfigPage() {
           levelId:  s.class.classType.id,
           capacity: 30
         }
-      }))
+      })
+      setClassrooms(classroomRows)
+
+      const levelBySessionId = new Map(
+        classroomRows.map((classroom) => [classroom.id, classroom.levelId])
+      )
+      const enrollmentGroups = await Promise.all(
+        classroomRows.map(async (classroom) => {
+          try {
+            const res = await fetch(
+              `/api/enrollments?classSessionId=${classroom.id}&status=ACTIVE`,
+              { credentials: 'include' }
+            )
+            if (!res.ok) return []
+            const enrollments = await res.json() as Array<{
+              id: string
+              studentId?: string
+              classSessionId?: string
+            }>
+            return enrollments.map((enrollment) => ({
+              id: enrollment.studentId || enrollment.id,
+              classroomId: enrollment.classSessionId || classroom.id,
+              levelId: levelBySessionId.get(enrollment.classSessionId || classroom.id) || classroom.levelId,
+            }))
+          } catch {
+            return []
+          }
+        })
+      )
+      setStudents(enrollmentGroups.flat())
 
       // 4. Types de classe → levels
       const typesRes = await fetch('/api/class-types', { credentials: 'include' })
@@ -305,6 +341,35 @@ export default function AcademicYearConfigPage() {
     }
   }
 
+  const handleMergePeriods = async (sourceId: string, targetId: string, newName: string | undefined) => {
+    try {
+      const res = await fetch(`/api/academic-years/steps/${sourceId}/merge-into/${targetId}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newName ? { newName } : {}),
+      })
+      const body = await res.json().catch(() => null) as
+        | { message?: string; summary?: { gradesMoved: number; behaviorsMoved: number; behaviorsDropped: number; archivesMoved: number } }
+        | null
+      if (!res.ok) throw new Error(body?.message || `Erreur ${res.status}`)
+      const summary = body?.summary
+      toast({
+        title: "Étapes fusionnées",
+        description: summary
+          ? `${summary.gradesMoved} note(s), ${summary.behaviorsMoved} comportement(s)${summary.behaviorsDropped ? ` (${summary.behaviorsDropped} doublon(s) ignoré(s))` : ""}, ${summary.archivesMoved} bulletin(s) archivé(s) déplacé(s).`
+          : undefined,
+      })
+      await loadData()
+    } catch (err) {
+      toast({
+        title: "Erreur",
+        description: toMessage(err, "lors de la fusion"),
+        variant: "destructive",
+      })
+    }
+  }
+
   // ── Handlers — Matières ────────────────────────────────────────────────────
 
   const handleAddSubjectParent = async (data: {
@@ -363,9 +428,13 @@ export default function AcademicYearConfigPage() {
   }
 
   const handleAddSubjectChild = async (parentId: string, data: {
-    name: string; code: string; type: string; coefficient: number
+    name: string; code: string; type: string; coefficient: number; maxScore?: number
   }) => {
     try {
+      if (!Number.isFinite(data.maxScore) || Number(data.maxScore) <= 0) {
+        throw new Error("La note maximum doit être un nombre positif.")
+      }
+
       const res = await fetch(`/api/subjects/${parentId}/sections/create`, {
         method: 'POST',
         credentials: 'include',
@@ -373,7 +442,8 @@ export default function AcademicYearConfigPage() {
         body: JSON.stringify({
           name:         data.name,
           code:         data.code,
-          maxScore:     100,
+          coefficient:  data.coefficient,
+          maxScore:     data.maxScore,
           displayOrder: subjectChildren.filter(c => c.parentId === parentId).length + 1,
         })
       })
@@ -455,7 +525,6 @@ export default function AcademicYearConfigPage() {
         description: toMessage(err, "lors de la création de la classe"),
         variant: "destructive"
       })
-      throw err
     }
   }
 
@@ -463,8 +532,26 @@ export default function AcademicYearConfigPage() {
     toast({ title: "Modification en cours..." })
   }
 
-  const handleDeleteClassroom = async (_classroomId: string) => {
-    toast({ title: "Suppression non disponible", description: "Cette action sera disponible prochainement.", variant: "destructive" })
+  const handleDeleteClassroom = async (classroomId: string) => {
+    try {
+      const res = await fetch(`/api/class-sessions/delete/${classroomId}`, {
+        method: 'POST',
+        credentials: 'include',
+      })
+      const body = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(body?.message || `Erreur ${res.status}`)
+
+      toast({ title: "Salle supprimée", description: "La salle a été retirée de cette année scolaire." })
+      await loadData()
+      return true
+    } catch (err) {
+      toast({
+        title: "Suppression impossible",
+        description: toMessage(err, "lors de la suppression de la salle"),
+        variant: "destructive",
+      })
+      return false
+    }
   }
 
   // ── Handlers — Niveaux ─────────────────────────────────────────────────────
@@ -534,11 +621,12 @@ export default function AcademicYearConfigPage() {
           subjectParents={subjectParents}
           subjectChildren={subjectChildren}
           classrooms={classrooms}
-          students={[]}
+          students={students}
           tracks={tracks}
           onAddPeriod={handleAddPeriod}
           onClosePeriod={handleClosePeriod}
           onReopenPeriod={handleReopenPeriod}
+          onMergePeriods={handleMergePeriods}
           onAddLevel={handleAddLevel}
           onAddSubjectParent={handleAddSubjectParent}
           onAddSubjectChild={handleAddSubjectChild}

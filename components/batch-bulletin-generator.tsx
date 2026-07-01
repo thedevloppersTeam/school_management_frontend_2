@@ -10,7 +10,16 @@ import { toast } from "sonner"
 import html2canvas from "html2canvas"
 import jsPDF from "jspdf"
 import { buildBulletinData } from "@/lib/api/bulletin"
-import BulletinScolaire, { type BulletinData } from "@/components/BulletinScolaire"
+import { type BulletinData } from "@/components/BulletinScolaire"
+import { BulletinPrintable } from "@/components/school/bulletin-printable"
+import {
+  createBulletinPdfHost,
+  getBulletinCanvasOptions,
+  LETTER_HEIGHT_MM,
+  LETTER_WIDTH_MM,
+  prepareBulletinPdfNode,
+  waitForBulletinPdfAssets,
+} from "@/lib/bulletin-pdf-capture"
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -140,7 +149,7 @@ export function BatchBulletinGenerator({
     setLoading(true)
 
     try {
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [LETTER_WIDTH_MM, LETTER_HEIGHT_MM] })
       let firstPage = true
 
       for (const [studentId, data] of bulletins) {
@@ -151,12 +160,7 @@ export function BatchBulletinGenerator({
         if (!container) continue
 
         // Injecter temporairement le composant via innerHTML — on utilise un div dédié
-        const tempDiv = document.createElement('div')
-        tempDiv.style.width = '210mm'
-        tempDiv.style.backgroundColor = 'white'
-        tempDiv.style.position = 'absolute'
-        tempDiv.style.left = '-9999px'
-        tempDiv.style.top = '0'
+        const tempDiv = createBulletinPdfHost()
         document.body.appendChild(tempDiv)
 
         // Rendu React → HTML via dangerouslySetInnerHTML n'est pas possible ici.
@@ -175,14 +179,13 @@ export function BatchBulletinGenerator({
         const { createRoot } = await import('react-dom/client')
         const React = await import('react')
 
-        const mountPoint = document.createElement('div')
-        mountPoint.style.cssText = 'position:absolute;left:-9999px;top:0;width:210mm;background:white;'
+        const mountPoint = createBulletinPdfHost()
         document.body.appendChild(mountPoint)
 
         const root = createRoot(mountPoint)
         await new Promise<void>(resolve => {
           root.render(
-            React.default.createElement(BulletinScolaire, {
+            React.default.createElement(BulletinPrintable, {
               data,
               key: studentId,
             })
@@ -191,32 +194,20 @@ export function BatchBulletinGenerator({
           setTimeout(resolve, 400)
         })
 
-        const canvas = await html2canvas(mountPoint, {
-          scale: 2, useCORS: true, logging: false,
-          backgroundColor: '#ffffff',
-          windowWidth:  mountPoint.scrollWidth,
-          windowHeight: mountPoint.scrollHeight,
-        })
+        const captureTarget = prepareBulletinPdfNode(mountPoint)
+        await waitForBulletinPdfAssets(captureTarget)
+
+        const canvas = await html2canvas(
+          captureTarget,
+          getBulletinCanvasOptions(captureTarget),
+        )
 
         root.unmount()
         document.body.removeChild(mountPoint)
 
         const imgData   = canvas.toDataURL('image/png')
-        const imgWidth  = 210
-        const pageH     = 297
-        const imgHeight = (canvas.height * imgWidth) / canvas.width
-        let   heightLeft = imgHeight
-        let   position   = 0
-
         if (!firstPage) pdf.addPage()
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
-        heightLeft -= pageH
-        while (heightLeft > 0) {
-          position = heightLeft - imgHeight
-          pdf.addPage()
-          pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
-          heightLeft -= pageH
-        }
+        pdf.addImage(imgData, 'PNG', 0, 0, LETTER_WIDTH_MM, LETTER_HEIGHT_MM)
 
         firstPage = false
       }

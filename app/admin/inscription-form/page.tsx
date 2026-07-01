@@ -66,7 +66,7 @@ const SYSTEM_GROUPS: Array<{ name: string; fields: Array<{ label: string; requir
   {
     name: "Identité",
     fields: [
-      { label: "NISU", required: true, hint: "20 caractères alphanumériques exactement" },
+      { label: "NISU", required: false, hint: "optionnel · 20 caractères alphanumériques exactement" },
       { label: "Nom", required: true },
       { label: "Prénom", required: true },
       { label: "Date de naissance", required: true },

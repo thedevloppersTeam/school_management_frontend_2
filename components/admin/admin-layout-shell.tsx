@@ -125,17 +125,17 @@ const navItems: NavItem[] = [
     children: [
       {
         label: "Élèves inscrits",
-        href: "/admin/students",
+        href: "/admin/academic-year/:yearId/students",
         icon: UserIcon,
       },
       {
         label: "Notes",
-        href: "/admin/grades",
+        href: "/admin/academic-year/:yearId/grades",
         icon: ClipboardEditIcon,
       },
       {
         label: "Bulletins",
-        href: "/admin/reports",
+        href: "/admin/academic-year/:yearId/reports",
         icon: FileTextIcon,
       },
     ],
@@ -180,10 +180,6 @@ const breadcrumbMap: Record<string, string> = {
   "/admin/all-students": "Élève",
   "/admin/inscription-form": "Configuration du formulaire",
   "/admin/inscription-import": "Import inscriptions",
-  "/admin/students": "Élèves inscrits",
-  "/admin/grades": "Notes",
-  "/admin/grades/view": "Consultation des notes",
-  "/admin/reports": "Bulletins",
   "/admin/subjects": "Matières",
   "/admin/academic-years": "Années Scolaires",
   "/admin/settings": "Établissement",

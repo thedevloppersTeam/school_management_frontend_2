@@ -38,6 +38,7 @@ import {
   type ClassSession,
 } from "@/lib/api/dashboard"
 import { type ApiFieldGroup, type ApiCustomField } from "@/lib/api/student-form"
+import { isNisuValid, normalizeNisu, NISU_RULE_LABEL } from "@/lib/nisu"
 
 // ── Encoding-aware decode ────────────────────────────────────────────────────
 // Excel / Windows exports are often Windows-1252 (Latin-1), not UTF-8. Decoding
@@ -384,7 +385,7 @@ export default function InscriptionImportPage() {
       const csvLine = idx + 1
       const get = (sys: SystemKey) => cellFor(allTargets.find((t) => t.system === sys)!, row)
 
-      const nisu = get("nisu").toUpperCase()
+      const nisu = normalizeNisu(get("nisu"))
       const lastName = get("lastName")
       const firstName = get("firstName")
       const birthRaw = get("birthDate")
@@ -414,7 +415,7 @@ export default function InscriptionImportPage() {
 
       // Validate system fields. NISU is optional — only checked when present.
       let error: string | null = null
-      if (nisu && !/^[A-Z0-9]{20}$/.test(nisu)) error = "NISU invalide (20 alphanum. exactement)"
+      if (!isNisuValid(nisu)) error = `NISU invalide (${NISU_RULE_LABEL})`
       else if (!lastName) error = "Nom manquant"
       else if (!firstName) error = "Prénom manquant"
 
