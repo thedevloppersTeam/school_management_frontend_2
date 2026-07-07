@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { useParams } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeftIcon, PrinterIcon, Loader2Icon } from "lucide-react"
@@ -13,6 +13,10 @@ import { fetchSteps } from "@/lib/api/dashboard"
 import { toMessage } from "@/lib/errors"
 import { BulletinPrintable } from "@/components/school/bulletin-printable"
 import type { BulletinData } from "@/components/BulletinScolaire"
+import {
+  addBulletinCanvasToPdf,
+  captureBulletinElement,
+} from "@/lib/bulletin-pdf-capture"
 
 interface EnrollmentResponse {
   id: string
@@ -44,6 +48,8 @@ export default function BulletinPrintPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [reportsHref, setReportsHref] = useState("/admin/dashboard")
+  const [generatingPdf, setGeneratingPdf] = useState(false)
+  const documentRef = useRef<HTMLDivElement | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -94,7 +100,50 @@ export default function BulletinPrintPage() {
     void Promise.resolve().then(load)
   }, [load])
 
-  const handlePrint = () => window.print()
+  const handlePrint = async () => {
+    const page = documentRef.current?.querySelector<HTMLElement>(
+      '[data-bulletin-page="true"]'
+    )
+
+    if (!page) {
+      toast({
+        title: "PDF indisponible",
+        description: "Aucun bulletin n'est prêt pour le téléchargement.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setGeneratingPdf(true)
+    try {
+      const jsPDF = (await import("jspdf")).default
+      const { canvas } = await captureBulletinElement(page)
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "pt",
+        format: "letter",
+        compress: true,
+      })
+
+      addBulletinCanvasToPdf(pdf, canvas)
+
+      const safeStudentName = `${bulletin?.nom ?? "eleve"}_${bulletin?.prenoms ?? ""}`
+        .replace(/[^\p{L}\p{N}]+/gu, "_")
+        .replace(/^_+|_+$/g, "")
+
+      pdf.save(
+        `bulletin_${safeStudentName}_${new Date().toISOString().slice(0, 10)}.pdf`
+      )
+    } catch (err) {
+      toast({
+        title: "Erreur PDF",
+        description: toMessage(err, "lors de la génération du PDF"),
+        variant: "destructive",
+      })
+    } finally {
+      setGeneratingPdf(false)
+    }
+  }
 
   return (
     <>
@@ -147,16 +196,20 @@ export default function BulletinPrintPage() {
 
           <Button
             onClick={handlePrint}
-            disabled={!bulletin || loading}
+            disabled={!bulletin || loading || generatingPdf}
             className="bg-[#2C4A6E] text-white hover:bg-[#1F3856]"
           >
-            <PrinterIcon className="mr-2 h-4 w-4" />
-            Imprimer / Télécharger PDF
+            {generatingPdf ? (
+              <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <PrinterIcon className="mr-2 h-4 w-4" />
+            )}
+            {generatingPdf ? "Génération PDF..." : "Imprimer / Télécharger PDF"}
           </Button>
         </div>
 
         {/* Document area */}
-        <div className="px-4 py-6 print:p-0">
+        <div ref={documentRef} className="px-4 py-6 print:p-0">
           {loading ? (
             <div className="mx-auto max-w-[8.5in] space-y-4 rounded-md bg-white p-6 shadow-md">
               <Skeleton className="h-24 w-full" />

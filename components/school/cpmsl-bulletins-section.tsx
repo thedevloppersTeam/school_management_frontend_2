@@ -72,11 +72,11 @@ import {
 } from "@/lib/api/dashboard";
 import { isNisuValid as isCentralNisuValid } from "@/lib/nisu";
 import {
-  getBulletinCanvasOptions,
-  LETTER_HEIGHT_MM,
-  LETTER_WIDTH_MM,
-  prepareBulletinPdfNode,
-  waitForBulletinPdfAssets,
+  addBulletinCanvasToPdf,
+  captureBulletinElement,
+  PDF_CAPTURE_HOST_ID,
+  removeStalePdfCaptureHosts,
+  waitForTwoFrames,
 } from "@/lib/bulletin-pdf-capture";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -162,6 +162,12 @@ export function CPMSLBulletinsSection({
   const [lotProgress, setLotProgress] = useState({ current: 0, total: 0 });
   const [lotData, setLotData] = useState<BulletinData | null>(null);
   const lotRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    return () => {
+      window.setTimeout(removeStalePdfCaptureHosts, 0);
+    };
+  }, []);
 
   // WF-003 / WF-005 : modaux de confirmation pré-génération
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -348,12 +354,13 @@ export function CPMSLBulletinsSection({
     let pdfSaved = false;
 
     try {
-      const html2canvas = (await import("html2canvas")).default;
       const jsPDF = (await import("jspdf")).default;
+      const { flushSync } = await import("react-dom");
       const pdf = new jsPDF({
         orientation: "portrait",
-        unit: "mm",
-        format: [LETTER_WIDTH_MM, LETTER_HEIGHT_MM],
+        unit: "pt",
+        format: "letter",
+        compress: true,
       });
       const stepObj = steps.find((s) => s.id === selectedStep);
       const stepName = stepObj?.name ?? "etape";
@@ -375,21 +382,14 @@ export function CPMSLBulletinsSection({
           yearId: academicYearId,
         });
 
-        setLotData(data);
-        await new Promise((r) => setTimeout(r, 600));
+        flushSync(() => setLotData(data));
+        await waitForTwoFrames();
 
         if (!lotRef.current) continue;
-        const captureTarget = prepareBulletinPdfNode(lotRef.current);
-        await waitForBulletinPdfAssets(captureTarget);
 
-        const canvas = await html2canvas(
-          captureTarget,
-          getBulletinCanvasOptions(captureTarget),
-        );
-
-        if (i > 0) pdf.addPage();
-        const imgData = canvas.toDataURL("image/png");
-        pdf.addImage(imgData, "PNG", 0, 0, LETTER_WIDTH_MM, LETTER_HEIGHT_MM);
+        if (i > 0) pdf.addPage("letter", "portrait");
+        const { canvas } = await captureBulletinElement(lotRef.current);
+        addBulletinCanvasToPdf(pdf, canvas);
 
         // WF-005 + EP-003 : archivage avec auditNote + remontée des échecs
         const archiveResult = await archiveBulletin({
@@ -447,6 +447,7 @@ export function CPMSLBulletinsSection({
       setGeneratingLot(false);
       setLotData(null);
       setLotProgress({ current: 0, total: 0 });
+      window.setTimeout(removeStalePdfCaptureHosts, 0);
     }
   };
 
@@ -833,21 +834,32 @@ export function CPMSLBulletinsSection({
       )}
 
       {/* Div caché pour capture lot PDF */}
+      {generatingLot && lotData && (
       <div
+        id={PDF_CAPTURE_HOST_ID}
+        data-pdf-capture-host="true"
+        aria-hidden="true"
         style={{
           position: "fixed",
-          left: 0,
+          left: "-100000px",
           top: 0,
-          zIndex: -1,
+          zIndex: 0,
           background: "white",
-          width: "8.5in",
-          minHeight: "11in",
+          width: "816px",
+          minHeight: "1056px",
+          margin: 0,
+          padding: 0,
           overflow: "visible",
           pointerEvents: "none",
+          opacity: 1,
+          visibility: "visible",
         }}
       >
-        <div ref={lotRef}>{lotData && <BulletinPrintable data={lotData} />}</div>
+        <div ref={lotRef}>
+          <BulletinPrintable data={lotData} />
+        </div>
       </div>
+      )}
 
       {/* PDF Generator Modal — individuel */}
       {pdfStudent && selectedStepObj && (

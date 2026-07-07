@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { useParams } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeftIcon, PrinterIcon, Loader2Icon } from "lucide-react"
@@ -15,6 +15,10 @@ import { toMessage } from "@/lib/errors"
 import { BulletinPrintable } from "@/components/school/bulletin-printable"
 import type { BulletinData } from "@/components/BulletinScolaire"
 import { isNisuValid } from "@/lib/nisu"
+import {
+  addBulletinCanvasToPdf,
+  captureBulletinElement,
+} from "@/lib/bulletin-pdf-capture"
 
 interface ApiEnrollmentRow {
   id: string
@@ -84,6 +88,8 @@ export default function BulletinLotPrintPage() {
   const [className, setClassName] = useState<string>("")
   const [stepName, setStepName] = useState<string>("Étape")
   const [reportsHref, setReportsHref] = useState("/admin/dashboard")
+  const [generatingPdf, setGeneratingPdf] = useState(false)
+  const documentRef = useRef<HTMLDivElement | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -168,7 +174,60 @@ export default function BulletinLotPrintPage() {
     void Promise.resolve().then(load)
   }, [load])
 
-  const handlePrint = () => window.print()
+  const handlePrint = async () => {
+    const pages = Array.from(
+      documentRef.current?.querySelectorAll<HTMLElement>(
+        '[data-bulletin-page="true"]'
+      ) ?? []
+    )
+
+    if (pages.length === 0) {
+      toast({
+        title: "PDF indisponible",
+        description: "Aucun bulletin n'est prêt pour le téléchargement.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setGeneratingPdf(true)
+    try {
+      const jsPDF = (await import("jspdf")).default
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "pt",
+        format: "letter",
+        compress: true,
+      })
+
+      for (let i = 0; i < pages.length; i++) {
+        if (i > 0) pdf.addPage("letter", "portrait")
+        const { canvas } = await captureBulletinElement(pages[i])
+        addBulletinCanvasToPdf(pdf, canvas)
+      }
+
+      const safeClassName = (className || "classe")
+        .replace(/[^\p{L}\p{N}]+/gu, "_")
+        .replace(/^_+|_+$/g, "")
+      const safeStepName = (stepName || "etape")
+        .replace(/[^\p{L}\p{N}]+/gu, "_")
+        .replace(/^_+|_+$/g, "")
+
+      pdf.save(
+        `bulletins_lot_${safeClassName}_${safeStepName}_${new Date()
+          .toISOString()
+          .slice(0, 10)}.pdf`
+      )
+    } catch (err) {
+      toast({
+        title: "Erreur PDF",
+        description: toMessage(err, "lors de la génération du PDF"),
+        variant: "destructive",
+      })
+    } finally {
+      setGeneratingPdf(false)
+    }
+  }
 
   const successCount = slots.filter((s) => s.data).length
   const failedCount  = slots.filter((s) => !s.data).length
@@ -237,11 +296,15 @@ export default function BulletinLotPrintPage() {
 
           <Button
             onClick={handlePrint}
-            disabled={loading || successCount === 0}
+            disabled={loading || generatingPdf || successCount === 0}
             className="bg-[#2C4A6E] text-white hover:bg-[#1F3856]"
           >
-            <PrinterIcon className="mr-2 h-4 w-4" />
-            Imprimer / Télécharger PDF
+            {generatingPdf ? (
+              <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <PrinterIcon className="mr-2 h-4 w-4" />
+            )}
+            {generatingPdf ? "Génération PDF..." : "Imprimer / Télécharger PDF"}
           </Button>
         </div>
 
@@ -291,7 +354,10 @@ export default function BulletinLotPrintPage() {
 
         {/* Document area — one BulletinPrintable per student, separated by page breaks in print */}
         {!loading && !error && slots.length > 0 && (
-          <div className="space-y-6 px-4 py-6 print:space-y-0 print:p-0">
+          <div
+            ref={documentRef}
+            className="space-y-6 px-4 py-6 print:space-y-0 print:p-0"
+          >
             {slots.map((slot) =>
               slot.data ? (
                 <div key={slot.enrollmentId} className="mx-auto shadow-lg print:shadow-none">

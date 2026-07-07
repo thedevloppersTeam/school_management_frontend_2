@@ -1,24 +1,21 @@
 // components/school/batch-bulletin-generator.tsx
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Loader2, Download, FileText, CheckCircle2, XCircle, Eye } from "lucide-react"
 import { toast } from "sonner"
-import html2canvas from "html2canvas"
 import jsPDF from "jspdf"
 import { buildBulletinData } from "@/lib/api/bulletin"
 import { type BulletinData } from "@/components/BulletinScolaire"
 import { BulletinPrintable } from "@/components/school/bulletin-printable"
 import {
+  addBulletinCanvasToPdf,
+  captureBulletinElement,
   createBulletinPdfHost,
-  getBulletinCanvasOptions,
-  LETTER_HEIGHT_MM,
-  LETTER_WIDTH_MM,
-  prepareBulletinPdfNode,
-  waitForBulletinPdfAssets,
+  waitForTwoFrames,
 } from "@/lib/bulletin-pdf-capture"
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -67,9 +64,6 @@ export function BatchBulletinGenerator({
   const [status,       setStatus]       = useState<Map<string, StudentStatus>>(new Map())
   const [bulletins,    setBulletins]    = useState<Map<string, BulletinData>>(new Map())
   const [generated,    setGenerated]    = useState(false)
-
-  // Conteneur off-screen pour le rendu HTML → canvas
-  const offscreenRef = useRef<HTMLDivElement>(null)
 
   // ── Reset à l'ouverture ───────────────────────────────────────────────────
 
@@ -149,31 +143,16 @@ export function BatchBulletinGenerator({
     setLoading(true)
 
     try {
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [LETTER_WIDTH_MM, LETTER_HEIGHT_MM] })
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'pt',
+        format: 'letter',
+        compress: true,
+      })
       let firstPage = true
 
       for (const [studentId, data] of bulletins) {
         if (status.get(studentId)?.status !== 'success') continue
-
-        // Rendre le bulletin dans le conteneur off-screen
-        const container = offscreenRef.current
-        if (!container) continue
-
-        // Injecter temporairement le composant via innerHTML — on utilise un div dédié
-        const tempDiv = createBulletinPdfHost()
-        document.body.appendChild(tempDiv)
-
-        // Rendu React → HTML via dangerouslySetInnerHTML n'est pas possible ici.
-        // On clone le bulletin déjà rendu dans le dialog si disponible.
-        // Sinon on crée un rendu simplifié texte pour le fallback.
-        // Approche : on render dans un portail temporaire.
-
-        // ── Fallback propre : rendu via un iframe temporaire ──
-        // Pour éviter la complexité du portail, on utilise html2canvas
-        // sur un div contenant le bulletin rendu côté client.
-
-        // Nettoyer
-        document.body.removeChild(tempDiv)
 
         // Solution : créer un élément, monter BulletinScolaire dedans via React DOM
         const { createRoot } = await import('react-dom/client')
@@ -183,31 +162,22 @@ export function BatchBulletinGenerator({
         document.body.appendChild(mountPoint)
 
         const root = createRoot(mountPoint)
-        await new Promise<void>(resolve => {
+        try {
           root.render(
             React.default.createElement(BulletinPrintable, {
               data,
               key: studentId,
             })
           )
-          // Laisser React flusher
-          setTimeout(resolve, 400)
-        })
+          await waitForTwoFrames()
 
-        const captureTarget = prepareBulletinPdfNode(mountPoint)
-        await waitForBulletinPdfAssets(captureTarget)
-
-        const canvas = await html2canvas(
-          captureTarget,
-          getBulletinCanvasOptions(captureTarget),
-        )
-
-        root.unmount()
-        document.body.removeChild(mountPoint)
-
-        const imgData   = canvas.toDataURL('image/png')
-        if (!firstPage) pdf.addPage()
-        pdf.addImage(imgData, 'PNG', 0, 0, LETTER_WIDTH_MM, LETTER_HEIGHT_MM)
+          if (!firstPage) pdf.addPage("letter", "portrait")
+          const { canvas } = await captureBulletinElement(mountPoint)
+          addBulletinCanvasToPdf(pdf, canvas)
+        } finally {
+          root.unmount()
+          mountPoint.remove()
+        }
 
         firstPage = false
       }
@@ -231,9 +201,6 @@ export function BatchBulletinGenerator({
 
   return (
     <>
-      {/* Conteneur off-screen pour le rendu PDF */}
-      <div ref={offscreenRef} style={{ position: 'absolute', left: '-9999px', top: 0 }} aria-hidden />
-
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
           <DialogHeader>

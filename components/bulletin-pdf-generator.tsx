@@ -20,12 +20,9 @@ import { toMessage } from "@/lib/errors";
 import { type BulletinData } from "./BulletinScolaire";
 import { BulletinPrintable } from "@/components/school/bulletin-printable";
 import {
-  createBulletinPdfHost,
-  getBulletinCanvasOptions,
-  LETTER_HEIGHT_MM,
-  LETTER_WIDTH_MM,
+  addBulletinCanvasToPdf,
+  captureBulletinElement,
   prepareBulletinPdfNode,
-  waitForBulletinPdfAssets,
 } from "@/lib/bulletin-pdf-capture";
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -240,32 +237,16 @@ export function BulletinPDFGenerator({
 
     try {
       // PB-001 : imports dynamiques, chargés uniquement à la demande
-      const html2canvas = (await import("html2canvas")).default;
       const jsPDF = (await import("jspdf")).default;
 
-      const tempContainer = createBulletinPdfHost();
-      document.body.appendChild(tempContainer);
-
-      const clone = createPrintableClone();
-      if (clone) tempContainer.appendChild(clone);
-
-      const captureTarget = clone ? prepareBulletinPdfNode(clone) : tempContainer;
-      await waitForBulletinPdfAssets(captureTarget);
-      await new Promise((resolve) => setTimeout(resolve, 100));
-
-      const canvas = await html2canvas(
-        captureTarget,
-        getBulletinCanvasOptions(captureTarget),
-      );
-      document.body.removeChild(tempContainer);
-
-      const imgData = canvas.toDataURL("image/png");
+      const { canvas } = await captureBulletinElement(bulletinRef.current);
       const pdf = new jsPDF({
         orientation: "portrait",
-        unit: "mm",
-        format: [LETTER_WIDTH_MM, LETTER_HEIGHT_MM],
+        unit: "pt",
+        format: "letter",
+        compress: true,
       });
-      pdf.addImage(imgData, "PNG", 0, 0, LETTER_WIDTH_MM, LETTER_HEIGHT_MM);
+      addBulletinCanvasToPdf(pdf, canvas);
 
       pdf.save(`bulletin_${bulletinData.nom ?? studentName}_${stepName}.pdf`);
       pdfSaved = true;
