@@ -69,13 +69,16 @@ export function BatchBulletinGenerator({
 
   useEffect(() => {
     if (!open) return
-    setProgress(0)
-    setGenerated(false)
-    setBulletins(new Map())
     const init = new Map<string, StudentStatus>()
     studentIds.forEach(id => init.set(id, { status: 'pending' }))
-    setStatus(init)
-  }, [open])
+
+    void Promise.resolve().then(() => {
+      setProgress(0)
+      setGenerated(false)
+      setBulletins(new Map())
+      setStatus(init)
+    })
+  }, [open, studentIds])
 
   // ── Génération de tous les bulletins ──────────────────────────────────────
 
@@ -166,6 +169,7 @@ export function BatchBulletinGenerator({
           root.render(
             React.default.createElement(BulletinPrintable, {
               data,
+              renderMode: "pdf",
               key: studentId,
             })
           )

@@ -856,7 +856,7 @@ export function CPMSLBulletinsSection({
         }}
       >
         <div ref={lotRef}>
-          <BulletinPrintable data={lotData} />
+          <BulletinPrintable data={lotData} renderMode="pdf" />
         </div>
       </div>
       )}

@@ -3,6 +3,7 @@
 import type { BulletinData, RubriqueEntry, ComportementItem } from "@/components/BulletinScolaire"
 import { calculateRubriqueTotals, formatBulletinNumber } from "@/lib/bulletin-calculations"
 import { normalizeUploadUrl } from "@/lib/upload-url"
+import { useLayoutEffect, useRef } from "react"
 
 // -----------------------------------------------------------------------------
 // Bulletin imprimable — design fidèle au template bulletin-scolaire.html
@@ -31,6 +32,199 @@ function parseDisplayNumber(value: string | number | null | undefined): number |
   return Number.isFinite(parsed) ? parsed : null
 }
 
+
+
+const PDF_HEADER_SERIF_FONT =
+  '"Times New Roman", "Liberation Serif", Times, serif'
+
+const PDF_HEADER_STUDENT_FONT =
+  '"Monotype Corsiva", var(--font-cookie), "Cookie", cursive'
+
+const PDF_HEADER_FOUNDED_FONT =
+  'var(--font-lobster), "Lobster", cursive'
+
+type PdfTextAlign = "start" | "middle" | "end"
+
+function resolveTextY(value: string, height: number): number {
+  const normalizedValue = value.trim()
+
+  if (normalizedValue.endsWith("%")) {
+    const percentage = Number.parseFloat(normalizedValue)
+
+    return Number.isFinite(percentage)
+      ? height * (percentage / 100)
+      : height * 0.44
+  }
+
+  const pixels = Number.parseFloat(normalizedValue)
+
+  return Number.isFinite(pixels)
+    ? pixels
+    : height * 0.44
+}
+
+const TRANSPARENT_PIXEL =
+  "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs="
+
+function PdfSvgTextLine({
+  value,
+  align = "start",
+  y = "44%",
+  fontFamily = PDF_HEADER_SERIF_FONT,
+}: Readonly<{
+  value: string
+  align?: PdfTextAlign
+  y?: string
+  fontFamily?: string
+}>) {
+  const imageRef = useRef<HTMLImageElement>(null)
+
+  useLayoutEffect(() => {
+    const image = imageRef.current
+
+    if (!image) {
+      return
+    }
+
+    let disposed = false
+    let animationFrame = 0
+
+    const renderBitmap = () => {
+      if (disposed) {
+        return
+      }
+
+      const width = Math.max(1, image.clientWidth)
+      const height = Math.max(1, image.clientHeight)
+      const computedStyle = window.getComputedStyle(image)
+
+      const pixelRatio = Math.max(
+        2,
+        Math.min(4, window.devicePixelRatio || 1),
+      )
+
+      const canvasFont = [
+        computedStyle.fontStyle,
+        computedStyle.fontWeight,
+        computedStyle.fontSize,
+        computedStyle.fontFamily,
+      ].join(" ")
+
+      const canvas = document.createElement("canvas")
+      canvas.width = Math.ceil(width * pixelRatio)
+      canvas.height = Math.ceil(height * pixelRatio)
+
+      const context = canvas.getContext("2d")
+
+      if (!context) {
+        return
+      }
+
+      context.setTransform(
+        pixelRatio,
+        0,
+        0,
+        pixelRatio,
+        0,
+        0,
+      )
+
+      context.clearRect(0, 0, width, height)
+      context.font = canvasFont
+      context.fillStyle = computedStyle.color
+      context.textBaseline = "middle"
+
+      context.textAlign =
+        align === "start"
+          ? "left"
+          : align === "middle"
+            ? "center"
+            : "right"
+
+      const x =
+        align === "start"
+          ? 0
+          : align === "middle"
+            ? width / 2
+            : width
+
+      context.fillText(
+        value,
+        x,
+        resolveTextY(y, height),
+      )
+
+      /*
+       * Une image data URL conserve son bitmap lors de cloneNode(true).
+       * Le texte de l'en-tête garde donc exactement la police utilisée par
+       * Chromium lorsque html2canvas capture le clone destiné au PDF.
+       */
+      image.src = canvas.toDataURL("image/png")
+      image.dataset.pdfTextReady = "true"
+    }
+
+    const scheduleDraw = () => {
+      cancelAnimationFrame(animationFrame)
+      animationFrame = requestAnimationFrame(renderBitmap)
+    }
+
+    const loadFontAndRedraw = async () => {
+      const computedStyle = window.getComputedStyle(image)
+      const canvasFont = [
+        computedStyle.fontStyle,
+        computedStyle.fontWeight,
+        computedStyle.fontSize,
+        computedStyle.fontFamily,
+      ].join(" ")
+
+      image.dataset.pdfTextReady = "false"
+
+      if (document.fonts?.load) {
+        await document.fonts
+          .load(canvasFont, value)
+          .catch(() => undefined)
+      }
+
+      scheduleDraw()
+    }
+
+    const resizeObserver = new ResizeObserver(scheduleDraw)
+    resizeObserver.observe(image)
+
+    /*
+     * Premier rendu synchrone : le clone PDF ne récupère jamais une image vide.
+     * Un second rendu est effectué dès que la police est confirmée comme chargée.
+     */
+    renderBitmap()
+    void loadFontAndRedraw()
+
+    if (document.fonts?.ready) {
+      void document.fonts.ready.then(scheduleDraw)
+    }
+
+    return () => {
+      disposed = true
+      cancelAnimationFrame(animationFrame)
+      resizeObserver.disconnect()
+    }
+  }, [align, fontFamily, value, y])
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      ref={imageRef}
+      src={TRANSPARENT_PIXEL}
+      alt=""
+      className="pdf-svg-text-line pdf-font-image"
+      data-pdf-font-image="true"
+      data-pdf-text-ready="false"
+      aria-hidden="true"
+      draggable={false}
+      style={{ fontFamily }}
+    />
+  )
+}
+
 /** Totaux d'une rubrique : Σnotes, Σcoeffs sur les sous-matières notées. */
 function RubriqueTable({
   title,
@@ -41,6 +235,9 @@ function RubriqueTable({
   const totals = calculateRubriqueTotals(entries)
   const displayTitle = title?.trim() && title !== "—" ? title : fallbackTitle
   const firstNoteIndex = entries.findIndex((entry) => !entry.isParent)
+  const lastNoteIndex = entries.reduce((lastIndex, entry, index) =>
+    entry.isParent ? lastIndex : index,
+  -1)
 
   return (
     <div className="rubrique-table">
@@ -48,8 +245,50 @@ function RubriqueTable({
       <div className="rubrique-score-grid">
         <div className="rubrique-row rubrique-header-row">
           <div aria-hidden="true" />
-          <div className="score-header score-header-note">Notes</div>
-          <div className="score-header score-header-coeff">Coeff.</div>
+          <div className="score-header score-header-note" aria-label="Notes">
+            <svg
+              className="score-header-svg"
+              width="100%"
+              height="100%"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <text
+                x="50%"
+                y="44%"
+                textAnchor="middle"
+                dominantBaseline="middle"
+                fontFamily="Times New Roman, Liberation Serif, Times, serif"
+                fontSize="12px"
+                fontWeight="700"
+                fill="#000000"
+              >
+                Notes
+              </text>
+            </svg>
+          </div>
+          <div className="score-header score-header-coeff" aria-label="Coefficient">
+            <svg
+              className="score-header-svg"
+              width="100%"
+              height="100%"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <text
+                x="50%"
+                y="44%"
+                textAnchor="middle"
+                dominantBaseline="middle"
+                fontFamily="Times New Roman, Liberation Serif, Times, serif"
+                fontSize="12px"
+                fontWeight="700"
+                fill="#000000"
+              >
+                Coeff.
+              </text>
+            </svg>
+          </div>
         </div>
         {entries.map((e, i) => {
           if (e.isParent) {
@@ -64,7 +303,12 @@ function RubriqueTable({
           }
           const cc = colorClass(e.note, e.coeff)
           return (
-            <div className="rubrique-row" key={`${e.name}-${i}`}>
+            <div
+              className={i === lastNoteIndex
+                ? "rubrique-row rubrique-data-row rubrique-last-data-row"
+                : "rubrique-row rubrique-data-row"}
+              key={`${e.name}-${i}`}
+            >
               <div className="subject-item">{e.name}</div>
               <div
                 className={`note-cell note-value ${cc}`}
@@ -198,10 +442,25 @@ function BulletinHeader({ data }: Readonly<{ data: BulletinData }>) {
   const etab = data.etablissement
   const cycleLabel = getCycleLabel(data.niveau)
   const periodDetails = getPeriodDetails(data.periode)
+  const firstName = data.prenoms || "—"
+  const lastName = (data.nom || "—").toLocaleUpperCase("fr")
+  const level = data.niveau || "—"
+  const period = data.periode || "—"
+  const birthDate = data.dateNaissance || "—"
+  const academicYear = data.anneeScolaire || "—"
+  const sex = data.sexe || "—"
+  const nisu = data.nisu || "—"
+  const studentCode = `Code: ${data.code || "—"}`
 
   return (
     <header className="bulletin-header" aria-label="En-tête du bulletin">
-      <h1 className="bulletin-header-title" data-pdf-anchor="bulletin-title">Bulletin Scolaire</h1>
+      <h1
+        className="bulletin-header-title"
+        data-pdf-anchor="bulletin-title"
+        aria-label="Bulletin Scolaire"
+      >
+        <PdfSvgTextLine value="Bulletin Scolaire" align="middle" />
+      </h1>
 
       <div className="bulletin-header-grid">
         <div className="bulletin-logo-block">
@@ -215,41 +474,133 @@ function BulletinHeader({ data }: Readonly<{ data: BulletinData }>) {
           ) : (
             <div className="bulletin-logo-placeholder" aria-hidden="true" />
           )}
-          <div className="bulletin-founded">Depuis 1998!</div>
+          <div className="bulletin-founded" aria-label="Depuis 1998!">
+            <PdfSvgTextLine value="Depuis 1998!" align="middle" fontFamily={PDF_HEADER_FOUNDED_FONT} />
+          </div>
         </div>
 
         <div className="bulletin-header-spacer" aria-hidden="true" />
 
         <div className="bulletin-info-grid">
-          <div className="info-label info-row-1 info-col-identity-label">Prénom(s)</div>
-          <div className="info-value info-first-name info-row-1 info-col-identity-value" data-pdf-anchor="student-firstname">{data.prenoms || "—"}</div>
+          <div
+            className="info-label info-row-1 info-col-identity-label"
+            aria-label="Prénom(s)"
+          >
+            <PdfSvgTextLine value="Prénom(s)" />
+          </div>
+          <div
+            className="info-value info-first-name info-row-1 info-col-identity-value"
+            data-pdf-anchor="student-firstname"
+            aria-label={firstName}
+          >
+            <PdfSvgTextLine value={firstName} fontFamily={PDF_HEADER_STUDENT_FONT} />
+          </div>
 
           <div className="info-school-label-block info-row-1 info-col-school-label">
-            <div className="info-school-primary">Niveau</div>
-            {cycleLabel ? <div className="info-school-secondary info-level-secondary">{cycleLabel}</div> : null}
+            <div className="info-school-primary" aria-label="Niveau">
+              <PdfSvgTextLine value="Niveau" />
+            </div>
+            {cycleLabel ? (
+              <div
+                className="info-school-secondary info-level-secondary"
+                aria-label={cycleLabel}
+              >
+                <PdfSvgTextLine value={cycleLabel} />
+              </div>
+            ) : null}
           </div>
-          <div className="info-school-value info-row-1 info-col-school-value">{data.niveau || "—"}</div>
+          <div
+            className="info-school-value info-row-1 info-col-school-value"
+            aria-label={level}
+          >
+            <PdfSvgTextLine value={level} fontFamily={PDF_HEADER_STUDENT_FONT} />
+          </div>
 
-          <div className="info-label info-row-2 info-col-identity-label">Nom</div>
-          <div className="info-value info-last-name info-row-2 info-col-identity-value" data-pdf-anchor="student-lastname">{data.nom || "—"}</div>
+          <div
+            className="info-label info-row-2 info-col-identity-label"
+            aria-label="Nom"
+          >
+            <PdfSvgTextLine value="Nom" />
+          </div>
+          <div
+            className="info-value info-last-name info-row-2 info-col-identity-value"
+            data-pdf-anchor="student-lastname"
+            aria-label={lastName}
+          >
+            <PdfSvgTextLine value={lastName} fontFamily={PDF_HEADER_STUDENT_FONT} />
+          </div>
 
           <div className="info-school-label-block info-row-2 info-col-school-label">
-            <div className="info-school-primary">{periodDetails.label}</div>
-            {periodDetails.months ? <div className="info-school-secondary info-period-secondary">{periodDetails.months}</div> : null}
+            <div className="info-school-primary" aria-label={periodDetails.label}>
+              <PdfSvgTextLine value={periodDetails.label} />
+            </div>
+            {periodDetails.months ? (
+              <div
+                className="info-school-secondary info-period-secondary"
+                aria-label={periodDetails.months}
+              >
+                <PdfSvgTextLine value={periodDetails.months} />
+              </div>
+            ) : null}
           </div>
-          <div className="info-school-value info-row-2 info-col-school-value">{data.periode || "—"}</div>
+          <div
+            className="info-school-value info-row-2 info-col-school-value"
+            aria-label={period}
+          >
+            <PdfSvgTextLine value={period} fontFamily={PDF_HEADER_STUDENT_FONT} />
+          </div>
 
-          <div className="info-label info-birth-label info-row-3 info-col-identity-label">Date de naissance</div>
-          <div className="info-value info-birth-value info-row-3 info-col-identity-value">{data.dateNaissance || "—"}</div>
+          <div
+            className="info-label info-birth-label info-row-3 info-col-identity-label"
+            aria-label="Date de naissance"
+          >
+            <PdfSvgTextLine value="Date de naissance" />
+          </div>
+          <div
+            className="info-value info-birth-value info-row-3 info-col-identity-value"
+            aria-label={birthDate}
+          >
+            <PdfSvgTextLine value={birthDate} fontFamily={PDF_HEADER_STUDENT_FONT} />
+          </div>
 
-          <div className="info-label info-row-3 info-col-school-label">Année scolaire</div>
-          <div className="info-academic-year-value info-row-3 info-col-school-value">{data.anneeScolaire || "—"}</div>
+          <div
+            className="info-label info-row-3 info-col-school-label"
+            aria-label="Année scolaire"
+          >
+            <PdfSvgTextLine value="Année scolaire" />
+          </div>
+          <div
+            className="info-academic-year-value info-row-3 info-col-school-value"
+            aria-label={academicYear}
+          >
+            <PdfSvgTextLine value={academicYear} />
+          </div>
 
-          <div className="info-label info-row-4 info-col-identity-label">Sexe</div>
-          <div className="info-secondary-value info-row-4 info-col-identity-value">{data.sexe || "—"}</div>
+          <div
+            className="info-label info-row-4 info-col-identity-label"
+            aria-label="Sexe"
+          >
+            <PdfSvgTextLine value="Sexe" />
+          </div>
+          <div
+            className="info-secondary-value info-row-4 info-col-identity-value"
+            aria-label={sex}
+          >
+            <PdfSvgTextLine value={sex} />
+          </div>
 
-          <div className="info-label info-row-4 info-col-school-label">NISU</div>
-          <div className="info-nisu-value info-row-4 info-col-school-value">{data.nisu || "—"}</div>
+          <div
+            className="info-label info-row-4 info-col-school-label"
+            aria-label="NISU"
+          >
+            <PdfSvgTextLine value="NISU" />
+          </div>
+          <div
+            className="info-nisu-value info-row-4 info-col-school-value"
+            aria-label={nisu}
+          >
+            <PdfSvgTextLine value={nisu} />
+          </div>
         </div>
 
         <div className="bulletin-header-spacer" aria-hidden="true" />
@@ -271,7 +622,9 @@ function BulletinHeader({ data }: Readonly<{ data: BulletinData }>) {
               </svg>
             )}
           </div>
-          <div className="bulletin-student-code">Code: {data.code || "—"}</div>
+          <div className="bulletin-student-code" aria-label={studentCode}>
+            <PdfSvgTextLine value={studentCode} align="middle" />
+          </div>
         </div>
       </div>
     </header>
@@ -419,6 +772,25 @@ const CSS = `
 }
 .btpl.pdf-capture{overflow:visible;}
 .btpl *{box-sizing:border-box;}
+.btpl .pdf-svg-text-line{
+  display:block;width:100%;height:1em;height:1lh;min-height:1em;
+  overflow:visible;color:inherit;font-family:inherit;font-size:inherit;
+  font-weight:inherit;font-style:inherit;letter-spacing:inherit;
+}
+.btpl img.pdf-font-image{
+  display:block;
+  width:100%;
+  padding:0;
+  margin:0;
+  border:0;
+  background:transparent;
+  object-fit:fill;
+}
+.btpl .pdf-svg-text-glyph{
+  fill:currentColor;font-family:inherit;font-size:inherit;font-weight:inherit;
+  font-style:inherit;letter-spacing:inherit;word-spacing:inherit;
+  text-rendering:geometricPrecision;white-space:pre;
+}
 .btpl .page{
   width:var(--paper-w);height:var(--paper-h);margin:0 auto;background:#fff;
   padding:.18in .32in .34in;position:relative;overflow:hidden;
@@ -555,9 +927,23 @@ const CSS = `
   align-items:stretch;width:100%;box-sizing:border-box;margin:0;padding:0;
 }
 .btpl .score-header{
-  font-family:var(--font-serif);font-size:calc(6.5pt / var(--template-scale));font-weight:700;
-  font-style:normal;line-height:calc(8pt / var(--template-scale));text-align:center;color:#000;
-  border:calc(0.5pt / var(--template-scale)) solid #000;box-sizing:border-box;padding:calc(1pt / var(--template-scale)) 0;
+  height:calc(11pt / var(--template-scale));
+  min-height:calc(11pt / var(--template-scale));
+  position:relative;
+  display:block;
+  overflow:hidden;
+  line-height:0;
+  text-align:center;
+  color:#000;
+  border:calc(0.5pt / var(--template-scale)) solid #000;
+  box-sizing:border-box;
+  padding:0;
+}
+.btpl .score-header-svg{
+  display:block;
+  width:100%;
+  height:100%;
+  overflow:visible;
 }
 .btpl .score-header-coeff{border-left:none;}
 .btpl .subject-group{
@@ -589,11 +975,41 @@ const CSS = `
   font-style:normal;line-height:calc(9pt / var(--template-scale));
 }
 .btpl .rubric-empty-cell{min-height:calc(9.5pt / var(--template-scale));}
-.btpl .total-cell{
-  font-family:var(--font-serif);font-size:calc(6.8pt / var(--template-scale));font-weight:700;
-  font-style:normal;line-height:calc(8pt / var(--template-scale));text-align:center;color:#000;
-  border-top:calc(0.5pt / var(--template-scale)) solid #000;border-bottom:calc(0.5pt / var(--template-scale)) solid #000;
-  padding:calc(1pt / var(--template-scale)) 0;
+/*
+ * Réserve verticale au bas de la colonne Notes/Coeff.
+ * html2canvas dessine les chiffres HTML légèrement plus bas que Chromium.
+ * On agrandit uniquement la dernière ligne de données pour empêcher la
+ * bordure supérieure du total de traverser la dernière note/coefficient,
+ * sans augmenter l'interligne de toute la rubrique.
+ */
+.btpl .rubrique-last-data-row .note-cell,
+.btpl .rubrique-last-data-row .coeff-cell{
+  min-height:calc(12.5pt / var(--template-scale));
+  padding-bottom:calc(3pt / var(--template-scale));
+}
+.btpl .total-cell {
+  min-height: calc(13pt / var(--template-scale));
+
+  font-family: var(--font-serif);
+  font-size: calc(6.8pt / var(--template-scale));
+  font-weight: 700;
+  font-style: normal;
+  line-height: calc(8pt / var(--template-scale));
+  text-align: center;
+  color: #000;
+
+  border-top: calc(0.5pt / var(--template-scale)) solid #000;
+  border-bottom: calc(0.5pt / var(--template-scale)) solid #000;
+
+  padding:
+    calc(0.5pt / var(--template-scale))
+    0
+    calc(4.5pt / var(--template-scale));
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
 }
 .btpl .total-value{display:inline-block;line-height:calc(8pt / var(--template-scale));padding:0;}
 .btpl .red{color:var(--red);}
