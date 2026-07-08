@@ -168,8 +168,18 @@ export default function GradesViewPage({
 
             const gradeMap: Record<string, number | null> = {}
             cs.forEach(c => { gradeMap[c.id] = null })
+            const sectionTotals: Record<string, number> = {}
             rawGrades.forEach((g: { classSubjectId: string; sectionId: string | null; studentScore: number }) => {
-              if (g.sectionId === null) gradeMap[g.classSubjectId] = parseDecimal(g.studentScore)
+              const score = parseDecimal(g.studentScore)
+              if (score === null) return
+              if (g.sectionId === null) {
+                gradeMap[g.classSubjectId] = score
+              } else {
+                sectionTotals[g.classSubjectId] = (sectionTotals[g.classSubjectId] ?? 0) + score
+              }
+            })
+            Object.entries(sectionTotals).forEach(([classSubjectId, total]) => {
+              if (gradeMap[classSubjectId] === null) gradeMap[classSubjectId] = total
             })
 
             const isComplete = cs.length > 0 && cs.every(c => gradeMap[c.id] !== null)
@@ -445,7 +455,7 @@ export default function GradesViewPage({
                     Aucun élève inscrit
                   </h3>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Aucun élève n'est inscrit dans cette classe.
+                    Aucun élève n&apos;est inscrit dans cette classe.
                   </p>
                 </CardContent>
               </Card>
@@ -468,14 +478,14 @@ export default function GradesViewPage({
                 </CardHeader>
                 <Separator />
                 <CardContent className="p-0">
-                  <div className="overflow-x-auto">
-                    <Table className="min-w-full" style={{ minWidth: `${360 + classSubjects.length * 80}px` }}>
+                  <div className="max-h-[68vh] overflow-auto">
+                    <Table className="min-w-full" style={{ minWidth: `${520 + classSubjects.length * 108}px` }}>
                       <TableHeader>
                         {/* Ligne 1 — Rubriques */}
                         <TableRow className="bg-muted/60 hover:bg-muted/60">
                           <TableHead
                             rowSpan={2}
-                            className="w-[200px] border-r-2 border-border pl-6 align-middle text-xs font-semibold uppercase tracking-wider text-foreground"
+                            className="sticky left-0 z-30 min-w-[220px] border-r-2 border-border bg-muted/80 pl-6 align-middle text-xs font-semibold uppercase tracking-wider text-foreground shadow-[1px_0_0_hsl(var(--border))]"
                           >
                             Élève
                           </TableHead>
@@ -529,7 +539,7 @@ export default function GradesViewPage({
                                 key={cs.id}
                                 title={cs.subject.name}
                                 className={cn(
-                                  "min-w-[72px] text-center text-[11px] font-semibold uppercase tracking-wide",
+                                  "min-w-[104px] text-center text-[11px] font-semibold uppercase tracking-wide",
                                   rc.col,
                                   i === 0 ? `border-l-2 ${rc.border}` : `border-l ${rc.border}`
                                 )}
@@ -545,9 +555,9 @@ export default function GradesViewPage({
                         {gradeRows.map((row, ri) => (
                           <TableRow
                             key={row.enrollmentId}
-                            className={cn(ri % 2 === 1 && "bg-muted/20")}
+                            className={cn("group", ri % 2 === 1 && "bg-muted/20")}
                           >
-                            <TableCell className="border-r-2 border-border pl-6">
+                            <TableCell className="sticky left-0 z-10 border-r-2 border-border bg-card pl-6 shadow-[1px_0_0_hsl(var(--border))] group-hover:bg-muted/80">
                               <div className="text-sm font-semibold text-foreground">{row.lastname}</div>
                               <div className="text-xs text-muted-foreground">{row.firstname}</div>
                             </TableCell>
@@ -564,13 +574,23 @@ export default function GradesViewPage({
                                   <TableCell
                                     key={cs.id}
                                     className={cn(
-                                      "text-center text-sm tabular-nums",
-                                      note !== null && note !== undefined ? "font-semibold" : "font-normal",
-                                      noteColorClass(note ?? null, max),
+                                      "min-w-[104px] text-center text-sm tabular-nums",
                                       i === 0 ? `border-l-2 ${rc.border}` : "border-l border-border/50"
                                     )}
                                   >
-                                    {note !== null && note !== undefined ? note.toFixed(1) : '—'}
+                                    {note !== null && note !== undefined ? (
+                                      <span
+                                        className={cn(
+                                          "inline-flex min-w-[64px] justify-center rounded-md border bg-background px-2 py-1 font-bold shadow-sm",
+                                          noteColorClass(note, max)
+                                        )}
+                                        title={`${cs.subject.name} : ${note.toFixed(2)} / ${max}`}
+                                      >
+                                        {note.toFixed(2)}
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex min-w-[64px] justify-center rounded-md border border-dashed px-2 py-1 text-muted-foreground">—</span>
+                                    )}
                                   </TableCell>
                                 )
                               })
@@ -578,11 +598,13 @@ export default function GradesViewPage({
                             {/* Moyenne */}
                             <TableCell
                               className={cn(
-                                "border-l-2 border-border bg-primary/5 text-center text-sm font-bold tabular-nums",
+                                "min-w-[96px] border-l-2 border-border bg-primary/5 text-center text-sm font-bold tabular-nums",
                                 averageColorClass(row.average)
                               )}
                             >
-                              {fmt(row.average)}
+                              <span className="inline-flex min-w-[72px] justify-center rounded-md bg-background px-2 py-1 shadow-sm">
+                                {fmt(row.average)}
+                              </span>
                             </TableCell>
                             {/* Statut */}
                             <TableCell className="border-l border-border text-center">
@@ -616,7 +638,7 @@ export default function GradesViewPage({
                       <TableFooter>
                         {/* Ligne moyenne classe */}
                         <TableRow className="bg-muted/60 hover:bg-muted/60">
-                          <TableCell className="border-r-2 border-border pl-6 text-xs font-bold uppercase tracking-wider text-foreground">
+                          <TableCell className="sticky left-0 z-20 border-r-2 border-border bg-muted/80 pl-6 text-xs font-bold uppercase tracking-wider text-foreground shadow-[1px_0_0_hsl(var(--border))]">
                             Moy. classe
                           </TableCell>
                           {rubricGroups.map(group => {
@@ -625,7 +647,7 @@ export default function GradesViewPage({
                               <TableCell
                                 key={cs.id}
                                 className={cn(
-                                  "text-center text-sm font-bold tabular-nums",
+                                  "min-w-[104px] text-center text-sm font-bold tabular-nums",
                                   rc.col,
                                   i === 0 ? `border-l-2 ${rc.border}` : "border-l border-border/50"
                                 )}

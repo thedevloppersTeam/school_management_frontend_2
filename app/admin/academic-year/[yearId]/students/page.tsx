@@ -63,6 +63,7 @@ import { TransferEnrollmentModal } from "@/components/school/transfer-enrollment
 import { StatCard } from "@/components/school/stat-card"
 import { fetchClassSessions, type AcademicYear, type ClassSession } from "@/lib/api/dashboard"
 import { cn } from "@/lib/utils"
+import { isNisuValid, NISU_RULE_LABEL } from "@/lib/nisu"
 
 // ── Types locaux ──────────────────────────────────────────────────────────────
 
@@ -86,10 +87,6 @@ interface StudentRow {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function isNisuValid(nisu: string): boolean {
-  return !!nisu && /^[A-Z0-9]{14}$/.test(nisu.trim())
-}
 
 function deriveYearStatus(year: AcademicYear): 'active' | 'preparation' | 'archived' {
   if (year.isCurrent) return 'active'
@@ -614,7 +611,7 @@ export default function StudentsManagementPage() {
                           </span>
                           {nisuInvalid && (
                             <span className="text-[11px] text-destructive">
-                              12-13 caractères requis
+                              {NISU_RULE_LABEL}
                             </span>
                           )}
                         </div>

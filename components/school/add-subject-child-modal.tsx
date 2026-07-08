@@ -38,6 +38,7 @@ interface AddSubjectChildModalProps {
     code: string;
     type: "L" | "C" | "N" | "P" | "T";
     coefficient: number;
+    maxScore: number;
   }) => void;
   trigger?: React.ReactNode;
   open?: boolean;
@@ -56,6 +57,7 @@ export function AddSubjectChildModal({
   const [name, setName] = useState("");
   const [type, setType] = useState<"L" | "C" | "N" | "P" | "T" | "">("");
   const [coefficient, setCoefficient] = useState("");
+  const [maxScore, setMaxScore] = useState("");
 
   const isControlled = controlledOpen !== undefined;
   const isOpen = isControlled ? controlledOpen : internalOpen;
@@ -99,6 +101,8 @@ export function AddSubjectChildModal({
   const newTotal = currentTotal + (coefficient ? parseInt(coefficient) : 0);
   const isValidTotal = newTotal <= parent.coefficient;
   const isMaxReached = currentTotal >= parent.coefficient;
+  const parsedMaxScore = maxScore !== "" ? Number(maxScore) : NaN;
+  const isMaxScoreValid = Number.isFinite(parsedMaxScore) && parsedMaxScore > 0;
 
   // Check if form is valid
   const isFormValid =
@@ -106,6 +110,7 @@ export function AddSubjectChildModal({
     type !== "" &&
     coefficient !== "" &&
     parseInt(coefficient) >= 1 &&
+    isMaxScoreValid &&
     isValidTotal &&
     !isMaxReached;
 
@@ -117,11 +122,13 @@ export function AddSubjectChildModal({
       code: generatedCode,
       type: type as "L" | "C" | "N" | "P" | "T",
       coefficient: parseInt(coefficient),
+      maxScore: parsedMaxScore,
     });
 
     setName("");
     setType("");
     setCoefficient("");
+    setMaxScore("");
     setIsOpen(false);
   };
 
@@ -129,6 +136,7 @@ export function AddSubjectChildModal({
     setName("");
     setType("");
     setCoefficient("");
+    setMaxScore("");
     setIsOpen(false);
   };
 
@@ -275,6 +283,34 @@ export function AddSubjectChildModal({
               <p className="text-error text-[13px] font-medium mt-1.5">
                 Coefficient maximum atteint. Impossible d'ajouter une
                 sous-matière.
+              </p>
+            )}
+          </div>
+
+          {/* Note maximum */}
+          <div className="space-y-2">
+            <Label
+              htmlFor="maxScore"
+              className="text-neutral-900 text-[13px] font-medium"
+            >
+              Note maximum <span className="text-error">*</span>
+            </Label>
+            <Input
+              id="maxScore"
+              type="number"
+              min="0.01"
+              step="0.01"
+              value={maxScore}
+              onChange={(e) => setMaxScore(e.target.value)}
+              placeholder="Ex: 30"
+              className="border border-neutral-300 rounded-lg focus-visible:ring-2 focus-visible:ring-primary-500/40 focus-visible:border-primary-500"
+            />
+            <p className="text-neutral-500 text-xs mt-1.5">
+              Note maximale utilisée pour cette sous-matière sur les bulletins.
+            </p>
+            {maxScore && !isMaxScoreValid && (
+              <p className="text-error text-[13px] font-medium mt-1.5">
+                La note maximum doit être un nombre positif.
               </p>
             )}
           </div>

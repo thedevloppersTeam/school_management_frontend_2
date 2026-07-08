@@ -2,9 +2,18 @@
 // Logique partagée de construction des données bulletin (individuel + lot)
 // IMPORTANT : ce fichier ne contient aucun JSX — extension .ts correcte
 import { clientFetch as apiFetch } from '@/lib/client-fetch'
-import { fetchClassSubjects, type ApiClassSubject } from "@/lib/api/grades"
-import { parseDecimal, formatDate } from "@/lib/decimal"
+import { fetchClassSubjects, type ApiClassSubject, type ApiGrade } from "@/lib/api/grades"
+import { parseDecimal } from "@/lib/decimal"
+import { formatFrenchLongDate } from "@/lib/date-format"
 import type { BulletinData, RubriqueEntry, ComportementItem } from "@/components/BulletinScolaire"
+import {
+  calculateBulletinAverages,
+  calculateClassAverages,
+  formatBulletinNumber,
+  normalizeBulletinLevel,
+  normalizeRubriqueLabel,
+  type BulletinClassAverages,
+} from "@/lib/bulletin-calculations"
 
 // ── Types internes ────────────────────────────────────────────────────────────
 
@@ -17,32 +26,67 @@ type RubriqueSet = {
   r3: RubriqueEntry[]; r3Name: string
 }
 
+type SchoolInfoPayload = {
+  name?: string | null
+  nom?: string | null
+  schoolName?: string | null
+  address?: string | null
+  adresse?: string | null
+  phone?: string | null
+  telephone?: string | null
+  email?: string | null
+  logo?: string | null
+  logoUrl?: string | null
+}
+
+type PromotionPhotoPayload = {
+  academicYearId?: string | null
+  studentId?: string | null
+  photoUrl?: string | null
+}
+
+type EnrollmentForClassAverage = {
+  id: string
+}
+
+type StudentPayload = {
+  user?: {
+    firstname?: string | null
+    lastname?: string | null
+    gender?: string | null
+    birth_date?: string | null
+    birthDate?: string | null
+    profilePhoto?: string | null
+  } | null
+  filiere?: string | null
+  studentCode?: string | null
+  nisu?: string | null
+}
+
+type BehaviorPayload = {
+  attitudeResponses?: Array<{
+    attitudeId?: string | null
+    value?: unknown
+  }>
+  absences?: unknown
+  retards?: unknown
+  devoirsManques?: unknown
+  pointsForts?: string | null
+  defis?: string | null
+  remarque?: string | null
+}
+
+type AttitudePayload = {
+  id: string
+  label: string
+}
+
+const classAveragesCache = new Map<string, Promise<BulletinClassAverages>>()
+
 // ── Helpers math ──────────────────────────────────────────────────────────────
 
 function avg(arr: number[]): number | null {
   return arr.length > 0 ? arr.reduce((s, v) => s + v, 0) / arr.length : null
-}
-
-function rubriqueAvg(entries: RubriqueEntry[]): number | null {
-  let total = 0, totalCoeff = 0
-  for (const e of entries) {
-    if (!e.isParent && e.note !== null && e.note !== undefined && e.coeff) {
-      total      += e.note * e.coeff
-      totalCoeff += e.coeff
-    }
-  }
-  return totalCoeff > 0 ? total / totalCoeff : null
-}
-
-function getAppreciation(m: number): string {
-  if (m >= 9.0) return 'A+'
-  if (m >= 8.5) return 'A'
-  if (m >= 7.8) return 'B+'
-  if (m >= 7.5) return 'B'
-  if (m >= 6.9) return 'C+'
-  if (m >= 6.0) return 'C'
-  if (m >= 5.1) return 'D'
-  return 'E'
 }
 
 async function safeFetch<T>(url: string, fallback: T): Promise<T> {
@@ -55,19 +99,44 @@ async function safeFetch<T>(url: string, fallback: T): Promise<T> {
   }
 }
 
-// ── Normalisation behavior / attitudes ────────────────────────────────────────
-
-function normalizeBehavior(raw: any): any {
-  return Array.isArray(raw) ? raw[0] ?? null : raw
+function readPath(source: unknown, path: string): unknown {
+  return path.split('.').reduce<unknown>((current, key) => {
+    if (current && typeof current === 'object' && key in current) {
+      return (current as Record<string, unknown>)[key]
+    }
+    return undefined
+  }, source)
 }
 
-function normalizeAttitudes(raw: any): any[] {
-  return Array.isArray(raw) ? raw : []
+function firstString(source: unknown, paths: string[]): string {
+  for (const path of paths) {
+    const value = readPath(source, path)
+    if (value === null || value === undefined || value === '') continue
+    return String(value)
+  }
+  return '—'
+}
+
+// ── Normalisation behavior / attitudes ────────────────────────────────────────
+
+function normalizeBehavior(raw: unknown): BehaviorPayload | null {
+  const value = Array.isArray(raw) ? raw[0] ?? null : raw
+  return value && typeof value === 'object' ? value as BehaviorPayload : null
+}
+
+function normalizeAttitudes(raw: unknown): AttitudePayload[] {
+  if (!Array.isArray(raw)) return []
+  return raw.flatMap((attitude) => {
+    if (!attitude || typeof attitude !== 'object') return []
+    const record = attitude as Record<string, unknown>
+    if (typeof record.id !== 'string' || typeof record.label !== 'string') return []
+    return [{ id: record.id, label: record.label }]
+  })
 }
 
 // ── Indexation des notes ──────────────────────────────────────────────────────
 
-function addScoreToIndex(index: GradeIndex, grade: any, score: number): void {
+function addScoreToIndex(index: GradeIndex, grade: ApiGrade, score: number): void {
   if (!index.has(grade.classSubjectId)) {
     index.set(grade.classSubjectId, { direct: [], sections: new Map() })
   }
@@ -80,7 +149,7 @@ function addScoreToIndex(index: GradeIndex, grade: any, score: number): void {
   }
 }
 
-function buildGradeIndex(allGrades: any[]): GradeIndex {
+function buildGradeIndex(allGrades: ApiGrade[]): GradeIndex {
   const index: GradeIndex = new Map()
   for (const grade of allGrades) {
     const score = parseDecimal(grade.studentScore)
@@ -91,29 +160,40 @@ function buildGradeIndex(allGrades: any[]): GradeIndex {
 
 // ── Construction des rubriques ────────────────────────────────────────────────
 
+function decimalToNumber(raw: unknown, fallback = 0): number {
+  if (raw == null) return fallback
+  if (typeof raw === 'object' && 'd' in raw) {
+    const digits = (raw as { d?: unknown }).d
+    if (Array.isArray(digits) && digits.length > 0) return Number(digits[0])
+  }
+  const n = Number(raw)
+  return Number.isFinite(n) ? n : fallback
+}
+
 function buildSubjectEntries(cs: ApiClassSubject, bucket: GradeBucket | undefined): RubriqueEntry[] {
   const subject = cs.subject
-  // Fix Prisma Decimal — coefficientOverride et coefficient peuvent être { s, e, d: [val] }
-  const rawCoeff = cs.coefficientOverride !== null ? cs.coefficientOverride : subject.coefficient
-  const coeff = (typeof rawCoeff === 'object' && (rawCoeff as any).d)
-    ? Number((rawCoeff as any).d[0])
-    : Number(rawCoeff) || 1
+  const subjectMax = decimalToNumber(subject.maxScore, 0)
 
   if (!subject.hasSections || subject.sections.length === 0) {
-    return [{ name: subject.name, note: avg(bucket?.direct ?? []), coeff, isParent: false }]
+    const note = avg(bucket?.direct ?? [])
+    return [{ name: subject.name, note, coeff: note !== null ? subjectMax : undefined, isParent: false }]
+  }
+
+  const hasAnySectionGrade = Array.from(bucket?.sections.values() ?? []).some(arr => arr.length > 0)
+  if (!hasAnySectionGrade) {
+    const note = avg(bucket?.direct ?? [])
+    return [{ name: subject.name, note, coeff: note !== null ? subjectMax : undefined, isParent: false }]
   }
 
   const entries: RubriqueEntry[] = [{ name: subject.name, isParent: true }]
   for (const sec of subject.sections) {
-    const scores = bucket?.sections.get(sec.id) ?? []
-    const rawMax = sec.maxScore
-    const maxScore = (typeof rawMax === 'object' && (rawMax as any).d)
-      ? Number((rawMax as any).d[0])
-      : Number(rawMax) || 0
+    const scores   = bucket?.sections.get(sec.id) ?? []
+    const maxScore = decimalToNumber(sec.maxScore, 0)
+    const note     = avg(scores)
     entries.push({
       name:     sec.name,
-      note:     avg(scores),
-      coeff:    maxScore > 0 ? coeff / subject.sections.length : 1,
+      note,
+      coeff:    note !== null ? maxScore : undefined,
       isParent: false,
     })
   }
@@ -128,39 +208,88 @@ function pushToRubrique(set: RubriqueSet, code: string, entries: RubriqueEntry[]
 
 function buildRubriques(classSubjects: ApiClassSubject[], gradeIndex: GradeIndex): RubriqueSet {
   const set: RubriqueSet = {
-    r1: [], r1Name: 'Rubrique 1',
-    r2: [], r2Name: 'Rubrique 2',
-    r3: [], r3Name: 'Rubrique 3',
+    r1: [], r1Name: normalizeRubriqueLabel(1),
+    r2: [], r2Name: normalizeRubriqueLabel(2),
+    r3: [], r3Name: normalizeRubriqueLabel(3),
   }
   for (const cs of classSubjects) {
     const { rubric } = cs.subject
     const code = rubric?.code ?? ''
-    const name = rubric?.name ?? ''
-    if (code === 'R1' && name) set.r1Name = name
-    if (code === 'R2' && name) set.r2Name = name
-    if (code === 'R3' && name) set.r3Name = name
     const entries = buildSubjectEntries(cs, gradeIndex.get(cs.id))
     pushToRubrique(set, code, entries)
   }
   return set
 }
 
-// ── Bloc comportement ─────────────────────────────────────────────────────────
+async function getClassAverages(params: {
+  classSessionId: string
+  stepId: string
+  classSubjects: ApiClassSubject[]
+}): Promise<BulletinClassAverages> {
+  const cacheKey = `${params.classSessionId}:${params.stepId}`
+  const cached = classAveragesCache.get(cacheKey)
+  if (cached) return cached
 
-function resolveAttitudeOui(behavior: any, attitudeId: string): boolean | null {
-  const response = behavior?.attitudeResponses?.find((r: any) => r.attitudeId === attitudeId)
-  return response != null ? response.value : null
+  const promise = (async () => {
+    const enrollments = await apiFetch<EnrollmentForClassAverage[]>(
+      `/api/enrollments?classSessionId=${params.classSessionId}&status=ACTIVE`,
+    )
+
+    const averages = await Promise.all(
+      enrollments.map(async (enrollment) => {
+        try {
+          const grades = await apiFetch<ApiGrade[]>(
+            `/api/grades/enrollment/${enrollment.id}?stepId=${params.stepId}`,
+          )
+          const gradeIndex = buildGradeIndex(grades)
+          const rubriques = buildRubriques(params.classSubjects, gradeIndex)
+          return calculateBulletinAverages({
+            rubrique1: rubriques.r1,
+            rubrique2: rubriques.r2,
+            rubrique3: rubriques.r3,
+          })
+        } catch {
+          return null
+        }
+      }),
+    )
+
+    return calculateClassAverages(averages.filter((avg): avg is NonNullable<typeof avg> => avg !== null))
+  })()
+
+  classAveragesCache.set(cacheKey, promise)
+  return promise
 }
 
-function buildComportementItems(attitudes: any[], behavior: any): ComportementItem[] {
-  return attitudes.map((att: any, i: number) => ({
+// ── Bloc comportement ─────────────────────────────────────────────────────────
+
+function resolveAttitudeOui(behavior: BehaviorPayload | null, attitudeId: string): boolean | null {
+  const response = behavior?.attitudeResponses?.find((r) => r.attitudeId === attitudeId)
+  return typeof response?.value === 'boolean' ? response.value : null
+}
+
+const DEFAULT_BEHAVIOUR_ITEMS = [
+  "Est Agité(e)", "Est distrait(e)", "Est rêveur(se)", "Est bagarreur(se)", "Est impertinent(e)",
+  "Prends des initiatives", "Perturbe les autres", "A des conduites imprévisibles",
+  "Se laisse mener par les autres", "Respecte les prescrits et le code de vie",
+  "Coopère avec l'enseignant", "Termine ce qu'il / elle commence",
+  "Demande une attention excessive de l'enseignant",
+  "Se décourage facilement lorsqu'un effort est nécessaire",
+]
+
+function buildComportementItems(attitudes: AttitudePayload[], behavior: BehaviorPayload | null): ComportementItem[] {
+  const source = attitudes.length > 0
+    ? attitudes.map((att) => ({ id: att.id, label: att.label }))
+    : DEFAULT_BEHAVIOUR_ITEMS.map((label, i) => ({ id: `default-${i}`, label }))
+  const perCol = Math.max(1, Math.ceil(source.length / 3))
+  return source.map((att, i) => ({
     label: att.label,
     oui:   resolveAttitudeOui(behavior, att.id),
-    col:   ((i % 3) + 1) as 1 | 2 | 3,
+    col:   Math.min(3, Math.floor(i / perCol) + 1) as 1 | 2 | 3,
   }))
 }
 
-function buildComportement(behavior: any, attitudes: any[]) {
+function buildComportement(behavior: BehaviorPayload | null, attitudes: AttitudePayload[]) {
   return {
     absences:        behavior?.absences        != null ? String(behavior.absences)        : '—',
     retards:         behavior?.retards          != null ? String(behavior.retards)          : '—',
@@ -189,12 +318,14 @@ export async function buildBulletinData(params: {
   const { enrollmentId, studentId, classSessionId, stepId, stepName, className, yearId } = params
 
   // 1. Fetch toutes les données en parallèle
-  const [student, classSubjects, allGrades, behaviorRaw, attitudesRaw] = await Promise.all([
-    apiFetch<any>(`/api/students/${studentId}`),
+  const [student, classSubjects, allGrades, behaviorRaw, attitudesRaw, schoolInfo, promotionPhotos] = await Promise.all([
+    apiFetch<StudentPayload>(`/api/students/${studentId}`),
     fetchClassSubjects(classSessionId),
-    apiFetch<any[]>(`/api/grades/enrollment/${enrollmentId}?stepId=${stepId}`),
-    safeFetch<any>(`/api/behaviors?enrollmentId=${enrollmentId}&stepId=${stepId}`, null),
-    safeFetch<any[]>(`/api/attitudes?academicYearId=${yearId}`, []),
+    apiFetch<ApiGrade[]>(`/api/grades/enrollment/${enrollmentId}?stepId=${stepId}`),
+    safeFetch<unknown>(`/api/behaviors?enrollmentId=${enrollmentId}&stepId=${stepId}`, null),
+    safeFetch<unknown>(`/api/attitudes?academicYearId=${yearId}`, []),
+    safeFetch<SchoolInfoPayload | null>('/api/school-info', null),
+    safeFetch<PromotionPhotoPayload[]>(`/api/promotion-photos?studentId=${studentId}`, []),
   ])
 
   // 2. Normaliser
@@ -207,56 +338,70 @@ export async function buildBulletinData(params: {
   // 4. Rubriques
   const { r1, r1Name, r2, r2Name, r3, r3Name } = buildRubriques(classSubjects, gradeIndex)
 
-  // 5. Moyennes BR-001 (70/25/5)
-  const moyR1    = rubriqueAvg(r1)
-  const moyR2    = rubriqueAvg(r2)
-  const moyR3    = rubriqueAvg(r3)
-  const finalAvg = ((moyR1 ?? 0) * 0.70) + ((moyR2 ?? 0) * 0.25) + ((moyR3 ?? 0) * 0.05)
+  // 5. Resultats calcules CPMSL, centralises hors JSX.
+  const averages = calculateBulletinAverages({
+    rubrique1: r1,
+    rubrique2: r2,
+    rubrique3: r3,
+  })
+  const moyenneEtape = formatBulletinNumber(averages.moyenneEtape)
+  const appreciation = averages.appreciation
+  const classAverages = await getClassAverages({ classSessionId, stepId, classSubjects })
+  const backendMoyenneClasse = firstString(student, ['moyenneClasse', 'classAverage', 'bulletin.moyenneClasse', 'bulletin.classAverage'])
+  const moyenneClasse = backendMoyenneClasse !== '—'
+    ? backendMoyenneClasse
+    : formatBulletinNumber(classAverages.moyenneClasseEtape)
 
   // 6. Comportement
   const comportement = buildComportement(behavior, attitudes)
+  const promotionPhoto = promotionPhotos.find(p => p.academicYearId === yearId) ?? promotionPhotos[0]
+  const schoolName = schoolInfo?.name ?? schoolInfo?.nom ?? schoolInfo?.schoolName
+  const logoUrl = schoolInfo?.logoUrl ?? schoolInfo?.logo ?? ''
 
   return {
     prenoms:       student?.user?.firstname ?? '',
     nom:           student?.user?.lastname  ?? '',
     sexe:          student?.user?.gender    ?? '—',
-    niveau:        className,
+    niveau:        normalizeBulletinLevel(className),
     filiere:       student?.filiere         ?? '—',
-    dateNaissance: formatDate(student?.user?.birth_date ?? student?.user?.birthDate ?? ''),
+    dateNaissance: formatFrenchLongDate(student?.user?.birth_date ?? student?.user?.birthDate),
     anneeScolaire: `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`,
     periode:       stepName,
     code:          student?.studentCode ?? '',
     nisu:          student?.nisu        ?? '',
-    photoUrl:      student?.user?.profilePhoto ?? undefined,
+    photoUrl:      promotionPhoto?.photoUrl ?? student?.user?.profilePhoto ?? undefined,
 
     rubrique1Name:  r1Name,
     rubrique1Poids: '70%',
     rubrique1:      r1,
-    moyR1,
+    moyR1: averages.moyR1,
+    moyClasseR1: classAverages.moyClasseR1,
 
     rubrique2Name:  r2Name,
     rubrique2Poids: '25%',
     rubrique2:      r2,
-    moyR2,
+    moyR2: averages.moyR2,
+    moyClasseR2: classAverages.moyClasseR2,
 
     rubrique3Name:  r3Name,
     rubrique3Poids: '5%',
     rubrique3:      r3,
-    moyR3,
+    moyR3: averages.moyR3,
+    moyClasseR3: classAverages.moyClasseR3,
 
-    moyenneEtape:  finalAvg.toFixed(2),
-    appreciation:  getAppreciation(finalAvg),
-    moyenneClasse: '—',
+    moyenneEtape,
+    appreciation,
+    moyenneClasse,
 
     comportement,
 
     etablissement: {
-      nomLigne1: 'Cours Privé Mixte',
-      nomLigne2: 'SAINT LÉONARD',
-      adresse:   'Delmas, Angle 47 & 41 #10',
-      telephone: '2813-1205 / 2264-2081 / 4893-3367',
-      email:     'information@stleonard.ht',
-      logoUrl:   '/test.jpeg',
+      nomLigne1: '',
+      nomLigne2: schoolName ?? '',
+      adresse:   schoolInfo?.address ?? schoolInfo?.adresse ?? '',
+      telephone: schoolInfo?.phone ?? schoolInfo?.telephone ?? '',
+      email:     schoolInfo?.email ?? '',
+      logoUrl,
     },
   }
 }

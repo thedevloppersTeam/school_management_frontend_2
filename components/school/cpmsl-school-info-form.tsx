@@ -1,13 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { UploadIcon, SaveIcon } from "lucide-react";
+import { UploadIcon, SaveIcon, Loader2Icon } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
+import { toMessage } from "@/lib/errors";
+import { normalizeUploadUrl } from "@/lib/upload-url";
 
 interface SchoolInfo {
   name: string;
@@ -25,12 +28,18 @@ interface CPMSLSchoolInfoFormProps {
   loading?: boolean;
 }
 
+const ALLOWED_LOGO_TYPES = ["image/jpeg", "image/png", "image/webp", "image/svg+xml"];
+const MAX_LOGO_BYTES = 2 * 1024 * 1024;
+
 export function CPMSLSchoolInfoForm({
   schoolInfo,
   onSave,
   loading = false,
 }: CPMSLSchoolInfoFormProps) {
+  const { toast } = useToast();
+  const fileRef = useRef<HTMLInputElement | null>(null);
   const [editedInfo, setEditedInfo] = useState<SchoolInfo>(schoolInfo);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // Sync quand les données arrivent depuis l'API
@@ -38,13 +47,55 @@ export function CPMSLSchoolInfoForm({
     setEditedInfo(schoolInfo);
   }, [schoolInfo]);
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file) return;
-    const reader = new FileReader();
-    reader.onloadend = () =>
-      setEditedInfo((prev) => ({ ...prev, logo: reader.result as string }));
-    reader.readAsDataURL(file);
+
+    if (!ALLOWED_LOGO_TYPES.includes(file.type)) {
+      toast({
+        title: "Format non supporté",
+        description: "Acceptés : PNG, JPG, WEBP, SVG.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (file.size > MAX_LOGO_BYTES) {
+      toast({
+        title: "Fichier trop volumineux",
+        description: "Maximum 2 Mo.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setUploadingLogo(true);
+    try {
+      const form = new FormData();
+      form.append("logo", file);
+      const res = await fetch("/api/school-info/upload-logo", {
+        method: "POST",
+        credentials: "include",
+        body: form,
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(data?.message || `Échec de l'envoi (HTTP ${res.status})`);
+      }
+      if (data?.logoUrl) {
+        setEditedInfo((prev) => ({ ...prev, logo: data.logoUrl }));
+        toast({ title: "Logo enregistré" });
+      }
+    } catch (err) {
+      toast({
+        title: "Erreur",
+        description: toMessage(err, "lors de l'envoi du logo"),
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingLogo(false);
+    }
   };
 
   const handleSave = async () => {
@@ -113,7 +164,7 @@ export function CPMSLSchoolInfoForm({
               <Avatar className="h-24 w-24 rounded-xl">
                 {editedInfo.logo ? (
                   <AvatarImage
-                    src={editedInfo.logo}
+                    src={normalizeUploadUrl(editedInfo.logo)}
                     alt="Logo de l'école"
                     className="object-cover"
                   />
@@ -128,23 +179,26 @@ export function CPMSLSchoolInfoForm({
                   htmlFor="logo-upload"
                   className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg border-2 border-dashed border-primary-200 cursor-pointer hover:bg-primary-50 focus-within:ring-2 focus-within:ring-primary-500 focus-within:ring-offset-2"
                 >
-                  <UploadIcon
-                    className="h-4 w-4 text-neutral-500"
-                    aria-hidden="true"
-                  />
+                  {uploadingLogo ? (
+                    <Loader2Icon className="h-4 w-4 animate-spin text-neutral-500" aria-hidden="true" />
+                  ) : (
+                    <UploadIcon className="h-4 w-4 text-neutral-500" aria-hidden="true" />
+                  )}
                   <span className="text-sm text-neutral-500">
-                    Télécharger un logo
+                    {uploadingLogo ? "Envoi du logo..." : editedInfo.logo ? "Remplacer le logo" : "Télécharger un logo"}
                   </span>
                 </label>
                 <input
+                  ref={fileRef}
                   id="logo-upload"
                   type="file"
-                  accept="image/png,image/jpeg,image/jpg"
+                  accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml"
                   onChange={handleLogoUpload}
+                  disabled={uploadingLogo}
                   className="sr-only"
                 />
                 <p className="text-xs text-neutral-600 mt-1">
-                  PNG ou JPG, max 2 Mo
+                  PNG, JPG, WEBP ou SVG, max 2 Mo
                 </p>
               </div>
             </div>

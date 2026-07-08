@@ -19,7 +19,7 @@ import { FileTextIcon, CheckCircle2Icon, XCircleIcon, InfoIcon } from "lucide-re
  *
  * L'Administrateur voit avant de lancer :
  *   - Combien de bulletins seront générés
- *   - Combien seront exclus (NISU manquant) et pourquoi
+ *   - Combien seront exclus (NISU invalide) et pourquoi
  *   - La classe et la période ciblées
  *   - Un avertissement si la période est clôturée (WF-005)
  *
@@ -123,7 +123,7 @@ export function BatchPreviewModal({
               <XCircleIcon className="h-4 w-4" />
               <div>
                 <div className="text-2xl font-bold tabular-nums">{excluded.length}</div>
-                <div className="text-xs">Élèves exclus (NISU manquant)</div>
+                <div className="text-xs">Élèves exclus (NISU invalide)</div>
               </div>
             </div>
           </div>
@@ -133,7 +133,7 @@ export function BatchPreviewModal({
         {excluded.length > 0 && (
           <div className="mt-4 rounded-lg border overflow-hidden">
             <div className="bg-red-50 px-4 py-2 text-sm font-semibold text-red-800 border-b border-red-200">
-              Élèves exclus — NISU manquant ou invalide
+              Élèves exclus — NISU invalide
             </div>
             <div className="max-h-40 overflow-y-auto">
               <table className="w-full text-sm">
@@ -153,7 +153,7 @@ export function BatchPreviewModal({
               </table>
             </div>
             <div className="bg-muted px-4 py-2 text-xs text-muted-foreground border-t">
-              Renseignez le NISU (12 chiffres — DR-001) dans la fiche élève avant de regénérer.
+              Corrigez le NISU dans la fiche élève avant de regénérer.
             </div>
           </div>
         )}
@@ -164,7 +164,7 @@ export function BatchPreviewModal({
             <XCircleIcon className="h-4 w-4" />
             <AlertDescription>
               Aucun bulletin ne peut être généré. Tous les élèves de cette classe
-              ont un NISU manquant ou invalide. Corrigez les fiches élèves avant
+              ont un NISU invalide. Corrigez les fiches élèves avant
               de relancer la génération.
             </AlertDescription>
           </Alert>

@@ -24,7 +24,7 @@ import { AlertTriangleIcon, CheckCircle2Icon, ExternalLinkIcon } from "lucide-re
  *
  * Corrections appliquées :
  *   - WF-001 / EP-002 : désactive le bouton tant que la confirmation n'est pas explicite
- *   - WF-002 : checklist élargie (notes manquantes + NISU manquants + matières non mappées)
+ *   - WF-002 : checklist élargie (notes manquantes + NISU invalides + matières non mappées)
  *   - Typed-name : exige de taper le nom de la période pour confirmer
  *   - AI-002 : styles Tailwind / shadcn au lieu de styles inline
  *   - AI-003 : <caption> + scope="col" sur la table
@@ -39,7 +39,7 @@ interface ClassroomGradeStatus {
   sessionId?:          string  // pour générer le lien direct vers la saisie
   gradesEntered:       number
   totalGrades:         number
-  studentsWithoutNisu: number  // WF-002 : comptage des NISU manquants (DR-001)
+  studentsWithoutNisu: number  // WF-002 : comptage des NISU invalides (DR-001)
   unmappedSubjects:    number  // WF-002 : matières sans rubrique (DR-003)
   status:              'complete' | 'incomplete' | 'not-started'
 }
@@ -98,7 +98,7 @@ export function ClosePeriodModal({
     (sum, c) => sum + (c.unmappedSubjects || 0), 0
   )
 
-  // Prêt-à-clôturer = pas de notes manquantes ET pas de NISU manquants ET pas de matières non mappées
+  // Prêt-à-clôturer = pas de notes manquantes ET pas de NISU invalides ET pas de matières non mappées
   const isComplete =
     incompleteCount === 0 && missingNisuTotal === 0 && unmappedSubjectsTotal === 0
 
@@ -143,7 +143,7 @@ export function ClosePeriodModal({
         <div className="grid grid-cols-4 gap-2 mt-4">
           <KpiCard value={completeCount} label="Classes complètes" tone="success" />
           <KpiCard value={incompleteCount} label="Classes incomplètes" tone="warning" />
-          <KpiCard value={missingNisuTotal} label="NISU manquants" tone={missingNisuTotal > 0 ? "error" : "neutral"} />
+          <KpiCard value={missingNisuTotal} label="NISU invalides" tone={missingNisuTotal > 0 ? "error" : "neutral"} />
           <KpiCard value={unmappedSubjectsTotal} label="Matières non mappées" tone={unmappedSubjectsTotal > 0 ? "error" : "neutral"} />
         </div>
 
@@ -223,7 +223,7 @@ export function ClosePeriodModal({
                 )}
                 {missingNisuTotal > 0 && (
                   <li>
-                    <strong>{missingNisuTotal}</strong> élève{missingNisuTotal > 1 ? 's ont' : ' a'} un NISU manquant
+                    <strong>{missingNisuTotal}</strong> élève{missingNisuTotal > 1 ? 's ont' : ' a'} un NISU invalide
                     — ces élèves seront exclus des bulletins archivés (DR-001).
                   </li>
                 )}
@@ -258,7 +258,7 @@ export function ClosePeriodModal({
             <CheckCircle2Icon className="h-4 w-4" />
             <AlertTitle>Prêt à clôturer</AlertTitle>
             <AlertDescription>
-              Toutes les classes ont leurs notes saisies, les NISU sont renseignés
+              Toutes les classes ont leurs notes saisies, les NISU présents sont valides
               et toutes les matières sont mappées. La clôture est sûre.
             </AlertDescription>
           </Alert>

@@ -41,9 +41,8 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { StatCard } from "@/components/school/stat-card";
 import { BulletinPDFGenerator } from "@/components/bulletin-pdf-generator";
-import BulletinScolaire, {
-  type BulletinData,
-} from "@/components/BulletinScolaire";
+import { type BulletinData } from "@/components/BulletinScolaire";
+import { BulletinPrintable } from "@/components/school/bulletin-printable";
 import { buildBulletinData } from "@/lib/api/bulletin";
 import {
   AlertTriangleIcon,
@@ -71,6 +70,14 @@ import {
   type AcademicYearStep,
   type ClassSession,
 } from "@/lib/api/dashboard";
+import { isNisuValid as isCentralNisuValid } from "@/lib/nisu";
+import {
+  addBulletinCanvasToPdf,
+  captureBulletinElement,
+  PDF_CAPTURE_HOST_ID,
+  removeStalePdfCaptureHosts,
+  waitForTwoFrames,
+} from "@/lib/bulletin-pdf-capture";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -93,9 +100,12 @@ interface CPMSLBulletinsSectionProps {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function isNisuValid(nisu: string | null): boolean {
-  if (!nisu) return false;
-  return /^[A-Z0-9]{14}$/.test(nisu.trim());
+function hasValidNisu(nisu: string | null): boolean {
+  return isCentralNisuValid(nisu, false);
+}
+
+function canPrintBulletin(nisu: string | null): boolean {
+  return isCentralNisuValid(nisu);
 }
 
 // ── Helper archive silencieux ─────────────────────────────────────────────────
@@ -109,7 +119,7 @@ async function archiveBulletin(params: {
   auditNote?: string; // WF-005 : motif pour correction post-clôture
 }): Promise<{ ok: true } | { ok: false; error: unknown }> {
   try {
-    const res = await fetch("/api/bulletin-archives/create", {
+    const res = await fetch("/api/bulletin-archives", {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
@@ -153,13 +163,15 @@ export function CPMSLBulletinsSection({
   const [lotData, setLotData] = useState<BulletinData | null>(null);
   const lotRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    return () => {
+      window.setTimeout(removeStalePdfCaptureHosts, 0);
+    };
+  }, []);
+
   // WF-003 / WF-005 : modaux de confirmation pré-génération
   const [previewOpen, setPreviewOpen] = useState(false);
   const [auditNoteOpen, setAuditNoteOpen] = useState(false);
-  const [pendingAudit, setPendingAudit] = useState<{
-    reason: AuditReason;
-    note: string;
-  } | null>(null);
 
   // ── Recherche + pagination ─────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState("");
@@ -183,7 +195,8 @@ export function CPMSLBulletinsSection({
   }, [filteredEnrollments, currentPage, itemsPerPage]);
 
   useEffect(() => {
-    setCurrentPage(1);
+    const timeoutId = window.setTimeout(() => setCurrentPage(1), 0);
+    return () => window.clearTimeout(timeoutId);
   }, [searchQuery, itemsPerPage]);
 
   // ── Chargement initial ────────────────────────────────────────────────────────
@@ -252,13 +265,17 @@ export function CPMSLBulletinsSection({
   );
 
   useEffect(() => {
-    if (selectedSession) loadEnrollments(selectedSession);
-    else setEnrollments([]);
+    const timeoutId = window.setTimeout(() => {
+      if (selectedSession) void loadEnrollments(selectedSession);
+      else setEnrollments([]);
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [selectedSession, loadEnrollments]);
 
   // ── KPIs ──────────────────────────────────────────────────────────────────────
-  const withNisu = enrollments.filter((e) => isNisuValid(e.nisu));
-  const withoutNisu = enrollments.filter((e) => !isNisuValid(e.nisu));
+  const withNisu = enrollments.filter((e) => hasValidNisu(e.nisu));
+  const withoutNisu = enrollments.filter((e) => !hasValidNisu(e.nisu));
+  const bulletinEligible = enrollments.filter((e) => canPrintBulletin(e.nisu));
   const selectedStepObj = steps.find((s) => s.id === selectedStep);
 
   const totalPages = Math.max(
@@ -319,7 +336,6 @@ export function CPMSLBulletinsSection({
     note: string;
   }) => {
     setAuditNoteOpen(false);
-    setPendingAudit(payload);
     await executeGenerateLot(payload);
   };
 
@@ -327,7 +343,7 @@ export function CPMSLBulletinsSection({
   const executeGenerateLot = async (
     audit: { reason: AuditReason; note: string } | null,
   ) => {
-    const eligible = enrollments.filter((e) => isNisuValid(e.nisu));
+    const eligible = enrollments.filter((e) => canPrintBulletin(e.nisu));
     if (eligible.length === 0 || !selectedStep || !selectedSession) return;
 
     setGeneratingLot(true);
@@ -338,12 +354,13 @@ export function CPMSLBulletinsSection({
     let pdfSaved = false;
 
     try {
-      const html2canvas = (await import("html2canvas")).default;
       const jsPDF = (await import("jspdf")).default;
+      const { flushSync } = await import("react-dom");
       const pdf = new jsPDF({
         orientation: "portrait",
-        unit: "mm",
-        format: "a4",
+        unit: "pt",
+        format: "letter",
+        compress: true,
       });
       const stepObj = steps.find((s) => s.id === selectedStep);
       const stepName = stepObj?.name ?? "etape";
@@ -365,34 +382,14 @@ export function CPMSLBulletinsSection({
           yearId: academicYearId,
         });
 
-        setLotData(data);
-        await new Promise((r) => setTimeout(r, 600));
+        flushSync(() => setLotData(data));
+        await waitForTwoFrames();
 
         if (!lotRef.current) continue;
 
-        const canvas = await html2canvas(lotRef.current, {
-          scale: 2,
-          useCORS: true,
-          backgroundColor: "#ffffff",
-          windowWidth: lotRef.current.scrollWidth,
-          windowHeight: lotRef.current.scrollHeight,
-        });
-
-        if (i > 0) pdf.addPage();
-        const imgData = canvas.toDataURL("image/png");
-        const imgWidth = 210;
-        const imgHeight = (canvas.height * imgWidth) / canvas.width;
-        pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight);
-
-        const pageHeight = 297;
-        let heightLeft = imgHeight - pageHeight;
-        let position = -pageHeight;
-        while (heightLeft > 0) {
-          pdf.addPage();
-          pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-          heightLeft -= pageHeight;
-          position -= pageHeight;
-        }
+        if (i > 0) pdf.addPage("letter", "portrait");
+        const { canvas } = await captureBulletinElement(lotRef.current);
+        addBulletinCanvasToPdf(pdf, canvas);
 
         // WF-005 + EP-003 : archivage avec auditNote + remontée des échecs
         const archiveResult = await archiveBulletin({
@@ -415,9 +412,8 @@ export function CPMSLBulletinsSection({
       }
 
       // Téléchargement du PDF combiné
-      pdf.save(
-        `bulletins_lot_${className}_${stepName}_${new Date().toISOString().slice(0, 10)}.pdf`,
-      );
+      const lotFilename = `bulletins_lot_${className}_${stepName}_${new Date().toISOString().slice(0, 10)}.pdf`;
+      pdf.save(lotFilename);
       pdfSaved = true;
 
       // EP-003 : remonter l'état d'archivage à l'utilisateur
@@ -451,7 +447,7 @@ export function CPMSLBulletinsSection({
       setGeneratingLot(false);
       setLotData(null);
       setLotProgress({ current: 0, total: 0 });
-      setPendingAudit(null);
+      window.setTimeout(removeStalePdfCaptureHosts, 0);
     }
   };
 
@@ -556,7 +552,7 @@ export function CPMSLBulletinsSection({
               iconBgClassName="bg-emerald-50"
             />
             <StatCard
-              label="NISU manquants"
+              label="NISU absents/invalides"
               value={withoutNisu.length}
               icon={AlertTriangleIcon}
               iconClassName="text-amber-600"
@@ -576,7 +572,7 @@ export function CPMSLBulletinsSection({
             <CardContent className="flex flex-col items-start gap-3 p-4 sm:flex-row sm:items-center">
               <Button
                 onClick={handleOpenPreview}
-                disabled={isArchived || generatingLot || withNisu.length === 0}
+                disabled={isArchived || generatingLot || bulletinEligible.length === 0}
               >
                 {generatingLot ? (
                   <>
@@ -586,8 +582,8 @@ export function CPMSLBulletinsSection({
                 ) : (
                   <>
                     <LayersIcon className="mr-2 h-4 w-4" />
-                    Générer le lot ({withNisu.length} bulletin
-                    {withNisu.length > 1 ? "s" : ""})
+                    Générer le lot ({bulletinEligible.length} bulletin
+                    {bulletinEligible.length > 1 ? "s" : ""})
                   </>
                 )}
               </Button>
@@ -677,7 +673,8 @@ export function CPMSLBulletinsSection({
                     </TableHeader>
                     <TableBody>
                       {paginatedEnrollments.map((student) => {
-                        const nisuOk = isNisuValid(student.nisu);
+                        const hasNisu = student.nisu.trim() !== "";
+                        const canPrint = canPrintBulletin(student.nisu);
                         return (
                           <TableRow key={student.enrollmentId}>
                             <TableCell className="pl-6">
@@ -697,7 +694,7 @@ export function CPMSLBulletinsSection({
                               <span
                                 className={cn(
                                   "font-mono text-xs tabular-nums",
-                                  nisuOk
+                                  canPrint
                                     ? "text-foreground"
                                     : "text-destructive font-medium",
                                 )}
@@ -706,9 +703,9 @@ export function CPMSLBulletinsSection({
                               </span>
                             </TableCell>
                             <TableCell>
-                              {nisuOk ? (
+                              {canPrint ? (
                                 <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
-                                  Valide
+                                  {hasNisu ? "Valide" : "Optionnel"}
                                 </Badge>
                               ) : (
                                 <Badge variant="destructive">Invalide</Badge>
@@ -718,7 +715,7 @@ export function CPMSLBulletinsSection({
                               <Button
                                 size="sm"
                                 variant="outline"
-                                disabled={isArchived || !nisuOk}
+                                disabled={isArchived || !canPrint}
                                 onClick={() => handleGenerateBulletin(student)}
                               >
                                 <FileTextIcon className="mr-1 h-3 w-3" />
@@ -837,17 +834,32 @@ export function CPMSLBulletinsSection({
       )}
 
       {/* Div caché pour capture lot PDF */}
+      {generatingLot && lotData && (
       <div
+        id={PDF_CAPTURE_HOST_ID}
+        data-pdf-capture-host="true"
+        aria-hidden="true"
         style={{
           position: "fixed",
-          left: "-9999px",
+          left: "-100000px",
           top: 0,
-          zIndex: -1,
+          zIndex: 0,
           background: "white",
+          width: "816px",
+          minHeight: "1056px",
+          margin: 0,
+          padding: 0,
+          overflow: "visible",
+          pointerEvents: "none",
+          opacity: 1,
+          visibility: "visible",
         }}
       >
-        <div ref={lotRef}>{lotData && <BulletinScolaire data={lotData} />}</div>
+        <div ref={lotRef}>
+          <BulletinPrintable data={lotData} renderMode="pdf" />
+        </div>
       </div>
+      )}
 
       {/* PDF Generator Modal — individuel */}
       {pdfStudent && selectedStepObj && (
@@ -891,7 +903,7 @@ export function CPMSLBulletinsSection({
           nisu: e.nisu,
           enrollmentId: e.enrollmentId,
         }))}
-        isNisuValid={isNisuValid}
+        isNisuValid={canPrintBulletin}
         onConfirm={handlePreviewConfirm}
         loading={generatingLot}
       />

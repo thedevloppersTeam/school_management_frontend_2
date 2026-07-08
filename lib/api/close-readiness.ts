@@ -34,6 +34,7 @@
  */
 
 import type { ApiClassSubject, ApiEnrollment, ApiGrade } from './grades'
+import { isNisuValid } from '@/lib/nisu'
 
 // ── Structures attendues côté composant parent ───────────────────────────────
 
@@ -66,16 +67,6 @@ export interface ClassroomStatus {
   studentsWithoutNisu: number
   unmappedSubjects:    number
   status:              'complete' | 'incomplete' | 'not-started'
-}
-
-// ── Validation NISU (DR-001) ─────────────────────────────────────────────────
-// Le projet a encore la dérive EP-002 : code actuel = {14} alphanum,
-// spec DR-001 = {12} chiffres. À valider avec MOA.
-// Pour l'instant, on utilise la même règle que le reste du code
-// pour rester cohérent.
-function isNisuValid(nisu: string | null | undefined): boolean {
-  if (!nisu) return false
-  return /^[A-Z0-9]{14}$/.test(nisu.trim())
 }
 
 // ── Fetch helpers ────────────────────────────────────────────────────────────
@@ -129,7 +120,7 @@ async function computeClassroomStatus(
     return status !== 'CANCELLED' && status !== 'TRANSFERRED'
   })
 
-  // Validation DR-001 : NISU manquant
+  // NISU optionnel : seuls les NISU présents mais mal formés bloquent.
   const studentsWithoutNisu = activeEnrollments.filter(
     e => !isNisuValid(e.student.nisu)
   ).length

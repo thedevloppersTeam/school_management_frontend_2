@@ -1,66 +1,26 @@
 /**
  * lib/errors.ts
  *
- * Helper de traduction des erreurs techniques en messages métier CPMSL.
+ * Helper centralisé de traduction des erreurs techniques en messages métier.
  *
- * Problème résolu :
- *   Partout dans le code, on trouve :
- *     toast({ description: e.message })
- *     setError(e.message)
- *
- *   Ces messages exposent des textes techniques à l'Administrateur :
- *     - "HTTP 422 Unprocessable Entity"
- *     - "Invalid input: Expected number, received string"
- *     - "Unique constraint failed on the constraint: `User_email_key`"
- *     - "Network request failed"
- *
- *   Ces messages violent :
- *     - REQ-NF-004 (terminologie CPMSL)
- *     - Nielsen H9 (messages d'erreur compréhensibles et actionnables)
- *     - Le glossaire de CLAUDE.md §5
- *
- * Solution :
- *   Fonction toMessage(err, fallback?) qui retourne un message métier
- *   FR lisible par l'Administrateur. Classe les erreurs par catégorie
- *   (réseau, auth, validation, conflit, serveur) et applique des messages
- *   par défaut adaptés.
- *
- *   Supporte un override par contexte métier (ex: "lors de la clôture").
- *
- * Usage minimal :
- *   import { toMessage } from '@/lib/errors'
- *   try { ... }
- *   catch (e) {
- *     toast({ title: 'Erreur', description: toMessage(e), variant: 'destructive' })
- *   }
- *
- * Usage avec contexte :
- *   catch (e) {
- *     toast({
- *       title: 'Échec',
- *       description: toMessage(e, "lors de la clôture de la période"),
- *       variant: 'destructive'
- *     })
- *   }
- *
- * Bonus : toujours logguer la vraie erreur en console pour le debug dev :
- *   catch (e) {
- *     console.error('[close-period]', e)
- *     toast({ description: toMessage(e, "lors de la clôture") })
- *   }
+ * Objectifs :
+ *  - Ne jamais exposer directement les erreurs techniques à l’utilisateur.
+ *  - Transformer les erreurs HTTP / backend / réseau en messages compréhensibles.
+ *  - Garder un contexte métier propre : "lors de la clôture", "lors de l'inscription", etc.
+ *  - Éviter les messages mal formés comme : "lors de lors de la clôture".
+ *  - Éviter les logs techniques en console navigateur en production.
  */
 
-import { ApiError } from './client-fetch'
+import { ApiError } from "./client-fetch"
 
 // ── Messages par code HTTP ─────────────────────────────────────────────
-// Couvre les cas les plus fréquents. Les codes non listés tombent sur
-// le message "Une erreur technique est survenue".
 
 const HTTP_MESSAGES: Record<number, string> = {
   400: "Les données envoyées ne sont pas valides.",
   401: "Votre session a expiré. Reconnectez-vous.",
   403: "Vous n'avez pas les droits pour effectuer cette action.",
   404: "L'élément demandé n'existe pas ou a été supprimé.",
+  408: "La requête a pris trop de temps. Réessayez.",
   409: "Ce changement entre en conflit avec une donnée existante.",
   422: "Les données saisies ne respectent pas les règles attendues.",
   429: "Trop de requêtes en peu de temps. Patientez quelques secondes.",
@@ -71,87 +31,196 @@ const HTTP_MESSAGES: Record<number, string> = {
 }
 
 // ── Mots-clés reconnus dans les messages backend ─────────────────────
-// Permet de garder un message un peu plus précis quand le backend envoie
-// quelque chose de compréhensible (ex: "NISU déjà utilisé").
 // Priorité décroissante : premier match gagne.
 
 const KEYWORD_PATTERNS: Array<{ match: RegExp; message: string }> = [
   // Conflits d'unicité explicites
-  { match: /nisu.*(unique|d[ée]j[àa]|exist|us[ée])/i,
-    message: "Ce NISU est déjà utilisé par un autre élève." },
-  { match: /email.*(unique|d[ée]j[àa]|exist|us[ée])/i,
-    message: "Cet email est déjà utilisé." },
-  { match: /(already exist|d[ée]j[àa] existant|duplicate|unique constraint)/i,
-    message: "Cet élément existe déjà." },
+  {
+    match: /nisu.*(unique|d[ée]j[àa]|exist|us[ée])/i,
+    message: "Ce NISU est déjà utilisé par un autre élève.",
+  },
+  {
+    match: /email.*(unique|d[ée]j[àa]|exist|us[ée])/i,
+    message: "Cet email est déjà utilisé.",
+  },
+  {
+    match: /(already exist|d[ée]j[àa] existant|duplicate|unique constraint)/i,
+    message: "Cet élément existe déjà.",
+  },
 
-  // Période clôturée (REQ-F-004)
-  { match: /(period|p[ée]riode|step|[ée]tape).*(closed|cl[ôo]tur)/i,
-    message: "La période est clôturée. Modification impossible." },
+  // Période clôturée
+  {
+    match: /(period|p[ée]riode|step|[ée]tape).*(closed|cl[ôo]tur)/i,
+    message: "La période est clôturée. Modification impossible.",
+  },
 
-  // NISU invalide (DR-001)
-  { match: /nisu.*(invalid|format|chiffre|digit)/i,
-    message: "Le NISU doit contenir 12 chiffres." },
+  // NISU invalide
+  {
+    match: /nisu.*(invalid|format|chiffre|digit)/i,
+    message: "Le NISU doit contenir 12 chiffres.",
+  },
 
-  // Note invalide (DR-004)
-  { match: /(score|note).*(0\.25|multiple|step|0,25)/i,
-    message: "La note doit être un multiple de 0,25 (.00 / .25 / .50 / .75)." },
+  // Note invalide
+  {
+    match: /(score|note).*(0\.25|multiple|step|0,25)/i,
+    message: "La note doit être un multiple de 0,25 (.00 / .25 / .50 / .75).",
+  },
 
-  // Matière non mappée (DR-003)
-  { match: /(subject|mati[èe]re).*(rubric|rubrique).*(map|assign|mandatory)/i,
-    message: "Cette matière doit d'abord être associée à une rubrique (R1, R2 ou R3)." },
+  // Matière non mappée
+  {
+    match: /(subject|mati[èe]re).*(rubric|rubrique).*(map|assign|mandatory)/i,
+    message: "Cette matière doit d'abord être associée à une rubrique (R1, R2 ou R3).",
+  },
+
+  // Authentification / session
+  {
+    match: /(unauthorized|non autoris[ée]|session.*expired|session.*expir)/i,
+    message: "Votre session a expiré. Reconnectez-vous.",
+  },
+
+  // Permissions
+  {
+    match: /(forbidden|permission|droit|access denied|acc[eè]s refus)/i,
+    message: "Vous n'avez pas les droits pour effectuer cette action.",
+  },
 
   // Réseau
-  { match: /(failed to fetch|network|enet|timeout|aborted)/i,
-    message: "Connexion impossible. Vérifiez votre accès internet." },
+  {
+    match: /(failed to fetch|network|enet|timeout|aborted|econnrefused|econnreset)/i,
+    message: "Connexion impossible. Vérifiez votre accès internet.",
+  },
 ]
 
 // ── Fonction principale ──────────────────────────────────────────────
 
 /**
- * Traduit une erreur en message métier FR.
+ * Traduit une erreur technique en message métier lisible.
  *
- * @param err      — L'erreur attrapée (peut être n'importe quel type).
- * @param context  — Optionnel : contexte métier ajouté au message
- *                   (ex: "lors de la clôture"). Rendu comme : "<msg> lors de la clôture."
- * @returns        — Un message FR lisible par l'Administrateur, jamais vide,
- *                   jamais technique.
+ * @param err      Erreur interceptée.
+ * @param context  Contexte métier optionnel.
+ *
+ * Exemples acceptés :
+ *  - toMessage(e)
+ *  - toMessage(e, "lors de la clôture")
+ *  - toMessage(e, "la clôture")
+ *  - toMessage(e, "de l'inscription")
  */
 export function toMessage(err: unknown, context?: string): string {
   const base = resolveBaseMessage(err)
-  if (!context) return base
 
-  // Ajoute le contexte métier. On retire le point final du base
-  // pour éviter "..déjà utilisé.. lors de la clôture."
-  const baseTrimmed = base.replace(/[.!?]+$/, '')
-  return `${baseTrimmed} lors de ${context}.`
+  if (!context?.trim()) {
+    return base
+  }
+
+  const baseTrimmed = base.replace(/[.!?]+$/, "")
+  const formattedContext = formatContext(context)
+
+  return `${baseTrimmed} ${formattedContext}.`
 }
 
-// ── Logique interne ──────────────────────────────────────────────────
+// ── Formatage du contexte ────────────────────────────────────────────
+
+function formatContext(context: string): string {
+  const normalized = context.trim().replace(/[.!?]+$/, "")
+
+  if (!normalized) {
+    return ""
+  }
+
+  /**
+   * Cas déjà bien formulés :
+   *  - "lors de la clôture"
+   *  - "pendant l'inscription"
+   *  - "durant la génération"
+   *  - "au moment de la sauvegarde"
+   *  - "en enregistrant les notes"
+   *  - "dans le module bulletin"
+   */
+  if (
+    /^(lors|pendant|durant|au moment|à l'occasion|a l'occasion|en|dans|pendant que)\b/i.test(
+      normalized
+    )
+  ) {
+    return normalized
+  }
+
+  /**
+   * Cas partiels :
+   *  - "de l'inscription" => "lors de l'inscription"
+   *  - "de la clôture"    => "lors de la clôture"
+   *  - "du calcul"        => "lors du calcul"
+   *  - "des bulletins"    => "lors des bulletins"
+   */
+  if (/^(de l'|de la |du |des |d')/i.test(normalized)) {
+    return `lors ${normalized}`
+  }
+
+  /**
+   * Cas avec article défini :
+   *  - "la clôture"       => "lors de la clôture"
+   *  - "l'inscription"    => "lors de l'inscription"
+   *  - "le calcul"        => "lors du calcul"
+   *  - "les bulletins"    => "lors des bulletins"
+   */
+  if (/^la\s+/i.test(normalized)) {
+    return `lors de ${normalized}`
+  }
+
+  if (/^l'/i.test(normalized)) {
+    return `lors de ${normalized}`
+  }
+
+  if (/^le\s+/i.test(normalized)) {
+    return `lors du ${normalized.replace(/^le\s+/i, "")}`
+  }
+
+  if (/^les\s+/i.test(normalized)) {
+    return `lors des ${normalized.replace(/^les\s+/i, "")}`
+  }
+
+  /**
+   * Cas générique :
+   *  - "clôture"          => "lors de clôture"
+   *  - "sauvegarde"       => "lors de sauvegarde"
+   *
+   * Ce n'est pas toujours grammaticalement parfait, mais cela reste sûr.
+   * Pour de beaux messages, préférer passer un contexte complet :
+   *  - "lors de la clôture"
+   *  - "lors de la sauvegarde"
+   */
+  return `lors de ${normalized}`
+}
+
+// ── Résolution du message de base ────────────────────────────────────
 
 function resolveBaseMessage(err: unknown): string {
-  // 1. ApiError : on a un status + un message backend
+  // 1. ApiError : status HTTP + message backend
   if (err instanceof ApiError) {
-    // D'abord, essai de match par mots-clés sur le message backend
-    const kw = matchKeyword(err.message)
-    if (kw) return kw
+    const keywordMessage = matchKeyword(err.message)
+    if (keywordMessage) {
+      return keywordMessage
+    }
 
-    // Sinon, on tombe sur le message par code HTTP
-    const httpMsg = HTTP_MESSAGES[err.status]
-    if (httpMsg) return httpMsg
+    const httpMessage = HTTP_MESSAGES[err.status]
+    if (httpMessage) {
+      return httpMessage
+    }
 
     return "Une erreur technique est survenue. Réessayez."
   }
 
-  // 2. Error standard
+  // 2. Error standard JavaScript
   if (err instanceof Error) {
-    const kw = matchKeyword(err.message)
-    if (kw) return kw
+    const keywordMessage = matchKeyword(err.message)
+    if (keywordMessage) {
+      return keywordMessage
+    }
 
-    // Type d'erreur JS connu
-    if (err.name === 'TypeError' && /fetch/i.test(err.message)) {
+    if (err.name === "TypeError" && /fetch/i.test(err.message)) {
       return "Connexion impossible. Vérifiez votre accès internet."
     }
-    if (err.name === 'AbortError') {
+
+    if (err.name === "AbortError") {
       return "L'opération a été interrompue."
     }
 
@@ -159,18 +228,24 @@ function resolveBaseMessage(err: unknown): string {
   }
 
   // 3. String brute
-  if (typeof err === 'string' && err.trim()) {
-    const kw = matchKeyword(err)
-    if (kw) return kw
+  if (typeof err === "string" && err.trim()) {
+    const keywordMessage = matchKeyword(err)
+    if (keywordMessage) {
+      return keywordMessage
+    }
+
     return "Une erreur est survenue. Réessayez."
   }
 
-  // 4. Objet avec .message
-  if (err && typeof err === 'object' && 'message' in err) {
-    const m = (err as { message: unknown }).message
-    if (typeof m === 'string' && m.trim()) {
-      const kw = matchKeyword(m)
-      if (kw) return kw
+  // 4. Objet avec propriété message
+  if (err && typeof err === "object" && "message" in err) {
+    const message = (err as { message: unknown }).message
+
+    if (typeof message === "string" && message.trim()) {
+      const keywordMessage = matchKeyword(message)
+      if (keywordMessage) {
+        return keywordMessage
+      }
     }
   }
 
@@ -178,31 +253,31 @@ function resolveBaseMessage(err: unknown): string {
   return "Une erreur inconnue est survenue. Réessayez."
 }
 
-function matchKeyword(msg: string): string | null {
-  for (const { match, message } of KEYWORD_PATTERNS) {
-    if (match.test(msg)) return message
+function matchKeyword(message: string): string | null {
+  for (const { match, message: userMessage } of KEYWORD_PATTERNS) {
+    if (match.test(message)) {
+      return userMessage
+    }
   }
+
   return null
 }
 
-// ── Helper bonus : logger + message ──────────────────────────────────
+// ── Helper : log technique + message utilisateur ─────────────────────
 
 /**
- * Combine console.error pour le dev et toMessage pour l'utilisateur.
- * Évite d'oublier le log en production.
+ * Combine un log technique en développement et un message propre pour l'utilisateur.
  *
- * Usage :
- *   catch (e) {
- *     const msg = logAndMessage('close-period', e, 'lors de la clôture')
- *     toast({ title: 'Erreur', description: msg, variant: 'destructive' })
- *   }
+ * En production, on évite de pousser des détails techniques dans la console navigateur.
  */
 export function logAndMessage(
   tag: string,
   err: unknown,
   context?: string
 ): string {
-  // Log technique pour le dev, sous un préfixe clair
-  console.error(`[${tag}]`, err)
+  if (process.env.NODE_ENV !== "production") {
+    console.error(`[${tag}]`, err)
+  }
+
   return toMessage(err, context)
 }

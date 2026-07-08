@@ -31,20 +31,20 @@ export default function ReportsPage() {
     <div className="space-y-8">
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-foreground">Bulletins</h1>
-<div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
-  <span>Génération des bulletins et rapports statistiques</span>
-  {academicYear?.name && (
-    <>
-      <span>&middot;</span>
-      <Badge variant="secondary" className="align-middle">
-        {academicYear.name}
-      </Badge>
-    </>
-  )}
-</div>
+        <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
+          <span>Génération des bulletins et rapports statistiques</span>
+          {academicYear?.name && (
+            <>
+              <span>&middot;</span>
+              <Badge variant="secondary" className="align-middle">
+                {academicYear.name}
+              </Badge>
+            </>
+          )}
+        </div>
       </div>
 
-      {isArchived && <ArchivedYearBanner yearName={academicYear?.name || ''} />}
+      {isArchived && <ArchivedYearBanner yearName={academicYear?.name || ""} />}
 
       <Tabs defaultValue="bulletins" className="space-y-6">
         <TabsList>
@@ -53,17 +53,11 @@ export default function ReportsPage() {
         </TabsList>
 
         <TabsContent value="bulletins">
-          <CPMSLBulletinsSection
-            academicYearId={yearId}
-            isArchived={isArchived}
-          />
+          <CPMSLBulletinsSection academicYearId={yearId} isArchived={isArchived} />
         </TabsContent>
 
         <TabsContent value="rapports">
-          <CPMSLRapportsSection
-            academicYearId={yearId}
-            isArchived={isArchived}
-          />
+          <CPMSLRapportsSection academicYearId={yearId} isArchived={isArchived} />
         </TabsContent>
       </Tabs>
     </div>

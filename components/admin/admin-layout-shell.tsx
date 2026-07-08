@@ -65,9 +65,11 @@ import {
   UserIcon,
   LockIcon,
   ArchiveIcon,
-  CheckIcon,
+  UserPlusIcon,
+  UploadIcon,
+  BookOpenIcon
 } from "lucide-react";
-// SEC-A01-004 : ajout de `logout` à l'import
+
 import { getMe, logout, type AuthUser } from "@/lib/data/auth-data";
 import {
   fetchActiveAcademicYear,
@@ -76,7 +78,7 @@ import {
 import { cn } from "@/lib/utils";
 import { NotificationPanel } from "@/components/school/notification-panel";
 import { ProfileDialog } from "@/components/school/profile-dialog";
-import { Toaster } from "@/components/ui/toaster";
+
 
 /* ─────────────────────────── Nav config ─────────────────────────── */
 
@@ -101,15 +103,30 @@ interface NavLink {
 type NavItem = NavLink | NavGroup;
 
 const navItems: NavItem[] = [
-  { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboardIcon },
+  {
+    label: "Dashboard",
+    href: "/admin/dashboard",
+    icon: LayoutDashboardIcon,
+  },
+  {
+    label: "Inscription",
+    icon: UserPlusIcon,
+    children: [
+      {
+        label: "Élève",
+        href: "/admin/all-students",
+        icon: UsersIcon,
+      },
+    ],
+  },
   {
     label: "Gestion Scolaire",
     icon: SchoolIcon,
     children: [
       {
-        label: "Élèves",
+        label: "Élèves inscrits",
         href: "/admin/academic-year/:yearId/students",
-        icon: UsersIcon,
+        icon: UserIcon,
       },
       {
         label: "Notes",
@@ -138,7 +155,11 @@ const navItems: NavItem[] = [
     label: "Paramétrage",
     icon: SettingsIcon,
     children: [
-      { label: "Établissement", href: "/admin/settings", icon: BuildingIcon },
+      {
+        label: "Établissement",
+        href: "/admin/settings",
+        icon: BuildingIcon,
+      },
       {
         label: "Années Scolaires",
         href: "/admin/academic-years",
@@ -156,6 +177,10 @@ function isNavGroup(item: NavItem): item is NavGroup {
 
 const breadcrumbMap: Record<string, string> = {
   "/admin/dashboard": "Dashboard",
+  "/admin/all-students": "Élève",
+  "/admin/inscription-form": "Configuration du formulaire",
+  "/admin/inscription-import": "Import inscriptions",
+  "/admin/subjects": "Matières",
   "/admin/academic-years": "Années Scolaires",
   "/admin/settings": "Établissement",
   "/admin/archives": "Bulletins archivés",
@@ -163,9 +188,15 @@ const breadcrumbMap: Record<string, string> = {
 
 function getBreadcrumbLabel(pathname: string): string {
   if (breadcrumbMap[pathname]) return breadcrumbMap[pathname];
-  if (pathname.includes("/students")) return "Élèves";
+  if (pathname.includes("/all-students")) return "Élève";
+  if (pathname.includes("/inscription-form")) return "Configuration du formulaire";
+  if (pathname.includes("/inscription-import")) return "Import inscriptions";
+  if (pathname.includes("/students")) return "Élèves inscrits";
+  if (pathname.includes("/subjects")) return "Matières";
   if (pathname.includes("/grades")) return "Notes";
   if (pathname.includes("/reports")) return "Bulletins";
+  if (pathname.includes("/bulletins")) return "Bulletin";
+  if (pathname.includes("/archives")) return "Archives";
   if (pathname.includes("/config")) return "Configuration";
   return "Page";
 }
@@ -175,22 +206,19 @@ function getBreadcrumbLabel(pathname: string): string {
 export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+
   const [activeYear, setActiveYear] = useState<AcademicYear | null>(null);
   const [yearLoading, setYearLoading] = useState(true);
+
   const [profileOpen, setProfileOpen] = useState(false);
 
-  // ── Auth guard ──
-  // proxy.ts gère déjà la redirection si pas de cookie. Ici on gère uniquement
-  // le cas "cookie présent mais session invalide côté backend" (logout, expirée).
-  // window.location.href au lieu de router.push pour éviter les race conditions
-  // RSC pendant les transitions ("Failed to fetch RSC payload" error).
+  // Auth guard
   useEffect(() => {
     getMe().then((user) => {
       if (!user) {
-        // Full reload : évite "Failed to fetch RSC payload" + ne garde aucun
-        // cache potentiellement compromis côté client.
         window.location.href = "/login";
       } else {
         setCurrentUser(user);
@@ -199,7 +227,7 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  // ── Année active ──
+  // Année active
   useEffect(() => {
     fetchActiveAcademicYear()
       .then((year) => setActiveYear(year))
@@ -207,7 +235,7 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
       .finally(() => setYearLoading(false));
   }, []);
 
-  // ── Notifications (demo) ──
+  // Notifications de démonstration
   const [notifications, setNotifications] = useState([
     {
       id: "1",
@@ -253,22 +281,13 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
 
-  // SEC-A01-004 : POST au lieu de GET (anti-CSRF)
-  // L'ancien `window.location.href = "/api/auth/logout"` faisait un GET,
-  // ce qui était exploitable via <img src=...> sur un site malveillant.
-  // logout() est défini dans lib/data/auth-data.tsx et fait fetch POST.
-  //
-  // Full reload (window.location.href) après le logout pour :
-  // - Forcer la relecture des cookies par le navigateur
-  // - Éviter les race conditions React entre démontage du layout et navigation
-  // - Casser tout cache Next.js stale
   const handleLogout = async () => {
     try {
       await logout();
     } catch {
-      // Best-effort : même si l'appel backend échoue, on force la déconnexion
-      // locale. Le proxy.ts redirigera vers /login s'il n'y a plus de session.
+      // Best-effort : même si l'appel échoue, on force la sortie locale.
     }
+
     window.location.href = "/login";
   };
 
@@ -277,6 +296,7 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
       if (yearLoading || !activeYear?.id) return "#";
       return href.replace(":yearId", activeYear.id);
     }
+
     return href;
   };
 
@@ -286,7 +306,9 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
       return pathname === href || pathname.startsWith(href.split("?")[0]);
     });
 
-  const initials = `${currentUser?.firstname?.[0] ?? ""}${currentUser?.lastname?.[0] ?? ""}`;
+  const initials = `${currentUser?.firstname?.[0] ?? ""}${
+    currentUser?.lastname?.[0] ?? ""
+  }`;
 
   if (authLoading) {
     return (
@@ -303,7 +325,7 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider>
-      {/* ── Sidebar ── */}
+      {/* Sidebar */}
       <Sidebar collapsible="icon" className="border-r border-sidebar-border">
         {/* Logo/Header */}
         <SidebarHeader className="border-b border-sidebar-border p-4">
@@ -314,6 +336,7 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
               <SchoolIcon className="h-5 w-5" />
             </div>
+
             <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
               <span className="truncate font-semibold text-sidebar-foreground">
                 CPMSL
@@ -331,11 +354,13 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
             <SidebarGroupLabel className="px-4 py-2 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/50 group-data-[collapsible=icon]:hidden">
               Navigation
             </SidebarGroupLabel>
+
             <SidebarMenu className="px-2">
               {navItems.map((item) => {
                 if (!isNavGroup(item)) {
                   const Icon = item.icon;
                   const isActive = pathname === item.href;
+
                   return (
                     <SidebarMenuItem key={item.href}>
                       <SidebarMenuButton
@@ -359,6 +384,7 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
 
                 const Icon = item.icon;
                 const groupActive = isChildActive(item.children);
+
                 return (
                   <Collapsible
                     key={item.label}
@@ -374,9 +400,10 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
                         >
                           <Icon className="h-4 w-4" />
                           <span>{item.label}</span>
-                          <ChevronRightIcon className="ml-auto size-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90 text-sidebar-foreground/40" />
+                          <ChevronRightIcon className="ml-auto size-4 text-sidebar-foreground/40 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
                         </SidebarMenuButton>
                       </CollapsibleTrigger>
+
                       <CollapsibleContent>
                         <SidebarMenuSub>
                           {item.children.map((child) => {
@@ -384,7 +411,9 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
                             const childActive =
                               pathname === childHref ||
                               pathname.startsWith(childHref.split("?")[0]);
+
                             const ChildIcon = child.icon;
+
                             return (
                               <SidebarMenuSubItem key={child.href}>
                                 <SidebarMenuSubButton
@@ -414,7 +443,7 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
           </SidebarGroup>
         </SidebarContent>
 
-        {/* ── Sidebar Footer (User) ── */}
+        {/* Sidebar Footer */}
         <SidebarFooter className="border-t border-sidebar-border">
           <SidebarMenu>
             <SidebarMenuItem>
@@ -429,6 +458,7 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
                         {initials}
                       </AvatarFallback>
                     </Avatar>
+
                     <div className="grid flex-1 text-left text-sm leading-tight">
                       <span className="truncate font-semibold text-sidebar-foreground">
                         {currentUser?.firstname} {currentUser?.lastname}
@@ -437,9 +467,11 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
                         Administrateur
                       </span>
                     </div>
+
                     <ChevronsUpDownIcon className="ml-auto size-4 text-sidebar-foreground/40" />
                   </SidebarMenuButton>
                 </DropdownMenuTrigger>
+
                 <DropdownMenuContent
                   className="w-56"
                   align="end"
@@ -456,25 +488,36 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
                       </p>
                     </div>
                   </DropdownMenuLabel>
+
                   <DropdownMenuSeparator />
+
                   <DropdownMenuItem onClick={() => setProfileOpen(true)}>
-                    <UserIcon className="mr-2 h-4 w-4" /> Profil / Mon compte
+                    <UserIcon className="mr-2 h-4 w-4" />
+                    Profil / Mon compte
                   </DropdownMenuItem>
+
                   <DropdownMenuItem onClick={() => setProfileOpen(true)}>
-                    <LockIcon className="mr-2 h-4 w-4" /> Changer mot de passe
+                    <LockIcon className="mr-2 h-4 w-4" />
+                    Changer mot de passe
                   </DropdownMenuItem>
+
                   <DropdownMenuSeparator />
+
                   <DropdownMenuItem
                     onClick={() => router.push("/admin/settings")}
                   >
-                    <SettingsIcon className="mr-2 h-4 w-4" /> Paramètres système
+                    <SettingsIcon className="mr-2 h-4 w-4" />
+                    Paramètres système
                   </DropdownMenuItem>
+
                   <DropdownMenuSeparator />
+
                   <DropdownMenuItem
                     onClick={handleLogout}
                     className="!text-destructive focus:!bg-destructive/10"
                   >
-                    <LogOutIcon className="mr-2 h-4 w-4" /> Déconnexion
+                    <LogOutIcon className="mr-2 h-4 w-4" />
+                    Déconnexion
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -483,11 +526,12 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
         </SidebarFooter>
       </Sidebar>
 
-      {/* ── Main content area ── */}
+      {/* Main content area */}
       <div className="flex flex-1 flex-col overflow-hidden bg-background">
         {/* Header bar */}
         <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <SidebarTrigger className="-ml-1" />
+
           <Separator orientation="vertical" className="mr-1 h-5" />
 
           {/* Breadcrumb */}
@@ -498,6 +542,7 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
                   <Link href="/admin/dashboard">Accueil</Link>
                 </BreadcrumbLink>
               </BreadcrumbItem>
+
               {pathname !== "/admin/dashboard" && (
                 <>
                   <BreadcrumbSeparator />
@@ -524,7 +569,7 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
                 activeYear ? "bg-emerald-500" : "bg-muted-foreground",
               )}
             />
-            {yearLoading ? "..." : (activeYear?.name ?? "Aucune année")}
+            {yearLoading ? "..." : activeYear?.name ?? "Aucune année"}
           </Badge>
 
           {/* Notifications */}
@@ -545,6 +590,7 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
                 )}
               </Button>
             </PopoverTrigger>
+
             <PopoverContent
               align="end"
               className="w-[380px] p-0"
@@ -558,16 +604,17 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
             </PopoverContent>
           </Popover>
 
-          {/* User dropdown (header) */}
+          {/* User dropdown header */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
-                className="flex items-center gap-2 pl-2 pr-1 h-8"
+                className="flex h-8 items-center gap-2 pl-2 pr-1"
               >
                 <span className="hidden text-sm font-medium sm:inline">
                   {currentUser?.firstname}
                 </span>
+
                 <Avatar className="h-7 w-7">
                   <AvatarFallback className="text-[10px] font-semibold">
                     {initials}
@@ -575,20 +622,27 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>
+
             <DropdownMenuContent align="end" className="w-48">
               <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
                 Mon compte
               </DropdownMenuLabel>
+
               <DropdownMenuSeparator />
+
               <DropdownMenuItem onClick={() => setProfileOpen(true)}>
-                <UserIcon className="mr-2 h-4 w-4" /> Profil
+                <UserIcon className="mr-2 h-4 w-4" />
+                Profil
               </DropdownMenuItem>
+
               <DropdownMenuSeparator />
+
               <DropdownMenuItem
                 onClick={handleLogout}
                 className="!text-destructive focus:!bg-destructive/10"
               >
-                <LogOutIcon className="mr-2 h-4 w-4" /> Déconnexion
+                <LogOutIcon className="mr-2 h-4 w-4" />
+                Déconnexion
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -610,7 +664,7 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
         />
       )}
 
-      <Toaster />
+    
     </SidebarProvider>
   );
 }

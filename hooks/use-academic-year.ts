@@ -1,6 +1,6 @@
 // hooks/use-academic-year.ts
 import { useState, useEffect } from "react"
-import { academicYearsApi } from "@/services/api"
+import { clientFetch } from "@/lib/client-fetch"
 import type { AcademicYear } from "@/types"
 
 export function useAcademicYear(yearId: string) {
@@ -11,7 +11,7 @@ export function useAcademicYear(yearId: string) {
   useEffect(() => {
     async function fetchAcademicYear() {
       try {
-        const year = await academicYearsApi.getById(yearId)
+        const year = await clientFetch<AcademicYear>(`/api/academic-years/${yearId}`)
         setAcademicYear(year)
         
         // Vérifier si l'année est archivée

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,7 +29,7 @@ interface DeleteClassroomModalProps {
     niveau: string;
   };
   studentCount: number;
-  onConfirm?: () => void;
+  onConfirm?: () => boolean | void | Promise<boolean | void>;
   trigger?: React.ReactNode;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -45,11 +45,7 @@ export function DeleteClassroomModal({
   onOpenChange,
 }: DeleteClassroomModalProps) {
   const [typedName, setTypedName] = useState("");
-
-  // Reset à chaque ouverture
-  useEffect(() => {
-    if (open) setTypedName("");
-  }, [open]);
+  const [submitting, setSubmitting] = useState(false);
 
   const isFondamentale = level.niveau === "Fondamentale";
   const title = isFondamentale
@@ -62,14 +58,27 @@ export function DeleteClassroomModal({
     !needsTypedName || typedName.trim() === classroom.name.trim();
   const canConfirm = typedMatches;
 
-  const handleConfirm = () => {
-    if (!canConfirm) return;
-    onConfirm?.();
-    onOpenChange?.(false);
+  const handleConfirm = async () => {
+    if (!canConfirm || submitting) return;
+    setSubmitting(true);
+    try {
+      const shouldClose = await onConfirm?.();
+      if (shouldClose !== false) {
+        setTypedName("");
+        onOpenChange?.(false);
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) setTypedName("");
+    onOpenChange?.(nextOpen);
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       {trigger}
       <DialogContent className="max-w-[480px] rounded-lg border border-neutral-200 p-0">
         <DialogHeader className="px-6 pt-6 pb-4">
@@ -128,17 +137,18 @@ export function DeleteClassroomModal({
           <DialogFooter className="gap-3 flex flex-row justify-end">
             <Button
               variant="outline"
-              onClick={() => onOpenChange?.(false)}
+              onClick={() => handleOpenChange(false)}
+              disabled={submitting}
               className="rounded-lg border border-neutral-300 text-neutral-900 bg-white"
             >
               Annuler
             </Button>
             <Button
               onClick={handleConfirm}
-              disabled={!canConfirm}
+              disabled={!canConfirm || submitting}
               className="rounded-lg bg-error text-white hover:bg-error/90 disabled:bg-neutral-300 disabled:cursor-not-allowed"
             >
-              Supprimer définitivement
+              {submitting ? "Suppression..." : "Supprimer définitivement"}
             </Button>
           </DialogFooter>
         </div>

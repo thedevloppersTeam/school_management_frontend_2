@@ -1,16 +1,22 @@
 // components/school/batch-bulletin-generator.tsx
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Loader2, Download, FileText, CheckCircle2, XCircle, Eye } from "lucide-react"
 import { toast } from "sonner"
-import html2canvas from "html2canvas"
 import jsPDF from "jspdf"
 import { buildBulletinData } from "@/lib/api/bulletin"
-import BulletinScolaire, { type BulletinData } from "@/components/BulletinScolaire"
+import { type BulletinData } from "@/components/BulletinScolaire"
+import { BulletinPrintable } from "@/components/school/bulletin-printable"
+import {
+  addBulletinCanvasToPdf,
+  captureBulletinElement,
+  createBulletinPdfHost,
+  waitForTwoFrames,
+} from "@/lib/bulletin-pdf-capture"
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -59,20 +65,20 @@ export function BatchBulletinGenerator({
   const [bulletins,    setBulletins]    = useState<Map<string, BulletinData>>(new Map())
   const [generated,    setGenerated]    = useState(false)
 
-  // Conteneur off-screen pour le rendu HTML → canvas
-  const offscreenRef = useRef<HTMLDivElement>(null)
-
   // ── Reset à l'ouverture ───────────────────────────────────────────────────
 
   useEffect(() => {
     if (!open) return
-    setProgress(0)
-    setGenerated(false)
-    setBulletins(new Map())
     const init = new Map<string, StudentStatus>()
     studentIds.forEach(id => init.set(id, { status: 'pending' }))
-    setStatus(init)
-  }, [open])
+
+    void Promise.resolve().then(() => {
+      setProgress(0)
+      setGenerated(false)
+      setBulletins(new Map())
+      setStatus(init)
+    })
+  }, [open, studentIds])
 
   // ── Génération de tous les bulletins ──────────────────────────────────────
 
@@ -140,82 +146,41 @@ export function BatchBulletinGenerator({
     setLoading(true)
 
     try {
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'pt',
+        format: 'letter',
+        compress: true,
+      })
       let firstPage = true
 
       for (const [studentId, data] of bulletins) {
         if (status.get(studentId)?.status !== 'success') continue
 
-        // Rendre le bulletin dans le conteneur off-screen
-        const container = offscreenRef.current
-        if (!container) continue
-
-        // Injecter temporairement le composant via innerHTML — on utilise un div dédié
-        const tempDiv = document.createElement('div')
-        tempDiv.style.width = '210mm'
-        tempDiv.style.backgroundColor = 'white'
-        tempDiv.style.position = 'absolute'
-        tempDiv.style.left = '-9999px'
-        tempDiv.style.top = '0'
-        document.body.appendChild(tempDiv)
-
-        // Rendu React → HTML via dangerouslySetInnerHTML n'est pas possible ici.
-        // On clone le bulletin déjà rendu dans le dialog si disponible.
-        // Sinon on crée un rendu simplifié texte pour le fallback.
-        // Approche : on render dans un portail temporaire.
-
-        // ── Fallback propre : rendu via un iframe temporaire ──
-        // Pour éviter la complexité du portail, on utilise html2canvas
-        // sur un div contenant le bulletin rendu côté client.
-
-        // Nettoyer
-        document.body.removeChild(tempDiv)
-
         // Solution : créer un élément, monter BulletinScolaire dedans via React DOM
         const { createRoot } = await import('react-dom/client')
         const React = await import('react')
 
-        const mountPoint = document.createElement('div')
-        mountPoint.style.cssText = 'position:absolute;left:-9999px;top:0;width:210mm;background:white;'
+        const mountPoint = createBulletinPdfHost()
         document.body.appendChild(mountPoint)
 
         const root = createRoot(mountPoint)
-        await new Promise<void>(resolve => {
+        try {
           root.render(
-            React.default.createElement(BulletinScolaire, {
+            React.default.createElement(BulletinPrintable, {
               data,
+              renderMode: "pdf",
               key: studentId,
             })
           )
-          // Laisser React flusher
-          setTimeout(resolve, 400)
-        })
+          await waitForTwoFrames()
 
-        const canvas = await html2canvas(mountPoint, {
-          scale: 2, useCORS: true, logging: false,
-          backgroundColor: '#ffffff',
-          windowWidth:  mountPoint.scrollWidth,
-          windowHeight: mountPoint.scrollHeight,
-        })
-
-        root.unmount()
-        document.body.removeChild(mountPoint)
-
-        const imgData   = canvas.toDataURL('image/png')
-        const imgWidth  = 210
-        const pageH     = 297
-        const imgHeight = (canvas.height * imgWidth) / canvas.width
-        let   heightLeft = imgHeight
-        let   position   = 0
-
-        if (!firstPage) pdf.addPage()
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
-        heightLeft -= pageH
-        while (heightLeft > 0) {
-          position = heightLeft - imgHeight
-          pdf.addPage()
-          pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
-          heightLeft -= pageH
+          if (!firstPage) pdf.addPage("letter", "portrait")
+          const { canvas } = await captureBulletinElement(mountPoint)
+          addBulletinCanvasToPdf(pdf, canvas)
+        } finally {
+          root.unmount()
+          mountPoint.remove()
         }
 
         firstPage = false
@@ -240,9 +205,6 @@ export function BatchBulletinGenerator({
 
   return (
     <>
-      {/* Conteneur off-screen pour le rendu PDF */}
-      <div ref={offscreenRef} style={{ position: 'absolute', left: '-9999px', top: 0 }} aria-hidden />
-
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
           <DialogHeader>

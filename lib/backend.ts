@@ -4,7 +4,7 @@ import { logger } from "./logger";
 
 /**
  * Timeout max pour les requêtes backend.
- * Au-delà, on renvoie 504 pour éviter de bloquer les workers Next.js (FF3).
+ * Au-delà, on renvoie 504 pour éviter de bloquer les workers Next.js.
  */
 const BACKEND_TIMEOUT_MS = 15_000;
 
@@ -13,12 +13,63 @@ const BACKEND_TIMEOUT_MS = 15_000;
  */
 export interface BackendFetchOptions {
   /**
-   * Si true, le header `set-cookie` du backend est forwardé au browser.
-   * Indispensable pour les routes d'auth (login, logout) qui doivent
-   * propager la session connect.sid.
-   * Par défaut : false (rétrocompatibilité).
+   * Si true, le header `set-cookie` du backend est forwardé au navigateur.
+   * Indispensable pour les routes d'auth comme login/logout.
+   * Par défaut : false.
    */
   forwardSetCookie?: boolean;
+}
+
+function shouldForwardBody(method: string): boolean {
+  const upperMethod = method.toUpperCase();
+  return upperMethod !== "GET" && upperMethod !== "HEAD";
+}
+
+function isJsonContentType(contentType: string | null): boolean {
+  return Boolean(contentType?.toLowerCase().includes("application/json"));
+}
+
+function getSafeJsonBodyKeys(body: ArrayBuffer, contentType: string | null): string[] | undefined {
+  if (!isJsonContentType(contentType) || body.byteLength === 0 || body.byteLength > 64_000) {
+    return undefined;
+  }
+
+  try {
+    const text = new TextDecoder().decode(body);
+    const parsed = JSON.parse(text);
+
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return Object.keys(parsed);
+    }
+
+    if (Array.isArray(parsed)) {
+      return ["<array>"];
+    }
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
+}
+
+function appendBackendSetCookie(response: NextResponse, backendHeaders: Headers): void {
+  const headersWithGetSetCookie = backendHeaders as Headers & {
+    getSetCookie?: () => string[];
+  };
+
+  const setCookies = headersWithGetSetCookie.getSetCookie?.();
+
+  if (setCookies && setCookies.length > 0) {
+    for (const cookie of setCookies) {
+      response.headers.append("set-cookie", cookie);
+    }
+    return;
+  }
+
+  const setCookie = backendHeaders.get("set-cookie");
+  if (setCookie) {
+    response.headers.append("set-cookie", setCookie);
+  }
 }
 
 export async function backendFetch(
@@ -29,45 +80,47 @@ export async function backendFetch(
 ): Promise<NextResponse> {
   const targetUrl = new URL(path, env.BACKEND_URL);
 
-  // Forward query parameters from the incoming request
+  // Forward query parameters from the incoming request.
   request.nextUrl.searchParams.forEach((value, key) => {
     targetUrl.searchParams.set(key, value);
   });
 
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = {
+    accept: "application/json",
+  };
+
   const cookie = request.headers.get("cookie");
-  if (cookie) headers["cookie"] = cookie;
+  if (cookie) {
+    headers.cookie = cookie;
+  }
 
-  let body: string | undefined;
-  if (method !== "GET" && method !== "HEAD") {
-    try {
-      const json = await request.json();
+  let body: ArrayBuffer | undefined;
 
-      // SEC-A09-002 : ne PLUS logger le body complet (contenait passwords en clair).
-      // On log uniquement la méthode + path + clés présentes (pas les valeurs).
-      // La redaction du logger gère password/nisu/email même si une clé connue passe,
-      // mais on reste conservateur : on ne forward jamais les valeurs ici.
-      if (env.NODE_ENV === "development") {
-        const bodyKeys = Object.keys(json ?? {});
-        logger.debug(
-          {
-            event: "backend_fetch_request",
-            method,
-            path,
-            bodyKeys, // ← juste les noms des champs, jamais les valeurs
-          },
-          "backendFetch outgoing",
-        );
-      }
+  if (shouldForwardBody(method)) {
+    body = await request.arrayBuffer();
 
-      body = JSON.stringify(json);
+    const incomingContentType = request.headers.get("content-type");
+    if (incomingContentType) {
+      headers["content-type"] = incomingContentType;
+    } else if (body.byteLength > 0) {
       headers["content-type"] = "application/json";
-    } catch {
-      // no body
+    }
+
+    if (env.NODE_ENV === "development") {
+      logger.debug(
+        {
+          event: "backend_fetch_request",
+          method,
+          path,
+          contentType: incomingContentType ?? null,
+          bodyBytes: body.byteLength,
+          bodyKeys: getSafeJsonBodyKeys(body, incomingContentType),
+        },
+        "backendFetch outgoing",
+      );
     }
   }
 
-  // FF3 — Timeout pour éviter DoS par requêtes lentes
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), BACKEND_TIMEOUT_MS);
 
@@ -76,27 +129,66 @@ export async function backendFetch(
       method,
       headers,
       body,
-      // FF2 — Ne pas suivre les redirections (anti-SSRF via 302 malveillant)
       redirect: "manual",
       signal: controller.signal,
     });
 
-    const data = await backendRes.json().catch(() => null);
+    const raw = await backendRes.text();
+    let data: unknown = null;
+
+    if (raw) {
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        data = null;
+      }
+    }
+
+    // Protection contre le backend stale : certains backends Express renvoient
+    // 200 + "Ok" sur une route non montée. Sans ce contrôle, le frontend peut
+    // croire qu'une opération a réussi alors que l'endpoint n'existe pas.
+    if (backendRes.ok && data === null && raw.trim() === "Ok") {
+      logger.error(
+        {
+          event: "backend_fetch_stale_backend",
+          method,
+          path,
+          status: backendRes.status,
+        },
+        "Backend stale route fallback detected",
+      );
+
+      return NextResponse.json(
+        {
+          message:
+            "Backend stale: the requested route is not mounted on the API server. Rebuild and restart the backend.",
+        },
+        { status: 502 },
+      );
+    }
+
+    if (env.NODE_ENV === "development" && !backendRes.ok) {
+      logger.debug(
+        {
+          event: "backend_fetch_response_error",
+          method,
+          path,
+          status: backendRes.status,
+        },
+        "backendFetch non-OK response",
+      );
+    }
+
     const response = NextResponse.json(data, { status: backendRes.status });
 
-    // Forward set-cookie si demandé (auth routes uniquement)
     if (options.forwardSetCookie) {
-      const setCookie = backendRes.headers.get("set-cookie");
-      if (setCookie) {
-        response.headers.set("set-cookie", setCookie);
-      }
+      appendBackendSetCookie(response, backendRes.headers);
     }
 
     return response;
   } catch (error: unknown) {
     const err = error as { name?: string; message?: string };
 
-    // SEC-A09-001 : logs structurés pour ingestion future (Loki/Datadog)
     if (err.name === "AbortError") {
       logger.error(
         {
@@ -107,6 +199,7 @@ export async function backendFetch(
         },
         "Backend timeout",
       );
+
       return NextResponse.json({ message: "Backend timeout" }, { status: 504 });
     }
 
