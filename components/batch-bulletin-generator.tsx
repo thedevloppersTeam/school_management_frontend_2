@@ -166,13 +166,12 @@ export function BatchBulletinGenerator({
 
         const root = createRoot(mountPoint)
         try {
-          root.render(
-            React.default.createElement(BulletinPrintable, {
-              data,
-              renderMode: "pdf",
-              key: studentId,
-            })
-          )
+root.render(
+  React.default.createElement(BulletinPrintable, {
+    data,
+    key: studentId,
+  })
+)
           await waitForTwoFrames()
 
           if (!firstPage) pdf.addPage("letter", "portrait")
