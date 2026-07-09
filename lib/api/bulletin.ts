@@ -289,18 +289,50 @@ function buildComportementItems(attitudes: AttitudePayload[], behavior: Behavior
   }))
 }
 
+function extractBehaviorExtrasFromRemarque(remarque: string | null | undefined) {
+  const source = remarque ?? ""
+  const markerPattern = /\[\[\s*(LECONS_NON_SUES|RESPECT_UNIFORME|DISCIPLINE)\s*=\s*([^\]]*)\]\]/gi
+  const values = {
+    leconsNonSues: "",
+    respectUniforme: "",
+    discipline: "",
+    cleanRemarque: "",
+  }
+
+  let match: RegExpExecArray | null
+  while ((match = markerPattern.exec(source)) !== null) {
+    const key = match[1].toUpperCase()
+    const value = match[2].trim()
+    if (key === "LECONS_NON_SUES" && values.leconsNonSues === "") values.leconsNonSues = value
+    if (key === "RESPECT_UNIFORME" && values.respectUniforme === "") values.respectUniforme = value
+    if (key === "DISCIPLINE" && values.discipline === "") values.discipline = value
+  }
+
+  values.cleanRemarque = source
+    .replace(markerPattern, "")
+    .split(/\r?\n/)
+    .map(line => line.trimEnd())
+    .filter((line, index, lines) => line.trim() !== "" || (index > 0 && index < lines.length - 1))
+    .join("\n")
+    .trim()
+
+  return values
+}
+
 function buildComportement(behavior: BehaviorPayload | null, attitudes: AttitudePayload[]) {
+  const extras = extractBehaviorExtrasFromRemarque(behavior?.remarque)
+
   return {
     absences:        behavior?.absences        != null ? String(behavior.absences)        : '—',
     retards:         behavior?.retards          != null ? String(behavior.retards)          : '—',
     devoirsNonRemis: behavior?.devoirsManques   != null ? String(behavior.devoirsManques)   : '—',
-    leconsNonSues:   '—',
-    uniforme:        '—',
-    discipline:      '—',
+    leconsNonSues:   extras.leconsNonSues || '—',
+    uniforme:        extras.respectUniforme || '—',
+    discipline:      extras.discipline || '—',
     items:           buildComportementItems(attitudes, behavior),
     pointsForts:     behavior?.pointsForts ?? '',
     defis:           behavior?.defis        ?? '',
-    remarque:        behavior?.remarque     ?? '',
+    remarque:        extras.cleanRemarque,
   }
 }
 

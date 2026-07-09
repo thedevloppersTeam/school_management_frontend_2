@@ -12,14 +12,6 @@ import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import {
   Pagination,
   PaginationContent,
   PaginationEllipsis,
@@ -39,7 +31,7 @@ import type { ApiEnrollment } from "@/lib/api/grades"
 import { fetchEnrollments } from "@/lib/api/grades"
 import { cn } from "@/lib/utils"
 
-// ── Types API ─────────────────────────────────────────────────────────────────
+// Types API
 
 interface ApiAttitude {
   id: string
@@ -65,7 +57,7 @@ interface ApiBehavior {
   attitudeResponses: ApiAttitudeResponse[]
 }
 
-// ── Types internes ─────────────────────────────────────────────────────────────
+// Types internes
 
 interface BehaviorEntry {
   behaviorId: string | null
@@ -73,13 +65,35 @@ interface BehaviorEntry {
   absences: string
   retards: string
   devoirsManques: string
+  leconsNonSues: string
+  respectUniforme: string
+  discipline: string
   attitudeResponses: Map<string, boolean | null>
   pointsForts: string
   defis: string
   remarque: string
 }
 
-// ── Props ─────────────────────────────────────────────────────────────────────
+type BehaviorExtraFields = {
+  leconsNonSues: string
+  respectUniforme: string
+  discipline: string
+  cleanRemarque: string
+}
+
+type NumericBehaviorField =
+  | "absences"
+  | "retards"
+  | "devoirsManques"
+  | "leconsNonSues"
+  | "respectUniforme"
+  | "discipline"
+
+type TextBehaviorField = "pointsForts" | "defis" | "remarque"
+
+type BehaviorFilter = "all" | "filled" | "missing"
+
+// Props
 
 interface CPMSLBehaviorGridProps {
   yearId: string
@@ -87,7 +101,7 @@ interface CPMSLBehaviorGridProps {
   steps: AcademicYearStep[]
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// Helpers
 
 function getStudentInitials(enrollment: ApiEnrollment): string {
   const f = enrollment.student?.user?.firstname?.[0] ?? ""
@@ -101,6 +115,116 @@ function getStudentName(enrollment: ApiEnrollment): string {
   return `${first} ${last}`.trim() || (enrollment.student?.studentCode ?? "—")
 }
 
+function extractBehaviorExtrasFromRemarque(remarque: string | null): BehaviorExtraFields {
+  const source = remarque ?? ""
+  const markerPattern = /\[\[\s*(LECONS_NON_SUES|RESPECT_UNIFORME|DISCIPLINE)\s*=\s*([^\]]*)\]\]/gi
+  const values: BehaviorExtraFields = {
+    leconsNonSues: "",
+    respectUniforme: "",
+    discipline: "",
+    cleanRemarque: "",
+  }
+
+  let match: RegExpExecArray | null
+  while ((match = markerPattern.exec(source)) !== null) {
+    const key = match[1].toUpperCase()
+    const value = match[2].trim()
+    if (key === "LECONS_NON_SUES" && values.leconsNonSues === "") values.leconsNonSues = value
+    if (key === "RESPECT_UNIFORME" && values.respectUniforme === "") values.respectUniforme = value
+    if (key === "DISCIPLINE" && values.discipline === "") values.discipline = value
+  }
+
+  values.cleanRemarque = source
+    .replace(markerPattern, "")
+    .split(/\r?\n/)
+    .map(line => line.trimEnd())
+    .filter((line, index, lines) => line.trim() !== "" || (index > 0 && index < lines.length - 1))
+    .join("\n")
+    .trim()
+
+  return values
+}
+
+function buildRemarqueWithBehaviorExtras(params: {
+  cleanRemarque: string
+  leconsNonSues: string
+  respectUniforme: string
+  discipline: string
+}): string | null {
+  const lines: string[] = []
+  const leconsNonSues = params.leconsNonSues.trim()
+  const respectUniforme = params.respectUniforme.trim()
+  const discipline = params.discipline.trim()
+  const cleanRemarque = params.cleanRemarque.trim()
+
+  if (leconsNonSues !== "") lines.push(`[[LECONS_NON_SUES=${leconsNonSues}]]`)
+  if (respectUniforme !== "") lines.push(`[[RESPECT_UNIFORME=${respectUniforme}]]`)
+  if (discipline !== "") lines.push(`[[DISCIPLINE=${discipline}]]`)
+  if (cleanRemarque !== "") lines.push(cleanRemarque)
+
+  return lines.length > 0 ? lines.join("\n") : null
+}
+
+function parseNullableInt(value: string): number | null {
+  return value.trim() === "" ? null : Number.parseInt(value, 10)
+}
+
+function hasBehaviorData(entry: BehaviorEntry): boolean {
+  const hasAttitude = Array.from(entry.attitudeResponses.values()).some(value => value !== null)
+  return (
+    entry.absences.trim() !== "" ||
+    entry.retards.trim() !== "" ||
+    entry.devoirsManques.trim() !== "" ||
+    entry.leconsNonSues.trim() !== "" ||
+    entry.respectUniforme.trim() !== "" ||
+    entry.discipline.trim() !== "" ||
+    hasAttitude ||
+    entry.pointsForts.trim() !== "" ||
+    entry.defis.trim() !== "" ||
+    entry.remarque.trim() !== ""
+  )
+}
+
+function buildBehaviorPayload(entry: BehaviorEntry, selectedStepId: string) {
+  const attitudeResponses = Array.from(entry.attitudeResponses.entries())
+    .filter(([, value]) => value !== null)
+    .map(([attitudeId, value]) => ({ attitudeId, value: value as boolean }))
+
+  return {
+    enrollmentId: entry.enrollmentId,
+    stepId: selectedStepId,
+    absences: parseNullableInt(entry.absences),
+    retards: parseNullableInt(entry.retards),
+    devoirsManques: parseNullableInt(entry.devoirsManques),
+    pointsForts: entry.pointsForts.trim() || null,
+    defis: entry.defis.trim() || null,
+    remarque: buildRemarqueWithBehaviorExtras({
+      cleanRemarque: entry.remarque,
+      leconsNonSues: entry.leconsNonSues,
+      respectUniforme: entry.respectUniforme,
+      discipline: entry.discipline,
+    }),
+    attitudeResponses,
+  }
+}
+
+function createEmptyBehaviorEntry(enrollmentId: string): BehaviorEntry {
+  return {
+    behaviorId: null,
+    enrollmentId,
+    absences: "",
+    retards: "",
+    devoirsManques: "",
+    leconsNonSues: "",
+    respectUniforme: "",
+    discipline: "",
+    attitudeResponses: new Map<string, boolean | null>(),
+    pointsForts: "",
+    defis: "",
+    remarque: "",
+  }
+}
+
 function createBehaviorEntry(
   enr: ApiEnrollment,
   behaviorList: ApiBehavior[],
@@ -110,6 +234,7 @@ function createBehaviorEntry(
   const attMap   = new Map<string, boolean | null>()
   attitudes.forEach(att => attMap.set(att.id, null))
   existing?.attitudeResponses.forEach(r => attMap.set(r.attitudeId, r.value))
+  const parsedExtras = extractBehaviorExtrasFromRemarque(existing?.remarque ?? null)
 
   return {
     behaviorId:        existing?.id ?? null,
@@ -117,14 +242,17 @@ function createBehaviorEntry(
     absences:          existing?.absences?.toString()       ?? "",
     retards:           existing?.retards?.toString()        ?? "",
     devoirsManques:    existing?.devoirsManques?.toString() ?? "",
+    leconsNonSues:     parsedExtras.leconsNonSues,
+    respectUniforme:   parsedExtras.respectUniforme,
+    discipline:        parsedExtras.discipline,
     attitudeResponses: attMap,
     pointsForts:       existing?.pointsForts ?? "",
     defis:             existing?.defis       ?? "",
-    remarque:          existing?.remarque    ?? "",
+    remarque:          parsedExtras.cleanRemarque,
   }
 }
 
-// ── Composant ─────────────────────────────────────────────────────────────────
+// Composant
 
 export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGridProps) {
   const { toast } = useToast()
@@ -135,12 +263,13 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
 
   // Sync classType when sessions arrive or the session changes externally
   useEffect(() => {
-    if (!selectedSessionId) {
-      setSelectedClassTypeId("")
-      return
-    }
-    const s = sessions.find(x => x.id === selectedSessionId)
-    if (s) setSelectedClassTypeId(s.class.classType.id)
+    const nextClassTypeId = selectedSessionId
+      ? sessions.find(x => x.id === selectedSessionId)?.class.classType.id ?? ""
+      : ""
+
+    void Promise.resolve().then(() => {
+      setSelectedClassTypeId(current => current === nextClassTypeId ? current : nextClassTypeId)
+    })
   }, [selectedSessionId, sessions])
 
   const classTypeOptions = useMemo(() => {
@@ -179,31 +308,50 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
   const [saving,           setSaving]           = useState(false)
   const [currentPage,      setCurrentPage]      = useState(1)
   const [searchQuery,      setSearchQuery]      = useState("")
+  const [behaviorFilter,   setBehaviorFilter]   = useState<BehaviorFilter>("all")
   const itemsPerPage = 25
 
-  // ── Chargement attitudes ──────────────────────────────────────────────────
+  // Chargement attitudes
 
   useEffect(() => {
     if (!yearId) return
-    setLoadingAttitudes(true)
-    fetch(`/api/attitudes?academicYearId=${yearId}`, { credentials: "include" })
-      .then(r => r.json())
-      .then(data => setAttitudes(Array.isArray(data) ? data : []))
-      .catch(() => toast({ title: "Erreur", description: "Impossible de charger les attitudes", variant: "destructive" }))
-      .finally(() => setLoadingAttitudes(false))
-  }, [yearId])
+    let cancelled = false
 
-  // ── Chargement enrollments + behaviors ────────────────────────────────────
+    void Promise.resolve().then(async () => {
+      setLoadingAttitudes(true)
+      try {
+        const response = await fetch(`/api/attitudes?academicYearId=${yearId}`, { credentials: "include" })
+        const data = await response.json()
+        if (!cancelled) setAttitudes(Array.isArray(data) ? data : [])
+      } catch {
+        if (!cancelled) {
+          toast({ title: "Erreur", description: "Impossible de charger les attitudes", variant: "destructive" })
+        }
+      } finally {
+        if (!cancelled) setLoadingAttitudes(false)
+      }
+    })
+
+    return () => { cancelled = true }
+  }, [yearId, toast])
+
+  // Chargement enrollments + behaviors
 
   useEffect(() => {
     if (!selectedSessionId || !selectedStepId) return
-    setLoadingBehaviors(true)
-    Promise.all([
-      fetchEnrollments(selectedSessionId),
-      fetch(`/api/behaviors?classSessionId=${selectedSessionId}&stepId=${selectedStepId}`, { credentials: "include" })
-        .then(r => r.json())
-    ])
-      .then(([enrs, behs]) => {
+    let cancelled = false
+
+    void Promise.resolve().then(async () => {
+      setLoadingBehaviors(true)
+      try {
+        const [enrs, behs] = await Promise.all([
+          fetchEnrollments(selectedSessionId),
+          fetch(`/api/behaviors?classSessionId=${selectedSessionId}&stepId=${selectedStepId}`, { credentials: "include" })
+            .then(r => r.json())
+        ])
+
+        if (cancelled) return
+
         const enrollmentList: ApiEnrollment[] = Array.isArray(enrs) ? enrs : []
         const behaviorList: ApiBehavior[]     = Array.isArray(behs) ? behs : []
 
@@ -215,12 +363,19 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
           newEntries.set(enr.id, createBehaviorEntry(enr, behaviorList, attitudes))
         })
         setEntries(newEntries)
-      })
-      .catch(() => toast({ title: "Erreur", description: "Impossible de charger les comportements", variant: "destructive" }))
-      .finally(() => setLoadingBehaviors(false))
-  }, [selectedSessionId, selectedStepId])
+      } catch {
+        if (!cancelled) {
+          toast({ title: "Erreur", description: "Impossible de charger les comportements", variant: "destructive" })
+        }
+      } finally {
+        if (!cancelled) setLoadingBehaviors(false)
+      }
+    })
 
-  // ── Pagination + recherche ─────────────────────────────────────────────────
+    return () => { cancelled = true }
+  }, [selectedSessionId, selectedStepId, attitudes, toast])
+
+  // Pagination + recherche
 
   const sortedEnrollments = useMemo(() =>
     [...enrollments].sort((a, b) => getStudentName(a).localeCompare(getStudentName(b))),
@@ -228,14 +383,20 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
   )
 
   const filteredEnrollments = useMemo(() => {
-    if (!searchQuery.trim()) return sortedEnrollments
     const q = searchQuery.toLowerCase()
     return sortedEnrollments.filter(e => {
       const name = getStudentName(e).toLowerCase()
       const code = (e.student?.studentCode ?? "").toLowerCase()
-      return name.includes(q) || code.includes(q)
+      const matchesSearch = !q.trim() || name.includes(q) || code.includes(q)
+      const entry = entries.get(e.id)
+      const filled = entry ? hasBehaviorData(entry) : false
+      const matchesFilter =
+        behaviorFilter === "all" ||
+        (behaviorFilter === "filled" && filled) ||
+        (behaviorFilter === "missing" && !filled)
+      return matchesSearch && matchesFilter
     })
-  }, [sortedEnrollments, searchQuery])
+  }, [sortedEnrollments, searchQuery, behaviorFilter, entries])
 
   const totalPages    = Math.max(1, Math.ceil(filteredEnrollments.length / itemsPerPage))
   const paginatedEnrs = filteredEnrollments.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
@@ -249,9 +410,11 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
     return [1, 'ellipsis-left', currentPage - 1, currentPage, currentPage + 1, 'ellipsis-right', totalPages]
   }, [currentPage, totalPages])
 
-  useEffect(() => { setCurrentPage(1) }, [searchQuery])
+  useEffect(() => {
+    void Promise.resolve().then(() => setCurrentPage(1))
+  }, [searchQuery, behaviorFilter])
 
-  // ── KPIs ──────────────────────────────────────────────────────────────────
+  // KPIs
 
   const kpis = useMemo(() => {
     const total   = sortedEnrollments.length
@@ -259,17 +422,16 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
     sortedEnrollments.forEach(enr => {
       const e = entries.get(enr.id)
       if (!e) return
-      const hasAttitude = Array.from(e.attitudeResponses.values()).some(v => v !== null)
-      if (e.absences || e.retards || e.devoirsManques || hasAttitude || e.pointsForts || e.defis || e.remarque)
-        entered++
+      if (hasBehaviorData(e)) entered++
     })
     return { total, entered, missing: total - entered, percent: total > 0 ? Math.round((entered / total) * 100) : 0 }
   }, [sortedEnrollments, entries])
 
-  // ── Handlers ──────────────────────────────────────────────────────────────
+  // Handlers
 
-  function handleNumber(enrollmentId: string, field: "absences" | "retards" | "devoirsManques", value: string) {
-    if (value !== "" && !(/^\d{1,3}$/.test(value) && parseInt(value) >= 0)) return
+  function handleNumber(enrollmentId: string, field: NumericBehaviorField, value: string) {
+    const max = field === "respectUniforme" || field === "discipline" ? 10 : 999
+    if (value !== "" && (!/^\d+$/.test(value) || Number.parseInt(value, 10) > max)) return
     setEntries(prev => {
       const next = new Map(prev)
       const e = next.get(enrollmentId)
@@ -278,7 +440,7 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
     })
   }
 
-  function handleText(enrollmentId: string, field: "pointsForts" | "defis" | "remarque", value: string) {
+  function handleText(enrollmentId: string, field: TextBehaviorField, value: string) {
     const max = field === "remarque" ? 500 : 300
     if (value.length > max) return
     setEntries(prev => {
@@ -302,66 +464,158 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
   }
 
   async function handleSave() {
-    if (!selectedSessionId || !selectedStepId) return
+    if (!selectedSessionId || !selectedStepId || isLocked) return
     setSaving(true)
     try {
-      const ops = Array.from(entries.values()).map(async e => {
-        const attitudeResponses = Array.from(e.attitudeResponses.entries())
-          .filter(([, v]) => v !== null)
-          .map(([attitudeId, value]) => ({ attitudeId, value: value as boolean }))
+      const entriesToSave = Array.from(entries.values()).filter(e => e.behaviorId || hasBehaviorData(e))
 
-        const body = {
-          enrollmentId:   e.enrollmentId,
-          stepId:         selectedStepId,
-          absences:       e.absences       ? parseInt(e.absences)       : null,
-          retards:        e.retards        ? parseInt(e.retards)        : null,
-          devoirsManques: e.devoirsManques ? parseInt(e.devoirsManques) : null,
-          pointsForts:    e.pointsForts    || null,
-          defis:          e.defis          || null,
-          remarque:       e.remarque       || null,
-          attitudeResponses,
-        }
+      if (entriesToSave.length === 0) {
+        toast({
+          title: "Aucune donnée à enregistrer",
+          description: "Aucun comportement renseigné pour cette sélection.",
+        })
+        return
+      }
 
-        if (e.behaviorId) {
-          const { enrollmentId, ...updateBody } = body
-          await fetch(`/api/behaviors/update/${e.behaviorId}`, {
-            method: "POST", credentials: "include",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(updateBody),
-          })
-        } else {
-          const res = await fetch("/api/behaviors/create", {
-            method: "POST", credentials: "include",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-          })
-          if (res.ok) {
-            const created: ApiBehavior = await res.json()
-            setEntries(prev => {
-              const next  = new Map(prev)
-              const entry = next.get(e.enrollmentId)
-              if (entry) next.set(e.enrollmentId, { ...entry, behaviorId: created.id })
-              return next
+      let successCount = 0
+      let errorCount = 0
+
+      for (const e of entriesToSave) {
+        const body = buildBehaviorPayload(e, selectedStepId)
+
+        try {
+          if (e.behaviorId) {
+            const updateBody = {
+              stepId: body.stepId,
+              absences: body.absences,
+              retards: body.retards,
+              devoirsManques: body.devoirsManques,
+              pointsForts: body.pointsForts,
+              defis: body.defis,
+              remarque: body.remarque,
+              attitudeResponses: body.attitudeResponses,
+            }
+            const res = await fetch(`/api/behaviors/update/${e.behaviorId}`, {
+              method: "POST", credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(updateBody),
             })
+            if (!res.ok) throw new Error(`HTTP ${res.status}`)
+          } else {
+            const res = await fetch("/api/behaviors/create", {
+              method: "POST", credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body),
+            })
+            if (!res.ok) throw new Error(`HTTP ${res.status}`)
+            const created = await res.json().catch(() => null) as Partial<ApiBehavior> | null
+            if (created?.id) {
+              setEntries(prev => {
+                const next  = new Map(prev)
+                const entry = next.get(e.enrollmentId)
+                if (entry) next.set(e.enrollmentId, { ...entry, behaviorId: created.id ?? entry.behaviorId })
+                return next
+              })
+            }
           }
+          successCount++
+        } catch (error) {
+          errorCount++
+          console.error("[CPMSLBehaviorGrid] save behavior:", error)
         }
-      })
-      await Promise.all(ops)
-      toast({ title: "Comportements enregistrés" })
-    } catch {
-      toast({ title: "Erreur", description: "Erreur lors de l'enregistrement", variant: "destructive" })
+      }
+
+      if (successCount > 0 && errorCount === 0) {
+        toast({ title: `${successCount} comportement${successCount > 1 ? "s" : ""} enregistré${successCount > 1 ? "s" : ""}.` })
+      } else if (successCount > 0) {
+        toast({
+          title: "Enregistrement partiel",
+          description: `${successCount} comportement${successCount > 1 ? "s" : ""} enregistré${successCount > 1 ? "s" : ""}, ${errorCount} erreur${errorCount > 1 ? "s" : ""}.`,
+          variant: "destructive",
+        })
+      } else {
+        toast({
+          title: "Aucun comportement n'a pu être enregistré.",
+          description: "Veuillez réessayer ou vérifier la connexion.",
+          variant: "destructive",
+        })
+      }
     } finally {
       setSaving(false)
     }
   }
 
-  // ── Helpers pour le rendu ────────────────────────────────────────────────
+
+  // Helpers pour le rendu
+
+  const numericFields: Array<{
+    field: NumericBehaviorField
+    label: string
+    max: number
+  }> = [
+    { field: "absences", label: "Absences", max: 999 },
+    { field: "retards", label: "Retards", max: 999 },
+    { field: "devoirsManques", label: "Devoirs manqués", max: 999 },
+    { field: "leconsNonSues", label: "Nombre de leçons non sues", max: 999 },
+    { field: "respectUniforme", label: "Respect des prescrits de l'uniforme (/10)", max: 10 },
+    { field: "discipline", label: "Discipline (/10)", max: 10 },
+  ]
+
+  const textFields: Array<{
+    field: TextBehaviorField
+    label: string
+    placeholder: string
+    max: number
+  }> = [
+    { field: "pointsForts", label: "Points forts", placeholder: "Points forts...", max: 300 },
+    { field: "defis", label: "Défis", placeholder: "Défis...", max: 300 },
+    { field: "remarque", label: "Remarque", placeholder: "Remarque visible...", max: 500 },
+  ]
+
+  function renderNumericField(entry: BehaviorEntry, field: NumericBehaviorField, label: string, max: number) {
+    return (
+      <label key={field} className="space-y-1.5">
+        <span className="text-xs font-medium text-muted-foreground">{label}</span>
+        <Input
+          inputMode="numeric"
+          pattern="[0-9]*"
+          min={0}
+          max={max}
+          step={1}
+          value={entry[field]}
+          placeholder="0"
+          disabled={isLocked}
+          onChange={event => handleNumber(entry.enrollmentId, field, event.target.value)}
+          className="h-9 text-center tabular-nums"
+        />
+      </label>
+    )
+  }
+
+  function renderTextField(entry: BehaviorEntry, field: TextBehaviorField, label: string, placeholder: string, max: number) {
+    return (
+      <label key={field} className="space-y-1.5">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs font-medium text-muted-foreground">{label}</span>
+          <span className="text-[11px] text-muted-foreground tabular-nums">{entry[field].length} / {max}</span>
+        </div>
+        <Textarea
+          value={entry[field]}
+          onChange={event => handleText(entry.enrollmentId, field, event.target.value)}
+          placeholder={placeholder}
+          disabled={isLocked}
+          rows={3}
+          className="resize-y text-sm"
+        />
+      </label>
+    )
+  }
 
   function renderAttitudeRow(att: ApiAttitude, e: BehaviorEntry, enrollmentId: string, isLocked: boolean) {
     const resp = e.attitudeResponses.get(att.id)
     return (
-      <div key={att.id} className="flex items-center gap-3">
-        <span className="min-w-[130px] text-sm font-medium text-foreground">
+      <div key={att.id} className="flex flex-col gap-2 rounded-md border bg-muted/20 p-2 sm:flex-row sm:items-center sm:justify-between">
+        <span className="text-sm font-medium text-foreground">
           {att.label}
         </span>
         <div className="flex items-center gap-3">
@@ -383,7 +637,7 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
     )
   }
 
-  // ── Dérivés ───────────────────────────────────────────────────────────────
+  // Dérivés
 
   const selectedSession = sessions.find(s => s.id === selectedSessionId)
   const selectedStep    = steps.find(s => s.id === selectedStepId)
@@ -392,7 +646,7 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
     ? `${selectedSession.class?.classType?.name ?? ""} ${selectedSession.class?.letter ?? ""}`.trim()
     : ""
 
-  // ── Pagination footer ─────────────────────────────────────────────────────
+  // Pagination footer
   function renderPaginationFooter() {
     if (totalPages <= 1) return null
     return (
@@ -447,7 +701,7 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
     )
   }
 
-  // ── Rendu ─────────────────────────────────────────────────────────────────
+  // Rendu
 
   return (
     <div className="space-y-6">
@@ -568,44 +822,80 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
             />
           </div>
 
-          {/* Table */}
+          {/* Cartes élèves */}
           <Card className="border bg-card shadow-sm">
             <CardHeader className="pb-3">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                   <CardTitle className="text-base font-semibold">
-                    Étape {selectedStep?.stepNumber} — {sessionLabelStr}
+                    Étape {selectedStep?.stepNumber} - {sessionLabelStr}
                   </CardTitle>
                   <CardDescription>
-                    {filteredEnrollments.length} élève{filteredEnrollments.length > 1 ? 's' : ''} &middot; {kpis.entered} / {kpis.total} saisis
+                    {filteredEnrollments.length} élève{filteredEnrollments.length > 1 ? "s" : ""} affiché{filteredEnrollments.length > 1 ? "s" : ""} sur {sortedEnrollments.length} - {kpis.entered} / {kpis.total} saisis
                   </CardDescription>
+                  <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                    <Badge variant="outline">Classe sélectionnée : {selectedSession?.class?.classType?.name ?? "-"}</Badge>
+                    <Badge variant="outline">Salle : {selectedSession?.class?.track?.code ?? selectedSession?.class?.letter ?? "-"}</Badge>
+                    <Badge variant="outline">Étape : {selectedStep ? `Étape ${selectedStep.stepNumber}` : "-"}</Badge>
+                    {isLocked && (
+                      <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">
+                        <LockIcon className="mr-1 h-3 w-3 !text-amber-600" /> Étape clôturée
+                      </Badge>
+                    )}
+                  </div>
                 </div>
-                {isLocked && (
-                  <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">
-                    <LockIcon className="mr-1 h-3 w-3 !text-amber-600" /> Clôturée
-                  </Badge>
+                {!isLocked && filteredEnrollments.length > 0 && (
+                  <Button onClick={handleSave} disabled={saving} className="w-full sm:w-auto">
+                    {saving ? (
+                      <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    ) : (
+                      <SaveIcon className="mr-2 h-4 w-4" />
+                    )}
+                    {saving ? "Enregistrement..." : "Enregistrer les comportements"}
+                  </Button>
                 )}
               </div>
             </CardHeader>
 
             <Separator />
 
-            {/* Search toolbar */}
-            <div className="p-4">
-              <div className="relative max-w-md">
-                <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="Rechercher par nom ou code..."
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  className="pl-9"
-                />
+            <div className="space-y-3 p-4">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="relative w-full lg:max-w-md">
+                  <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    placeholder="Recherche par nom ou code élève..."
+                    value={searchQuery}
+                    onChange={event => setSearchQuery(event.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {([
+                    ["all", "Tous"],
+                    ["filled", "Saisis"],
+                    ["missing", "Manquants"],
+                  ] as const).map(([value, label]) => (
+                    <Button
+                      key={value}
+                      type="button"
+                      variant={behaviorFilter === value ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setBehaviorFilter(value)}
+                    >
+                      {label}
+                    </Button>
+                  ))}
+                </div>
               </div>
+              <p className="text-xs text-muted-foreground">
+                {filteredEnrollments.length} élève{filteredEnrollments.length > 1 ? "s" : ""} affiché{filteredEnrollments.length > 1 ? "s" : ""} sur {sortedEnrollments.length}
+              </p>
             </div>
 
             <Separator />
 
-            <CardContent className="p-0">
+            <CardContent className="p-4">
               {loadingBehaviors ? (
                 <div className="flex items-center justify-center py-16">
                   <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-muted border-t-primary" />
@@ -615,133 +905,77 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
                   <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
                     <InboxIcon className="h-7 w-7 text-muted-foreground" />
                   </div>
-                  <h3 className="mt-4 text-sm font-semibold text-foreground">
-                    Aucun élève trouvé
-                  </h3>
+                  <h3 className="mt-4 text-sm font-semibold text-foreground">Aucun élève trouvé</h3>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {searchQuery ? "Modifiez vos critères de recherche." : "Aucun élève inscrit dans cette classe."}
+                    {searchQuery || behaviorFilter !== "all" ? "Modifiez vos critères de recherche." : "Aucun élève inscrit dans cette classe."}
                   </p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="hover:bg-transparent">
-                        <TableHead className="sticky left-0 z-10 min-w-[200px] bg-card pl-6 font-semibold">Élève</TableHead>
-                        <TableHead className="min-w-[100px] text-center font-semibold">Absences</TableHead>
-                        <TableHead className="min-w-[100px] text-center font-semibold">Retards</TableHead>
-                        <TableHead className="min-w-[110px] text-center font-semibold">Devoirs manqués</TableHead>
-                        <TableHead className="min-w-[260px] font-semibold">Attitudes</TableHead>
-                        <TableHead className="min-w-[220px] font-semibold">Points forts</TableHead>
-                        <TableHead className="min-w-[220px] font-semibold">Défis</TableHead>
-                        <TableHead className="min-w-[220px] pr-6 font-semibold">Remarque</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {paginatedEnrs.map(enr => {
-                        const e = entries.get(enr.id) ?? {
-                          behaviorId: null, enrollmentId: enr.id,
-                          absences: "", retards: "", devoirsManques: "",
-                          attitudeResponses: new Map<string, boolean | null>(),
-                          pointsForts: "", defis: "", remarque: "",
-                        }
+                <div className="grid grid-cols-1 gap-4">
+                  {paginatedEnrs.map(enr => {
+                    const entry = entries.get(enr.id) ?? createEmptyBehaviorEntry(enr.id)
+                    const filled = hasBehaviorData(entry)
 
-                        return (
-                          <TableRow key={enr.id}>
-                            <TableCell className="sticky left-0 z-10 bg-card pl-6">
-                              <div className="flex items-center gap-3">
-                                <Avatar className="h-8 w-8">
-                                  <AvatarFallback className="bg-muted text-xs text-muted-foreground">
-                                    {getStudentInitials(enr)}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <div>
-                                  <p className="text-sm font-semibold text-foreground">
-                                    {getStudentName(enr)}
-                                  </p>
-                                  <p className="text-[11px] text-muted-foreground">
-                                    {enr.student?.studentCode ?? ""}
-                                  </p>
-                                </div>
+                    return (
+                      <Card key={enr.id} className="border bg-background shadow-sm">
+                        <CardHeader className="pb-3">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="flex items-center gap-3">
+                              <Avatar className="h-10 w-10">
+                                <AvatarFallback className="bg-muted text-xs font-semibold text-muted-foreground">
+                                  {getStudentInitials(enr)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <CardTitle className="text-sm font-semibold text-foreground">
+                                  {getStudentName(enr)}
+                                </CardTitle>
+                                <CardDescription className="text-xs">
+                                  Code élève : {enr.student?.studentCode ?? "-"}
+                                </CardDescription>
                               </div>
-                            </TableCell>
+                            </div>
+                            <Badge variant={filled ? "default" : "outline"} className={cn(!filled && "text-muted-foreground")}>
+                              {filled ? "Saisi" : "Manquant"}
+                            </Badge>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="space-y-5">
+                          <section className="space-y-3">
+                            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Suivi quantitatif</h4>
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                              {numericFields.map(({ field, label, max }) => renderNumericField(entry, field, label, max))}
+                            </div>
+                          </section>
 
-                            {(["absences", "retards", "devoirsManques"] as const).map(field => (
-                              <TableCell key={field} className="text-center">
-                                <Input
-                                  type="number" min="0" max="999" step="1"
-                                  value={e[field]} placeholder="0" disabled={isLocked}
-                                  onChange={ev => handleNumber(enr.id, field, ev.target.value)}
-                                  className="mx-auto w-20 text-center tabular-nums"
-                                />
-                              </TableCell>
-                            ))}
+                          <section className="space-y-3">
+                            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Attitudes</h4>
+                            {loadingAttitudes ? (
+                              <p className="text-xs text-muted-foreground">Chargement...</p>
+                            ) : attitudes.length === 0 ? (
+                              <p className="text-xs italic text-muted-foreground">Aucune attitude configurée</p>
+                            ) : (
+                              <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+                                {attitudes.map(att => renderAttitudeRow(att, entry, enr.id, isLocked))}
+                              </div>
+                            )}
+                          </section>
 
-                            {/* Attitudes */}
-                            <TableCell>
-                              {loadingAttitudes ? (
-                                <p className="text-xs text-muted-foreground">Chargement...</p>
-                              ) : attitudes.length === 0 ? (
-                                <p className="text-xs italic text-muted-foreground">
-                                  Aucune attitude configurée
-                                </p>
-                              ) : (
-                                <div className="flex flex-col gap-2">
-                                  {attitudes.map(att => renderAttitudeRow(att, e, enr.id, isLocked))}
-                                </div>
-                              )}
-                            </TableCell>
-
-                            {/* Textes libres */}
-                            {(["pointsForts", "defis", "remarque"] as const).map(field => (
-                              <TableCell
-                                key={field}
-                                className={cn(field === "remarque" && "pr-6")}
-                              >
-                                <Textarea
-                                  value={e[field]}
-                                  onChange={ev => handleText(enr.id, field, ev.target.value)}
-                                  placeholder={
-                                    field === "pointsForts" ? "Points forts..." :
-                                    field === "defis"       ? "Défis..." :
-                                                              "Remarque..."
-                                  }
-                                  disabled={isLocked}
-                                  rows={2}
-                                  className="resize-y text-sm"
-                                />
-                                <p className="mt-1 text-[11px] text-muted-foreground tabular-nums">
-                                  {e[field].length} / {field === "remarque" ? 500 : 300}
-                                </p>
-                              </TableCell>
-                            ))}
-                          </TableRow>
-                        )
-                      })}
-                    </TableBody>
-                  </Table>
+                          <section className="space-y-3">
+                            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Commentaires</h4>
+                            <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+                              {textFields.map(({ field, label, placeholder, max }) => renderTextField(entry, field, label, placeholder, max))}
+                            </div>
+                          </section>
+                        </CardContent>
+                      </Card>
+                    )
+                  })}
                 </div>
               )}
             </CardContent>
 
             {renderPaginationFooter()}
-
-            {/* Save button */}
-            {!isLocked && filteredEnrollments.length > 0 && (
-              <>
-                <Separator />
-                <div className="flex justify-end p-4">
-                  <Button onClick={handleSave} disabled={saving}>
-                    {saving ? (
-                      <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                    ) : (
-                      <SaveIcon className="mr-2 h-4 w-4" />
-                    )}
-                    {saving ? "Enregistrement..." : "Enregistrer le comportement"}
-                  </Button>
-                </div>
-              </>
-            )}
           </Card>
         </>
       )}
