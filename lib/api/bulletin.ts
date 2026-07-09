@@ -3,6 +3,7 @@
 // IMPORTANT : ce fichier ne contient aucun JSX — extension .ts correcte
 import { clientFetch as apiFetch } from '@/lib/client-fetch'
 import { fetchClassSubjects, type ApiClassSubject, type ApiGrade } from "@/lib/api/grades"
+import { fetchSteps } from "@/lib/api/dashboard"
 import { parseDecimal } from "@/lib/decimal"
 import { formatFrenchLongDate } from "@/lib/date-format"
 import type { BulletinData, RubriqueEntry, ComportementItem } from "@/components/BulletinScolaire"
@@ -261,6 +262,51 @@ async function getClassAverages(params: {
   return promise
 }
 
+
+async function calculateGeneralAverageForEnrollment(params: {
+  enrollmentId: string
+  academicYearId: string
+  selectedStepId: string
+  classSubjects: ApiClassSubject[]
+}): Promise<number | null> {
+  const steps = await fetchSteps(params.academicYearId)
+  const selectedStep = steps.find((step) => step.id === params.selectedStepId)
+  const selectedStepNumber = selectedStep?.stepNumber
+
+  const eligibleSteps = steps
+    .filter((step) => selectedStepNumber === undefined || step.stepNumber <= selectedStepNumber)
+    .sort((a, b) => a.stepNumber - b.stepNumber)
+
+  if (eligibleSteps.length === 0) return null
+
+  const averages = await Promise.all(
+    eligibleSteps.map(async (step) => {
+      try {
+        const grades = await apiFetch<ApiGrade[]>(
+          `/api/grades/enrollment/${params.enrollmentId}?stepId=${step.id}`,
+        )
+        const gradeIndex = buildGradeIndex(grades)
+        const rubriques = buildRubriques(params.classSubjects, gradeIndex)
+        return calculateBulletinAverages({
+          rubrique1: rubriques.r1,
+          rubrique2: rubriques.r2,
+          rubrique3: rubriques.r3,
+        }).moyenneEtape
+      } catch {
+        return null
+      }
+    }),
+  )
+
+  const validAverages = averages.filter((average): average is number =>
+    average !== null && Number.isFinite(average),
+  )
+
+  if (validAverages.length === 0) return null
+
+  return validAverages.reduce((sum, average) => sum + average, 0) / validAverages.length
+}
+
 // ── Bloc comportement ─────────────────────────────────────────────────────────
 
 function resolveAttitudeOui(behavior: BehaviorPayload | null, attitudeId: string): boolean | null {
@@ -289,65 +335,43 @@ function buildComportementItems(attitudes: AttitudePayload[], behavior: Behavior
   }))
 }
 
-function extractBehaviorExtrasFromRemarque(remarque: string | null | undefined) {
-  const source = remarque ?? ""
-  const markerPattern = /\[\[\s*(LECONS_NON_SUES|RESPECT_UNIFORME|DISCIPLINE)\s*=\s*([^\]]*)\]\]/gi
-  const values = {
-    leconsNonSues: "",
-    respectUniforme: "",
-    discipline: "",
-    cleanRemarque: "",
-  }
-
-  let match: RegExpExecArray | null
-  while ((match = markerPattern.exec(source)) !== null) {
-    const key = match[1].toUpperCase()
-    const value = match[2].trim()
-    if (key === "LECONS_NON_SUES" && values.leconsNonSues === "") values.leconsNonSues = value
-    if (key === "RESPECT_UNIFORME" && values.respectUniforme === "") values.respectUniforme = value
-    if (key === "DISCIPLINE" && values.discipline === "") values.discipline = value
-  }
-
-  values.cleanRemarque = source
-    .replace(markerPattern, "")
-    .split(/\r?\n/)
-    .map(line => line.trimEnd())
-    .filter((line, index, lines) => line.trim() !== "" || (index > 0 && index < lines.length - 1))
-    .join("\n")
-    .trim()
-
-  return values
-}
-
 function buildComportement(behavior: BehaviorPayload | null, attitudes: AttitudePayload[]) {
-  const extras = extractBehaviorExtrasFromRemarque(behavior?.remarque)
-
   return {
     absences:        behavior?.absences        != null ? String(behavior.absences)        : '—',
     retards:         behavior?.retards          != null ? String(behavior.retards)          : '—',
     devoirsNonRemis: behavior?.devoirsManques   != null ? String(behavior.devoirsManques)   : '—',
-    leconsNonSues:   extras.leconsNonSues || '—',
-    uniforme:        extras.respectUniforme || '—',
-    discipline:      extras.discipline || '—',
+    leconsNonSues:   '—',
+    uniforme:        '—',
+    discipline:      '—',
     items:           buildComportementItems(attitudes, behavior),
     pointsForts:     behavior?.pointsForts ?? '',
     defis:           behavior?.defis        ?? '',
-    remarque:        extras.cleanRemarque,
+    remarque:        behavior?.remarque     ?? '',
   }
 }
 
 // ── Fonction principale ───────────────────────────────────────────────────────
 
 export async function buildBulletinData(params: {
-  enrollmentId:   string
-  studentId:      string
-  classSessionId: string
-  stepId:         string
-  stepName:       string
-  className:      string
-  yearId:         string
+  enrollmentId:            string
+  studentId:               string
+  classSessionId:          string
+  stepId:                  string
+  stepName:                string
+  className:               string
+  yearId:                  string
+  includeGeneralAverage?:  boolean
 }): Promise<BulletinData> {
-  const { enrollmentId, studentId, classSessionId, stepId, stepName, className, yearId } = params
+  const {
+    enrollmentId,
+    studentId,
+    classSessionId,
+    stepId,
+    stepName,
+    className,
+    yearId,
+    includeGeneralAverage = false,
+  } = params
 
   // 1. Fetch toutes les données en parallèle
   const [student, classSubjects, allGrades, behaviorRaw, attitudesRaw, schoolInfo, promotionPhotos] = await Promise.all([
@@ -383,6 +407,14 @@ export async function buildBulletinData(params: {
   const moyenneClasse = backendMoyenneClasse !== '—'
     ? backendMoyenneClasse
     : formatBulletinNumber(classAverages.moyenneClasseEtape)
+  const moyenneGenerale = includeGeneralAverage
+    ? formatBulletinNumber(await calculateGeneralAverageForEnrollment({
+        enrollmentId,
+        academicYearId: yearId,
+        selectedStepId: stepId,
+        classSubjects,
+      }))
+    : undefined
 
   // 6. Comportement
   const comportement = buildComportement(behavior, attitudes)
@@ -424,6 +456,7 @@ export async function buildBulletinData(params: {
     moyenneEtape,
     appreciation,
     moyenneClasse,
+    moyenneGenerale,
 
     comportement,
 

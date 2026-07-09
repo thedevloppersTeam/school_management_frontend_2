@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Progress } from "@/components/ui/progress"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Loader2, Download, FileText, CheckCircle2, XCircle, Eye } from "lucide-react"
@@ -64,6 +65,7 @@ export function BatchBulletinGenerator({
   const [status,       setStatus]       = useState<Map<string, StudentStatus>>(new Map())
   const [bulletins,    setBulletins]    = useState<Map<string, BulletinData>>(new Map())
   const [generated,    setGenerated]    = useState(false)
+  const [includeGeneralAverage, setIncludeGeneralAverage] = useState(false)
 
   // ── Reset à l'ouverture ───────────────────────────────────────────────────
 
@@ -112,6 +114,7 @@ export function BatchBulletinGenerator({
           stepName,
           className,
           yearId,
+          includeGeneralAverage,
         })
         newBulletins.set(studentId, data)
         newStatus.set(studentId, {
@@ -166,12 +169,13 @@ export function BatchBulletinGenerator({
 
         const root = createRoot(mountPoint)
         try {
-root.render(
-  React.default.createElement(BulletinPrintable, {
-    data,
-    key: studentId,
-  })
-)
+          root.render(
+            React.default.createElement(BulletinPrintable, {
+              data,
+              renderMode: "pdf",
+              key: studentId,
+            })
+          )
           await waitForTwoFrames()
 
           if (!firstPage) pdf.addPage("letter", "portrait")
@@ -213,6 +217,25 @@ root.render(
           </DialogHeader>
 
           <div className="flex-1 overflow-auto space-y-6">
+
+            <div className="rounded-lg border bg-muted/30 p-4">
+              <div className="flex items-start gap-3">
+                <Checkbox
+                  id="batch-include-general-average"
+                  checked={includeGeneralAverage}
+                  onCheckedChange={(checked) => setIncludeGeneralAverage(checked === true)}
+                  disabled={loading}
+                />
+                <div className="space-y-1 leading-none">
+                  <label htmlFor="batch-include-general-average" className="text-sm font-medium leading-none">
+                    Calculer la moyenne générale
+                  </label>
+                  <p className="text-xs text-muted-foreground">
+                    Calcul côté frontend et affichage sous le bloc moyenne du PDF.
+                  </p>
+                </div>
+              </div>
+            </div>
 
             {/* KPIs */}
             <div className="grid grid-cols-3 gap-4">

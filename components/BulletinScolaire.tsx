@@ -75,9 +75,10 @@ export interface BulletinData {
   moyClasseR3?:   number | null;
 
   // Résultats
-  moyenneEtape:  string;
-  appreciation:  string;
-  moyenneClasse: string;
+  moyenneEtape:    string;
+  appreciation:    string;
+  moyenneClasse:   string;
+  moyenneGenerale?: string; // calculée côté frontend uniquement si demandé avant génération PDF
 
   // Comportement
   comportement: ComportementData;

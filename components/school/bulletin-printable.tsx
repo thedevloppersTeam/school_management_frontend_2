@@ -225,6 +225,43 @@ function PdfSvgTextLine({
   )
 }
 
+
+function PdfInlineSvgText({
+  value,
+  align = "start",
+  y = "44%",
+  className = "",
+}: Readonly<{
+  value: string | number | null | undefined
+  align?: PdfTextAlign
+  y?: string
+  className?: string
+}>) {
+  const textValue = value === null || value === undefined || value === "" ? "—" : String(value)
+  const x = align === "start" ? "0" : align === "middle" ? "50%" : "100%"
+  const textAnchor = align === "start" ? "start" : align === "middle" ? "middle" : "end"
+
+  return (
+    <svg
+      className={className ? `pdf-inline-svg-text ${className}` : "pdf-inline-svg-text"}
+      width="100%"
+      height="100%"
+      aria-hidden="true"
+      focusable="false"
+      preserveAspectRatio="none"
+    >
+      <text
+        x={x}
+        y={y}
+        textAnchor={textAnchor}
+        dominantBaseline="middle"
+      >
+        {textValue}
+      </text>
+    </svg>
+  )
+}
+
 /** Totaux d'une rubrique : Σnotes, Σcoeffs sur les sous-matières notées. */
 function RubriqueTable({
   title,
@@ -241,53 +278,17 @@ function RubriqueTable({
 
   return (
     <div className="rubrique-table">
-      <h2 className="rubrique-title" data-pdf-anchor={`${anchorPrefix}-title`}>{displayTitle}</h2>
+      <h2 className="rubrique-title" data-pdf-anchor={`${anchorPrefix}-title`} title={displayTitle}>
+        <PdfInlineSvgText value={displayTitle} align="start" />
+      </h2>
       <div className="rubrique-score-grid">
         <div className="rubrique-row rubrique-header-row">
           <div aria-hidden="true" />
           <div className="score-header score-header-note" aria-label="Notes">
-            <svg
-              className="score-header-svg"
-              width="100%"
-              height="100%"
-              aria-hidden="true"
-              focusable="false"
-            >
-              <text
-                x="50%"
-                y="44%"
-                textAnchor="middle"
-                dominantBaseline="middle"
-                fontFamily="Times New Roman, Liberation Serif, Times, serif"
-                fontSize="12px"
-                fontWeight="700"
-                fill="#000000"
-              >
-                Notes
-              </text>
-            </svg>
+            <PdfInlineSvgText value="Notes" align="middle" />
           </div>
           <div className="score-header score-header-coeff" aria-label="Coefficient">
-            <svg
-              className="score-header-svg"
-              width="100%"
-              height="100%"
-              aria-hidden="true"
-              focusable="false"
-            >
-              <text
-                x="50%"
-                y="44%"
-                textAnchor="middle"
-                dominantBaseline="middle"
-                fontFamily="Times New Roman, Liberation Serif, Times, serif"
-                fontSize="12px"
-                fontWeight="700"
-                fill="#000000"
-              >
-                Coeff.
-              </text>
-            </svg>
+            <PdfInlineSvgText value="Coeff." align="middle" />
           </div>
         </div>
         {entries.map((e, i) => {
@@ -295,7 +296,9 @@ function RubriqueTable({
             const isFirstGroup = entries.slice(0, i).every((entry) => !entry.isParent)
             return (
               <div className="rubrique-row" key={`${e.name}-${i}`}>
-                <div className={isFirstGroup ? "subject-group subject-group-first" : "subject-group"}>{e.name}</div>
+                <div className={isFirstGroup ? "subject-group subject-group-first" : "subject-group"} title={e.name}>
+                  <PdfInlineSvgText value={e.name} align="start" />
+                </div>
                 <div className="note-cell rubric-empty-cell" />
                 <div className="coeff-cell rubric-empty-cell" />
               </div>
@@ -309,21 +312,25 @@ function RubriqueTable({
                 : "rubrique-row rubrique-data-row"}
               key={`${e.name}-${i}`}
             >
-              <div className="subject-item">{e.name}</div>
+              <div className="subject-item" title={e.name}>
+                <PdfInlineSvgText value={e.name} align="start" />
+              </div>
               <div
                 className={`note-cell note-value ${cc}`}
                 data-pdf-anchor={i === firstNoteIndex ? `${anchorPrefix}-first-note` : undefined}
               >
-                {formatBulletinNumber(e.note)}
+                <PdfInlineSvgText value={formatBulletinNumber(e.note)} align="middle" />
               </div>
-              <div className="coeff-cell coefficient-value">{fmtC(e.coeff)}</div>
+              <div className="coeff-cell coefficient-value">
+                <PdfInlineSvgText value={fmtC(e.coeff)} align="middle" />
+              </div>
             </div>
           )
         })}
         <div className="rubrique-row rubrique-total-row">
           <div aria-hidden="true" />
-          <div className="note-cell total-cell"><span className="total-value">{formatBulletinNumber(totals.note)}</span></div>
-          <div className="coeff-cell total-cell"><span className="total-value">{fmtC(totals.coeff)}</span></div>
+          <div className="note-cell total-cell"><span className="total-value"><PdfInlineSvgText value={formatBulletinNumber(totals.note)} align="middle" /></span></div>
+          <div className="coeff-cell total-cell"><span className="total-value"><PdfInlineSvgText value={fmtC(totals.coeff)} align="middle" /></span></div>
         </div>
       </div>
     </div>
@@ -339,46 +346,58 @@ function MoyLine({
   label: string
   value: string
   valueTone?: string
-  variant?: "rubric" | "class" | "step" | "appreciation" | "general-class"
+  variant?: "rubric" | "class" | "step" | "appreciation" | "general-class" | "general"
 }>) {
   return (
     <div className={`mline mline-${variant}`}>
-      <span className="ml">{label}</span>
-      <span className="leader">...</span>
+      <span className="ml"><PdfInlineSvgText value={label} align="end" /></span>
+      <span className="leader"><PdfInlineSvgText value="..." align="middle" /></span>
       <span
         className={valueTone ? `mv ${valueTone}` : "mv"}
         data-pdf-anchor={variant === "step" ? "step-average" : undefined}
       >
-        {value}
+        <PdfInlineSvgText value={value} align="end" />
       </span>
     </div>
   )
 }
 
-function BehTable({ items }: Readonly<{ items: ComportementItem[]; right?: boolean }>) {
+function BehTable({ items, right = false }: Readonly<{ items: ComportementItem[]; right?: boolean }>) {
+  const labelAlign: PdfTextAlign = right ? "end" : "start"
+
   return (
     <div className="behavior-group">
       <div className="behavior-row behavior-choice-header-row">
         <div aria-hidden="true" />
-        <div className="behavior-choice-header">OUI</div>
-        <div className="behavior-choice-header">NON</div>
+        <div className="behavior-choice-header"><PdfInlineSvgText value="OUI" align="middle" /></div>
+        <div className="behavior-choice-header"><PdfInlineSvgText value="NON" align="middle" /></div>
       </div>
       {items.map((it, i) => (
         <div className="behavior-row" key={`${it.label}-${i}`}>
-          <div className="behavior-criterion">{it.label}</div>
-          <div className="behavior-choice-cell">{it.oui === true ? <span className="behavior-check">✓</span> : ""}</div>
-          <div className="behavior-choice-cell">{it.oui === false ? <span className="behavior-check">✓</span> : ""}</div>
+          <div className="behavior-criterion" title={it.label}>
+            <PdfInlineSvgText value={it.label} align={labelAlign} />
+          </div>
+          <div className="behavior-choice-cell">{it.oui === true ? <span className="behavior-check"><PdfInlineSvgText value="✓" align="middle" /></span> : ""}</div>
+          <div className="behavior-choice-cell">{it.oui === false ? <span className="behavior-check"><PdfInlineSvgText value="✓" align="middle" /></span> : ""}</div>
         </div>
       ))}
     </div>
   )
 }
 
-function BehaviorMetricLine({ label, value }: Readonly<{ label: string; value: string }>) {
+function BehaviorMetricLine({
+  label,
+  value,
+  labelAlign = "end",
+}: Readonly<{ label: string; value: string; labelAlign?: PdfTextAlign }>) {
   return (
     <div className="behavior-metric-row">
-      <span className="behavior-metric-label">{label}</span>
-      <b className="behavior-metric-value">{value}</b>
+      <span className="behavior-metric-label" title={label}>
+        <PdfInlineSvgText value={label} align={labelAlign} />
+      </span>
+      <b className="behavior-metric-value">
+        <PdfInlineSvgText value={value} align="middle" />
+      </b>
     </div>
   )
 }
@@ -448,7 +467,6 @@ function BulletinHeader({ data }: Readonly<{ data: BulletinData }>) {
   const period = data.periode || "—"
   const birthDate = data.dateNaissance || "—"
   const academicYear = data.anneeScolaire || "—"
-  const sex = data.sexe || "—"
   const nisu = data.nisu || "—"
   const studentCode = `Code: ${data.code || "—"}`
 
@@ -577,19 +595,6 @@ function BulletinHeader({ data }: Readonly<{ data: BulletinData }>) {
           </div>
 
           <div
-            className="info-label info-row-4 info-col-identity-label"
-            aria-label="Sexe"
-          >
-            <PdfSvgTextLine value="Sexe" />
-          </div>
-          <div
-            className="info-secondary-value info-row-4 info-col-identity-value"
-            aria-label={sex}
-          >
-            <PdfSvgTextLine value={sex} />
-          </div>
-
-          <div
             className="info-label info-row-4 info-col-school-label"
             aria-label="NISU"
           >
@@ -631,7 +636,7 @@ function BulletinHeader({ data }: Readonly<{ data: BulletinData }>) {
   )
 }
 
-export function BulletinPrintable({ data }: { data: BulletinData }) {
+export function BulletinPrintable({ data }: { data: BulletinData; renderMode?: "preview" | "pdf" }) {
   const { etablissement: etab, comportement: comp } = data
   const col1 = comp.items.filter((c) => c.col === 1)
   const col2 = comp.items.filter((c) => c.col === 2)
@@ -640,6 +645,8 @@ export function BulletinPrintable({ data }: { data: BulletinData }) {
   const moyClasse = data.moyenneClasse && data.moyenneClasse !== "" ? data.moyenneClasse : "—"
   const moyClasseNumber = parseDisplayNumber(moyClasse)
   const moyenneEtapeNumber = parseDisplayNumber(data.moyenneEtape)
+  const moyenneGenerale = data.moyenneGenerale && data.moyenneGenerale !== "" ? data.moyenneGenerale : null
+  const moyenneGeneraleNumber = parseDisplayNumber(moyenneGenerale)
 
   return (
     <div className="btpl" data-bulletin-page="true">
@@ -669,6 +676,14 @@ export function BulletinPrintable({ data }: { data: BulletinData }) {
               <MoyLine label="Moy. de l'étape" value={data.moyenneEtape} valueTone={colorClass(moyenneEtapeNumber, 10)} variant="step" />
               <MoyLine label="Appréciation" value={data.appreciation || "—"} variant="appreciation" />
               <MoyLine label="Moyenne classe sur 10" value={moyClasse} valueTone={colorClass(moyClasseNumber, 10)} variant="general-class" />
+              {moyenneGenerale ? (
+                <MoyLine
+                  label="Moyenne générale sur 10"
+                  value={moyenneGenerale}
+                  valueTone={colorClass(moyenneGeneraleNumber, 10)}
+                  variant="general"
+                />
+              ) : null}
             </div>
           </div>
 
@@ -684,7 +699,9 @@ export function BulletinPrintable({ data }: { data: BulletinData }) {
 
         <div className="lower-section">
           {/* ===== COMPORTEMENT ===== */}
-          <div className="behav-title" data-pdf-anchor="behavior-title">Difficultés de comportement et / ou d&apos;apprentissage</div>
+          <div className="behav-title" data-pdf-anchor="behavior-title">
+            <PdfInlineSvgText value="Difficultés de comportement et / ou d'apprentissage" align="start" />
+          </div>
           <div className="behav-grid">
             <BehTable items={col1} />
             <BehTable items={col2} right />
@@ -693,8 +710,8 @@ export function BulletinPrintable({ data }: { data: BulletinData }) {
 
           <div className="behavior-metrics-grid">
             <div>
-              <BehaviorMetricLine label={"Nbre d'absences"} value={comp.absences} />
-              <BehaviorMetricLine label="Nbre de retards" value={comp.retards} />
+              <BehaviorMetricLine label={"Nbre d'absences"} value={comp.absences} labelAlign="start" />
+              <BehaviorMetricLine label="Nbre de retards" value={comp.retards} labelAlign="start" />
             </div>
             <div>
               <BehaviorMetricLine label="Nbre de devoirs non remis" value={comp.devoirsNonRemis} />
@@ -709,15 +726,15 @@ export function BulletinPrintable({ data }: { data: BulletinData }) {
           {/* ===== POINTS FORTS / REMARQUE ===== */}
           <div className="observations-grid">
             <div className="observation-main">
-              <div className="h-maroon">Points forts et / ou défis à relever</div>
-              <div className="h-maroon2">Point(s) fort(s) :</div>
+              <div className="h-maroon"><PdfInlineSvgText value="Points forts et / ou défis à relever" align="start" /></div>
+              <div className="h-maroon2"><PdfInlineSvgText value="Point(s) fort(s) :" align="start" /></div>
               <p className="plain">{comp.pointsForts || " "}</p>
-              <div className="h-maroon2 challenge-label">Défi(s) à relever :</div>
+              <div className="h-maroon2 challenge-label"><PdfInlineSvgText value="Défi(s) à relever :" align="start" /></div>
               <p className="plain">{comp.defis || " "}</p>
             </div>
             <div aria-hidden="true" />
             <div className="remark-block">
-              <div className="h-maroon">Remarque</div>
+              <div className="h-maroon"><PdfInlineSvgText value="Remarque" align="start" /></div>
               <p className="plain">{comp.remarque || " "}</p>
             </div>
             <div aria-hidden="true" />
@@ -726,7 +743,7 @@ export function BulletinPrintable({ data }: { data: BulletinData }) {
           {/* ===== LÉGENDE / FOOTER + SIGNATURES ===== */}
           <div className="bottom-area">
             <div className="legend-col">
-              <div className="legend-title" data-pdf-anchor="footer-legend">Légende des notes et des couleurs</div>
+              <div className="legend-title" data-pdf-anchor="footer-legend"><PdfInlineSvgText value="Légende des notes et des couleurs" align="start" /></div>
               <div className="legend">
                 90 - 100 : <b>A+ = Excellent</b>&nbsp;&nbsp;&nbsp;&nbsp;78 - 84 : <b>B+ = Très bien</b>&nbsp;&nbsp;&nbsp;69 - 74 : <b>C+ = Bien</b>&nbsp;&nbsp;&nbsp;51 - 59&nbsp; : <b style={{ color: "var(--orange)" }}>D = Déficient</b><br />
                 85 - 89&nbsp; : <b>A = Excellent</b>&nbsp;&nbsp;&nbsp;&nbsp;75 - 77 : <b>B = Très bien</b>&nbsp;&nbsp;&nbsp;60 - 68 : <b style={{ color: "var(--green)" }}>C&nbsp; = Assez bien</b>&nbsp;&nbsp;&nbsp;&le; 50 : <b style={{ color: "var(--red)" }}>E = Échec</b>
@@ -742,8 +759,8 @@ export function BulletinPrintable({ data }: { data: BulletinData }) {
             <div aria-hidden="true" />
 
             <div className="sign-col">
-              <div className="signbox"><div className="signline" /><div className="signlabel">Parent</div></div>
-              <div className="signbox signbox-direction"><div className="signline" /><div className="signlabel" data-pdf-anchor="direction-signature">Direction</div></div>
+              <div className="signbox"><div className="signline" /><div className="signlabel"><PdfInlineSvgText value="Parent" align="middle" /></div></div>
+              <div className="signbox signbox-direction"><div className="signline" /><div className="signlabel" data-pdf-anchor="direction-signature"><PdfInlineSvgText value="Direction" align="middle" /></div></div>
             </div>
           </div>
         </div>
@@ -790,6 +807,31 @@ const CSS = `
   fill:currentColor;font-family:inherit;font-size:inherit;font-weight:inherit;
   font-style:inherit;letter-spacing:inherit;word-spacing:inherit;
   text-rendering:geometricPrecision;white-space:pre;
+}
+
+.btpl .pdf-inline-svg-text{
+  display:block;
+  width:100%;
+  height:1em;
+  min-height:1em;
+  overflow:visible;
+  color:inherit;
+  font-family:inherit;
+  font-size:inherit;
+  font-weight:inherit;
+  font-style:inherit;
+  line-height:inherit;
+  letter-spacing:inherit;
+}
+.btpl .pdf-inline-svg-text text{
+  fill:currentColor;
+  font-family:inherit;
+  font-size:inherit;
+  font-weight:inherit;
+  font-style:inherit;
+  letter-spacing:inherit;
+  text-rendering:geometricPrecision;
+  white-space:pre;
 }
 .btpl .page{
   width:var(--paper-w);height:var(--paper-h);margin:0 auto;background:#fff;
@@ -1016,42 +1058,131 @@ const CSS = `
 .btpl .orange{color:var(--orange);}
 .btpl .green{color:var(--green);}
 .btpl .mline{
-  display:grid;grid-template-columns:minmax(0,1fr) calc(30pt / var(--template-scale)) calc(26pt / var(--template-scale));
-  align-items:baseline;margin-top:calc(2.5pt / var(--template-scale));padding:0;width:100%;
-  font-family:var(--font-serif);font-size:calc(7pt / var(--template-scale));font-weight:400;
-  font-style:normal;line-height:calc(9pt / var(--template-scale));color:#000;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) calc(30pt / var(--template-scale)) calc(26pt / var(--template-scale));
+  align-items:baseline;
+  margin-top:calc(2.5pt / var(--template-scale));
+  padding:0;
+  width:100%;
+  font-family:var(--font-serif);
+  font-size:calc(7pt / var(--template-scale));
+  font-weight:400;
+  font-style:normal;
+  line-height:calc(9pt / var(--template-scale));
+  color:#000;
+
 }
-.btpl .rubrique-table + .mline{margin-top:calc(5pt / var(--template-scale));}
-.btpl .mline .ml{white-space:nowrap;text-align:left;padding-right:calc(3pt / var(--template-scale));}
+/* Décale légèrement vers la gauche la ligne "Moyenne classe sur 10" sous les rubriques */
+.btpl .rubric-column > .mline-class{
+  margin-left:calc(-6pt / var(--template-scale));
+}
+/* Décale légèrement vers la gauche la ligne "Moyenne sur 10" sous les rubriques */
+.btpl .rubric-column > .mline-rubric{
+  margin-left:calc(-6pt / var(--template-scale));
+}
+.btpl .rubrique-table + .mline{
+  margin-top:calc(5pt / var(--template-scale));
+}
+
+.btpl .mline .ml{
+  white-space:nowrap;
+  text-align:left;
+  padding-right:calc(3pt / var(--template-scale));
+}
+
 .btpl .mline .leader{
-  width:calc(30pt / var(--template-scale));text-align:center;font-family:var(--font-serif);
-  font-size:calc(7pt / var(--template-scale));font-weight:400;font-style:normal;
-  line-height:calc(9pt / var(--template-scale));color:#777;letter-spacing:calc(0.5pt / var(--template-scale));
+  width:calc(30pt / var(--template-scale));
+  text-align:center;
+  font-family:var(--font-serif);
+  font-size:calc(7pt / var(--template-scale));
+  font-weight:400;
+  font-style:normal;
+  line-height:calc(9pt / var(--template-scale));
+  color:#777;
+  letter-spacing:calc(0.5pt / var(--template-scale));
 }
+
 .btpl .mline .mv{
-  width:calc(26pt / var(--template-scale));text-align:center;font-size:calc(7.5pt / var(--template-scale));
-  font-weight:700;font-style:normal;line-height:calc(9pt / var(--template-scale));white-space:nowrap;color:#000;
+  width:calc(26pt / var(--template-scale));
+  text-align:center;
+  font-size:calc(7.5pt / var(--template-scale));
+  font-weight:700;
+  font-style:normal;
+  line-height:calc(9pt / var(--template-scale));
+  white-space:nowrap;
+  color:#000;
 }
+
 .btpl .mline-class .mv{
-  font-size:calc(7.3pt / var(--template-scale));font-weight:700;line-height:calc(9pt / var(--template-scale));
+  font-size:calc(7.3pt / var(--template-scale));
+  font-weight:700;
+  line-height:calc(9pt / var(--template-scale));
 }
+
+/* Moyenne sur 10 / Moyenne classe sur 10 sous Rubrique 1, 2 et 3 */
+.btpl .rubric-column > .mline .ml{
+  text-align:right;
+  padding-right:calc(3pt / var(--template-scale));
+}
+
+.btpl .rubric-column > .mline .mv{
+  text-align:right;
+}
+
+/* Bloc Moy. de l'Étape sous Rubrique 2 : espace avant le bloc seulement */
 .btpl .etape-block{
-  margin-top:calc(11pt / var(--template-scale));margin-bottom:calc(12pt / var(--template-scale));
-  padding:0;background:transparent;border:0;border-radius:0;
+  margin-top:calc(16pt / var(--template-scale));
+  margin-bottom:calc(12pt / var(--template-scale));
+  padding-top:calc(12pt / var(--template-scale));
+  background:transparent;
+  border:0;
+  border-radius:0;
 }
-.btpl .etape-block .mline{margin-top:calc(3pt / var(--template-scale));}
-.btpl .etape-block .mline:first-child{margin-top:0;}
-.btpl .mline-step .ml,.btpl .mline-step .mv{
-  font-size:calc(9.5pt / var(--template-scale));font-weight:700;line-height:calc(11pt / var(--template-scale));
+
+.btpl .etape-block .mline{
+  margin-top:calc(3pt / var(--template-scale));
 }
+
+.btpl .etape-block .mline:first-child{
+  margin-top:0;
+}
+
+.btpl .etape-block .mline .ml{
+  text-align:right;
+  padding-right:calc(3pt / var(--template-scale));
+}
+
+.btpl .etape-block .mline .mv{
+  text-align:right;
+}
+
+.btpl .mline-step .ml,
+.btpl .mline-step .mv{
+  font-size:calc(9.5pt / var(--template-scale));
+  font-weight:700;
+}
+
 .btpl .mline-appreciation .ml{
-  font-size:calc(7.5pt / var(--template-scale));font-weight:400;line-height:calc(9pt / var(--template-scale));
+  font-size:calc(7.5pt / var(--template-scale));
+  font-weight:400;
 }
+
 .btpl .mline-appreciation .mv{
-  font-size:calc(8.5pt / var(--template-scale));font-weight:700;line-height:calc(10pt / var(--template-scale));
+  font-size:calc(8.5pt / var(--template-scale));
+  font-weight:700;
 }
+
 .btpl .mline-general-class{
-  font-size:calc(7pt / var(--template-scale));font-weight:400;line-height:calc(9pt / var(--template-scale));
+  font-size:calc(7pt / var(--template-scale));
+  font-weight:400;
+}
+.btpl .mline-general{
+  font-size:calc(7.3pt / var(--template-scale));
+  font-weight:400;
+}
+.btpl .mline-general .mv{
+  font-size:calc(7.8pt / var(--template-scale));
+  font-weight:700;
 }
 .btpl .mline .mv.red{color:var(--red);}
 .btpl .mline .mv.orange{color:var(--orange);}
@@ -1079,7 +1210,7 @@ const CSS = `
 }
 .btpl .behav-grid{
   display:grid;
-  grid-template-columns:calc(174pt / var(--template-scale)) calc(174pt / var(--template-scale)) calc(174pt / var(--template-scale));
+  grid-template-columns:2.7fr 4.3fr 5fr;
   column-gap:calc(9pt / var(--template-scale));
   width:calc(540pt / var(--template-scale));
   align-items:start;
@@ -1120,8 +1251,17 @@ const CSS = `
   color:#000;
   margin:0;
   padding:0;
+    /* Petit gap entre le texte et les colonnes OUI/NON */
+  padding:0 calc(5pt / var(--template-scale)) 0 0;
   min-width:0;
   overflow-wrap:break-word;
+  text-align:right;
+}
+.btpl .behav-grid > .behavior-group:nth-child(1) .behavior-criterion{
+  text-align:left !important;
+  justify-self:stretch;
+  padding-left:0;
+  padding-right:calc(5pt / var(--template-scale));
 }
 .btpl .behavior-choice-cell{
   min-height:calc(10.5pt / var(--template-scale));
@@ -1145,7 +1285,7 @@ const CSS = `
 }
 .btpl .behavior-metrics-grid{
   display:grid;
-  grid-template-columns:calc(174pt / var(--template-scale)) calc(174pt / var(--template-scale)) calc(174pt / var(--template-scale));
+  grid-template-columns:2.7fr 4.3fr 5fr;
   column-gap:calc(9pt / var(--template-scale));
   width:calc(540pt / var(--template-scale));
   align-items:start;
@@ -1154,12 +1294,13 @@ const CSS = `
 }
 .btpl .behavior-metric-row{
   display:grid;
-  grid-template-columns:minmax(0,1fr) calc(24pt / var(--template-scale));
+  grid-template-columns:minmax(0,1fr) calc(20pt / var(--template-scale)) calc(20pt / var(--template-scale));
   align-items:baseline;
   width:100%;
   min-height:calc(10pt / var(--template-scale));
   margin:0;
   padding:0;
+  box-sizing:border-box;
 }
 .btpl .behavior-metric-label{
   font-family:"Times New Roman","Liberation Serif",Times,serif;
@@ -1173,13 +1314,37 @@ const CSS = `
   min-width:0;
   overflow-wrap:break-word;
 }
+.btpl .behavior-metric-label{
+  grid-column:1;
+  font-family:"Times New Roman","Liberation Serif",Times,serif;
+  font-size:calc(7.5pt / var(--template-scale));
+  font-weight:400;
+  font-style:italic;
+  line-height:calc(10pt / var(--template-scale));
+  color:#000;
+  margin:0;
+  padding:0 calc(5pt / var(--template-scale)) 0 0;
+  min-width:0;
+  overflow-wrap:break-word;
+}
+
 .btpl .behavior-metric-value{
+  grid-column:3;
+  justify-self:stretch;
   font-family:"Times New Roman","Liberation Serif",Times,serif;
   font-size:calc(8pt / var(--template-scale));
   font-weight:700;
   font-style:normal;
   line-height:calc(10pt / var(--template-scale));
   color:#000;
+  text-align:center;
+}
+
+.btpl .behavior-metrics-grid > div:nth-child(1) .behavior-metric-label{
+  text-align:left;
+}
+.btpl .behavior-metrics-grid > div:nth-child(2) .behavior-metric-label,
+.btpl .behavior-metrics-grid > div:nth-child(3) .behavior-metric-label{
   text-align:right;
 }
 .btpl .observations-grid{
@@ -1327,6 +1492,28 @@ const CSS = `
   margin-top:calc(4pt / var(--template-scale));
   padding:0;
 }
+
+/* Texte SVG : hauteurs calées sur les line-height existants pour contourner le décalage html2canvas. */
+.btpl .rubrique-title .pdf-inline-svg-text{height:calc(7.5pt / var(--template-scale));}
+.btpl .score-header .pdf-inline-svg-text{height:100%;font-size:calc(6.8pt / var(--template-scale));font-weight:700;line-height:calc(11pt / var(--template-scale));}
+.btpl .subject-group .pdf-inline-svg-text{height:calc(9.5pt / var(--template-scale));}
+.btpl .subject-item .pdf-inline-svg-text{height:calc(9pt / var(--template-scale));}
+.btpl .note-value .pdf-inline-svg-text,
+.btpl .coefficient-value .pdf-inline-svg-text{height:calc(9pt / var(--template-scale));}
+.btpl .total-value .pdf-inline-svg-text{height:calc(8pt / var(--template-scale));}
+.btpl .mline .pdf-inline-svg-text{height:calc(9pt / var(--template-scale));}
+.btpl .mline-step .pdf-inline-svg-text{height:calc(10pt / var(--template-scale));}
+.btpl .mline-appreciation .pdf-inline-svg-text{height:calc(9pt / var(--template-scale));}
+.btpl .behavior-choice-header .pdf-inline-svg-text{height:calc(6pt / var(--template-scale));}
+.btpl .behavior-criterion .pdf-inline-svg-text{height:calc(10.5pt / var(--template-scale));}
+.btpl .behavior-check .pdf-inline-svg-text{height:calc(9pt / var(--template-scale));}
+.btpl .behavior-metric-label .pdf-inline-svg-text,
+.btpl .behavior-metric-value .pdf-inline-svg-text{height:calc(10pt / var(--template-scale));}
+.btpl .behav-title .pdf-inline-svg-text{height:calc(12pt / var(--template-scale));}
+.btpl .h-maroon .pdf-inline-svg-text{height:calc(10pt / var(--template-scale));}
+.btpl .h-maroon2 .pdf-inline-svg-text{height:calc(8.5pt / var(--template-scale));}
+.btpl .legend-title .pdf-inline-svg-text{height:calc(7pt / var(--template-scale));}
+.btpl .signlabel .pdf-inline-svg-text{height:calc(9pt / var(--template-scale));}
 @media print{
   .btpl{width:var(--paper-w);height:var(--paper-h);break-after:page;page-break-after:always;}
   .btpl:last-child{break-after:auto;page-break-after:auto;}

@@ -36,7 +36,7 @@ export interface ClassSession {
     classType: { id: string; name: string; isTerminal: boolean }
     track?: { id: string; name: string; code: string }
   }
-  academicYear: { id: string; name: string }
+  academicYear: { id: string; name: string; yearString?: string | null }
   displayName?: string
 }
 

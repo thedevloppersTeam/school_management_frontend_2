@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Download, Eye, Printer, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { buildBulletinData } from "@/lib/api/bulletin";
+import { clientFetch as apiFetch } from "@/lib/client-fetch";
 import { toMessage } from "@/lib/errors";
 import { type BulletinData } from "./BulletinScolaire";
 import { BulletinPrintable } from "@/components/school/bulletin-printable";
@@ -23,6 +24,7 @@ import {
   addBulletinCanvasToPdf,
   captureBulletinElement,
   prepareBulletinPdfNode,
+  waitForTwoFrames,
 } from "@/lib/bulletin-pdf-capture";
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -63,15 +65,11 @@ async function archiveBulletin(params: {
   auditNote?: string;
 }): Promise<{ ok: true } | { ok: false; error: unknown }> {
   try {
-    const res = await fetch("/api/bulletin-archives", {
+    await apiFetch<unknown>("/api/bulletin-archives", {
       method: "POST",
-      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(params),
     });
-    if (!res.ok) {
-      return { ok: false, error: new Error(`HTTP ${res.status}`) };
-    }
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err };
@@ -157,6 +155,11 @@ export function BulletinPDFGenerator({
   const [auditNote, setAuditNote] = useState("");
   const [auditSubmitting, setAuditSubmitting] = useState(false);
 
+  // Demande optionnelle : calculer la moyenne générale au moment de générer le PDF.
+  // Le calcul reste côté frontend et ne modifie pas le backend.
+  const [generalAverageModalOpen, setGeneralAverageModalOpen] = useState(false);
+  const [pendingIncludeGeneralAverage, setPendingIncludeGeneralAverage] = useState(false);
+
   const isCorrection = !stepIsCurrent;
 
   // ── Construction des données ────────────────────────────────────────────────
@@ -229,13 +232,32 @@ export function BulletinPDFGenerator({
   //            plus AVANT l'archivage. On attend le résultat et on
   //            ajuste le message selon succès / partiel / échec archive.
 
-  const doGeneratePDF = async (note?: string) => {
+  const doGeneratePDF = async (note?: string, includeGeneralAverage = false) => {
     if (!bulletinRef.current || !bulletinData) return;
     setGenerating(true);
 
     let pdfSaved = false;
+    let bulletinSnapshot = bulletinData;
 
     try {
+      // Si demandé, on recalcule les données avec la moyenne générale AVANT capture.
+      if (includeGeneralAverage) {
+        const { flushSync } = await import("react-dom");
+        const refreshedData = await buildBulletinData({
+          enrollmentId,
+          studentId,
+          classSessionId,
+          stepId,
+          stepName,
+          className,
+          yearId,
+          includeGeneralAverage: true,
+        });
+        bulletinSnapshot = refreshedData;
+        flushSync(() => setBulletinData(refreshedData));
+        await waitForTwoFrames();
+      }
+
       // PB-001 : imports dynamiques, chargés uniquement à la demande
       const jsPDF = (await import("jspdf")).default;
 
@@ -248,7 +270,7 @@ export function BulletinPDFGenerator({
       });
       addBulletinCanvasToPdf(pdf, canvas);
 
-      pdf.save(`bulletin_${bulletinData.nom ?? studentName}_${stepName}.pdf`);
+      pdf.save(`bulletin_${bulletinSnapshot.nom ?? studentName}_${stepName}.pdf`);
       pdfSaved = true;
 
       // ── REQ-F-007 : archiver après génération ─────────────────────────
@@ -257,7 +279,7 @@ export function BulletinPDFGenerator({
         enrollmentId,
         stepId,
         source: "individual",
-        bulletinSnapshot: bulletinData,
+        bulletinSnapshot,
         isCorrection,
         auditNote: note,
       });
@@ -265,15 +287,17 @@ export function BulletinPDFGenerator({
       if (archiveResult.ok) {
         toast.success("Bulletin téléchargé et archivé");
       } else {
-        console.error(
+        const archiveMessage = toMessage(archiveResult.error);
+        console.warn(
           "[archiveBulletin] échec individuel:",
-          archiveResult.error,
+          archiveMessage,
         );
         // Le PDF est bien téléchargé, mais l'archive est incomplète.
         // Le toast doit être clair sur les deux aspects.
         toast.warning(
           "Bulletin téléchargé, mais son archivage a échoué. " +
-            "L'historique est incomplet. Contactez le support si nécessaire.",
+            "L'historique est incomplet. Contactez le support si nécessaire. " +
+            `Détail : ${archiveMessage}`,
         );
       }
 
@@ -299,13 +323,20 @@ export function BulletinPDFGenerator({
       return;
     }
 
+    setGeneralAverageModalOpen(true);
+  };
+
+  const handleGeneralAverageChoice = async (includeGeneralAverage: boolean) => {
+    setGeneralAverageModalOpen(false);
+    setPendingIncludeGeneralAverage(includeGeneralAverage);
+
     if (isCorrection) {
       setAuditNote("");
       setAuditModalOpen(true);
       return;
     }
 
-    await doGeneratePDF();
+    await doGeneratePDF(undefined, includeGeneralAverage);
   };
 
   // ── Confirmation correction ───────────────────────────────────────────────
@@ -314,7 +345,7 @@ export function BulletinPDFGenerator({
     if (!auditNote.trim()) return;
     setAuditSubmitting(true);
     setAuditModalOpen(false);
-    await doGeneratePDF(auditNote.trim());
+    await doGeneratePDF(auditNote.trim(), pendingIncludeGeneralAverage);
     setAuditSubmitting(false);
     setAuditNote("");
   };
@@ -439,6 +470,8 @@ export function BulletinPDFGenerator({
       if (!newOpen) {
         setHasFetched(false);
         setBulletinData(null);
+        setGeneralAverageModalOpen(false);
+        setPendingIncludeGeneralAverage(false);
       }
       onOpenChange(newOpen);
     },
@@ -542,6 +575,58 @@ export function BulletinPDFGenerator({
               Fermer
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Choix moyenne générale — frontend uniquement ─────────────────── */}
+      <Dialog open={generalAverageModalOpen} onOpenChange={setGeneralAverageModalOpen}>
+        <DialogContent
+          style={{
+            backgroundColor: "white",
+            borderRadius: "12px",
+            maxWidth: "500px",
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle
+              className="font-serif"
+              style={{ fontSize: "20px", fontWeight: 700, color: "#2A3740" }}
+            >
+              Calcul de la moyenne générale
+            </DialogTitle>
+            <DialogDescription>
+              Voulez-vous calculer et afficher la moyenne générale sur ce bulletin ?
+              Le calcul sera effectué côté frontend à partir des moyennes d&apos;étape disponibles.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div
+            className="rounded-lg p-3 text-sm"
+            style={{
+              backgroundColor: "#F0F4F7",
+              border: "1px solid #D1CECC",
+              color: "#2A3740",
+            }}
+          >
+            Formule : somme des moyennes d&apos;étape disponibles / nombre d&apos;étapes disponibles.
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => void handleGeneralAverageChoice(false)}
+              disabled={generating}
+            >
+              Générer sans moyenne générale
+            </Button>
+            <Button
+              onClick={() => void handleGeneralAverageChoice(true)}
+              disabled={generating}
+              style={{ backgroundColor: "#2C4A6E", color: "white" }}
+            >
+              Calculer et générer
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

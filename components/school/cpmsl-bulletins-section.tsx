@@ -119,15 +119,11 @@ async function archiveBulletin(params: {
   auditNote?: string; // WF-005 : motif pour correction post-clôture
 }): Promise<{ ok: true } | { ok: false; error: unknown }> {
   try {
-    const res = await fetch("/api/bulletin-archives", {
+    await apiFetch<unknown>("/api/bulletin-archives", {
       method: "POST",
-      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(params),
     });
-    if (!res.ok) {
-      return { ok: false, error: new Error(`HTTP ${res.status}`) };
-    }
     return { ok: true };
   } catch (err) {
     // EP-003 : on ne swallow plus, on retourne l'erreur pour que
@@ -172,6 +168,7 @@ export function CPMSLBulletinsSection({
   // WF-003 / WF-005 : modaux de confirmation pré-génération
   const [previewOpen, setPreviewOpen] = useState(false);
   const [auditNoteOpen, setAuditNoteOpen] = useState(false);
+  const [includeGeneralAverage, setIncludeGeneralAverage] = useState(false);
 
   // ── Recherche + pagination ─────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState("");
@@ -351,6 +348,7 @@ export function CPMSLBulletinsSection({
 
     // EP-003 : compteurs d'échec pour remonter à l'utilisateur
     let archiveFailures = 0;
+    let firstArchiveFailure: string | null = null;
     let pdfSaved = false;
 
     try {
@@ -380,6 +378,7 @@ export function CPMSLBulletinsSection({
           stepName,
           className: student.className,
           yearId: academicYearId,
+          includeGeneralAverage,
         });
 
         flushSync(() => setLotData(data));
@@ -403,11 +402,9 @@ export function CPMSLBulletinsSection({
 
         if (!archiveResult.ok) {
           archiveFailures++;
-          console.error(
-            "[archive lot] échec pour",
-            student.studentCode,
-            archiveResult.error,
-          );
+          const archiveMessage = toMessage(archiveResult.error);
+          firstArchiveFailure ??= archiveMessage;
+          console.warn("[archive lot] échec pour", student.studentCode, archiveMessage);
         }
       }
 
@@ -427,12 +424,14 @@ export function CPMSLBulletinsSection({
         toast.warning(
           `${archived} bulletin${archived > 1 ? "s" : ""} archivé${archived > 1 ? "s" : ""}, ` +
             `${archiveFailures} échec${archiveFailures > 1 ? "s" : ""} d'archivage. ` +
-            `Le PDF est téléchargé mais certaines archives sont incomplètes.`,
+            `Le PDF est téléchargé mais certaines archives sont incomplètes.` +
+            (firstArchiveFailure ? ` Détail : ${firstArchiveFailure}` : ""),
         );
       } else {
         toast.error(
           `PDF téléchargé pour ${total} élèves, mais AUCUN bulletin n'a été archivé. ` +
-            `L'historique est incomplet. Contactez le support.`,
+            `L'historique est incomplet. Contactez le support.` +
+            (firstArchiveFailure ? ` Détail : ${firstArchiveFailure}` : ""),
         );
       }
     } catch (e) {
@@ -856,7 +855,7 @@ export function CPMSLBulletinsSection({
         }}
       >
         <div ref={lotRef}>
-          <BulletinPrintable data={lotData} />
+          <BulletinPrintable data={lotData} renderMode="pdf" />
         </div>
       </div>
       )}
@@ -906,6 +905,8 @@ export function CPMSLBulletinsSection({
         isNisuValid={canPrintBulletin}
         onConfirm={handlePreviewConfirm}
         loading={generatingLot}
+        includeGeneralAverage={includeGeneralAverage}
+        onIncludeGeneralAverageChange={setIncludeGeneralAverage}
       />
 
       {/* WF-005 : motif pour correction post-clôture */}

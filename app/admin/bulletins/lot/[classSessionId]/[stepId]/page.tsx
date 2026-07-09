@@ -37,7 +37,7 @@ interface ApiEnrollmentRow {
       classType?: { name?: string }
       track?: { code?: string }
     }
-    academicYear?: { id?: string }
+    academicYear?: { id?: string; name?: string; yearString?: string }
   }
 }
 
@@ -146,6 +146,9 @@ export default function BulletinLotPrintPage() {
               stepName: resolvedStepName,
               className: computedClassName,
               yearId,
+              academicYearLabel:
+                e.classSession?.academicYear?.yearString ??
+                e.classSession?.academicYear?.name,
             })
             return { enrollmentId: e.id, studentLabel: label, data, error: null }
           } catch (err) {

@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { FileTextIcon, CheckCircle2Icon, XCircleIcon, InfoIcon } from "lucide-react"
@@ -45,6 +46,8 @@ export interface BatchPreviewModalProps {
   isNisuValid:  (nisu: string | null) => boolean
   onConfirm:    () => void | Promise<void>
   loading?:     boolean
+  includeGeneralAverage?: boolean
+  onIncludeGeneralAverageChange?: (checked: boolean) => void
 }
 
 export function BatchPreviewModal({
@@ -57,6 +60,8 @@ export function BatchPreviewModal({
   isNisuValid,
   onConfirm,
   loading = false,
+  includeGeneralAverage = false,
+  onIncludeGeneralAverageChange,
 }: BatchPreviewModalProps) {
   const included = useMemo(() => students.filter(s => isNisuValid(s.nisu)), [students, isNisuValid])
   const excluded = useMemo(() => students.filter(s => !isNisuValid(s.nisu)), [students, isNisuValid])
@@ -157,6 +162,31 @@ export function BatchPreviewModal({
             </div>
           </div>
         )}
+
+        {/* Option moyenne générale */}
+        <div className="mt-4 rounded-lg border bg-muted/30 p-4">
+          <div className="flex items-start gap-3">
+            <Checkbox
+              id="include-general-average"
+              checked={includeGeneralAverage}
+              onCheckedChange={(checked) => {
+                onIncludeGeneralAverageChange?.(checked === true)
+              }}
+              disabled={loading}
+            />
+            <div className="space-y-1 leading-none">
+              <label
+                htmlFor="include-general-average"
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              >
+                Calculer la moyenne générale
+              </label>
+              <p className="text-xs text-muted-foreground">
+                Le calcul sera fait côté frontend et affiché sous le bloc des moyennes du bulletin.
+              </p>
+            </div>
+          </div>
+        </div>
 
         {/* Cas impossible */}
         {included.length === 0 && (

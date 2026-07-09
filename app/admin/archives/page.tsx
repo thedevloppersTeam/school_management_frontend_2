@@ -388,6 +388,7 @@ export default function ArchivesPage() {
           className={pdfArchive.className}
           enrollmentId={pdfArchive.enrollmentId}
           yearId={activeYear?.id ?? ''}
+          academicYearLabel={pdfArchive.academicYear}
           snapshotData={pdfArchive.bulletinSnapshot}
           stepIsCurrent={false}
         />

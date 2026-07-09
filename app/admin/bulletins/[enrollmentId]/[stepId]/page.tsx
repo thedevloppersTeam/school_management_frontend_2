@@ -85,6 +85,9 @@ export default function BulletinPrintPage() {
         stepName: stepName ?? "Étape",
         className,
         yearId,
+        academicYearLabel:
+          enrollment.classSession?.academicYear?.yearString ??
+          enrollment.classSession?.academicYear?.name,
       })
       setBulletin(data)
     } catch (err) {
