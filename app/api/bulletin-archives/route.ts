@@ -21,11 +21,19 @@ async function isStaleRouteResponse(response: Response): Promise<boolean> {
 }
 
 export async function POST(request: NextRequest) {
-  const fallbackRequest = request.clone()
-  const createResponse = await backendFetch(request, '/api/bulletin-archives/create', 'POST')
+  const body = await request.arrayBuffer()
+  const headers = new Headers(request.headers)
+  const makeProxyRequest = () =>
+    new NextRequest(request.url, {
+      method: 'POST',
+      headers,
+      body: body.byteLength > 0 ? body.slice(0) : undefined,
+    })
+
+  const createResponse = await backendFetch(makeProxyRequest(), '/api/bulletin-archives/create', 'POST')
 
   if (await isStaleRouteResponse(createResponse)) {
-    return backendFetch(fallbackRequest, '/api/bulletin-archives', 'POST')
+    return backendFetch(makeProxyRequest(), '/api/bulletin-archives', 'POST')
   }
 
   return createResponse

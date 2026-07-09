@@ -64,6 +64,17 @@ type StudentPayload = {
   nisu?: string | null
 }
 
+type AcademicYearPayload = {
+  yearString?: string | null
+  name?: string | null
+}
+
+type EnrollmentContextPayload = {
+  classSession?: {
+    academicYear?: AcademicYearPayload | null
+  } | null
+}
+
 type BehaviorPayload = {
   attitudeResponses?: Array<{
     attitudeId?: string | null
@@ -116,6 +127,26 @@ function firstString(source: unknown, paths: string[]): string {
     return String(value)
   }
   return '—'
+}
+
+function normalizeYearRange(value: string | null | undefined): string | null {
+  if (!value) return null
+  const match = value.trim().match(/(\d{4})\s*[-\u2013\u2014/]\s*(\d{4})/)
+  return match ? `${match[1]}-${match[2]}` : null
+}
+
+function resolveAcademicYearLabel(...candidates: Array<string | null | undefined>): string {
+  for (const candidate of candidates) {
+    if (!candidate) continue
+
+    const normalized = normalizeYearRange(candidate)
+    if (normalized) return normalized
+
+    const trimmed = candidate.trim()
+    if (trimmed && trimmed !== '\u2014') return trimmed
+  }
+
+  return '\u2014'
 }
 
 // ── Normalisation behavior / attitudes ────────────────────────────────────────
@@ -360,6 +391,7 @@ export async function buildBulletinData(params: {
   stepName:                string
   className:               string
   yearId:                  string
+  academicYearLabel?:      string | null
   includeGeneralAverage?:  boolean
 }): Promise<BulletinData> {
   const {
@@ -370,11 +402,22 @@ export async function buildBulletinData(params: {
     stepName,
     className,
     yearId,
+    academicYearLabel,
     includeGeneralAverage = false,
   } = params
 
   // 1. Fetch toutes les données en parallèle
-  const [student, classSubjects, allGrades, behaviorRaw, attitudesRaw, schoolInfo, promotionPhotos] = await Promise.all([
+  const [
+    student,
+    classSubjects,
+    allGrades,
+    behaviorRaw,
+    attitudesRaw,
+    schoolInfo,
+    promotionPhotos,
+    enrollmentContext,
+    academicYear,
+  ] = await Promise.all([
     apiFetch<StudentPayload>(`/api/students/${studentId}`),
     fetchClassSubjects(classSessionId),
     apiFetch<ApiGrade[]>(`/api/grades/enrollment/${enrollmentId}?stepId=${stepId}`),
@@ -382,6 +425,8 @@ export async function buildBulletinData(params: {
     safeFetch<unknown>(`/api/attitudes?academicYearId=${yearId}`, []),
     safeFetch<SchoolInfoPayload | null>('/api/school-info', null),
     safeFetch<PromotionPhotoPayload[]>(`/api/promotion-photos?studentId=${studentId}`, []),
+    safeFetch<EnrollmentContextPayload | null>(`/api/enrollments/${enrollmentId}`, null),
+    safeFetch<AcademicYearPayload | null>(`/api/academic-years/${yearId}`, null),
   ])
 
   // 2. Normaliser
@@ -421,6 +466,14 @@ export async function buildBulletinData(params: {
   const promotionPhoto = promotionPhotos.find(p => p.academicYearId === yearId) ?? promotionPhotos[0]
   const schoolName = schoolInfo?.name ?? schoolInfo?.nom ?? schoolInfo?.schoolName
   const logoUrl = schoolInfo?.logoUrl ?? schoolInfo?.logo ?? ''
+  const enrollmentAcademicYear = enrollmentContext?.classSession?.academicYear
+  const resolvedAcademicYear = resolveAcademicYearLabel(
+    academicYearLabel,
+    enrollmentAcademicYear?.yearString,
+    enrollmentAcademicYear?.name,
+    academicYear?.yearString,
+    academicYear?.name,
+  )
 
   return {
     prenoms:       student?.user?.firstname ?? '',
@@ -429,7 +482,7 @@ export async function buildBulletinData(params: {
     niveau:        normalizeBulletinLevel(className),
     filiere:       student?.filiere         ?? '—',
     dateNaissance: formatFrenchLongDate(student?.user?.birth_date ?? student?.user?.birthDate),
-    anneeScolaire: `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`,
+    anneeScolaire: resolvedAcademicYear,
     periode:       stepName,
     code:          student?.studentCode ?? '',
     nisu:          student?.nisu        ?? '',

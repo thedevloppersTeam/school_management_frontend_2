@@ -378,6 +378,9 @@ export function CPMSLBulletinsSection({
           stepName,
           className: student.className,
           yearId: academicYearId,
+          academicYearLabel:
+            sessionObj?.academicYear?.yearString ??
+            sessionObj?.academicYear?.name,
           includeGeneralAverage,
         });
 
@@ -876,6 +879,10 @@ export function CPMSLBulletinsSection({
           className={pdfStudent.className}
           enrollmentId={pdfStudent.enrollmentId}
           yearId={academicYearId}
+          academicYearLabel={
+            sessions.find((s) => s.id === pdfStudent.classSessionId)?.academicYear?.yearString ??
+            sessions.find((s) => s.id === pdfStudent.classSessionId)?.academicYear?.name
+          }
           stepIsCurrent={selectedStepObj.isCurrent}
         />
       )}

@@ -40,6 +40,7 @@ interface BulletinPDFGeneratorProps {
   className: string;
   enrollmentId: string;
   yearId: string;
+  academicYearLabel?: string | null;
   stepIsCurrent?: boolean;
   snapshotData?: BulletinData;
   onDownload?: () => void;
@@ -140,6 +141,7 @@ export function BulletinPDFGenerator({
   className,
   enrollmentId,
   yearId,
+  academicYearLabel,
   stepIsCurrent = true,
   snapshotData,
   onDownload,
@@ -168,7 +170,11 @@ export function BulletinPDFGenerator({
     if (!open || hasFetched) return;
 
     if (snapshotData) {
-      setBulletinData(snapshotData);
+      setBulletinData(
+        academicYearLabel
+          ? { ...snapshotData, anneeScolaire: academicYearLabel }
+          : snapshotData,
+      );
       setHasFetched(true);
       return;
     }
@@ -183,6 +189,7 @@ export function BulletinPDFGenerator({
         stepName,
         className,
         yearId,
+        academicYearLabel,
       });
       setBulletinData(data);
       setHasFetched(true);
@@ -205,6 +212,7 @@ export function BulletinPDFGenerator({
     className,
     stepName,
     yearId,
+    academicYearLabel,
     snapshotData,
   ]);
 
@@ -251,6 +259,7 @@ export function BulletinPDFGenerator({
           stepName,
           className,
           yearId,
+          academicYearLabel,
           includeGeneralAverage: true,
         });
         bulletinSnapshot = refreshedData;

@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CPMSLGradesGrid } from "@/components/school/cpmsl-grades-grid"
 import { CPMSLBehaviorGrid } from "@/components/school/cpmsl-behavior-grid"
 import { CPMSLProgressionTab } from "@/components/school/cpmsl-progression-tab"
-import GradesViewPage from "@/app/admin/academic-year/[yearId]/grades/view/page"
+import { GradesViewContent } from "@/components/school/grades-view-content"
 import type { ApiClassSession } from "@/lib/api/students"
 import type { AcademicYearStep, ClassSession } from "@/lib/api/dashboard"
 import type { ApiClassSubject, ApiEnrollment, ApiGrade, CreateGradePayload } from "@/lib/api/grades"
@@ -227,7 +227,7 @@ export default function GradesPage() {
 
         {/* Consultation — W4 */}
         <TabsContent value="consultation">
-          <GradesViewPage
+          <GradesViewContent
             initialSessionId={selectedSessionId}
             initialStepId={selectedStepId}
           />
