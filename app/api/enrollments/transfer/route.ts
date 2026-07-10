@@ -4,8 +4,9 @@
  *
  * Transfère un élève vers une autre classe.
  * Opération atomique : ancien enrollment → TRANSFERRED, nouvel enrollment → ACTIVE.
- * L'historique des notes reste attaché à l'ancien enrollment.
- * Body : { enrollmentId, newClassSessionId, notes? }
+ * Body : { enrollmentId, newClassSessionId, notes?, migrateGrades? }
+ * migrateGrades=true : notes, comportements et dispenses suivent l'élève
+ * (même année + même niveau requis) ; sinon l'historique reste sur l'ancien enrollment.
  * Rôles autorisés : SYSTEM_ADMIN, ADMIN
  */
 

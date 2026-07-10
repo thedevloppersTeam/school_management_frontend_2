@@ -10,16 +10,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 interface ClassSession {
   id: string
   label: string
+  classTypeId?: string
 }
 
 interface TransferEnrollmentModalProps {
-  open:              boolean
-  onOpenChange:      (open: boolean) => void
-  studentName:       string
-  currentClassName:  string
-  sessions:          ClassSession[]
-  submitting?:       boolean
-  onSubmit:          (data: { newClassSessionId: string; notes?: string }) => void
+  open:               boolean
+  onOpenChange:       (open: boolean) => void
+  studentName:        string
+  currentClassName:   string
+  currentClassTypeId?: string
+  sessions:           ClassSession[]
+  submitting?:        boolean
+  onSubmit:           (data: { newClassSessionId: string; notes?: string; migrateGrades?: boolean }) => void
 }
 
 const C = {
@@ -32,19 +34,30 @@ export function TransferEnrollmentModal({
   onOpenChange,
   studentName,
   currentClassName,
+  currentClassTypeId,
   sessions,
   submitting = false,
   onSubmit,
 }: TransferEnrollmentModalProps) {
   const [newClassSessionId, setNewClassSessionId] = useState('')
   const [notes, setNotes] = useState('')
+  const [migrateGrades, setMigrateGrades] = useState(true)
 
   const handleOpenChange = (o: boolean) => {
-    if (!o) { setNewClassSessionId(''); setNotes('') }
+    if (!o) { setNewClassSessionId(''); setNotes(''); setMigrateGrades(true) }
     onOpenChange(o)
   }
 
   const isValid = newClassSessionId.length > 0
+
+  // La migration des notes n'est possible que vers une salle du même niveau
+  // (même classType), dans la même année — le backend le vérifie aussi.
+  const selectedSession = sessions.find(s => s.id === newClassSessionId)
+  const migrationSupported = !!currentClassTypeId
+  const migrationCompatible =
+    migrationSupported &&
+    (!selectedSession || selectedSession.classTypeId === currentClassTypeId)
+  const effectiveMigrate = migrateGrades && migrationCompatible && !!selectedSession
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -94,10 +107,43 @@ export function TransferEnrollmentModal({
               style={{ borderColor: C.neutral[300] }} />
           </div>
 
+          {/* Migration des notes */}
+          {migrationSupported && (
+            <div className="space-y-1">
+              <label
+                htmlFor="transfer-migrate-grades"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '8px',
+                  fontSize: '13px', fontWeight: 500,
+                  color: migrationCompatible ? '#1F2937' : '#9CA3AF',
+                  cursor: migrationCompatible ? 'pointer' : 'not-allowed',
+                }}
+              >
+                <input
+                  id="transfer-migrate-grades"
+                  type="checkbox"
+                  checked={migrateGrades && migrationCompatible}
+                  disabled={!migrationCompatible}
+                  onChange={e => setMigrateGrades(e.target.checked)}
+                  style={{ width: '16px', height: '16px', accentColor: '#2C4A6E',
+                    cursor: migrationCompatible ? 'pointer' : 'not-allowed' }}
+                />
+                Transférer aussi les notes vers la nouvelle classe
+              </label>
+              {!migrationCompatible && selectedSession && (
+                <p style={{ fontSize: '12px', color: '#C48B1A', marginLeft: '24px' }}>
+                  Les notes ne peuvent être migrées que vers une salle du même niveau.
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Avertissement */}
           <div style={{ backgroundColor: '#FEF6E0', border: '1px solid #C48B1A', borderRadius: '8px',
             padding: '10px 14px', fontSize: '12px', color: '#92400E' }}>
-            L'historique des notes reste attaché à l'ancienne classe. Le nouvel enrollment sera actif immédiatement.
+            {effectiveMigrate
+              ? "Les notes, comportements et dispenses seront transférés vers la nouvelle classe. Le nouvel enrollment sera actif immédiatement."
+              : "L'historique des notes reste attaché à l'ancienne classe. Le nouvel enrollment sera actif immédiatement."}
           </div>
         </div>
 
@@ -106,7 +152,7 @@ export function TransferEnrollmentModal({
             style={{ borderColor: C.neutral[300] }}>
             Annuler
           </Button>
-          <Button onClick={() => onSubmit({ newClassSessionId, notes: notes || undefined })}
+          <Button onClick={() => onSubmit({ newClassSessionId, notes: notes || undefined, migrateGrades: effectiveMigrate })}
             disabled={!isValid || submitting}
             style={{ backgroundColor: !isValid || submitting ? '#9CA3AF' : '#2C4A6E', color: '#FFFFFF' }}>
             {submitting ? 'Transfert...' : 'Confirmer le transfert'}

@@ -358,7 +358,7 @@ export default function StudentsManagementPage() {
   }
 
   // ── Transfert ──────────────────────────────────────────────────────────────
-  const handleTransfer = async (data: { newClassSessionId: string; notes?: string }) => {
+  const handleTransfer = async (data: { newClassSessionId: string; notes?: string; migrateGrades?: boolean }) => {
     if (!transferringStudent) return
     setTransferSubmitting(true)
     try {
@@ -370,14 +370,26 @@ export default function StudentsManagementPage() {
           enrollmentId: transferringStudent.enrollmentId,
           newClassSessionId: data.newClassSessionId,
           notes: data.notes,
+          migrateGrades: data.migrateGrades ?? false,
         }),
       })
-      if (!res.ok) throw new Error()
-      toast({ title: "Élève transféré avec succès" })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(payload.message)
+      const m = payload.migration
+      toast({
+        title: "Élève transféré avec succès",
+        description: m
+          ? `${m.grades} note${m.grades > 1 ? 's' : ''}, ${m.behaviors} comportement${m.behaviors > 1 ? 's' : ''} et ${m.exclusions} dispense${m.exclusions > 1 ? 's' : ''} migrés vers la nouvelle classe`
+          : undefined,
+      })
       setTransferringStudent(null)
       loadStudents()
-    } catch {
-      toast({ title: "Erreur", description: "Impossible de transférer l'élève", variant: "destructive" })
+    } catch (err) {
+      toast({
+        title: "Erreur",
+        description: err instanceof Error && err.message ? err.message : "Impossible de transférer l'élève",
+        variant: "destructive",
+      })
     } finally {
       setTransferSubmitting(false)
     }
@@ -824,6 +836,7 @@ export default function StudentsManagementPage() {
           onOpenChange={open => !open && setTransferringStudent(null)}
           studentName={`${transferringStudent.firstname} ${transferringStudent.lastname}`}
           currentClassName={transferringStudent.className}
+          currentClassTypeId={sessions.find(s => s.id === transferringStudent.classSessionId)?.class.classType.id}
           sessions={sessions
             .filter(s => s.id !== transferringStudent.classSessionId)
             .map(s => {
@@ -831,6 +844,7 @@ export default function StudentsManagementPage() {
               return {
                 id: s.id,
                 label: `${s.class.classType.name} ${s.class.letter}${trackSuffix}`,
+                classTypeId: s.class.classType.id,
               };
             })}
           submitting={transferSubmitting}
