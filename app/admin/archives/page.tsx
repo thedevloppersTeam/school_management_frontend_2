@@ -1,7 +1,7 @@
 "use client"
 
 import { clientFetch as apiFetch } from '@/lib/client-fetch'
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -12,7 +12,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { BulletinPDFGenerator } from "@/components/bulletin-pdf-generator"
-import { SearchIcon, ArchiveIcon, ClockIcon, UserIcon } from "lucide-react"
+import { SearchIcon, ArchiveIcon, ClockIcon, UserIcon, ChevronsUpDownIcon, ArrowUpIcon, ArrowDownIcon } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { fetchActiveAcademicYear, fetchClassSessions, fetchSteps, getClassSessionName, type AcademicYear, type ClassSession, type AcademicYearStep } from "@/lib/api/dashboard"
 import type { BulletinData } from "@/components/BulletinScolaire"
 
@@ -76,6 +77,38 @@ export default function ArchivesPage() {
   // ── Archives ──────────────────────────────────────────────────────────────
   const [archives,     setArchives]     = useState<ArchiveRow[]>([])
   const [loadingList,  setLoadingList]  = useState(false)
+
+  // ── Tri ───────────────────────────────────────────────────────────────────
+  type SortDir = "asc" | "desc"
+  const [sort, setSort] = useState<{ col: string; dir: SortDir } | null>(null)
+  const toggleSort = (col: string) =>
+    setSort(cur =>
+      !cur || cur.col !== col ? { col, dir: "asc" }
+      : cur.dir === "asc" ? { col, dir: "desc" }
+      : null,
+    )
+  const sortedArchives = useMemo(() => {
+    if (!sort) return archives
+    const val = (a: ArchiveRow): string | number => {
+      switch (sort.col) {
+        case "nisu":    return a.nisu
+        case "classe":  return a.className
+        case "etape":   return a.stepName
+        case "version": return a.version
+        case "statut":  return a.status
+        case "auteur":  return `${a.generatedByUser.lastname} ${a.generatedByUser.firstname}`
+        case "date":    return a.generatedAt // ISO → tri chronologique
+        default:        return a.studentName
+      }
+    }
+    return [...archives].sort((a, b) => {
+      const av = val(a), bv = val(b)
+      const r = typeof av === "number" && typeof bv === "number"
+        ? av - bv
+        : String(av).localeCompare(String(bv), "fr", { numeric: true })
+      return sort.dir === "asc" ? r : -r
+    })
+  }, [archives, sort])
 
   // ── Panel versions ────────────────────────────────────────────────────────
   const [versionsOpen,    setVersionsOpen]    = useState(false)
@@ -245,15 +278,43 @@ export default function ArchivesPage() {
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  {['Élève', 'NISU', 'Classe', 'Étape', 'Version', 'Statut', 'Généré par', 'Date', 'Actions'].map(h => (
-                    <TableHead key={h} className="font-semibold">
-                      {h}
+                  {[
+                    { label: 'Élève', col: 'eleve' },
+                    { label: 'NISU', col: 'nisu' },
+                    { label: 'Classe', col: 'classe' },
+                    { label: 'Étape', col: 'etape' },
+                    { label: 'Version', col: 'version' },
+                    { label: 'Statut', col: 'statut' },
+                    { label: 'Généré par', col: 'auteur' },
+                    { label: 'Date', col: 'date' },
+                    { label: 'Actions', col: null },
+                  ].map(h => (
+                    <TableHead key={h.label} className="font-semibold">
+                      {h.col ? (
+                        <button
+                          type="button"
+                          onClick={() => toggleSort(h.col!)}
+                          className={cn(
+                            "inline-flex items-center gap-1 select-none hover:text-foreground",
+                            sort?.col === h.col ? "text-foreground" : "text-muted-foreground",
+                          )}
+                        >
+                          {h.label}
+                          {sort?.col === h.col ? (
+                            sort.dir === "asc" ? <ArrowUpIcon className="h-3.5 w-3.5" /> : <ArrowDownIcon className="h-3.5 w-3.5" />
+                          ) : (
+                            <ChevronsUpDownIcon className="h-3.5 w-3.5 opacity-40" />
+                          )}
+                        </button>
+                      ) : (
+                        h.label
+                      )}
                     </TableHead>
                   ))}
                 </TableRow>
               </TableHeader>
               <TableBody>
-              {archives.map((archive) => {
+              {sortedArchives.map((archive) => {
                 const badge = statusBadge(archive.status, archive.isActive)
                 return (
                   <TableRow key={archive.id}>

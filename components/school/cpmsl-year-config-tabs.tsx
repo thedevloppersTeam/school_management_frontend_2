@@ -29,6 +29,9 @@ import {
   UnlockIcon,
   ChevronDownIcon,
   ChevronRightIcon,
+  ChevronsUpDownIcon,
+  ArrowUpIcon,
+  ArrowDownIcon,
   CopyIcon,
 } from "lucide-react";
 import { ClosePeriodModal } from "@/components/school/close-period-modal";
@@ -188,6 +191,55 @@ interface CPMSLYearConfigTabsProps {
   onDeleteLevel?: (levelId: string) => void;
 }
 
+// En-tête de colonne triable réutilisable (défini au niveau module).
+type TableSort = { col: string; dir: "asc" | "desc" };
+function nextSort(cur: TableSort | null, col: string): TableSort | null {
+  if (!cur || cur.col !== col) return { col, dir: "asc" };
+  if (cur.dir === "asc") return { col, dir: "desc" };
+  return null;
+}
+function SortableTH({
+  label,
+  col,
+  sort,
+  setter,
+  className = "",
+  align = "left",
+}: {
+  label: string;
+  col: string;
+  sort: TableSort | null;
+  setter: (s: TableSort | null) => void;
+  className?: string;
+  align?: "left" | "center";
+}) {
+  const active = sort?.col === col;
+  return (
+    <th
+      scope="col"
+      className={`${TH_CLASS} px-4 py-3 ${align === "center" ? "text-center" : "text-left"} ${className}`}
+    >
+      <button
+        type="button"
+        onClick={() => setter(nextSort(sort, col))}
+        className={`inline-flex items-center gap-1 select-none hover:text-primary-700 focus-visible:outline-2 focus-visible:outline-primary-500 rounded ${align === "center" ? "justify-center" : ""} ${active ? "text-primary-700" : ""}`}
+        aria-label={`Trier par ${label}`}
+      >
+        {label}
+        {active ? (
+          sort?.dir === "asc" ? (
+            <ArrowUpIcon className="h-3.5 w-3.5" aria-hidden="true" />
+          ) : (
+            <ArrowDownIcon className="h-3.5 w-3.5" aria-hidden="true" />
+          )
+        ) : (
+          <ChevronsUpDownIcon className="h-3.5 w-3.5 text-neutral-300" aria-hidden="true" />
+        )}
+      </button>
+    </th>
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════
@@ -225,6 +277,11 @@ export function CPMSLYearConfigTabs({
   const [searchClass, setSearchClass] = useState("");
   const [searchSubject, setSearchSubject] = useState("");
   const [expandedLevels, setExpandedLevels] = useState<Set<string>>(new Set());
+
+  // ── Tri des tableaux ─────────────────────────────────────────────────────
+  type SortDir = "asc" | "desc";
+  const [classSort, setClassSort] = useState<TableSort | null>(null);
+  const [subjectSort, setSubjectSort] = useState<TableSort | null>(null);
   const [expandedSubjects, setExpandedSubjects] = useState<Set<string>>(
     new Set(["1"]),
   );
@@ -828,14 +885,46 @@ export function CPMSLYearConfigTabs({
     }
   };
 
-  const filteredLevels = levels.filter((l) =>
-    l.name.toLowerCase().includes(searchClass.toLowerCase()),
-  );
-  const filteredSubjectParents = subjectParents.filter(
-    (s) =>
-      s.name.toLowerCase().includes(searchSubject.toLowerCase()) ||
-      s.code.toLowerCase().includes(searchSubject.toLowerCase()),
-  );
+  const cmp = (a: string | number, b: string | number, dir: SortDir) => {
+    const r =
+      typeof a === "number" && typeof b === "number"
+        ? a - b
+        : String(a).localeCompare(String(b), "fr", { numeric: true });
+    return dir === "asc" ? r : -r;
+  };
+
+  const filteredLevels = levels
+    .filter((l) => l.name.toLowerCase().includes(searchClass.toLowerCase()))
+    .sort((a, b) => {
+      if (!classSort) return 0;
+      const val = (l: Level) => {
+        if (classSort.col === "niveau") return l.niveau ?? "";
+        if (classSort.col === "salles") return getClassroomsForLevel(l.id).length;
+        if (classSort.col === "eleves") return getTotalStudentCountForLevel(l.id);
+        return l.name;
+      };
+      return cmp(val(a), val(b), classSort.dir);
+    });
+
+  const levelName = (classTypeId?: string | null) =>
+    levels.find((l) => l.id === classTypeId)?.name ?? "";
+
+  const filteredSubjectParents = subjectParents
+    .filter(
+      (s) =>
+        s.name.toLowerCase().includes(searchSubject.toLowerCase()) ||
+        s.code.toLowerCase().includes(searchSubject.toLowerCase()),
+    )
+    .sort((a, b) => {
+      if (!subjectSort) return 0;
+      const val = (s: SubjectParent) => {
+        if (subjectSort.col === "code") return s.code;
+        if (subjectSort.col === "rubrique") return s.rubrique;
+        if (subjectSort.col === "classe") return levelName(s.classTypeId) || "￿"; // "Toutes" en dernier
+        return s.name;
+      };
+      return cmp(val(a), val(b), subjectSort.dir);
+    });
   const assignSelectedSubject = subjectParents.find(
     (s) => s.id === assignSubjectId,
   );
@@ -1047,30 +1136,10 @@ export function CPMSLYearConfigTabs({
                     scope="col"
                     className={`${TH_CLASS} px-4 py-3 text-left w-[4%]`}
                   ></th>
-                  <th
-                    scope="col"
-                    className={`${TH_CLASS} px-4 py-3 text-left w-[12%]`}
-                  >
-                    Nom
-                  </th>
-                  <th
-                    scope="col"
-                    className={`${TH_CLASS} px-4 py-3 text-left w-[22%]`}
-                  >
-                    Niveau
-                  </th>
-                  <th
-                    scope="col"
-                    className={`${TH_CLASS} px-4 py-3 text-left w-[18%]`}
-                  >
-                    Groupes
-                  </th>
-                  <th
-                    scope="col"
-                    className={`${TH_CLASS} px-4 py-3 text-left w-[18%]`}
-                  >
-                    Élèves
-                  </th>
+                  <SortableTH label="Nom" col="nom" sort={classSort} setter={setClassSort} className="w-[12%]" />
+                  <SortableTH label="Niveau" col="niveau" sort={classSort} setter={setClassSort} className="w-[22%]" />
+                  <SortableTH label="Groupes" col="salles" sort={classSort} setter={setClassSort} className="w-[18%]" />
+                  <SortableTH label="Élèves" col="eleves" sort={classSort} setter={setClassSort} className="w-[18%]" />
                   <th
                     scope="col"
                     className={`${TH_CLASS} px-4 py-3 text-center w-[26%]`}
@@ -1343,30 +1412,10 @@ export function CPMSLYearConfigTabs({
                     scope="col"
                     className={`${TH_CLASS} px-4 py-3 text-left w-[4%]`}
                   ></th>
-                  <th
-                    scope="col"
-                    className={`${TH_CLASS} px-4 py-3 text-left w-[12%]`}
-                  >
-                    Code
-                  </th>
-                  <th
-                    scope="col"
-                    className={`${TH_CLASS} px-4 py-3 text-left w-[30%]`}
-                  >
-                    Nom
-                  </th>
-                  <th
-                    scope="col"
-                    className={`${TH_CLASS} px-4 py-3 text-left w-[15%]`}
-                  >
-                    Rubrique
-                  </th>
-                  <th
-                    scope="col"
-                    className={`${TH_CLASS} px-4 py-3 text-left w-[15%]`}
-                  >
-                    Classe
-                  </th>
+                  <SortableTH label="Code" col="code" sort={subjectSort} setter={setSubjectSort} className="w-[12%]" />
+                  <SortableTH label="Nom" col="nom" sort={subjectSort} setter={setSubjectSort} className="w-[30%]" />
+                  <SortableTH label="Rubrique" col="rubrique" sort={subjectSort} setter={setSubjectSort} className="w-[15%]" />
+                  <SortableTH label="Classe" col="classe" sort={subjectSort} setter={setSubjectSort} className="w-[15%]" />
                   <th
                     scope="col"
                     className={`${TH_CLASS} px-4 py-3 text-center w-[24%]`}

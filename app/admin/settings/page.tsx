@@ -45,6 +45,9 @@ import {
   PlusIcon,
   ChevronRightIcon,
   ChevronDownIcon,
+  ChevronsUpDownIcon,
+  ArrowUpIcon,
+  ArrowDownIcon,
   CheckCircle2Icon,
   ZapIcon,
   Trash2Icon,
@@ -779,6 +782,45 @@ function SectionCard({
 // TAB COMPONENTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// ── Tri de tableau (partagé) ────────────────────────────────────────────────
+type TableSort = { col: string; dir: "asc" | "desc" }
+function nextSort(cur: TableSort | null, col: string): TableSort | null {
+  if (!cur || cur.col !== col) return { col, dir: "asc" }
+  if (cur.dir === "asc") return { col, dir: "desc" }
+  return null
+}
+function SortHead({
+  label, col, sort, setter, align = "left",
+}: {
+  label: string
+  col: string
+  sort: TableSort | null
+  setter: (s: TableSort | null) => void
+  align?: "left" | "right"
+}) {
+  const active = sort?.col === col
+  return (
+    <TableHead className={cn("font-semibold", align === "right" && "text-right")}>
+      <button
+        type="button"
+        onClick={() => setter(nextSort(sort, col))}
+        className={cn(
+          "inline-flex items-center gap-1 select-none hover:text-foreground",
+          align === "right" && "flex-row-reverse",
+          active ? "text-foreground" : "text-muted-foreground",
+        )}
+      >
+        {label}
+        {active ? (
+          sort?.dir === "asc" ? <ArrowUpIcon className="h-3.5 w-3.5" /> : <ArrowDownIcon className="h-3.5 w-3.5" />
+        ) : (
+          <ChevronsUpDownIcon className="h-3.5 w-3.5 opacity-40" />
+        )}
+      </button>
+    </TableHead>
+  )
+}
+
 interface ReferentielTabProps {
   loading: boolean
   rubrics: Rubric[]
@@ -801,6 +843,26 @@ function ReferentielTab({
   onCreateSection, onEditSection, onDeleteSection,
   onToggleExpand, onOpenImport,
 }: ReferentielTabProps) {
+  const [sort, setSort] = useState<TableSort | null>(null)
+  const sortedSubjects = useMemo(() => {
+    if (!sort) return subjects
+    const val = (s: Subject) => {
+      if (sort.col === "code") return s.code
+      if (sort.col === "niveau") return s.classTypeName || "￿" // "tous niveaux" en dernier
+      if (sort.col === "rubrique") return s.rubric?.code ?? "￿"
+      if (sort.col === "maxScore") return s.maxScore
+      return s.name
+    }
+    return [...subjects].sort((a, b) => {
+      const av = val(a), bv = val(b)
+      const r =
+        typeof av === "number" && typeof bv === "number"
+          ? av - bv
+          : String(av).localeCompare(String(bv), "fr", { numeric: true })
+      return sort.dir === "asc" ? r : -r
+    })
+  }, [subjects, sort])
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -908,16 +970,16 @@ function ReferentielTab({
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead className="w-[40px] pl-6"></TableHead>
-                <TableHead className="font-semibold">Code</TableHead>
-                <TableHead className="font-semibold">Nom</TableHead>
-                <TableHead className="font-semibold">Niveau</TableHead>
-                <TableHead className="font-semibold">Rubrique</TableHead>
-                <TableHead className="text-right font-semibold">Note max</TableHead>
+                <SortHead label="Code" col="code" sort={sort} setter={setSort} />
+                <SortHead label="Nom" col="nom" sort={sort} setter={setSort} />
+                <SortHead label="Niveau" col="niveau" sort={sort} setter={setSort} />
+                <SortHead label="Rubrique" col="rubrique" sort={sort} setter={setSort} />
+                <SortHead label="Note max" col="maxScore" sort={sort} setter={setSort} align="right" />
                 <TableHead className="pr-6 text-right font-semibold">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {subjects.map((subject) => {
+              {sortedSubjects.map((subject) => {
                 const isExpanded = expandedSubjects.has(subject.id)
                 return (
                   <React.Fragment key={subject.id}>
