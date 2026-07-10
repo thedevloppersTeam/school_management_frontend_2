@@ -1365,7 +1365,7 @@ export function CPMSLYearConfigTabs({
                     scope="col"
                     className={`${TH_CLASS} px-4 py-3 text-left w-[15%]`}
                   >
-                    Coefficient
+                    Classe
                   </th>
                   <th
                     scope="col"
@@ -1442,7 +1442,12 @@ export function CPMSLYearConfigTabs({
                             </Badge>
                           </td>
                           <td className="px-4 py-3 text-neutral-900 text-sm">
-                            {parent.coefficient}
+                            {levels.find((l) => l.id === parent.classTypeId)
+                              ?.name ?? (
+                              <span className="text-neutral-400 italic text-xs">
+                                Toutes
+                              </span>
+                            )}
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex items-center justify-center gap-2">
@@ -1512,9 +1517,7 @@ export function CPMSLYearConfigTabs({
                                 {child.name}
                               </td>
                               <td className="px-4 py-3"></td>
-                              <td className="px-4 py-3 text-neutral-900 text-sm">
-                                {child.coefficient}
-                              </td>
+                              <td className="px-4 py-3"></td>
                               <td className="px-4 py-3">
                                 <div className="flex items-center justify-center gap-2">
                                   <button

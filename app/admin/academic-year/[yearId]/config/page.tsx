@@ -53,6 +53,7 @@ interface SubjectParent {
   name: string
   rubrique: Rubique
   coefficient: number
+  classTypeId?: string | null
 }
 
 interface SubjectChild {
@@ -203,13 +204,14 @@ export default function AcademicYearConfigPage() {
 
         const parents: SubjectParent[] = subjects.map((s: {
           id: string; code: string; name: string
-          rubricId?: string; coefficient: number
+          rubricId?: string; classTypeId?: string | null; coefficient: number
         }) => ({
           id:          s.id,
           code:        s.code,
           name:        s.name,
           rubrique:    s.rubricId ? (rubricMap[s.rubricId] || 'R1') : 'R1',
-          coefficient: Number(s.coefficient) || 0
+          coefficient: Number(s.coefficient) || 0,
+          classTypeId: s.classTypeId ?? null
         }))
         setSubjectParents(parents)
 

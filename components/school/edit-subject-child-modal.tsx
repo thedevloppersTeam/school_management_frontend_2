@@ -57,7 +57,6 @@ export function EditSubjectChildModal({
   const [internalOpen, setInternalOpen] = useState(false)
   const [name, setName] = useState(child.name)
   const [type, setType] = useState<'L' | 'C' | 'N' | 'P' | 'T'>(child.type)
-  const [coefficient, setCoefficient] = useState(child.coefficient.toString())
 
   const isControlled = controlledOpen !== undefined
   const isOpen = isControlled ? controlledOpen : internalOpen
@@ -75,17 +74,15 @@ export function EditSubjectChildModal({
     if (isOpen) {
       setName(child.name)
       setType(child.type)
-      setCoefficient(child.coefficient.toString())
     }
   }, [isOpen, child])
 
   // Check if any field has changed
   const hasChanges =
     name.trim() !== child.name ||
-    type !== child.type ||
-    parseInt(coefficient) !== child.coefficient
+    type !== child.type
 
-  // Check if form is valid — le coefficient est optionnel : les coefficients
+  // Check if form is valid — le coefficient n'est plus affiché : les coefficients
   // de sous-matières ne sont pas utilisés pour le moment (le backend les ignore).
   const isFormValid = name.trim() !== ''
 
@@ -97,7 +94,7 @@ export function EditSubjectChildModal({
     onSubmit?.({
       name: name.trim(),
       type,
-      coefficient: coefficient !== '' ? parseInt(coefficient) : 1
+      coefficient: child.coefficient
     })
 
     setIsOpen(false)
@@ -106,7 +103,6 @@ export function EditSubjectChildModal({
   const handleCancel = () => {
     setName(child.name)
     setType(child.type)
-    setCoefficient(child.coefficient.toString())
     setIsOpen(false)
   }
 
@@ -298,41 +294,8 @@ export function EditSubjectChildModal({
             </RadioGroup>
           </div>
 
-          {/* Coefficient */}
-          <div className="space-y-2">
-            <Label
-              htmlFor="coefficient"
-              style={{
-                color: '#1E1A17',
-                fontSize: '13px',
-                fontWeight: 500
-              }}
-            >
-              Coefficient <span style={{ color: '#78756F', fontSize: '12px', fontWeight: 400 }}>(optionnel)</span>
-            </Label>
-            <Input
-              id="coefficient"
-              type="number"
-              min="1"
-              value={coefficient}
-              onChange={(e) => setCoefficient(e.target.value)}
-              placeholder="Ex: 1"
-              style={{
-                border: '1px solid #D1CECC',
-                borderRadius: '8px'
-              }}
-              className="focus:border-[#5A7085] focus:ring-[#5A7085]"
-            />
-            <p
-              style={{
-                color: '#78756F',
-                fontSize: '12px',
-                marginTop: '6px'
-              }}
-            >
-              Les coefficients de sous-matières ne sont pas utilisés pour le moment — seule la note maximum compte sur les bulletins.
-            </p>
-          </div>
+          {/* Coefficient masqué : non utilisé pour le moment — seule la note
+              maximum compte sur les bulletins. La valeur existante est conservée. */}
         </div>
 
         <DialogFooter

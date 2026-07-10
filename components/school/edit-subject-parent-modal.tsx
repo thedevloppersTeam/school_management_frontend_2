@@ -45,7 +45,6 @@ export function EditSubjectParentModal({
   const [internalOpen, setInternalOpen] = useState(false)
   const [name, setName] = useState(subject.name)
   const [rubrique, setRubrique] = useState<'R1' | 'R2' | 'R3'>(subject.rubrique)
-  const [coefficient, setCoefficient] = useState(subject.coefficient.toString())
 
   const isControlled = controlledOpen !== undefined
   const isOpen = isControlled ? controlledOpen : internalOpen
@@ -63,19 +62,17 @@ export function EditSubjectParentModal({
     if (isOpen) {
       setName(subject.name)
       setRubrique(subject.rubrique)
-      setCoefficient(subject.coefficient.toString())
     }
   }, [isOpen, subject])
 
   // Check if any field has changed
-  const hasChanges = 
+  const hasChanges =
     name.trim() !== subject.name ||
-    rubrique !== subject.rubrique ||
-    parseInt(coefficient) !== subject.coefficient
+    rubrique !== subject.rubrique
 
-  // Check if form is valid
-  const isFormValid = name.trim() !== '' && coefficient !== '' && 
-    parseInt(coefficient) >= 1 && parseInt(coefficient) <= 100
+  // Check if form is valid — le coefficient n'est plus affiché : les
+  // coefficients ne sont pas utilisés pour le moment (valeur existante conservée).
+  const isFormValid = name.trim() !== ''
 
   const isSubmitEnabled = hasChanges && isFormValid
 
@@ -85,7 +82,7 @@ export function EditSubjectParentModal({
     onSubmit?.({
       name: name.trim(),
       rubrique,
-      coefficient: parseInt(coefficient)
+      coefficient: subject.coefficient
     })
 
     setIsOpen(false)
@@ -94,7 +91,6 @@ export function EditSubjectParentModal({
   const handleCancel = () => {
     setName(subject.name)
     setRubrique(subject.rubrique)
-    setCoefficient(subject.coefficient.toString())
     setIsOpen(false)
   }
 
@@ -248,33 +244,7 @@ export function EditSubjectParentModal({
             </RadioGroup>
           </div>
 
-          {/* Coefficient */}
-          <div className="space-y-2">
-            <Label
-              htmlFor="coefficient"
-              style={{
-                color: '#1E1A17',
-                fontSize: '13px',
-                fontWeight: 500
-              }}
-            >
-              Coefficient <span style={{ color: '#C84A3D' }}>*</span>
-            </Label>
-            <Input
-              id="coefficient"
-              type="number"
-              min="1"
-              max="100"
-              value={coefficient}
-              onChange={(e) => setCoefficient(e.target.value)}
-              placeholder="Ex: 60"
-              style={{
-                border: '1px solid #D1CECC',
-                borderRadius: '8px'
-              }}
-              className="focus:border-[#5A7085] focus:ring-[#5A7085]"
-            />
-          </div>
+          {/* Coefficient masqué : non utilisé pour le moment (valeur existante conservée). */}
         </div>
 
         <DialogFooter

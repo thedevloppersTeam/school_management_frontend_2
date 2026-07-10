@@ -56,7 +56,6 @@ export function AddSubjectChildModal({
   const [internalOpen, setInternalOpen] = useState(false);
   const [name, setName] = useState("");
   const [type, setType] = useState<"L" | "C" | "N" | "P" | "T" | "">("");
-  const [coefficient, setCoefficient] = useState("");
   const [maxScore, setMaxScore] = useState("");
 
   const isControlled = controlledOpen !== undefined;
@@ -108,13 +107,12 @@ export function AddSubjectChildModal({
       name: name.trim(),
       code: generatedCode,
       type: type as "L" | "C" | "N" | "P" | "T",
-      coefficient: coefficient !== "" ? parseInt(coefficient) : 1,
+      coefficient: 1,
       maxScore: parsedMaxScore,
     });
 
     setName("");
     setType("");
-    setCoefficient("");
     setMaxScore("");
     setIsOpen(false);
   };
@@ -122,7 +120,6 @@ export function AddSubjectChildModal({
   const handleCancel = () => {
     setName("");
     setType("");
-    setCoefficient("");
     setMaxScore("");
     setIsOpen(false);
   };
@@ -136,8 +133,7 @@ export function AddSubjectChildModal({
             Ajouter une sous-matière — {parent.name}
           </DialogTitle>
           <DialogDescription className="text-neutral-600 text-sm">
-            {parent.code} · {parent.rubrique} · Coefficient parent:{" "}
-            {parent.coefficient}
+            {parent.code} · {parent.rubrique}
           </DialogDescription>
         </DialogHeader>
 
@@ -239,31 +235,8 @@ export function AddSubjectChildModal({
             </RadioGroup>
           </div>
 
-          {/* Coefficient */}
-          <div className="space-y-2">
-            <Label
-              htmlFor="coefficient"
-              className="text-neutral-900 text-[13px] font-medium"
-            >
-              Coefficient{" "}
-              <span className="text-neutral-500 text-xs font-normal">
-                (optionnel)
-              </span>
-            </Label>
-            <Input
-              id="coefficient"
-              type="number"
-              min="1"
-              value={coefficient}
-              onChange={(e) => setCoefficient(e.target.value)}
-              placeholder="Ex: 1"
-              className="border border-neutral-300 rounded-lg focus-visible:ring-2 focus-visible:ring-primary-500/40 focus-visible:border-primary-500"
-            />
-            <p className="text-neutral-500 text-xs mt-1.5">
-              Les coefficients de sous-matières ne sont pas utilisés pour le
-              moment — seule la note maximum compte sur les bulletins.
-            </p>
-          </div>
+          {/* Coefficient masqué : non utilisé pour le moment — seule la note
+              maximum compte sur les bulletins. Valeur par défaut : 1. */}
 
           {/* Note maximum */}
           <div className="space-y-2">

@@ -912,7 +912,6 @@ function ReferentielTab({
                 <TableHead className="font-semibold">Nom</TableHead>
                 <TableHead className="font-semibold">Niveau</TableHead>
                 <TableHead className="font-semibold">Rubrique</TableHead>
-                <TableHead className="text-right font-semibold">Coef.</TableHead>
                 <TableHead className="text-right font-semibold">Note max</TableHead>
                 <TableHead className="pr-6 text-right font-semibold">Actions</TableHead>
               </TableRow>
@@ -958,7 +957,6 @@ function ReferentielTab({
                           <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">{subject.coefficient}</TableCell>
                       <TableCell className="text-right tabular-nums">{subject.maxScore}</TableCell>
                       <TableCell className="pr-6 text-right">
                         <div className="flex items-center justify-end gap-1">
@@ -1005,7 +1003,6 @@ function ReferentielTab({
                                 )}
                               </div>
                             </TableCell>
-                            <TableCell></TableCell>
                             <TableCell className="text-right text-sm text-muted-foreground tabular-nums">
                               {secMax}
                             </TableCell>
@@ -1402,17 +1399,8 @@ function SubjectModal({ open, onOpenChange, form, onChange, onNameChange, rubric
               La matière n&apos;apparaîtra que pour les classes de ce niveau dans la configuration de l&apos;année.
             </p>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="subj-coef">Coefficient</Label>
-            <Input
-              id="subj-coef"
-              type="number"
-              step="0.5"
-              min="0"
-              value={form.coefficient}
-              onChange={(e) => onChange({ ...form, coefficient: e.target.value })}
-            />
-          </div>
+          {/* Coefficient masqué : non utilisé pour le moment — la valeur
+              existante (ou 1 par défaut) est conservée à l'enregistrement. */}
           <div className="space-y-2">
             <Label htmlFor="subj-max">Note max</Label>
             <Input
