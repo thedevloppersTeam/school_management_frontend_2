@@ -449,11 +449,25 @@ export default function AcademicYearConfigPage() {
           displayOrder: subjectChildren.filter(c => c.parentId === parentId).length + 1,
         })
       })
-      if (!res.ok) throw new Error('Échec création sous-matière')
-      toast({ title: "Sous-matière ajoutée" })
+      const payload = await res.json().catch(() => null)
+      if (!res.ok) {
+        // Remonter la vraie raison du refus
+        throw new Error(payload?.message ?? 'Échec création sous-matière')
+      }
+      const adj = payload?.subjectMaxScoreAdjusted
+      toast({
+        title: "Sous-matière ajoutée",
+        description: adj
+          ? `Note max de la matière augmentée automatiquement : ${adj.from} → ${adj.to}`
+          : undefined,
+      })
       await loadData()
-    } catch {
-      toast({ title: "Erreur", description: "Impossible de créer la sous-matière", variant: "destructive" })
+    } catch (err) {
+      toast({
+        title: "Erreur",
+        description: err instanceof Error && err.message ? err.message : "Impossible de créer la sous-matière",
+        variant: "destructive",
+      })
     }
   }
 
