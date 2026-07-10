@@ -128,6 +128,21 @@ export async function bulkCreateGrades(grades: CreateGradePayload[]): Promise<vo
   }
 }
 
+// ── Delete an existing grade ──────────────────────────────────────────────────
+// Effacer une note déjà enregistrée = la retirer complètement (pas un 0) :
+// elle ne doit plus exister, comme si elle n'avait jamais été saisie.
+
+export async function deleteGrade(gradeId: string): Promise<void> {
+  const res = await fetch(`/api/grades/delete/${gradeId}`, {
+    method: 'POST',
+    credentials: 'include',
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => null)
+    throw new Error(data?.message ?? 'Erreur lors de la suppression de la note')
+  }
+}
+
 // ── Update an existing grade ──────────────────────────────────────────────────
 
 export async function updateGrade(

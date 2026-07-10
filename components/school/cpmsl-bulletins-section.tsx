@@ -349,6 +349,7 @@ export function CPMSLBulletinsSection({
     // EP-003 : compteurs d'échec pour remonter à l'utilisateur
     let archiveFailures = 0;
     let firstArchiveFailure: string | null = null;
+    let generationFailures = 0;
     let pdfSaved = false;
 
     try {
@@ -366,49 +367,75 @@ export function CPMSLBulletinsSection({
       const sessionObj = sessions.find((s) => s.id === selectedSession);
       const className = sessionObj ? getClassSessionName(sessionObj) : "classe";
 
+      let firstPage = true;
+
       for (let i = 0; i < eligible.length; i++) {
         const student = eligible[i];
         setLotProgress({ current: i + 1, total: eligible.length });
 
-        const data = await buildBulletinData({
-          enrollmentId: student.enrollmentId,
-          studentId: student.studentId,
-          classSessionId: student.classSessionId,
-          stepId: selectedStep,
-          stepName,
-          className: student.className,
-          yearId: academicYearId,
-          academicYearLabel:
-            sessionObj?.academicYear?.yearString ??
-            sessionObj?.academicYear?.name,
-          includeGeneralAverage,
-        });
+        // Résilience : un élève qui échoue (données, capture, image…) est
+        // compté en erreur et le lot continue — plus de gel global.
+        try {
+          const data = await buildBulletinData({
+            enrollmentId: student.enrollmentId,
+            studentId: student.studentId,
+            classSessionId: student.classSessionId,
+            stepId: selectedStep,
+            stepName,
+            className: student.className,
+            yearId: academicYearId,
+            academicYearLabel:
+              sessionObj?.academicYear?.yearString ??
+              sessionObj?.academicYear?.name,
+            includeGeneralAverage,
+          });
 
-        flushSync(() => setLotData(data));
-        await waitForTwoFrames();
+          flushSync(() => setLotData(data));
+          await waitForTwoFrames();
 
-        if (!lotRef.current) continue;
+          if (!lotRef.current) {
+            generationFailures++;
+            continue;
+          }
 
-        if (i > 0) pdf.addPage("letter", "portrait");
-        const { canvas } = await captureBulletinElement(lotRef.current);
-        addBulletinCanvasToPdf(pdf, canvas);
+          const { canvas } = await captureBulletinElement(lotRef.current);
+          if (!firstPage) pdf.addPage("letter", "portrait");
+          addBulletinCanvasToPdf(pdf, canvas);
+          firstPage = false;
 
-        // WF-005 + EP-003 : archivage avec auditNote + remontée des échecs
-        const archiveResult = await archiveBulletin({
-          enrollmentId: student.enrollmentId,
-          stepId: selectedStep,
-          source: "batch",
-          bulletinSnapshot: data,
-          isCorrection,
-          auditNote: audit ? `[${audit.reason}] ${audit.note}` : undefined,
-        });
+          // WF-005 + EP-003 : archivage avec auditNote + remontée des échecs
+          const archiveResult = await archiveBulletin({
+            enrollmentId: student.enrollmentId,
+            stepId: selectedStep,
+            source: "batch",
+            bulletinSnapshot: data,
+            isCorrection,
+            auditNote: audit ? `[${audit.reason}] ${audit.note}` : undefined,
+          });
 
-        if (!archiveResult.ok) {
-          archiveFailures++;
-          const archiveMessage = toMessage(archiveResult.error);
-          firstArchiveFailure ??= archiveMessage;
-          console.warn("[archive lot] échec pour", student.studentCode, archiveMessage);
+          if (!archiveResult.ok) {
+            archiveFailures++;
+            const archiveMessage = toMessage(archiveResult.error);
+            firstArchiveFailure ??= archiveMessage;
+            console.warn("[archive lot] échec pour", student.studentCode, archiveMessage);
+          }
+        } catch (studentError) {
+          generationFailures++;
+          console.error(
+            "[generateLot] échec élève",
+            student.studentCode ?? student.enrollmentId,
+            studentError,
+          );
         }
+      }
+
+      const total = eligible.length - generationFailures;
+
+      if (total === 0) {
+        toast.error(
+          "Aucun bulletin n'a pu être généré — voir la console pour le détail.",
+        );
+        return;
       }
 
       // Téléchargement du PDF combiné
@@ -416,8 +443,13 @@ export function CPMSLBulletinsSection({
       pdf.save(lotFilename);
       pdfSaved = true;
 
+      if (generationFailures > 0) {
+        toast.warning(
+          `${generationFailures} bulletin${generationFailures > 1 ? "s" : ""} non généré${generationFailures > 1 ? "s" : ""} (erreur pendant la génération) — voir la console.`,
+        );
+      }
+
       // EP-003 : remonter l'état d'archivage à l'utilisateur
-      const total = eligible.length;
       const archived = total - archiveFailures;
       if (archiveFailures === 0) {
         toast.success(

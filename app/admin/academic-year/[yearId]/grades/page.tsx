@@ -13,11 +13,11 @@ import { GradesViewContent } from "@/components/school/grades-view-content"
 import type { ApiClassSession } from "@/lib/api/students"
 import type { AcademicYearStep, ClassSession } from "@/lib/api/dashboard"
 import type { ApiClassSubject, ApiEnrollment, ApiGrade, CreateGradePayload } from "@/lib/api/grades"
-import { fetchClassSubjects, fetchEnrollments, fetchGradesForClassSubjectStep, bulkCreateGrades, updateGrade } from "@/lib/api/grades"
+import { fetchClassSubjects, fetchEnrollments, fetchGradesForClassSubjectStep, bulkCreateGrades, updateGrade, deleteGrade } from "@/lib/api/grades"
 import type { UpdateGradePayload } from "@/components/school/cpmsl-grades-grid"
 import { toMessage } from '@/lib/errors'
 
-function buildSaveDescription(created: number, updated: number): string {
+function buildSaveDescription(created: number, updated: number, deleted: number): string {
   const parts: string[] = []
   if (created > 0) {
     const plural = created > 1 ? 's' : ''
@@ -26,6 +26,10 @@ function buildSaveDescription(created: number, updated: number): string {
   if (updated > 0) {
     const plural = updated > 1 ? 's' : ''
     parts.push(`${updated} note${plural} mise${plural} à jour`)
+  }
+  if (deleted > 0) {
+    const plural = deleted > 1 ? 's' : ''
+    parts.push(`${deleted} note${plural} retirée${plural}`)
   }
   return parts.join(', ')
 }
@@ -138,17 +142,18 @@ export default function GradesPage() {
     if (selectedClassSubjectId && id) loadGrades(selectedClassSubjectId, id)
   }
 
-  async function handleSaveGrades(toCreate: CreateGradePayload[], toUpdate: UpdateGradePayload[]) {
+  async function handleSaveGrades(toCreate: CreateGradePayload[], toUpdate: UpdateGradePayload[], toDelete: string[] = []) {
     setSaving(true)
     try {
       const ops: Promise<void>[] = []
       if (toCreate.length > 0) ops.push(bulkCreateGrades(toCreate))
       toUpdate.forEach(u => ops.push(updateGrade(u.gradeId, u.studentScore, u.gradeType)))
+      toDelete.forEach(id => ops.push(deleteGrade(id)))
       await Promise.all(ops)
 
       const created = toCreate.length
       const updated = toUpdate.length
-      const desc = buildSaveDescription(created, updated)
+      const desc = buildSaveDescription(created, updated, toDelete.length)
 
       toast({ title: 'Notes enregistrées', description: desc })
       if (selectedClassSubjectId && selectedStepId) {

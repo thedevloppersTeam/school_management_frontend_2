@@ -84,7 +84,7 @@ interface CPMSLGradesGridProps {
   onSessionChange:        (sessionId: string) => void
   onClassSubjectChange:   (classSubjectId: string) => void
   onStepChange:           (stepId: string) => void
-  onSaveGrades:           (toCreate: CreateGradePayload[], toUpdate: UpdateGradePayload[]) => void
+  onSaveGrades:           (toCreate: CreateGradePayload[], toUpdate: UpdateGradePayload[], toDelete: string[]) => void
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -481,8 +481,13 @@ const hasUnsavedChanges = useMemo(() => {
     )
 
     for (const [enrollmentId, entry] of gradeEntries) {
-      if (!entry.value?.trim() || !entry.isValid) continue
       const existing = existingMap.get(enrollmentId)
+      // Note existante effacée = suppression en attente
+      if (!entry.value?.trim()) {
+        if (existing) return true
+        continue
+      }
+      if (!entry.isValid) continue
       const scoreTyped = parseFloat(entry.value)
       if (!existing) return true
       if (scoreTyped !== Number(existing.studentScore)) return true
@@ -506,8 +511,13 @@ const hasUnsavedChanges = useMemo(() => {
 
   for (const [enrollmentId, studentMap] of sectionEntries) {
     for (const [sectionId, entry] of studentMap) {
-      if (!entry.value?.trim() || !entry.isValid) continue
       const existing = existingSectionMap.get(enrollmentId)?.get(sectionId)
+      // Note existante effacée = suppression en attente
+      if (!entry.value?.trim()) {
+        if (existing) return true
+        continue
+      }
+      if (!entry.isValid) continue
       const scoreTyped = parseFloat(entry.value)
       if (!existing) return true
       if (scoreTyped !== Number(existing.studentScore)) return true
@@ -533,6 +543,9 @@ useUnsavedChangesWarning(hasUnsavedChanges)
 
     const toCreate: CreateGradePayload[] = []
     const toUpdate: UpdateGradePayload[] = []
+    // Une note existante dont la cellule a été vidée est retirée complètement
+    // (pas mise à 0) — comme si elle n'avait jamais été saisie.
+    const toDelete: string[] = []
 
     if (entryMode === 'global') {
       const existingMap = new Map(
@@ -542,9 +555,13 @@ useUnsavedChangesWarning(hasUnsavedChanges)
       )
 
       gradeEntries.forEach((entry, enrollmentId) => {
-        if (!entry.value || !entry.isValid) return
-        const score    = parseFloat(entry.value)
         const existing = existingMap.get(enrollmentId)
+        if (!entry.value?.trim()) {
+          if (existing) toDelete.push(existing.id)
+          return
+        }
+        if (!entry.isValid) return
+        const score = parseFloat(entry.value)
         if (!existing) {
           toCreate.push({ enrollmentId, classSubjectId: selectedClassSubjectId, stepId: selectedStepId, studentScore: score, gradeType: 'EXAM' })
         } else if (score !== Number(existing.studentScore)) {
@@ -567,9 +584,13 @@ useUnsavedChangesWarning(hasUnsavedChanges)
         studentMap.forEach((entry, sectionId) => {
           // Don't write grades for sections explicitly excluded for this student.
           if (excluded.has(sectionId)) return
-          if (!entry.value || !entry.isValid) return
-          const score    = parseFloat(entry.value)
           const existing = existingSectionMap.get(enrollmentId)?.get(sectionId)
+          if (!entry.value?.trim()) {
+            if (existing) toDelete.push(existing.id)
+            return
+          }
+          if (!entry.isValid) return
+          const score = parseFloat(entry.value)
           if (!existing) {
             toCreate.push({ enrollmentId, classSubjectId: selectedClassSubjectId, sectionId, stepId: selectedStepId, studentScore: score, gradeType: 'EXAM' })
           } else if (score !== Number(existing.studentScore)) {
@@ -579,8 +600,8 @@ useUnsavedChangesWarning(hasUnsavedChanges)
       })
     }
 
-    if (toCreate.length === 0 && toUpdate.length === 0) return
-    onSaveGrades(toCreate, toUpdate)
+    if (toCreate.length === 0 && toUpdate.length === 0 && toDelete.length === 0) return
+    onSaveGrades(toCreate, toUpdate, toDelete)
   }
 
   const headerLabel = useMemo(() => {
@@ -606,8 +627,10 @@ useUnsavedChangesWarning(hasUnsavedChanges)
       const hasValue   = !!entry?.value?.trim()
       const hasError   = hasValue && entry && !entry.isValid
       const isModified = existing && hasValue && !hasError && parseFloat(entry!.value) !== Number(existing.studentScore)
+      // Note existante effacée → suppression en attente d'enregistrement
+      const isCleared  = existing && !hasValue
 
-      if (isModified) return 'modified'
+      if (isModified || isCleared) return 'modified'
       if (existing)   return 'saved'
       if (hasValue && !hasError) return 'entered'
       return 'empty'
@@ -637,6 +660,11 @@ useUnsavedChangesWarning(hasUnsavedChanges)
       if (value) anyValue = true
 
       if (existing && value && entry?.isValid && parseFloat(value) !== Number(existing.studentScore)) {
+        anyModified = true
+        allSavedAndUnchanged = false
+      }
+      // Note de section existante effacée → suppression en attente
+      if (existing && !value) {
         anyModified = true
         allSavedAndUnchanged = false
       }

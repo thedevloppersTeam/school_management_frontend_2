@@ -152,30 +152,56 @@ export function prepareBulletinPdfNode(root: HTMLElement): HTMLElement {
   return bulletin
 }
 
+// Toutes les attentes d'assets sont bornées : une police qui ne se charge
+// jamais ou une image sans src (complete=true, naturalWidth=0, aucun événement
+// load/error émis — cas typique d'une photo d'élève absente) ne doit jamais
+// geler la génération d'un bulletin, a fortiori un lot entier.
+const FONTS_WAIT_TIMEOUT_MS = 3_000
+const IMAGE_WAIT_TIMEOUT_MS = 10_000
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | void> {
+  return Promise.race([
+    promise,
+    new Promise<void>((resolve) => setTimeout(resolve, ms)),
+  ])
+}
+
 export async function waitForBulletinPdfAssets(root: HTMLElement): Promise<void> {
   if (document.fonts?.ready) {
-    await document.fonts.ready
+    await withTimeout(document.fonts.ready, FONTS_WAIT_TIMEOUT_MS)
   }
 
   const images = Array.from(root.querySelectorAll<HTMLImageElement>("img"))
 
   await Promise.all(
     images.map(async (image) => {
+      // Pas de src exploitable → aucun événement ne viendra jamais : on ignore.
+      const src = image.getAttribute("src")
+      if (!src) return
+
       if (image.complete && image.naturalWidth > 0) {
         if (typeof image.decode === "function") {
-          await image.decode().catch(() => undefined)
+          await withTimeout(image.decode().catch(() => undefined), IMAGE_WAIT_TIMEOUT_MS)
         }
         return
       }
 
       await new Promise<void>((resolve) => {
-        const done = () => resolve()
+        const timer = setTimeout(() => {
+          image.removeEventListener("load", done)
+          image.removeEventListener("error", done)
+          resolve()
+        }, IMAGE_WAIT_TIMEOUT_MS)
+        const done = () => {
+          clearTimeout(timer)
+          resolve()
+        }
         image.addEventListener("load", done, { once: true })
         image.addEventListener("error", done, { once: true })
       })
 
       if (typeof image.decode === "function") {
-        await image.decode().catch(() => undefined)
+        await withTimeout(image.decode().catch(() => undefined), IMAGE_WAIT_TIMEOUT_MS)
       }
     }),
   )

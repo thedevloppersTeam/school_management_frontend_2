@@ -213,23 +213,36 @@ function decimalToNumber(raw: unknown, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback
 }
 
-function buildSubjectEntries(cs: ApiClassSubject, bucket: GradeBucket | undefined): RubriqueEntry[] {
+function buildSubjectEntries(
+  cs: ApiClassSubject,
+  bucket: GradeBucket | undefined,
+  excludedSectionIds?: Set<string>,
+): RubriqueEntry[] {
   const subject = cs.subject
   const subjectMax = decimalToNumber(subject.maxScore, 0)
 
-  if (!subject.hasSections || subject.sections.length === 0) {
+  // Sections dispensées pour cette étape : elles sont totalement retirées
+  // (ni au numérateur, ni au dénominateur) → elles ne contribuent pas à la
+  // moyenne de CETTE étape uniquement.
+  const activeSections = subject.sections.filter(
+    (sec) => !excludedSectionIds?.has(sec.id),
+  )
+
+  if (!subject.hasSections || activeSections.length === 0) {
     const note = avg(bucket?.direct ?? [])
     return [{ name: subject.name, note, coeff: note !== null ? subjectMax : undefined, isParent: false }]
   }
 
-  const hasAnySectionGrade = Array.from(bucket?.sections.values() ?? []).some(arr => arr.length > 0)
+  const hasAnySectionGrade = activeSections.some(
+    (sec) => (bucket?.sections.get(sec.id)?.length ?? 0) > 0,
+  )
   if (!hasAnySectionGrade) {
     const note = avg(bucket?.direct ?? [])
     return [{ name: subject.name, note, coeff: note !== null ? subjectMax : undefined, isParent: false }]
   }
 
   const entries: RubriqueEntry[] = [{ name: subject.name, isParent: true }]
-  for (const sec of subject.sections) {
+  for (const sec of activeSections) {
     const scores   = bucket?.sections.get(sec.id) ?? []
     const maxScore = decimalToNumber(sec.maxScore, 0)
     const note     = avg(scores)
@@ -249,7 +262,11 @@ function pushToRubrique(set: RubriqueSet, code: string, entries: RubriqueEntry[]
   else if (code === 'R3') set.r3.push(...entries)
 }
 
-function buildRubriques(classSubjects: ApiClassSubject[], gradeIndex: GradeIndex): RubriqueSet {
+function buildRubriques(
+  classSubjects: ApiClassSubject[],
+  gradeIndex: GradeIndex,
+  excludedSectionIds?: Set<string>,
+): RubriqueSet {
   const set: RubriqueSet = {
     r1: [], r1Name: normalizeRubriqueLabel(1),
     r2: [], r2Name: normalizeRubriqueLabel(2),
@@ -258,10 +275,43 @@ function buildRubriques(classSubjects: ApiClassSubject[], gradeIndex: GradeIndex
   for (const cs of classSubjects) {
     const { rubric } = cs.subject
     const code = rubric?.code ?? ''
-    const entries = buildSubjectEntries(cs, gradeIndex.get(cs.id))
+    const entries = buildSubjectEntries(cs, gradeIndex.get(cs.id), excludedSectionIds)
     pushToRubrique(set, code, entries)
   }
   return set
+}
+
+// ── Dispenses (exclusions de sections) par étape ────────────────────────────
+// Une dispense est scoped par (élève + matière + section + étape). Pour le
+// calcul du bulletin on charge, en un seul appel, toutes les dispenses d'une
+// session pour UNE étape, puis on retire les sections dispensées de la moyenne
+// de cette étape uniquement — jamais des autres étapes de l'année.
+type SessionStepExclusions = Map<string, Set<string>> // enrollmentId -> Set<sectionId>
+const exclusionsCache = new Map<string, Promise<SessionStepExclusions>>()
+
+function fetchSessionStepExclusions(
+  classSessionId: string,
+  stepId: string,
+): Promise<SessionStepExclusions> {
+  const cacheKey = `${classSessionId}:${stepId}`
+  const cached = exclusionsCache.get(cacheKey)
+  if (cached) return cached
+
+  const promise = (async () => {
+    const rows = await safeFetch<Array<{ enrollmentId: string; sectionId: string }>>(
+      `/api/enrollments/excluded-sections?classSessionId=${classSessionId}&stepId=${stepId}`,
+      [],
+    )
+    const map: SessionStepExclusions = new Map()
+    for (const row of rows) {
+      if (!map.has(row.enrollmentId)) map.set(row.enrollmentId, new Set())
+      map.get(row.enrollmentId)!.add(row.sectionId)
+    }
+    return map
+  })()
+
+  exclusionsCache.set(cacheKey, promise)
+  return promise
 }
 
 async function getClassAverages(params: {
@@ -274,9 +324,12 @@ async function getClassAverages(params: {
   if (cached) return cached
 
   const promise = (async () => {
-    const enrollments = await apiFetch<EnrollmentForClassAverage[]>(
-      `/api/enrollments?classSessionId=${params.classSessionId}&status=ACTIVE`,
-    )
+    const [enrollments, exclusions] = await Promise.all([
+      apiFetch<EnrollmentForClassAverage[]>(
+        `/api/enrollments?classSessionId=${params.classSessionId}&status=ACTIVE`,
+      ),
+      fetchSessionStepExclusions(params.classSessionId, params.stepId),
+    ])
 
     const averages = await Promise.all(
       enrollments.map(async (enrollment) => {
@@ -285,7 +338,7 @@ async function getClassAverages(params: {
             `/api/grades/enrollment/${enrollment.id}?stepId=${params.stepId}`,
           )
           const gradeIndex = buildGradeIndex(grades)
-          const rubriques = buildRubriques(params.classSubjects, gradeIndex)
+          const rubriques = buildRubriques(params.classSubjects, gradeIndex, exclusions.get(enrollment.id))
           return calculateBulletinAverages({
             rubrique1: rubriques.r1,
             rubrique2: rubriques.r2,
@@ -307,6 +360,7 @@ async function getClassAverages(params: {
 
 async function calculateGeneralAverageForEnrollment(params: {
   enrollmentId: string
+  classSessionId: string
   academicYearId: string
   selectedStepId: string
   classSubjects: ApiClassSubject[]
@@ -324,11 +378,16 @@ async function calculateGeneralAverageForEnrollment(params: {
   const averages = await Promise.all(
     eligibleSteps.map(async (step) => {
       try {
-        const grades = await apiFetch<ApiGrade[]>(
-          `/api/grades/enrollment/${params.enrollmentId}?stepId=${step.id}`,
-        )
+        // Dispenses propres à CETTE étape : elles n'affectent que la moyenne
+        // de cette étape dans le calcul de la moyenne générale.
+        const [grades, exclusions] = await Promise.all([
+          apiFetch<ApiGrade[]>(
+            `/api/grades/enrollment/${params.enrollmentId}?stepId=${step.id}`,
+          ),
+          fetchSessionStepExclusions(params.classSessionId, step.id),
+        ])
         const gradeIndex = buildGradeIndex(grades)
-        const rubriques = buildRubriques(params.classSubjects, gradeIndex)
+        const rubriques = buildRubriques(params.classSubjects, gradeIndex, exclusions.get(params.enrollmentId))
         return calculateBulletinAverages({
           rubrique1: rubriques.r1,
           rubrique2: rubriques.r2,
@@ -526,6 +585,7 @@ export async function buildBulletinData(params: {
     promotionPhotos,
     enrollmentContext,
     academicYear,
+    stepExclusions,
   ] = await Promise.all([
     apiFetch<StudentPayload>(`/api/students/${studentId}`),
     fetchClassSubjects(classSessionId),
@@ -536,6 +596,7 @@ export async function buildBulletinData(params: {
     safeFetch<PromotionPhotoPayload[]>(`/api/promotion-photos?studentId=${studentId}`, []),
     safeFetch<EnrollmentContextPayload | null>(`/api/enrollments/${enrollmentId}`, null),
     safeFetch<AcademicYearPayload | null>(`/api/academic-years/${yearId}`, null),
+    fetchSessionStepExclusions(classSessionId, stepId),
   ])
 
   // 2. Normaliser
@@ -545,8 +606,9 @@ export async function buildBulletinData(params: {
   // 3. Index des notes
   const gradeIndex = buildGradeIndex(allGrades)
 
-  // 4. Rubriques
-  const { r1, r1Name, r2, r2Name, r3, r3Name } = buildRubriques(classSubjects, gradeIndex)
+  // 4. Rubriques — les sections dispensées pour cette étape sont retirées
+  const excludedForStep = stepExclusions.get(enrollmentId)
+  const { r1, r1Name, r2, r2Name, r3, r3Name } = buildRubriques(classSubjects, gradeIndex, excludedForStep)
 
   // 5. Resultats calcules CPMSL, centralises hors JSX.
   const averages = calculateBulletinAverages({
@@ -564,6 +626,7 @@ export async function buildBulletinData(params: {
   const moyenneGenerale = includeGeneralAverage
     ? formatBulletinNumber(await calculateGeneralAverageForEnrollment({
         enrollmentId,
+        classSessionId,
         academicYearId: yearId,
         selectedStepId: stepId,
         classSubjects,
