@@ -142,8 +142,9 @@ export function CPMSLGradesGrid({
   const [sectionEntries, setSectionEntries] = useState<Map<string, Map<string, GradeEntry>>>(new Map())
   const [entryMode, setEntryMode] = useState<'global' | 'sections'>('global')
 
-  // Per-enrollment excluded sections (loaded once per session). Sections
-  // present here drop out of the row total denominator and disable the cell.
+  // Exclusions de sous-matières pour le contexte courant.
+  // IMPORTANT : une dispense est scoped par élève + matière + étape/période.
+  // Elle ne doit pas être chargée/appliquée globalement sur toute l'année.
   const [exclusionsByEnrollment, setExclusionsByEnrollment] = useState<Map<string, Set<string>>>(new Map())
 
   // Exclusions-editor modal state
@@ -279,12 +280,24 @@ export function CPMSLGradesGrid({
 
   useEffect(() => { setCurrentPage(1) }, [selectedSessionId, selectedClassSubjectId, selectedStepId])
 
-  // Load every (enrollment × excluded-section) pair for the current session in
-  // one round-trip, then index it by enrollment id.
+  // Charge les exclusions uniquement pour la classe + matière + étape active.
+  // Avant, le fetch ne passait que classSessionId : la même dispense suivait
+  // l'élève sur toutes les étapes de l'année. Le stepId est maintenant
+  // obligatoire dans le contrat frontend/backend.
   useEffect(() => {
-    if (!selectedSessionId) { setExclusionsByEnrollment(new Map()); return }
+    if (!selectedSessionId || !selectedClassSubjectId || !selectedStepId) {
+      setExclusionsByEnrollment(new Map())
+      return
+    }
+
     let cancelled = false
-    fetch(`/api/enrollments/excluded-sections?classSessionId=${selectedSessionId}`, { credentials: 'include' })
+    const params = new URLSearchParams({
+      classSessionId: selectedSessionId,
+      classSubjectId: selectedClassSubjectId,
+      stepId: selectedStepId,
+    })
+
+    fetch(`/api/enrollments/excluded-sections?${params.toString()}`, { credentials: 'include' })
       .then((r) => (r.ok ? r.json() : []))
       .then((rows: Array<{ enrollmentId: string; sectionId: string }>) => {
         if (cancelled) return
@@ -298,7 +311,7 @@ export function CPMSLGradesGrid({
       })
       .catch(() => { if (!cancelled) setExclusionsByEnrollment(new Map()) })
     return () => { cancelled = true }
-  }, [selectedSessionId])
+  }, [selectedSessionId, selectedClassSubjectId, selectedStepId])
 
   // ── Exclusions editor handlers ────────────────────────────────────────────
   function openExclusionsEditor(enrollment: ApiEnrollment) {
@@ -319,18 +332,19 @@ export function CPMSLGradesGrid({
     if (!exclusionTarget) return
     setSavingExclusions(true)
     try {
-      // The draft only covers sections of the CURRENT subject. Preserve any
-      // exclusions of OTHER subjects (they aren't visible in this dialog).
-      const previous = exclusionsByEnrollment.get(exclusionTarget.id) ?? new Set<string>()
-      const currentSubjectSectionIds = new Set(subjectSections.map((s) => s.id))
-      const preservedFromOtherSubjects = [...previous].filter((id) => !currentSubjectSectionIds.has(id))
-      const finalSet = new Set<string>([...preservedFromOtherSubjects, ...exclusionDraft])
+      // Le draft concerne uniquement la matière + l'étape actuellement sélectionnées.
+      // On n'envoie donc pas une liste globale annuelle d'exclusions.
+      const finalSet = new Set<string>(exclusionDraft)
 
       const res = await fetch(`/api/enrollments/${exclusionTarget.id}/excluded-sections`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sectionIds: [...finalSet] }),
+        body: JSON.stringify({
+          classSubjectId: selectedClassSubjectId,
+          stepId: selectedStepId,
+          sectionIds: [...finalSet],
+        }),
       })
       if (!res.ok) throw new Error((await res.json().catch(() => null))?.message ?? 'Échec')
 
@@ -1342,7 +1356,7 @@ useUnsavedChangesWarning(hasUnsavedChanges)
 
       {renderMainContent()}
 
-      {/* Exclusions editor — per-student sub-subject opt-out */}
+      {/* Exclusions editor — dispense scoped par élève + matière + étape */}
       <Dialog open={!!exclusionTarget} onOpenChange={(o) => { if (!o) setExclusionTarget(null) }}>
         <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
@@ -1352,8 +1366,8 @@ useUnsavedChangesWarning(hasUnsavedChanges)
                 <>
                   {exclusionTarget.student.user.firstname} {exclusionTarget.student.user.lastname}
                   {selectedClassSubject && <> · {selectedClassSubject.subject.name}</>}.
-                  Décochez une sous-matière pour que l&apos;élève ne soit <strong>pas évalué</strong> dessus —
-                  son maximum baisse d&apos;autant et la moyenne est calculée sur le nouveau total.
+                  Décochez une sous-matière pour que l&apos;élève ne soit <strong>pas évalué</strong> dessus
+                  uniquement pour cette étape/période — son maximum baisse d&apos;autant et la moyenne est calculée sur le nouveau total.
                 </>
               )}
             </DialogDescription>

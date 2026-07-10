@@ -80,9 +80,20 @@ type BehaviorPayload = {
     attitudeId?: string | null
     value?: unknown
   }>
+
+  // Champs historiques déjà lus depuis la table student_behaviors
   absences?: unknown
   retards?: unknown
   devoirsManques?: unknown
+
+  // Nouveaux champs numériques — mêmes conventions que les champs ci-dessus.
+  // Le backend Prisma les renvoie normalement en camelCase. Les variantes
+  // snake_case sont acceptées plus bas pour garder une tolérance si une route
+  // renvoie un payload brut SQL ou ancien.
+  leconsNonSues?: unknown
+  respectUniforme?: unknown
+  discipline?: unknown
+
   pointsForts?: string | null
   defis?: string | null
   remarque?: string | null
@@ -354,6 +365,86 @@ const DEFAULT_BEHAVIOUR_ITEMS = [
   "Se décourage facilement lorsqu'un effort est nécessaire",
 ]
 
+type BehaviorExtraKey = 'LECONS_NON_SUES' | 'RESPECT_UNIFORME' | 'DISCIPLINE'
+type BehaviorExtraMap = Record<BehaviorExtraKey, string>
+
+const EMPTY_BEHAVIOR_EXTRAS: BehaviorExtraMap = {
+  LECONS_NON_SUES: '',
+  RESPECT_UNIFORME: '',
+  DISCIPLINE: '',
+}
+
+function getBehaviorRecord(behavior: BehaviorPayload | null): Record<string, unknown> | null {
+  return behavior && typeof behavior === 'object'
+    ? behavior as Record<string, unknown>
+    : null
+}
+
+function formatBehaviorValue(value: unknown): string | null {
+  if (value === null || value === undefined) return null
+
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? String(value) : null
+  }
+
+  if (typeof value === 'bigint') return value.toString()
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    return trimmed === '' ? null : trimmed
+  }
+
+  if (typeof value === 'object') {
+    // Prisma Decimal peut parfois arriver sous forme d'objet selon le client.
+    const decimalValue = decimalToNumber(value, Number.NaN)
+    return Number.isFinite(decimalValue) ? String(decimalValue) : null
+  }
+
+  return null
+}
+
+function readBehaviorField(
+  behavior: BehaviorPayload | null,
+  paths: string[],
+): string | null {
+  const record = getBehaviorRecord(behavior)
+  if (!record) return null
+
+  for (const path of paths) {
+    const value = path.includes('.') ? readPath(record, path) : record[path]
+    const formatted = formatBehaviorValue(value)
+    if (formatted !== null) return formatted
+  }
+
+  return null
+}
+
+function parseBehaviorExtrasFromRemark(remarque: string | null | undefined): {
+  extras: BehaviorExtraMap
+  cleanRemarque: string
+} {
+  const source = remarque ?? ''
+  const markerPattern = /\[\[\s*(LECONS_NON_SUES|RESPECT_UNIFORME|DISCIPLINE)\s*=\s*([^\]]*)\]\]/gi
+  const extras: BehaviorExtraMap = { ...EMPTY_BEHAVIOR_EXTRAS }
+
+  let match: RegExpExecArray | null
+  while ((match = markerPattern.exec(source)) !== null) {
+    const key = match[1].toUpperCase() as BehaviorExtraKey
+    const value = match[2].trim()
+    if (!extras[key] && value) extras[key] = value
+  }
+
+  const cleanRemarque = source
+    .replace(markerPattern, '')
+    .split(/\r?\n/)
+    .map((line) => line.trimEnd())
+    .filter((line, index, lines) => line.trim() !== '' || (index > 0 && index < lines.length - 1))
+    .join('\n')
+    .trim()
+
+  return { extras, cleanRemarque }
+}
+
 function buildComportementItems(attitudes: AttitudePayload[], behavior: BehaviorPayload | null): ComportementItem[] {
   const source = attitudes.length > 0
     ? attitudes.map((att) => ({ id: att.id, label: att.label }))
@@ -367,17 +458,35 @@ function buildComportementItems(attitudes: AttitudePayload[], behavior: Behavior
 }
 
 function buildComportement(behavior: BehaviorPayload | null, attitudes: AttitudePayload[]) {
+  const { extras, cleanRemarque } = parseBehaviorExtrasFromRemark(behavior?.remarque)
+
+  // Même logique que les champs déjà pris en base : on lit d'abord la colonne
+  // retournée par /api/behaviors, puis seulement en dernier recours les anciens
+  // marqueurs qui avaient été stockés temporairement dans remarque.
+  const absences = readBehaviorField(behavior, ['absences']) ?? '—'
+  const retards = readBehaviorField(behavior, ['retards']) ?? '—'
+  const devoirsNonRemis = readBehaviorField(behavior, ['devoirsManques', 'devoirs_manques']) ?? '—'
+  const leconsNonSues = readBehaviorField(behavior, ['leconsNonSues', 'lecons_non_sues'])
+    ?? formatBehaviorValue(extras.LECONS_NON_SUES)
+    ?? '—'
+  const uniforme = readBehaviorField(behavior, ['respectUniforme', 'respect_uniforme', 'uniforme'])
+    ?? formatBehaviorValue(extras.RESPECT_UNIFORME)
+    ?? '—'
+  const discipline = readBehaviorField(behavior, ['discipline'])
+    ?? formatBehaviorValue(extras.DISCIPLINE)
+    ?? '—'
+
   return {
-    absences:        behavior?.absences        != null ? String(behavior.absences)        : '—',
-    retards:         behavior?.retards          != null ? String(behavior.retards)          : '—',
-    devoirsNonRemis: behavior?.devoirsManques   != null ? String(behavior.devoirsManques)   : '—',
-    leconsNonSues:   '—',
-    uniforme:        '—',
-    discipline:      '—',
-    items:           buildComportementItems(attitudes, behavior),
-    pointsForts:     behavior?.pointsForts ?? '',
-    defis:           behavior?.defis        ?? '',
-    remarque:        behavior?.remarque     ?? '',
+    absences,
+    retards,
+    devoirsNonRemis,
+    leconsNonSues,
+    uniforme,
+    discipline,
+    items:       buildComportementItems(attitudes, behavior),
+    pointsForts: behavior?.pointsForts ?? '',
+    defis:       behavior?.defis        ?? '',
+    remarque:    cleanRemarque,
   }
 }
 

@@ -51,6 +51,9 @@ interface ApiBehavior {
   absences: number | null
   retards: number | null
   devoirsManques: number | null
+  leconsNonSues: number | null
+  respectUniforme: number | null
+  discipline: number | null
   pointsForts: string | null
   defis: string | null
   remarque: string | null
@@ -145,26 +148,10 @@ function extractBehaviorExtrasFromRemarque(remarque: string | null): BehaviorExt
   return values
 }
 
-function buildRemarqueWithBehaviorExtras(params: {
-  cleanRemarque: string
-  leconsNonSues: string
-  respectUniforme: string
-  discipline: string
-}): string | null {
-  const lines: string[] = []
-  const leconsNonSues = params.leconsNonSues.trim()
-  const respectUniforme = params.respectUniforme.trim()
-  const discipline = params.discipline.trim()
-  const cleanRemarque = params.cleanRemarque.trim()
-
-  if (leconsNonSues !== "") lines.push(`[[LECONS_NON_SUES=${leconsNonSues}]]`)
-  if (respectUniforme !== "") lines.push(`[[RESPECT_UNIFORME=${respectUniforme}]]`)
-  if (discipline !== "") lines.push(`[[DISCIPLINE=${discipline}]]`)
-  if (cleanRemarque !== "") lines.push(cleanRemarque)
-
-  return lines.length > 0 ? lines.join("\n") : null
-}
-
+// Ancienne logique supprimée : on ne cache plus les valeurs numériques dans `remarque`.
+// Les anciennes remarques contenant des marqueurs sont encore lues par
+// extractBehaviorExtrasFromRemarque(), mais à la sauvegarde les valeurs sont
+// envoyées dans des colonnes séparées.
 function parseNullableInt(value: string): number | null {
   return value.trim() === "" ? null : Number.parseInt(value, 10)
 }
@@ -193,17 +180,18 @@ function buildBehaviorPayload(entry: BehaviorEntry, selectedStepId: string) {
   return {
     enrollmentId: entry.enrollmentId,
     stepId: selectedStepId,
+
     absences: parseNullableInt(entry.absences),
     retards: parseNullableInt(entry.retards),
     devoirsManques: parseNullableInt(entry.devoirsManques),
+    leconsNonSues: parseNullableInt(entry.leconsNonSues),
+    respectUniforme: parseNullableInt(entry.respectUniforme),
+    discipline: parseNullableInt(entry.discipline),
+
     pointsForts: entry.pointsForts.trim() || null,
     defis: entry.defis.trim() || null,
-    remarque: buildRemarqueWithBehaviorExtras({
-      cleanRemarque: entry.remarque,
-      leconsNonSues: entry.leconsNonSues,
-      respectUniforme: entry.respectUniforme,
-      discipline: entry.discipline,
-    }),
+    remarque: entry.remarque.trim() || null,
+
     attitudeResponses,
   }
 }
@@ -242,9 +230,9 @@ function createBehaviorEntry(
     absences:          existing?.absences?.toString()       ?? "",
     retards:           existing?.retards?.toString()        ?? "",
     devoirsManques:    existing?.devoirsManques?.toString() ?? "",
-    leconsNonSues:     parsedExtras.leconsNonSues,
-    respectUniforme:   parsedExtras.respectUniforme,
-    discipline:        parsedExtras.discipline,
+    leconsNonSues:     existing?.leconsNonSues?.toString() ?? parsedExtras.leconsNonSues,
+    respectUniforme:   existing?.respectUniforme?.toString() ?? parsedExtras.respectUniforme,
+    discipline:        existing?.discipline?.toString() ?? parsedExtras.discipline,
     attitudeResponses: attMap,
     pointsForts:       existing?.pointsForts ?? "",
     defis:             existing?.defis       ?? "",
@@ -487,12 +475,18 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
           if (e.behaviorId) {
             const updateBody = {
               stepId: body.stepId,
+
               absences: body.absences,
               retards: body.retards,
               devoirsManques: body.devoirsManques,
+              leconsNonSues: body.leconsNonSues,
+              respectUniforme: body.respectUniforme,
+              discipline: body.discipline,
+
               pointsForts: body.pointsForts,
               defis: body.defis,
               remarque: body.remarque,
+
               attitudeResponses: body.attitudeResponses,
             }
             const res = await fetch(`/api/behaviors/update/${e.behaviorId}`, {
@@ -500,20 +494,30 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(updateBody),
             })
-            if (!res.ok) throw new Error(`HTTP ${res.status}`)
+            if (!res.ok) {
+              const errorBody = await res.json().catch(() => null)
+              throw new Error(errorBody?.error || errorBody?.message || `HTTP ${res.status}`)
+            }
           } else {
             const res = await fetch("/api/behaviors/create", {
               method: "POST", credentials: "include",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(body),
             })
-            if (!res.ok) throw new Error(`HTTP ${res.status}`)
-            const created = await res.json().catch(() => null) as Partial<ApiBehavior> | null
-            if (created?.id) {
+            if (!res.ok) {
+              const errorBody = await res.json().catch(() => null)
+              throw new Error(errorBody?.error || errorBody?.message || `HTTP ${res.status}`)
+            }
+            const created = await res.json().catch(() => null) as
+              | (Partial<ApiBehavior> & { behavior?: Partial<ApiBehavior>; data?: Partial<ApiBehavior> })
+              | null
+
+            const createdId = created?.id ?? created?.behavior?.id ?? created?.data?.id
+            if (createdId) {
               setEntries(prev => {
                 const next  = new Map(prev)
                 const entry = next.get(e.enrollmentId)
-                if (entry) next.set(e.enrollmentId, { ...entry, behaviorId: created.id ?? entry.behaviorId })
+                if (entry) next.set(e.enrollmentId, { ...entry, behaviorId: createdId })
                 return next
               })
             }

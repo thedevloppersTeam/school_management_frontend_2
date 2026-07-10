@@ -1,8 +1,8 @@
 /**
- * GET /api/enrollments/excluded-sections?classSessionId=…
- * Returns every enrollment×section exclusion in the given class session, so
- * the consultation grid can fetch them in a single request instead of one per
- * student.
+ * GET /api/enrollments/excluded-sections?classSessionId=…&classSubjectId=…&stepId=…
+ * Returns every enrollment×section exclusion for the selected class session,
+ * subject and step. The stepId scope is required so a dispense applies only to
+ * the current period/étape, not to the whole academic year.
  */
 import { NextRequest } from 'next/server'
 import { backendFetch } from '@/lib/backend'

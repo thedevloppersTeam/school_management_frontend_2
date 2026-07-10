@@ -32,6 +32,27 @@ function parseDisplayNumber(value: string | number | null | undefined): number |
   return Number.isFinite(parsed) ? parsed : null
 }
 
+function cleanBehaviorRemark(value: string | null | undefined): string {
+  if (!value) return ""
+
+  return value
+    .replace(
+      /\[\[\s*(LECONS_NON_SUES|RESPECT_UNIFORME|DISCIPLINE)\s*=\s*[^\]]*\]\]\s*/gi,
+      "",
+    )
+    .split(/\r?\n/)
+    .map((line) => line.trimEnd())
+    .filter((line, index, lines) => line.trim() !== "" || (index > 0 && index < lines.length - 1))
+    .join("\n")
+    .trim()
+}
+
+function displayBehaviorMetric(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return "—"
+  const text = String(value).trim()
+  return text === "" ? "—" : text
+}
+
 
 
 const PDF_HEADER_SERIF_FONT =
@@ -431,6 +452,9 @@ function getCycleLabel(level: string): string {
   return ""
 }
 
+function formatLevelForBulletin(level: string): string {
+  return level.replace(/\bA\.?\s*F\.?\b/gi, "A.F")
+}
 function extractStepNumber(period: string): number | null {
   const match = period.match(/\d+/)
   if (!match) return null
@@ -463,7 +487,7 @@ function BulletinHeader({ data }: Readonly<{ data: BulletinData }>) {
   const periodDetails = getPeriodDetails(data.periode)
   const firstName = data.prenoms || "—"
   const lastName = (data.nom || "—").toLocaleUpperCase("fr")
-  const level = data.niveau || "—"
+  const level = formatLevelForBulletin(data.niveau || "—")
   const period = data.periode || "—"
   const birthDate = data.dateNaissance || "—"
   const academicYear = data.anneeScolaire || "—"
@@ -492,9 +516,9 @@ function BulletinHeader({ data }: Readonly<{ data: BulletinData }>) {
           ) : (
             <div className="bulletin-logo-placeholder" aria-hidden="true" />
           )}
-          <div className="bulletin-founded" aria-label="Depuis 1998!">
-            <PdfSvgTextLine value="Depuis 1998!" align="middle" fontFamily={PDF_HEADER_FOUNDED_FONT} />
-          </div>
+<div className="bulletin-founded" aria-label="Depuis 1993!">
+  <PdfSvgTextLine value="Depuis 1993!" align="middle" fontFamily={PDF_HEADER_FOUNDED_FONT} />
+</div>
         </div>
 
         <div className="bulletin-header-spacer" aria-hidden="true" />
@@ -638,6 +662,15 @@ function BulletinHeader({ data }: Readonly<{ data: BulletinData }>) {
 
 export function BulletinPrintable({ data }: { data: BulletinData; renderMode?: "preview" | "pdf" }) {
   const { etablissement: etab, comportement: comp } = data
+  const behaviorMetrics = {
+    absences: displayBehaviorMetric(comp.absences),
+    retards: displayBehaviorMetric(comp.retards),
+    devoirsNonRemis: displayBehaviorMetric(comp.devoirsNonRemis),
+    leconsNonSues: displayBehaviorMetric(comp.leconsNonSues),
+    uniforme: displayBehaviorMetric(comp.uniforme),
+    discipline: displayBehaviorMetric(comp.discipline),
+  }
+  const cleanRemarque = cleanBehaviorRemark(comp.remarque)
   const col1 = comp.items.filter((c) => c.col === 1)
   const col2 = comp.items.filter((c) => c.col === 2)
   const col3 = comp.items.filter((c) => c.col === 3)
@@ -678,7 +711,7 @@ export function BulletinPrintable({ data }: { data: BulletinData; renderMode?: "
               <MoyLine label="Moyenne classe sur 10" value={moyClasse} valueTone={colorClass(moyClasseNumber, 10)} variant="general-class" />
               {moyenneGenerale ? (
                 <MoyLine
-                  label="Moyenne générale sur 10"
+                  label="Moyenne générale"
                   value={moyenneGenerale}
                   valueTone={colorClass(moyenneGeneraleNumber, 10)}
                   variant="general"
@@ -710,16 +743,16 @@ export function BulletinPrintable({ data }: { data: BulletinData; renderMode?: "
 
           <div className="behavior-metrics-grid">
             <div>
-              <BehaviorMetricLine label={"Nbre d'absences"} value={comp.absences} labelAlign="start" />
-              <BehaviorMetricLine label="Nbre de retards" value={comp.retards} labelAlign="start" />
+              <BehaviorMetricLine label={"Nbre d'absences"} value={behaviorMetrics.absences} labelAlign="start" />
+              <BehaviorMetricLine label="Nbre de retards" value={behaviorMetrics.retards} labelAlign="start" />
             </div>
             <div>
-              <BehaviorMetricLine label="Nbre de devoirs non remis" value={comp.devoirsNonRemis} />
-              <BehaviorMetricLine label="Nbre de leçons non sues" value={comp.leconsNonSues} />
+              <BehaviorMetricLine label="Nbre de devoirs non remis" value={behaviorMetrics.devoirsNonRemis} />
+              <BehaviorMetricLine label="Nbre de leçons non sues" value={behaviorMetrics.leconsNonSues} />
             </div>
             <div>
-              <BehaviorMetricLine label={"Respect des prescrits de l'uniforme"} value={comp.uniforme ?? "—"} />
-              <BehaviorMetricLine label="Discipline" value={comp.discipline ?? "—"} />
+              <BehaviorMetricLine label={"Respect des prescrits de l'uniforme"} value={behaviorMetrics.uniforme} />
+              <BehaviorMetricLine label="Discipline" value={behaviorMetrics.discipline} />
             </div>
           </div>
 
@@ -735,7 +768,7 @@ export function BulletinPrintable({ data }: { data: BulletinData; renderMode?: "
             <div aria-hidden="true" />
             <div className="remark-block">
               <div className="h-maroon"><PdfInlineSvgText value="Remarque" align="start" /></div>
-              <p className="plain">{comp.remarque || " "}</p>
+              <p className="plain">{cleanRemarque || " "}</p>
             </div>
             <div aria-hidden="true" />
           </div>
@@ -744,10 +777,17 @@ export function BulletinPrintable({ data }: { data: BulletinData; renderMode?: "
           <div className="bottom-area">
             <div className="legend-col">
               <div className="legend-title" data-pdf-anchor="footer-legend"><PdfInlineSvgText value="Légende des notes et des couleurs" align="start" /></div>
-              <div className="legend">
-                90 - 100 : <b>A+ = Excellent</b>&nbsp;&nbsp;&nbsp;&nbsp;78 - 84 : <b>B+ = Très bien</b>&nbsp;&nbsp;&nbsp;69 - 74 : <b>C+ = Bien</b>&nbsp;&nbsp;&nbsp;51 - 59&nbsp; : <b style={{ color: "var(--orange)" }}>D = Déficient</b><br />
-                85 - 89&nbsp; : <b>A = Excellent</b>&nbsp;&nbsp;&nbsp;&nbsp;75 - 77 : <b>B = Très bien</b>&nbsp;&nbsp;&nbsp;60 - 68 : <b style={{ color: "var(--green)" }}>C&nbsp; = Assez bien</b>&nbsp;&nbsp;&nbsp;&le; 50 : <b style={{ color: "var(--red)" }}>E = Échec</b>
-              </div>
+<div className="legend legend-grid">
+  <div className="legend-item">90 - 100 : <b>A+ = Excellent</b></div>
+  <div className="legend-item">78 - 84 : <b>B+ = Très bien</b></div>
+  <div className="legend-item">69 - 74 : <b>C+ = Bien</b></div>
+  <div className="legend-item">51 - 59 : <b style={{ color: "var(--orange)" }}>D = Déficient</b></div>
+
+  <div className="legend-item">85 - 89 : <b>A = Excellent</b></div>
+  <div className="legend-item">75 - 77 : <b>B = Très bien</b></div>
+  <div className="legend-item">60 - 68 : <b style={{ color: "var(--green)" }}>C = Assez bien</b></div>
+  <div className="legend-item">&le; 50 : <b style={{ color: "var(--red)" }}>E = Échec</b></div>
+</div>
               <div className="footer-rule">
                 <div className="first">Seuil de réussite pour promotion automatique en classe supérieure 7.00</div>
                 <div>Calcul de la moyenne de l&apos;étape : 70% Rubrique 1 + 25% Rubrique 2 + 5% Rubrique 3</div>
@@ -823,6 +863,11 @@ const CSS = `
   line-height:inherit;
   letter-spacing:inherit;
 }
+.btpl .pdf-rasterized-svg-text{
+  background:transparent !important;
+  border:none !important;
+  box-shadow:none !important;
+}  
 .btpl .pdf-inline-svg-text text{
   fill:currentColor;
   font-family:inherit;
@@ -835,13 +880,13 @@ const CSS = `
 }
 .btpl .page{
   width:var(--paper-w);height:var(--paper-h);margin:0 auto;background:#fff;
-  padding:.18in .32in .34in;position:relative;overflow:hidden;
+  padding:.14in .26in .28in;position:relative;overflow:hidden;
   font-family:Georgia,"Times New Roman",serif;color:var(--ink);
 }
 .btpl.pdf-capture .page{overflow:visible;}
 .btpl .page-content{
   width:var(--template-w);height:var(--template-h);
-  padding:8px 26px 24px;position:relative;
+  padding:6px 20px 20px;position:relative;
   display:flex;flex-direction:column;
   transform:scale(var(--template-scale));transform-origin:top left;
 }
@@ -856,16 +901,32 @@ const CSS = `
   grid-template-columns:calc(90pt / var(--template-scale)) calc(8pt / var(--template-scale)) calc(358pt / var(--template-scale)) calc(8pt / var(--template-scale)) calc(76pt / var(--template-scale));
   align-items:start;width:100%;
 }
-.btpl .bulletin-logo-block{width:calc(90pt / var(--template-scale));text-align:center;padding-top:calc(2pt / var(--template-scale));margin:0 auto;}
+.btpl .bulletin-logo-block{
+  width:calc(90pt / var(--template-scale));
+  text-align:center;
+  padding-top:0;
+  margin:0 auto;
+  transform:translateY(calc(-4pt / var(--template-scale)));
+}
 .btpl .bulletin-logo{
   width:100%;max-width:calc(90pt / var(--template-scale));max-height:calc(90pt / var(--template-scale));
   object-fit:contain;object-position:center;display:block;margin:0 auto;
 }
 .btpl .bulletin-logo-placeholder{width:calc(90pt / var(--template-scale));height:calc(90pt / var(--template-scale));margin:0 auto;}
 .btpl .bulletin-founded{
-  margin-top:calc(2pt / var(--template-scale));text-align:center;color:#000;
-  font-family:var(--font-founded);font-size:calc(7pt / var(--template-scale));
-  font-weight:200;font-style:normal;line-height:calc(8pt / var(--template-scale));letter-spacing:normal;
+  margin-top:calc(2pt / var(--template-scale));
+  text-align:center;
+  color:#4169E1;
+  font-family:var(--font-founded);
+  font-size:calc(6.2pt / var(--template-scale));
+  font-weight:200;
+  font-style:italic;
+  line-height:calc(7pt / var(--template-scale));
+  letter-spacing:normal;
+}
+
+.btpl .bulletin-founded svg text{
+  fill:#4169E1 !important;
 }
 .btpl .bulletin-info-grid{
   width:calc(358pt / var(--template-scale));display:grid;
@@ -1157,11 +1218,23 @@ const CSS = `
 }
 
 .btpl .mline-step .ml,
-.btpl .mline-step .mv{
+.btpl .mline-step .mv,
+.btpl .mline-general .ml,
+.btpl .mline-general .mv{
   font-size:calc(9.5pt / var(--template-scale));
   font-weight:700;
 }
 
+.btpl .mline-general{
+  background:#DDF1FA;
+  border:none;
+  padding:
+    calc(2pt / var(--template-scale))
+    calc(3pt / var(--template-scale))
+    calc(2pt / var(--template-scale));
+  margin-top:calc(4pt / var(--template-scale));
+  align-items:center;
+}
 .btpl .mline-appreciation .ml{
   font-size:calc(7.5pt / var(--template-scale));
   font-weight:400;
@@ -1176,13 +1249,21 @@ const CSS = `
   font-size:calc(7pt / var(--template-scale));
   font-weight:400;
 }
-.btpl .mline-general{
-  font-size:calc(7.3pt / var(--template-scale));
-  font-weight:400;
-}
-.btpl .mline-general .mv{
-  font-size:calc(7.8pt / var(--template-scale));
+
+
+.btpl .mline-general .ml{
   font-weight:700;
+  text-align:left;
+}
+
+.btpl .mline-general .leader{
+  color:#000;
+}
+
+.btpl .mline-general .mv{
+  font-size:calc(8.8pt / var(--template-scale));
+  font-weight:700;
+  line-height:calc(10pt / var(--template-scale));
 }
 .btpl .mline .mv.red{color:var(--red);}
 .btpl .mline .mv.orange{color:var(--orange);}
@@ -1349,7 +1430,7 @@ const CSS = `
 }
 .btpl .observations-grid{
   display:grid;
-  grid-template-columns:calc(285pt / var(--template-scale)) calc(20pt / var(--template-scale)) calc(175pt / var(--template-scale)) calc(60pt / var(--template-scale));
+  grid-template-columns:calc(302pt / var(--template-scale)) calc(20pt / var(--template-scale)) calc(175pt / var(--template-scale)) calc(43pt / var(--template-scale));
   width:calc(540pt / var(--template-scale));
   align-items:start;
   box-sizing:border-box;
@@ -1432,6 +1513,20 @@ const CSS = `
   margin:0;
   padding:0;
 }
+.btpl .legend-grid{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  column-gap:calc(2pt / var(--template-scale));
+  row-gap:calc(.5pt / var(--template-scale));
+  align-items:start;
+}
+
+.btpl .legend-item{
+  min-width:0;
+  white-space:nowrap;
+  text-align:left;
+}
+
 .btpl .legend b{font-weight:700;}
 .btpl .footer-rule{
   font-family:"Times New Roman","Liberation Serif",Times,serif;
@@ -1443,9 +1538,10 @@ const CSS = `
   margin-top:calc(4pt / var(--template-scale));
 }
 .btpl .footer-rule .first{
-  font-size:calc(6pt / var(--template-scale));
+  font-size:calc(5.8pt / var(--template-scale));
   font-weight:700;
-  line-height:calc(7pt / var(--template-scale));
+  line-height:calc(6.4pt / var(--template-scale));
+  margin-bottom:calc(.6pt / var(--template-scale));
 }
 .btpl .contact{
   font-family:"Times New Roman","Liberation Serif",Times,serif;
@@ -1493,6 +1589,75 @@ const CSS = `
   padding:0;
 }
 
+/* Réduction légère des tailles de police du bulletin */
+.btpl .rubrique-title{
+  font-size:calc(7.2pt / var(--template-scale));
+  line-height:calc(7.2pt / var(--template-scale));
+}
+
+.btpl .subject-group{
+  font-size:calc(7.6pt / var(--template-scale));
+  line-height:calc(9pt / var(--template-scale));
+}
+
+.btpl .subject-item{
+  font-size:calc(7.2pt / var(--template-scale));
+  line-height:calc(8.7pt / var(--template-scale));
+}
+
+.btpl .note-value{
+  font-size:calc(7pt / var(--template-scale));
+}
+
+.btpl .coefficient-value{
+  font-size:calc(6.8pt / var(--template-scale));
+}
+
+.btpl .mline{
+  font-size:calc(6.8pt / var(--template-scale));
+}
+
+.btpl .behavior-criterion{
+  font-size:calc(7pt / var(--template-scale));
+  line-height:calc(10pt / var(--template-scale));
+}
+
+.btpl .behavior-metric-label{
+  font-size:calc(7.2pt / var(--template-scale));
+  line-height:calc(9.7pt / var(--template-scale));
+}
+
+.btpl .behavior-metric-value{
+  font-size:calc(7.7pt / var(--template-scale));
+  line-height:calc(9.7pt / var(--template-scale));
+}
+
+.btpl .plain{
+  font-size:calc(6.6pt / var(--template-scale));
+  line-height:calc(8.4pt / var(--template-scale));
+}
+
+.btpl .legend{
+  font-size:calc(5.55pt / var(--template-scale));
+  line-height:calc(6.8pt / var(--template-scale));
+}
+
+.btpl .footer-rule,
+.btpl .contact{
+  font-size:calc(5.55pt / var(--template-scale));
+  line-height:calc(6.7pt / var(--template-scale));
+}
+  /* Underline stable pour les SVG */
+.btpl .subject-group .pdf-inline-svg-text text,
+.btpl .behav-title .pdf-inline-svg-text text,
+.btpl .h-maroon .pdf-inline-svg-text text,
+.btpl .h-maroon2 .pdf-inline-svg-text text,
+.btpl .legend-title .pdf-inline-svg-text text{
+  text-decoration-line:underline;
+  text-decoration-color:#000;
+  text-decoration-thickness:calc(.5pt / var(--template-scale));
+  text-underline-offset:calc(1.5pt / var(--template-scale));
+}
 /* Texte SVG : hauteurs calées sur les line-height existants pour contourner le décalage html2canvas. */
 .btpl .rubrique-title .pdf-inline-svg-text{height:calc(7.5pt / var(--template-scale));}
 .btpl .score-header .pdf-inline-svg-text{height:100%;font-size:calc(6.8pt / var(--template-scale));font-weight:700;line-height:calc(11pt / var(--template-scale));}
@@ -1502,7 +1667,10 @@ const CSS = `
 .btpl .coefficient-value .pdf-inline-svg-text{height:calc(9pt / var(--template-scale));}
 .btpl .total-value .pdf-inline-svg-text{height:calc(8pt / var(--template-scale));}
 .btpl .mline .pdf-inline-svg-text{height:calc(9pt / var(--template-scale));}
-.btpl .mline-step .pdf-inline-svg-text{height:calc(10pt / var(--template-scale));}
+.btpl .mline-step .pdf-inline-svg-text,
+.btpl .mline-general .pdf-inline-svg-text{
+  height:calc(10pt / var(--template-scale));
+}
 .btpl .mline-appreciation .pdf-inline-svg-text{height:calc(9pt / var(--template-scale));}
 .btpl .behavior-choice-header .pdf-inline-svg-text{height:calc(6pt / var(--template-scale));}
 .btpl .behavior-criterion .pdf-inline-svg-text{height:calc(10.5pt / var(--template-scale));}
