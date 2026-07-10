@@ -280,7 +280,12 @@ export default function StudentsManagementPage() {
 
   const totalPages        = Math.ceil(displayed.length / itemsPerPage)
   const paginated         = displayed.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
-    const uniqueClasses     = [...new Set(students.map(s => s.className))].sort((a, b) => a.localeCompare(b))
+  // Liste des classes dérivée des sessions (pas des élèves) : une salle
+  // nouvellement créée et encore vide doit apparaître dans le filtre.
+  const uniqueClasses     = [...new Set(sessions.map(s => {
+    const trackSuffix = s.class.track ? ` — ${s.class.track.code}` : ''
+    return `${s.class.classType.name} ${s.class.letter}${trackSuffix}`
+  }))].sort((a, b) => a.localeCompare(b))
 
   // ── Tri ──────────────────────────────────────────────────────────────────────
   const handleSort = (col: SortCol) => {
