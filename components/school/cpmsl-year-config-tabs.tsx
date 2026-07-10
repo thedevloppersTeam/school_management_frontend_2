@@ -29,6 +29,7 @@ import {
   UnlockIcon,
   ChevronDownIcon,
   ChevronRightIcon,
+  CopyIcon,
 } from "lucide-react";
 import { ClosePeriodModal } from "@/components/school/close-period-modal";
 import { ReopenPeriodModalV2 } from "@/components/school/reopen-period-modal-v2";
@@ -306,6 +307,14 @@ export function CPMSLYearConfigTabs({
   const [editCoeffValue, setEditCoeffValue] = useState("");
   const [editMaxScoreGlobalValue, setEditMaxScoreGlobalValue] = useState("");
   const [editCoeffSubmitting, setEditCoeffSubmitting] = useState(false);
+
+  // ── Modal copie de matières ──────────────────────────────────────────────
+  const [copyModalOpen, setCopyModalOpen] = useState(false);
+  const [copySourceSessionId, setCopySourceSessionId] = useState("");
+  const [copySourceCounts, setCopySourceCounts] = useState<
+    Record<string, number>
+  >({});
+  const [copySubmitting, setCopySubmitting] = useState(false);
 
   // ── Helpers ──────────────────────────────────────────────────────────────
   const getClassroomsForLevel = (levelId: string) =>
@@ -748,6 +757,74 @@ export function CPMSLYearConfigTabs({
       });
     } finally {
       setAssignSubmitting(false);
+    }
+  };
+
+  // ── Copie de matières depuis une autre salle ─────────────────────────────
+  const copyTargetClassroom = classrooms.find(
+    (c) => c.id === selectedSessionForAssign,
+  );
+  const copySourceCandidates = copyTargetClassroom
+    ? getClassroomsForLevel(copyTargetClassroom.levelId).filter(
+        (c) => c.id !== copyTargetClassroom.id,
+      )
+    : [];
+
+  const openCopyModal = async () => {
+    setCopySourceSessionId("");
+    setCopySourceCounts({});
+    setCopyModalOpen(true);
+    const counts: Record<string, number> = {};
+    await Promise.all(
+      copySourceCandidates.map(async (classroom) => {
+        try {
+          const res = await fetch(
+            `/api/class-subjects?classSessionId=${classroom.id}`,
+            { credentials: "include" },
+          );
+          if (res.ok) counts[classroom.id] = ((await res.json()) as unknown[]).length;
+        } catch {
+          // décompte indisponible — la salle reste sélectionnable
+        }
+      }),
+    );
+    setCopySourceCounts(counts);
+  };
+
+  const handleCopySubjects = async () => {
+    if (!copySourceSessionId || !selectedSessionForAssign) return;
+    setCopySubmitting(true);
+    try {
+      const res = await fetch("/api/class-subjects/copy", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sourceClassSessionId: copySourceSessionId,
+          targetClassSessionId: selectedSessionForAssign,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          data.message || `Échec de la copie (HTTP ${res.status})`,
+        );
+      }
+      toast({
+        title: "Matières copiées",
+        description: `${data.copied} matière${data.copied > 1 ? "s" : ""} copiée${data.copied > 1 ? "s" : ""}, ${data.skipped} déjà présente${data.skipped > 1 ? "s" : ""}`,
+      });
+      setCopyModalOpen(false);
+      await loadClassSubjects(selectedSessionForAssign);
+    } catch (err) {
+      console.error("[copie matières] erreur:", err);
+      toast({
+        title: "Erreur",
+        description: toMessage(err, "lors de la copie des matières"),
+        variant: "destructive",
+      });
+    } finally {
+      setCopySubmitting(false);
     }
   };
 
@@ -1490,13 +1567,29 @@ export function CPMSLYearConfigTabs({
               {!isArchived &&
                 subjectParents.length > 0 &&
                 classrooms.length > 0 && (
-                  <Button
-                    onClick={openAssignModal}
-                    className={BTN_PRIMARY_CLASS}
-                  >
-                    <PlusIcon className="mr-2 h-4 w-4" aria-hidden="true" />
-                    Assigner une matière
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    {selectedSessionForAssign &&
+                      copySourceCandidates.length > 0 && (
+                        <Button
+                          variant="outline"
+                          onClick={openCopyModal}
+                          className={BTN_OUTLINE_CLASS}
+                        >
+                          <CopyIcon
+                            className="mr-2 h-4 w-4"
+                            aria-hidden="true"
+                          />
+                          Copier depuis une autre salle
+                        </Button>
+                      )}
+                    <Button
+                      onClick={openAssignModal}
+                      className={BTN_PRIMARY_CLASS}
+                    >
+                      <PlusIcon className="mr-2 h-4 w-4" aria-hidden="true" />
+                      Assigner une matière
+                    </Button>
+                  </div>
                 )}
             </div>
 
@@ -1574,7 +1667,20 @@ export function CPMSLYearConfigTabs({
                             colSpan={6}
                             className="px-4 py-6 text-center text-neutral-500 text-sm"
                           >
-                            Aucune matière assignée à cette classe
+                            <p>Aucune matière assignée à cette classe</p>
+                            {!isArchived && copySourceCandidates.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={openCopyModal}
+                                className={`${LINK_BTN_CLASS} mt-2 text-primary-500 focus-visible:outline-primary-500 inline-flex items-center gap-1.5`}
+                              >
+                                <CopyIcon
+                                  className="h-3.5 w-3.5"
+                                  aria-hidden="true"
+                                />
+                                Copier les matières d&apos;une autre salle
+                              </button>
+                            )}
                           </td>
                         </tr>
                       ) : (
@@ -1902,6 +2008,100 @@ export function CPMSLYearConfigTabs({
         </DialogContent>
       </Dialog>
 
+
+      {/* ═══════════════════ Modal Copie de matières ═════════════════════════ */}
+      <Dialog open={copyModalOpen} onOpenChange={setCopyModalOpen}>
+        <DialogContent className="bg-white rounded-xl max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-serif text-xl font-bold text-primary-800">
+              Copier depuis une autre salle
+            </DialogTitle>
+            <DialogDescription className="text-sm text-neutral-500">
+              Copier toutes les matières d&apos;une salle du même niveau vers{" "}
+              <span className="font-semibold text-neutral-900">
+                {copyTargetClassroom?.name}
+              </span>
+              . Les matières déjà assignées seront ignorées.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-2">
+            <span className={FIELD_LABEL_CLASS}>
+              Salle source{" "}
+              <span className="text-error" aria-label="obligatoire">
+                *
+              </span>
+            </span>
+            <div className="mt-2 border border-neutral-200 rounded-lg overflow-auto max-h-60 cpmsl-scroll">
+              {copySourceCandidates.map((classroom, i) => {
+                const checked = copySourceSessionId === classroom.id;
+                const inputId = `copy-source-${classroom.id}`;
+                const count = copySourceCounts[classroom.id];
+                return (
+                  <label
+                    key={classroom.id}
+                    htmlFor={inputId}
+                    className={`
+                    flex items-center gap-3 px-4 py-2.5 cursor-pointer
+                    ${i > 0 ? "border-t border-neutral-200" : ""}
+                    ${checked ? "bg-primary-50" : "bg-white hover:bg-secondary-50"}
+                  `}
+                  >
+                    <input
+                      id={inputId}
+                      type="radio"
+                      name="copy-source-classroom"
+                      checked={checked}
+                      onChange={() => setCopySourceSessionId(classroom.id)}
+                      className="h-4 w-4 cursor-pointer accent-primary-800"
+                    />
+                    <span
+                      className={`flex-1 text-sm text-neutral-900 ${checked ? "font-semibold" : ""}`}
+                    >
+                      {classroom.name}
+                    </span>
+                    {count !== undefined && (
+                      <span
+                        className={`text-xs ${count === 0 ? "text-neutral-400" : "text-neutral-500"}`}
+                      >
+                        {count} matière{count > 1 ? "s" : ""}
+                      </span>
+                    )}
+                  </label>
+                );
+              })}
+            </div>
+            {copySourceSessionId &&
+              copySourceCounts[copySourceSessionId] === 0 && (
+                <p className="mt-2 text-xs text-warning">
+                  Cette salle n&apos;a aucune matière à copier.
+                </p>
+              )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setCopyModalOpen(false)}
+              disabled={copySubmitting}
+              className={BTN_OUTLINE_CLASS}
+            >
+              Annuler
+            </Button>
+            <Button
+              onClick={handleCopySubjects}
+              disabled={
+                copySubmitting ||
+                !copySourceSessionId ||
+                copySourceCounts[copySourceSessionId] === 0
+              }
+              className={BTN_DIALOG_PRIMARY_CLASS}
+            >
+              {copySubmitting ? "Copie en cours..." : "Copier les matières"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ═══════════════════ Modal Fusion d'étapes ════════════════════════════ */}
       <Dialog
