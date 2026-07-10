@@ -21,6 +21,7 @@ interface PromotionPhotoModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   studentId: string
+  userId?: string
   studentName: string
   studentCode: string
   academicYearId: string
@@ -32,10 +33,79 @@ interface PromotionPhotoModalProps {
 const MAX_BYTES = 5 * 1024 * 1024 // 5 MB (matches backend)
 const ALLOWED = ["image/jpeg", "image/png", "image/webp"]
 
+type PromotionPhotoLike = {
+  studentId?: unknown
+  academicYearId?: unknown
+  photoUrl?: unknown
+}
+
+function asPhoto(value: unknown): PromotionPhotoLike | null {
+  return value && typeof value === "object" ? value as PromotionPhotoLike : null
+}
+
+function extractPhotoUrl(value: unknown): string | null {
+  const root = asPhoto(value) as (PromotionPhotoLike & {
+    photo?: unknown
+    promotionPhoto?: unknown
+    data?: unknown
+  }) | null
+
+  const candidates = [
+    root?.photo,
+    root?.promotionPhoto,
+    root?.data,
+    root,
+  ]
+
+  for (const candidate of candidates) {
+    const photo = asPhoto(candidate)
+    if (typeof photo?.photoUrl === "string" && photo.photoUrl.trim()) {
+      return photo.photoUrl.trim()
+    }
+  }
+
+  return null
+}
+
+function normalizePhotoList(value: unknown): PromotionPhotoLike[] {
+  if (Array.isArray(value)) return value.map(asPhoto).filter((photo): photo is PromotionPhotoLike => photo !== null)
+
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>
+    for (const key of ["photos", "promotionPhotos", "data", "items"]) {
+      if (Array.isArray(record[key])) {
+        return record[key].map(asPhoto).filter((photo): photo is PromotionPhotoLike => photo !== null)
+      }
+    }
+  }
+
+  return []
+}
+
+async function verifyUploadedPhoto(studentId: string, academicYearId: string): Promise<string | null> {
+  const params = new URLSearchParams({ studentId, academicYearId, _t: String(Date.now()) })
+  const response = await fetch(`/api/promotion-photos?${params.toString()}`, {
+    credentials: "include",
+    cache: "no-store",
+  })
+
+  if (!response.ok) return null
+
+  const payload: unknown = await response.json().catch(() => null)
+  const photo = normalizePhotoList(payload).find((item) =>
+    item.studentId === studentId && item.academicYearId === academicYearId
+  ) ?? normalizePhotoList(payload)[0]
+
+  return typeof photo?.photoUrl === "string" && photo.photoUrl.trim()
+    ? photo.photoUrl.trim()
+    : null
+}
+
 export function PromotionPhotoModal({
   open,
   onOpenChange,
   studentId,
+  userId,
   studentName,
   studentCode,
   academicYearId,
@@ -45,27 +115,32 @@ export function PromotionPhotoModal({
 }: PromotionPhotoModalProps) {
   const { toast } = useToast()
   const fileRef = useRef<HTMLInputElement | null>(null)
+  const previewObjectUrlRef = useRef<string | null>(null)
   const [file, setFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
-    if (!open) {
-      setFile(null)
-      setPreviewUrl(null)
-      setSubmitting(false)
+    return () => {
+      if (previewObjectUrlRef.current) URL.revokeObjectURL(previewObjectUrlRef.current)
     }
-  }, [open])
+  }, [])
 
-  useEffect(() => {
-    if (!file) {
-      setPreviewUrl(null)
-      return
+  function resetForm() {
+    if (previewObjectUrlRef.current) {
+      URL.revokeObjectURL(previewObjectUrlRef.current)
+      previewObjectUrlRef.current = null
     }
-    const url = URL.createObjectURL(file)
-    setPreviewUrl(url)
-    return () => URL.revokeObjectURL(url)
-  }, [file])
+    if (fileRef.current) fileRef.current.value = ""
+    setFile(null)
+    setPreviewUrl(null)
+    setSubmitting(false)
+  }
+
+  function handleDialogOpenChange(nextOpen: boolean) {
+    if (!nextOpen) resetForm()
+    onOpenChange(nextOpen)
+  }
 
   function handlePick(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]
@@ -88,7 +163,11 @@ export function PromotionPhotoModal({
       e.target.value = ""
       return
     }
+    if (previewObjectUrlRef.current) URL.revokeObjectURL(previewObjectUrlRef.current)
+    const objectUrl = URL.createObjectURL(f)
+    previewObjectUrlRef.current = objectUrl
     setFile(f)
+    setPreviewUrl(objectUrl)
   }
 
   async function handleSubmit() {
@@ -105,14 +184,49 @@ export function PromotionPhotoModal({
         credentials: "include",
         body: form,
       })
-      const data = await res.json().catch(() => null)
+      const data: unknown = await res.json().catch(() => null)
       if (!res.ok) {
-        throw new Error(data?.message || `Échec de l'envoi (HTTP ${res.status})`)
+        const message =
+          data && typeof data === "object" && "message" in data && typeof data.message === "string"
+            ? data.message
+            : `Échec de l'envoi (HTTP ${res.status})`
+        throw new Error(message)
       }
 
-      toast({ title: "Photo de promotion enregistrée" })
-      if (data?.photo?.photoUrl) onUploaded?.(data.photo.photoUrl)
-      onOpenChange(false)
+      // Le backend documenté renvoie { photo: { photoUrl } }, mais certaines
+      // versions renvoient directement la photo ou une clé promotionPhoto.
+      // On accepte les trois formats afin qu'un succès HTTP ne soit jamais
+      // interprété comme une photo absente dans l'interface.
+      const uploadedUrl = extractPhotoUrl(data) ?? await verifyUploadedPhoto(studentId, academicYearId)
+      if (!uploadedUrl) {
+        throw new Error(
+          "Le serveur a accepté le fichier, mais aucune URL de photo n'a été retournée ni retrouvée."
+        )
+      }
+
+      // La photo annuelle sert également de photo de profil. Sans cette
+      // synchronisation, /api/students continue de retourner profilePhoto=null
+      // et plusieurs écrans affichent encore l'avatar par défaut.
+      let profileSynced = true
+      if (userId) {
+        const profileRes = await fetch(`/api/users/update/${userId}`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profilePhoto: uploadedUrl }),
+        })
+        profileSynced = profileRes.ok
+      }
+
+      onUploaded?.(uploadedUrl)
+      toast({
+        title: "Photo enregistrée",
+        description: profileSynced
+          ? "La photo de promotion et la photo de profil ont été mises à jour."
+          : "La photo de promotion est enregistrée, mais la photo de profil n'a pas pu être synchronisée.",
+        variant: profileSynced ? "default" : "destructive",
+      })
+      handleDialogOpenChange(false)
     } catch (err) {
       toast({
         title: "Erreur",
@@ -129,7 +243,7 @@ export function PromotionPhotoModal({
   const displayedUrl = previewUrl ?? normalizeUploadUrl(currentPhotoUrl) ?? null
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -198,7 +312,7 @@ export function PromotionPhotoModal({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+          <Button variant="outline" onClick={() => handleDialogOpenChange(false)} disabled={submitting}>
             Annuler
           </Button>
           <Button

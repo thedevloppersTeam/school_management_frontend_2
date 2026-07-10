@@ -78,6 +78,7 @@ type EnrollmentStatus = 'ACTIVE' | 'TRANSFERRED' | 'DROPPED' | 'GRADUATED'
 
 interface StudentRow {
   studentId:     string
+  userId?:       string
   studentCode:   string
   nisu:          string
   firstname:     string
@@ -104,6 +105,31 @@ interface StudentRow {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+type PromotionPhotoListItem = {
+  studentId?: string
+  academicYearId?: string
+  photoUrl?: string
+}
+
+function normalizePromotionPhotos(value: unknown): PromotionPhotoListItem[] {
+  const rawItems = Array.isArray(value)
+    ? value
+    : value && typeof value === "object"
+      ? ["photos", "promotionPhotos", "data", "items"]
+          .map((key) => (value as Record<string, unknown>)[key])
+          .find(Array.isArray) ?? []
+      : []
+
+  return rawItems.flatMap((item) => {
+    if (!item || typeof item !== "object") return []
+    const record = item as Record<string, unknown>
+    const studentId = typeof record.studentId === "string" ? record.studentId : undefined
+    const academicYearId = typeof record.academicYearId === "string" ? record.academicYearId : undefined
+    const photoUrl = typeof record.photoUrl === "string" ? record.photoUrl.trim() : undefined
+    return photoUrl ? [{ studentId, academicYearId, photoUrl }] : []
+  })
+}
 
 function deriveYearStatus(year: AcademicYear): 'active' | 'preparation' | 'archived' {
   if (year.isCurrent) return 'active'
@@ -219,7 +245,7 @@ export default function StudentsManagementPage() {
         phone2?: string
         parentsEmail?: string
         registrationDate?: string
-        user?: { firstname?: string; lastname?: string; profilePhoto?: string }
+        user?: { id?: string; firstname?: string; lastname?: string; profilePhoto?: string }
       }>>("/api/students", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -248,12 +274,16 @@ export default function StudentsManagementPage() {
       const photoByStudent = new Map<string, string>()
       if (yearData) {
         try {
-          const photos = await apiFetch<Array<{ studentId: string; photoUrl: string }>>(
-            `/api/promotion-photos?academicYearId=${yearData.id}`
+          const photoPayload = await apiFetch<unknown>(
+            `/api/promotion-photos?academicYearId=${yearData.id}&_t=${Date.now()}`,
+            { cache: "no-store" }
           )
-          photos.forEach((p) => photoByStudent.set(p.studentId, p.photoUrl))
-        } catch {
-          /* best-effort */
+          const photos = normalizePromotionPhotos(photoPayload)
+          photos.forEach((p) => {
+            if (p.studentId && p.photoUrl) photoByStudent.set(p.studentId, p.photoUrl)
+          })
+        } catch (error) {
+          console.error("[all-students] promotion photos load failed:", error)
         }
       }
 
@@ -280,6 +310,7 @@ export default function StudentsManagementPage() {
           : undefined
         return {
           studentId: s.id,
+          userId: s.user?.id,
           studentCode: s.studentCode || "—",
           nisu: s.nisu || "",
           firstname: s.user?.firstname || "",
@@ -1201,6 +1232,7 @@ export default function StudentsManagementPage() {
           open={!!photoTarget}
           onOpenChange={(o) => !o && setPhotoTarget(null)}
           studentId={photoTarget.studentId}
+          userId={photoTarget.userId}
           studentName={`${photoTarget.firstname} ${photoTarget.lastname}`.trim()}
           studentCode={photoTarget.studentCode}
           academicYearId={year.id}
@@ -1208,7 +1240,11 @@ export default function StudentsManagementPage() {
           currentPhotoUrl={photoTarget.promotionPhotoUrl ?? null}
           onUploaded={(url) => {
             setStudents((prev) =>
-              prev.map((s) => (s.studentId === photoTarget.studentId ? { ...s, promotionPhotoUrl: url } : s))
+              prev.map((s) =>
+                s.studentId === photoTarget.studentId
+                  ? { ...s, promotionPhotoUrl: url, profilePhoto: url }
+                  : s
+              )
             )
           }}
         />
