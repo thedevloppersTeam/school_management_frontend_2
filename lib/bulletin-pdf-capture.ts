@@ -180,7 +180,114 @@ export async function waitForBulletinPdfAssets(root: HTMLElement): Promise<void>
     }),
   )
 }
+function resolveSvgCoordinate(value: string | null | undefined, size: number): number {
+  const raw = value ?? "50%"
 
+  if (raw.endsWith("%")) {
+    const pct = Number.parseFloat(raw)
+    return Number.isFinite(pct) ? size * (pct / 100) : size / 2
+  }
+
+  const px = Number.parseFloat(raw)
+  return Number.isFinite(px) ? px : size / 2
+}
+
+function resolveCanvasFillStyle(textStyle: CSSStyleDeclaration, svgStyle: CSSStyleDeclaration): string {
+  const fill = textStyle.fill
+
+  if (fill && fill !== "none" && fill !== "currentColor" && fill !== "currentcolor") {
+    return fill
+  }
+
+  return textStyle.color || svgStyle.color || "#000"
+}
+
+/**
+ * html2canvas peut rasteriser les SVG inline avec un fond blanc.
+ * On les convertit en PNG transparent uniquement dans le clone PDF.
+ */
+function rasterizeBulletinInlineSvgText(root: HTMLElement): void {
+  const svgs = Array.from(
+    root.querySelectorAll<SVGSVGElement>("svg.pdf-inline-svg-text"),
+  )
+
+  svgs.forEach((svg) => {
+    const text = svg.querySelector<SVGTextElement>("text")
+    const value = text?.textContent ?? ""
+
+    if (!text || value.length === 0) {
+      return
+    }
+
+    const rect = svg.getBoundingClientRect()
+    const width = Math.max(1, Math.ceil(rect.width))
+    const height = Math.max(1, Math.ceil(rect.height))
+
+    const svgStyle = window.getComputedStyle(svg)
+    const textStyle = window.getComputedStyle(text)
+
+    const pixelRatio = Math.max(
+      2,
+      Math.min(4, window.devicePixelRatio || 1),
+    )
+
+    const canvas = document.createElement("canvas")
+    canvas.width = Math.ceil(width * pixelRatio)
+    canvas.height = Math.ceil(height * pixelRatio)
+
+    const context = canvas.getContext("2d")
+    if (!context) {
+      return
+    }
+
+    context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0)
+    context.clearRect(0, 0, width, height)
+
+    context.font = [
+      textStyle.fontStyle || svgStyle.fontStyle || "normal",
+      textStyle.fontWeight || svgStyle.fontWeight || "400",
+      textStyle.fontSize || svgStyle.fontSize || "10px",
+      textStyle.fontFamily || svgStyle.fontFamily || "serif",
+    ].join(" ")
+
+    context.fillStyle = resolveCanvasFillStyle(textStyle, svgStyle)
+    context.textBaseline = "middle"
+
+    const anchor = text.getAttribute("text-anchor") ?? "start"
+
+    context.textAlign =
+      anchor === "middle"
+        ? "center"
+        : anchor === "end"
+          ? "right"
+          : "left"
+
+    const x = resolveSvgCoordinate(text.getAttribute("x"), width)
+    const y = resolveSvgCoordinate(text.getAttribute("y"), height)
+
+    context.fillText(value, x, y)
+
+    const image = document.createElement("img")
+    image.src = canvas.toDataURL("image/png")
+    image.alt = ""
+    image.setAttribute("aria-hidden", "true")
+    image.setAttribute("data-pdf-rasterized-svg-text", "true")
+    image.className = `${svg.getAttribute("class") ?? ""} pdf-rasterized-svg-text`
+
+    image.style.setProperty("display", "block", "important")
+    image.style.setProperty("width", `${width}px`, "important")
+    image.style.setProperty("height", `${height}px`, "important")
+    image.style.setProperty("min-width", `${width}px`, "important")
+    image.style.setProperty("min-height", `${height}px`, "important")
+    image.style.setProperty("max-width", `${width}px`, "important")
+    image.style.setProperty("max-height", `${height}px`, "important")
+    image.style.setProperty("background", "transparent", "important")
+    image.style.setProperty("object-fit", "contain", "important")
+    image.style.setProperty("vertical-align", "top", "important")
+
+    svg.replaceWith(image)
+  })
+}
 /**
  * Prépare le clone de capture dans le repère natif du modèle.
  *
@@ -332,10 +439,15 @@ export async function captureBulletinElement(
       host,
     )
 
-    await waitForBulletinPdfAssets(captureBulletin)
-    await waitForTwoFrames()
+await waitForBulletinPdfAssets(captureBulletin)
+await waitForTwoFrames()
 
-    const html2canvas = (await import("html2canvas")).default
+rasterizeBulletinInlineSvgText(captureBulletin)
+
+await waitForBulletinPdfAssets(captureBulletin)
+await waitForTwoFrames()
+
+const html2canvas = (await import("html2canvas")).default
     const canvas = await html2canvas(
       captureBulletin,
       getBulletinCanvasOptions(captureBulletin, geometry),

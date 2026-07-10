@@ -60,6 +60,21 @@ interface ApiBehavior {
   attitudeResponses: ApiAttitudeResponse[]
 }
 
+interface BehaviorPayload {
+  enrollmentId: string
+  stepId: string
+  absences: number | null
+  retards: number | null
+  devoirsManques: number | null
+  leconsNonSues: number | null
+  respectUniforme: number | null
+  discipline: number | null
+  pointsForts: string | null
+  defis: string | null
+  remarque: string | null
+  attitudeResponses: ApiAttitudeResponse[]
+}
+
 // Types internes
 
 interface BehaviorEntry {
@@ -77,12 +92,6 @@ interface BehaviorEntry {
   remarque: string
 }
 
-type BehaviorExtraFields = {
-  leconsNonSues: string
-  respectUniforme: string
-  discipline: string
-  cleanRemarque: string
-}
 
 type NumericBehaviorField =
   | "absences"
@@ -118,40 +127,7 @@ function getStudentName(enrollment: ApiEnrollment): string {
   return `${first} ${last}`.trim() || (enrollment.student?.studentCode ?? "—")
 }
 
-function extractBehaviorExtrasFromRemarque(remarque: string | null): BehaviorExtraFields {
-  const source = remarque ?? ""
-  const markerPattern = /\[\[\s*(LECONS_NON_SUES|RESPECT_UNIFORME|DISCIPLINE)\s*=\s*([^\]]*)\]\]/gi
-  const values: BehaviorExtraFields = {
-    leconsNonSues: "",
-    respectUniforme: "",
-    discipline: "",
-    cleanRemarque: "",
-  }
 
-  let match: RegExpExecArray | null
-  while ((match = markerPattern.exec(source)) !== null) {
-    const key = match[1].toUpperCase()
-    const value = match[2].trim()
-    if (key === "LECONS_NON_SUES" && values.leconsNonSues === "") values.leconsNonSues = value
-    if (key === "RESPECT_UNIFORME" && values.respectUniforme === "") values.respectUniforme = value
-    if (key === "DISCIPLINE" && values.discipline === "") values.discipline = value
-  }
-
-  values.cleanRemarque = source
-    .replace(markerPattern, "")
-    .split(/\r?\n/)
-    .map(line => line.trimEnd())
-    .filter((line, index, lines) => line.trim() !== "" || (index > 0 && index < lines.length - 1))
-    .join("\n")
-    .trim()
-
-  return values
-}
-
-// Ancienne logique supprimée : on ne cache plus les valeurs numériques dans `remarque`.
-// Les anciennes remarques contenant des marqueurs sont encore lues par
-// extractBehaviorExtrasFromRemarque(), mais à la sauvegarde les valeurs sont
-// envoyées dans des colonnes séparées.
 function parseNullableInt(value: string): number | null {
   return value.trim() === "" ? null : Number.parseInt(value, 10)
 }
@@ -172,26 +148,29 @@ function hasBehaviorData(entry: BehaviorEntry): boolean {
   )
 }
 
-function buildBehaviorPayload(entry: BehaviorEntry, selectedStepId: string) {
+function buildBehaviorPayload(
+  entry: BehaviorEntry,
+  selectedStepId: string
+): BehaviorPayload {
   const attitudeResponses = Array.from(entry.attitudeResponses.entries())
     .filter(([, value]) => value !== null)
-    .map(([attitudeId, value]) => ({ attitudeId, value: value as boolean }))
+    .map(([attitudeId, value]) => ({
+      attitudeId,
+      value: value as boolean,
+    }))
 
   return {
     enrollmentId: entry.enrollmentId,
     stepId: selectedStepId,
-
     absences: parseNullableInt(entry.absences),
     retards: parseNullableInt(entry.retards),
     devoirsManques: parseNullableInt(entry.devoirsManques),
     leconsNonSues: parseNullableInt(entry.leconsNonSues),
     respectUniforme: parseNullableInt(entry.respectUniforme),
     discipline: parseNullableInt(entry.discipline),
-
     pointsForts: entry.pointsForts.trim() || null,
     defis: entry.defis.trim() || null,
     remarque: entry.remarque.trim() || null,
-
     attitudeResponses,
   }
 }
@@ -218,25 +197,30 @@ function createBehaviorEntry(
   behaviorList: ApiBehavior[],
   attitudes: ApiAttitude[]
 ): BehaviorEntry {
-  const existing = behaviorList.find(b => b.enrollmentId === enr.id)
-  const attMap   = new Map<string, boolean | null>()
-  attitudes.forEach(att => attMap.set(att.id, null))
-  existing?.attitudeResponses.forEach(r => attMap.set(r.attitudeId, r.value))
-  const parsedExtras = extractBehaviorExtrasFromRemarque(existing?.remarque ?? null)
+  const existing = behaviorList.find(behavior => behavior.enrollmentId === enr.id)
+  const attitudeMap = new Map<string, boolean | null>()
+
+  attitudes.forEach(attitude => {
+    attitudeMap.set(attitude.id, null)
+  })
+
+  existing?.attitudeResponses?.forEach(response => {
+    attitudeMap.set(response.attitudeId, response.value)
+  })
 
   return {
-    behaviorId:        existing?.id ?? null,
-    enrollmentId:      enr.id,
-    absences:          existing?.absences?.toString()       ?? "",
-    retards:           existing?.retards?.toString()        ?? "",
-    devoirsManques:    existing?.devoirsManques?.toString() ?? "",
-    leconsNonSues:     existing?.leconsNonSues?.toString() ?? parsedExtras.leconsNonSues,
-    respectUniforme:   existing?.respectUniforme?.toString() ?? parsedExtras.respectUniforme,
-    discipline:        existing?.discipline?.toString() ?? parsedExtras.discipline,
-    attitudeResponses: attMap,
-    pointsForts:       existing?.pointsForts ?? "",
-    defis:             existing?.defis       ?? "",
-    remarque:          parsedExtras.cleanRemarque,
+    behaviorId: existing?.id ?? null,
+    enrollmentId: enr.id,
+    absences: existing?.absences?.toString() ?? "",
+    retards: existing?.retards?.toString() ?? "",
+    devoirsManques: existing?.devoirsManques?.toString() ?? "",
+    leconsNonSues: existing?.leconsNonSues?.toString() ?? "",
+    respectUniforme: existing?.respectUniforme?.toString() ?? "",
+    discipline: existing?.discipline?.toString() ?? "",
+    attitudeResponses: attitudeMap,
+    pointsForts: existing?.pointsForts ?? "",
+    defis: existing?.defis ?? "",
+    remarque: existing?.remarque ?? "",
   }
 }
 
@@ -475,18 +459,15 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
           if (e.behaviorId) {
             const updateBody = {
               stepId: body.stepId,
-
               absences: body.absences,
               retards: body.retards,
               devoirsManques: body.devoirsManques,
               leconsNonSues: body.leconsNonSues,
               respectUniforme: body.respectUniforme,
               discipline: body.discipline,
-
               pointsForts: body.pointsForts,
               defis: body.defis,
               remarque: body.remarque,
-
               attitudeResponses: body.attitudeResponses,
             }
             const res = await fetch(`/api/behaviors/update/${e.behaviorId}`, {
@@ -494,30 +475,20 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(updateBody),
             })
-            if (!res.ok) {
-              const errorBody = await res.json().catch(() => null)
-              throw new Error(errorBody?.error || errorBody?.message || `HTTP ${res.status}`)
-            }
+            if (!res.ok) throw new Error(`HTTP ${res.status}`)
           } else {
             const res = await fetch("/api/behaviors/create", {
               method: "POST", credentials: "include",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(body),
             })
-            if (!res.ok) {
-              const errorBody = await res.json().catch(() => null)
-              throw new Error(errorBody?.error || errorBody?.message || `HTTP ${res.status}`)
-            }
-            const created = await res.json().catch(() => null) as
-              | (Partial<ApiBehavior> & { behavior?: Partial<ApiBehavior>; data?: Partial<ApiBehavior> })
-              | null
-
-            const createdId = created?.id ?? created?.behavior?.id ?? created?.data?.id
-            if (createdId) {
+            if (!res.ok) throw new Error(`HTTP ${res.status}`)
+            const created = await res.json().catch(() => null) as Partial<ApiBehavior> | null
+            if (created?.id) {
               setEntries(prev => {
                 const next  = new Map(prev)
                 const entry = next.get(e.enrollmentId)
-                if (entry) next.set(e.enrollmentId, { ...entry, behaviorId: createdId })
+                if (entry) next.set(e.enrollmentId, { ...entry, behaviorId: created.id ?? entry.behaviorId })
                 return next
               })
             }
