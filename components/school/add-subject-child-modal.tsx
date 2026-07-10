@@ -93,26 +93,13 @@ export function AddSubjectChildModal({
 
   const generatedCode = generateCode(type);
 
-  // Calculate current total coefficient
-  const currentTotal = existingChildren
-    .filter((c) => c.parentId === parent.id)
-    .reduce((sum, c) => sum + c.coefficient, 0);
-
-  const newTotal = currentTotal + (coefficient ? parseInt(coefficient) : 0);
-  const isValidTotal = newTotal <= parent.coefficient;
-  const isMaxReached = currentTotal >= parent.coefficient;
   const parsedMaxScore = maxScore !== "" ? Number(maxScore) : NaN;
   const isMaxScoreValid = Number.isFinite(parsedMaxScore) && parsedMaxScore > 0;
 
-  // Check if form is valid
-  const isFormValid =
-    name.trim() !== "" &&
-    type !== "" &&
-    coefficient !== "" &&
-    parseInt(coefficient) >= 1 &&
-    isMaxScoreValid &&
-    isValidTotal &&
-    !isMaxReached;
+  // Check if form is valid — le coefficient est optionnel : les coefficients
+  // de sous-matières ne sont pas utilisés pour le moment (le backend les
+  // ignore, seule la note maximum compte sur les bulletins).
+  const isFormValid = name.trim() !== "" && type !== "" && isMaxScoreValid;
 
   const handleSubmit = () => {
     if (!isFormValid) return;
@@ -121,7 +108,7 @@ export function AddSubjectChildModal({
       name: name.trim(),
       code: generatedCode,
       type: type as "L" | "C" | "N" | "P" | "T",
-      coefficient: parseInt(coefficient),
+      coefficient: coefficient !== "" ? parseInt(coefficient) : 1,
       maxScore: parsedMaxScore,
     });
 
@@ -258,7 +245,10 @@ export function AddSubjectChildModal({
               htmlFor="coefficient"
               className="text-neutral-900 text-[13px] font-medium"
             >
-              Coefficient <span className="text-error">*</span>
+              Coefficient{" "}
+              <span className="text-neutral-500 text-xs font-normal">
+                (optionnel)
+              </span>
             </Label>
             <Input
               id="coefficient"
@@ -266,25 +256,13 @@ export function AddSubjectChildModal({
               min="1"
               value={coefficient}
               onChange={(e) => setCoefficient(e.target.value)}
-              placeholder={isMaxReached ? `Solde disponible : 0` : `Ex: 30`}
-              disabled={isMaxReached}
-              className="border border-neutral-300 rounded-lg disabled:bg-neutral-50 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-primary-500/40 focus-visible:border-primary-500"
+              placeholder="Ex: 1"
+              className="border border-neutral-300 rounded-lg focus-visible:ring-2 focus-visible:ring-primary-500/40 focus-visible:border-primary-500"
             />
             <p className="text-neutral-500 text-xs mt-1.5">
-              La somme des coefficients des sous-matières doit égaler{" "}
-              {parent.coefficient}
+              Les coefficients de sous-matières ne sont pas utilisés pour le
+              moment — seule la note maximum compte sur les bulletins.
             </p>
-            <p
-              className={`text-[13px] font-medium mt-1.5 ${isValidTotal ? "text-success" : "text-warning"}`}
-            >
-              Total actuel: {newTotal} / {parent.coefficient}
-            </p>
-            {isMaxReached && (
-              <p className="text-error text-[13px] font-medium mt-1.5">
-                Coefficient maximum atteint. Impossible d'ajouter une
-                sous-matière.
-              </p>
-            )}
           </div>
 
           {/* Note maximum */}

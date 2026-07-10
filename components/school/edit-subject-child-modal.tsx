@@ -79,23 +79,15 @@ export function EditSubjectChildModal({
     }
   }, [isOpen, child])
 
-  // Calculate current total coefficient (excluding this child)
-  const otherChildrenTotal = existingChildren
-    .filter(c => c.parentId === parent.id && c.id !== child.id)
-    .reduce((sum, c) => sum + c.coefficient, 0)
-  
-  const newTotal = otherChildrenTotal + (coefficient ? parseInt(coefficient) : 0)
-  const isValidTotal = newTotal <= parent.coefficient
-
   // Check if any field has changed
-  const hasChanges = 
+  const hasChanges =
     name.trim() !== child.name ||
     type !== child.type ||
     parseInt(coefficient) !== child.coefficient
 
-  // Check if form is valid
-  const isFormValid = name.trim() !== '' && coefficient !== '' && 
-    parseInt(coefficient) >= 1 && isValidTotal
+  // Check if form is valid — le coefficient est optionnel : les coefficients
+  // de sous-matières ne sont pas utilisés pour le moment (le backend les ignore).
+  const isFormValid = name.trim() !== ''
 
   const isSubmitEnabled = hasChanges && isFormValid
 
@@ -105,7 +97,7 @@ export function EditSubjectChildModal({
     onSubmit?.({
       name: name.trim(),
       type,
-      coefficient: parseInt(coefficient)
+      coefficient: coefficient !== '' ? parseInt(coefficient) : 1
     })
 
     setIsOpen(false)
@@ -316,7 +308,7 @@ export function EditSubjectChildModal({
                 fontWeight: 500
               }}
             >
-              Coefficient <span style={{ color: '#C84A3D' }}>*</span>
+              Coefficient <span style={{ color: '#78756F', fontSize: '12px', fontWeight: 400 }}>(optionnel)</span>
             </Label>
             <Input
               id="coefficient"
@@ -324,7 +316,7 @@ export function EditSubjectChildModal({
               min="1"
               value={coefficient}
               onChange={(e) => setCoefficient(e.target.value)}
-              placeholder="Ex: 30"
+              placeholder="Ex: 1"
               style={{
                 border: '1px solid #D1CECC',
                 borderRadius: '8px'
@@ -338,20 +330,7 @@ export function EditSubjectChildModal({
                 marginTop: '6px'
               }}
             >
-              La somme des coefficients des sous-matières doit égaler {parent.coefficient}
-            </p>
-            <p
-              style={{
-                color: isValidTotal ? '#2D7D46' : '#DC2626',
-                fontSize: '13px',
-                fontWeight: 500,
-                marginTop: '6px'
-              }}
-            >
-              {isValidTotal 
-                ? `Total actuel: ${newTotal} / ${parent.coefficient}`
-                : `Total ${newTotal} / ${parent.coefficient} — Dépasse le coefficient parent`
-              }
+              Les coefficients de sous-matières ne sont pas utilisés pour le moment — seule la note maximum compte sur les bulletins.
             </p>
           </div>
         </div>
