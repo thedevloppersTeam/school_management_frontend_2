@@ -1513,8 +1513,12 @@ const CSS = `
   font-style:normal;
   line-height:calc(8.5pt / var(--template-scale));
   color:#C85C65;
-  margin:0 0 calc(1pt / var(--template-scale));
+  margin:0 0 calc(0.5pt / var(--template-scale));
   padding:0;
+}
+
+.btpl .challenge-label{
+  margin-top:calc(9pt / var(--template-scale));
 }
 .btpl .challenge-label{margin-top:calc(3.5pt / var(--template-scale));}
 .btpl .plain{
