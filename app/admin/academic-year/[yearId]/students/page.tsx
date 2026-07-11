@@ -2,7 +2,7 @@
 
 import { clientFetch as apiFetch } from '@/lib/client-fetch'
 import { useEffect, useState, useMemo, useCallback } from "react"
-import { useParams } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -55,6 +55,7 @@ import {
   ArrowRightLeftIcon,
   UserRoundXIcon,
   UserRoundCheckIcon,
+  ClipboardListIcon,
 } from "lucide-react"
 import { ArchivedYearBanner } from "@/components/school/archived-year-banner"
 import { StudentEnrollForm } from "@/components/school/students/student-enroll-form"
@@ -127,6 +128,7 @@ function StatusBadge({ status }: { status: StudentRow['status'] }) {
 
 export default function StudentsManagementPage() {
   const params = useParams()
+  const router = useRouter()
   const yearId = params.yearId as string
   const { toast } = useToast()
 
@@ -798,6 +800,10 @@ export default function StudentsManagementPage() {
                                 </DropdownMenuItem>
                               ) : (
                                 <>
+                                  <DropdownMenuItem onClick={() => router.push(`/admin/academic-year/${yearId}/students/${student.enrollmentId}/grades`)}>
+                                    <ClipboardListIcon className="mr-2 h-4 w-4" />
+                                    Saisir les notes
+                                  </DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => setEditingStudent(student)}>
                                     <PencilIcon className="mr-2 h-4 w-4" />
                                     Modifier
