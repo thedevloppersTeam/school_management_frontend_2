@@ -61,6 +61,7 @@ import { StudentEnrollForm } from "@/components/school/students/student-enroll-f
 import { EditStudentModal } from "@/components/school/edit-student-modal"
 import { TransferEnrollmentModal } from "@/components/school/transfer-enrollment-modal"
 import { BulkTransferModal } from "@/components/school/bulk-transfer-modal"
+import { StepExemptionModal } from "@/components/school/step-exemption-modal"
 import { Checkbox } from "@/components/ui/checkbox"
 import { StatCard } from "@/components/school/stat-card"
 import { fetchClassSessions, type AcademicYear, type ClassSession } from "@/lib/api/dashboard"
@@ -156,6 +157,9 @@ export default function StudentsManagementPage() {
   // Transfert
   const [transferringStudent, setTransferringStudent] = useState<StudentRow | null>(null)
   const [transferSubmitting, setTransferSubmitting]   = useState(false)
+
+  // Dispense d'étape
+  const [exemptingStudent, setExemptingStudent] = useState<StudentRow | null>(null)
 
   // Transfert groupé
   const [selectedEnrollmentIds, setSelectedEnrollmentIds] = useState<Set<string>>(new Set())
@@ -802,6 +806,10 @@ export default function StudentsManagementPage() {
                                     <ArrowRightLeftIcon className="mr-2 h-4 w-4" />
                                     Transférer
                                   </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => setExemptingStudent(student)}>
+                                    <BadgeAlertIcon className="mr-2 h-4 w-4" />
+                                    Dispenser d&apos;une étape
+                                  </DropdownMenuItem>
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem
                                     onClick={() => { setDeactivatingId(student.enrollmentId); setDeactivationReason('') }}
@@ -981,6 +989,17 @@ export default function StudentsManagementPage() {
             })}
           submitting={transferSubmitting}
           onSubmit={handleTransfer}
+        />
+      )}
+
+      {/* Modal dispense d'étape */}
+      {exemptingStudent && (
+        <StepExemptionModal
+          open={!!exemptingStudent}
+          onOpenChange={open => !open && setExemptingStudent(null)}
+          enrollmentId={exemptingStudent.enrollmentId}
+          studentName={`${exemptingStudent.firstname} ${exemptingStudent.lastname}`}
+          steps={year?.steps ?? []}
         />
       )}
 

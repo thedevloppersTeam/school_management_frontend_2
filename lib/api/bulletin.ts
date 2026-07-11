@@ -365,12 +365,22 @@ async function calculateGeneralAverageForEnrollment(params: {
   selectedStepId: string
   classSubjects: ApiClassSubject[]
 }): Promise<number | null> {
-  const steps = await fetchSteps(params.academicYearId)
+  // Dispenses d'étape : une étape dont l'élève est dispensé est totalement
+  // exclue de la moyenne générale (ni au numérateur, ni au dénominateur).
+  const [steps, exemptionRows] = await Promise.all([
+    fetchSteps(params.academicYearId),
+    safeFetch<Array<{ stepId: string }>>(
+      `/api/enrollments/${params.enrollmentId}/step-exemptions`,
+      [],
+    ),
+  ])
+  const exemptedStepIds = new Set(exemptionRows.map((r) => r.stepId))
   const selectedStep = steps.find((step) => step.id === params.selectedStepId)
   const selectedStepNumber = selectedStep?.stepNumber
 
   const eligibleSteps = steps
     .filter((step) => selectedStepNumber === undefined || step.stepNumber <= selectedStepNumber)
+    .filter((step) => !exemptedStepIds.has(step.id))
     .sort((a, b) => a.stepNumber - b.stepNumber)
 
   if (eligibleSteps.length === 0) return null
