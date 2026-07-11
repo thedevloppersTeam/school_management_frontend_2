@@ -1729,6 +1729,19 @@ const CSS = `
 .btpl .mline-general .pdf-inline-svg-text{
   height:calc(10pt / var(--template-scale));
 }
+  .btpl .etape-block .mline,
+.btpl .mline-general{
+  grid-template-columns:
+    minmax(0,1fr)
+    calc(30pt / var(--template-scale))
+    calc(26pt / var(--template-scale));
+}
+
+.btpl .etape-block .mline .leader,
+.btpl .mline-general .leader{
+  justify-self:center;
+  text-align:center;
+}
 .btpl .mline-appreciation .pdf-inline-svg-text{height:calc(9pt / var(--template-scale));}
 .btpl .behavior-choice-header .pdf-inline-svg-text{height:calc(6pt / var(--template-scale));}
 .btpl .behavior-criterion .pdf-inline-svg-text{height:calc(10.5pt / var(--template-scale));}
