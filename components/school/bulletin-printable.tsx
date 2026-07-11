@@ -308,74 +308,6 @@ function PdfInlineSvgText({
   )
 }
 
-
-function PdfWrappedSvgText({
-  value,
-  className = "",
-}: Readonly<{
-  value: string | number | null | undefined
-  className?: string
-}>) {
-  const textValue =
-    value === null || value === undefined || value === ""
-      ? "—"
-      : String(value)
-
-  const words = textValue.trim().split(/\s+/).filter(Boolean)
-
-  /*
-   * Chaque mot est un élément flex distinct. Le navigateur est ainsi forcé
-   * à passer les mots suivants à la ligne lorsque la première colonne de la
-   * rubrique n'a plus de place. Cette solution ne dépend pas du wrapping
-   * d'un <text> SVG et reste stable pendant la capture html2canvas.
-   */
-  return (
-    <span
-      className={
-        className
-          ? `pdf-wrapped-svg-container ${className}`
-          : "pdf-wrapped-svg-container"
-      }
-      data-pdf-text-ready="true"
-      data-subject-wrap="words"
-      aria-label={textValue}
-      style={{
-        display: "flex",
-        flexWrap: "wrap",
-        alignItems: "flex-start",
-        alignContent: "flex-start",
-        columnGap: "0.24em",
-        rowGap: 0,
-        width: "100%",
-        minWidth: 0,
-        maxWidth: "100%",
-        whiteSpace: "normal",
-        overflow: "hidden",
-      }}
-    >
-      {words.map((word, index) => (
-        <span
-          className="pdf-wrapped-word"
-          key={`${word}-${index}`}
-          aria-hidden="true"
-          style={{
-            display: "inline-block",
-            flex: "0 1 auto",
-            minWidth: 0,
-            maxWidth: "100%",
-            whiteSpace: "normal",
-            overflowWrap: "anywhere",
-            wordBreak: "break-word",
-            lineHeight: "inherit",
-          }}
-        >
-          {word}
-        </span>
-      ))}
-    </span>
-  )
-}
-
 function RubriqueTable({
   title,
   fallbackTitle,
@@ -446,7 +378,7 @@ function RubriqueTable({
                   }
                   title={entry.name}
                 >
-                  <PdfWrappedSvgText value={entry.name} />
+                  <PdfInlineSvgText value={entry.name} align="start" />
                 </div>
 
                 <div className="note-cell rubric-empty-cell" />
@@ -467,7 +399,7 @@ function RubriqueTable({
               key={`${entry.name}-${index}`}
             >
               <div className="subject-item" title={entry.name}>
-                <PdfWrappedSvgText value={entry.name} />
+                <PdfInlineSvgText value={entry.name} align="start" />
               </div>
 
               <div
@@ -606,12 +538,7 @@ function BehTable({
           <div className="behavior-choice-cell">
             {item.oui === true ? (
               <span className="behavior-check">
-                <PdfInlineSvgText
-                  value="✓"
-                  align="middle"
-                  color="#000000"
-                  className="behavior-check-mark"
-                />
+                <PdfInlineSvgText value="✓" align="middle" />
               </span>
             ) : (
               ""
@@ -621,12 +548,7 @@ function BehTable({
           <div className="behavior-choice-cell">
             {item.oui === false ? (
               <span className="behavior-check">
-                <PdfInlineSvgText
-                  value="✓"
-                  align="middle"
-                  color="#000000"
-                  className="behavior-check-mark"
-                />
+                <PdfInlineSvgText value="✓" align="middle" />
               </span>
             ) : (
               ""
@@ -1907,11 +1829,8 @@ const CSS = `
     minmax(0,1fr)
     var(--mline-leader-width)
     var(--mline-value-width);
-  grid-auto-rows:minmax(min-content,auto);
   align-items:stretch;
   width:100%;
-  min-width:0;
-  max-width:100%;
   box-sizing:border-box;
   margin:0;
   padding:0;
@@ -1971,59 +1890,6 @@ const CSS = `
   padding:0 calc(2pt / var(--template-scale)) 0 0;
   min-width:0;
   overflow-wrap:break-word;
-}
-
-.btpl .rubrique-row > .subject-item,
-.btpl .rubrique-row > .subject-group{
-  grid-column:1;
-  width:100%;
-  min-width:0 !important;
-  max-width:100% !important;
-  inline-size:100%;
-  max-inline-size:100%;
-  box-sizing:border-box;
-  white-space:normal !important;
-  overflow:hidden;
-}
-
-
-.btpl .pdf-wrapped-svg-container{
-  display:flex !important;
-  flex-wrap:wrap !important;
-  align-items:flex-start;
-  align-content:flex-start;
-  column-gap:.24em;
-  row-gap:0;
-  width:100% !important;
-  min-width:0 !important;
-  max-width:100% !important;
-  inline-size:100%;
-  max-inline-size:100%;
-  box-sizing:border-box;
-  color:inherit;
-  font-family:inherit;
-  font-size:inherit;
-  font-weight:inherit;
-  font-style:inherit;
-  line-height:inherit;
-  white-space:normal !important;
-  overflow:hidden;
-}
-
-.btpl .pdf-wrapped-word{
-  display:inline-block;
-  flex:0 1 auto;
-  min-width:0;
-  max-width:100%;
-  white-space:normal !important;
-  overflow-wrap:anywhere;
-  word-break:break-word;
-  line-height:inherit;
-}
-
-.btpl .rubrique-data-row .subject-item,
-.btpl .rubrique-row .subject-group{
-  overflow:hidden;
 }
 
 .btpl .note-cell,
@@ -2333,15 +2199,14 @@ const CSS = `
   display:block;
   width:100%;
   height:calc(9pt / var(--template-scale));
-  color:#000000 !important;
+  color:var(--check);
   font-size:calc(8pt / var(--template-scale));
   font-weight:700;
 }
 
+/* Couleur uniquement : aucune règle de dimension, d'espacement ou de mise en page. */
 .btpl .behavior-check .pdf-inline-svg-text,
-.btpl .behavior-check .pdf-inline-svg-text text,
-.btpl .behavior-check .behavior-check-mark,
-.btpl .behavior-check .behavior-check-mark text{
+.btpl .behavior-check .pdf-inline-svg-text text{
   color:#000000 !important;
   fill:#000000 !important;
 }
@@ -2584,8 +2449,6 @@ const CSS = `
 
 /* Soulignement SVG stable. */
 .btpl .subject-group .pdf-inline-svg-text text,
-.btpl .subject-group .pdf-wrapped-svg-text text,
-.btpl .subject-group .pdf-wrapped-svg-container,
 .btpl .behav-title .pdf-inline-svg-text text,
 .btpl .h-maroon .pdf-inline-svg-text text,
 .btpl .h-maroon2 .pdf-inline-svg-text text,
@@ -2612,16 +2475,8 @@ const CSS = `
   height:calc(9.5pt / var(--template-scale));
 }
 
-.btpl .subject-group .pdf-wrapped-svg-container{
-  min-height:calc(9.5pt / var(--template-scale));
-}
-
 .btpl .subject-item .pdf-inline-svg-text{
   height:calc(9pt / var(--template-scale));
-}
-
-.btpl .subject-item .pdf-wrapped-svg-container{
-  min-height:calc(9pt / var(--template-scale));
 }
 
 .btpl .note-value .pdf-inline-svg-text,
