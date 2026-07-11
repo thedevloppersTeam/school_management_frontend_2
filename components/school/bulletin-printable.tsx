@@ -410,13 +410,19 @@ function BehaviorMetricLine({
   label,
   value,
   labelAlign = "end",
-}: Readonly<{ label: string; value: string; labelAlign?: PdfTextAlign }>) {
+  valueTone = "",
+}: Readonly<{
+  label: string
+  value: string
+  labelAlign?: PdfTextAlign
+  valueTone?: string
+}>) {
   return (
     <div className="behavior-metric-row">
       <span className="behavior-metric-label" title={label}>
         <PdfInlineSvgText value={label} align={labelAlign} />
       </span>
-      <b className="behavior-metric-value">
+      <b className={valueTone ? `behavior-metric-value ${valueTone}` : "behavior-metric-value"}>
         <PdfInlineSvgText value={value} align="middle" />
       </b>
     </div>
@@ -452,8 +458,51 @@ function getCycleLabel(level: string): string {
   return ""
 }
 
-function formatLevelForBulletin(level: string): string {
-  return level.replace(/\bA\.?\s*F\.?\b/gi, "A.F")
+function cleanRoomLabel(value: string | null | undefined): string {
+  if (!value) return ""
+
+  return value
+    .trim()
+    .replace(/^salle\s+/i, "")
+    .replace(/^section\s+/i, "")
+    .trim()
+}
+
+function extractRoomFromLevel(level: string): string {
+  const match = level.match(/\s[-–]\s*([A-Za-z0-9]+)\s*$/)
+  return cleanRoomLabel(match?.[1])
+}
+
+function getRoomLabel(data: BulletinData): string {
+  const record = data as BulletinData & {
+    salle?: string | null
+    salleName?: string | null
+    salleNom?: string | null
+    section?: string | null
+    room?: string | null
+    roomName?: string | null
+  }
+
+  return (
+    cleanRoomLabel(record.salle) ||
+    cleanRoomLabel(record.salleName) ||
+    cleanRoomLabel(record.salleNom) ||
+    cleanRoomLabel(record.section) ||
+    cleanRoomLabel(record.room) ||
+    cleanRoomLabel(record.roomName) ||
+    extractRoomFromLevel(data.niveau || "")
+  )
+}
+
+function formatLevelForBulletin(level: string, room: string): string {
+  const normalizedLevel = level
+    .replace(/\s[-–]\s*[A-Za-z0-9]+\s*$/, "")
+    .replace(/\bA\.?\s*F\.?\b/gi, "A.F.")
+    .replace(/^\s*1\s*(?:e|ere|ère)?\b/i, "1ere")
+    .replace(/\s+/g, " ")
+    .trim()
+
+  return room ? `${normalizedLevel} - ${room}` : normalizedLevel
 }
 function extractStepNumber(period: string): number | null {
   const match = period.match(/\d+/)
@@ -487,7 +536,8 @@ function BulletinHeader({ data }: Readonly<{ data: BulletinData }>) {
   const periodDetails = getPeriodDetails(data.periode)
   const firstName = data.prenoms || "—"
   const lastName = (data.nom || "—").toLocaleUpperCase("fr")
-  const level = formatLevelForBulletin(data.niveau || "—")
+  const roomLabel = getRoomLabel(data)
+  const level = formatLevelForBulletin(data.niveau || "—", roomLabel)
   const period = data.periode || "—"
   const birthDate = data.dateNaissance || "—"
   const academicYear = data.anneeScolaire || "—"
@@ -670,6 +720,8 @@ export function BulletinPrintable({ data }: { data: BulletinData; renderMode?: "
     uniforme: displayBehaviorMetric(comp.uniforme),
     discipline: displayBehaviorMetric(comp.discipline),
   }
+  const uniformeTone = colorClass(parseDisplayNumber(behaviorMetrics.uniforme), 10)
+  const disciplineTone = colorClass(parseDisplayNumber(behaviorMetrics.discipline), 10)
   const cleanRemarque = cleanBehaviorRemark(comp.remarque)
   const col1 = comp.items.filter((c) => c.col === 1)
   const col2 = comp.items.filter((c) => c.col === 2)
@@ -707,7 +759,7 @@ export function BulletinPrintable({ data }: { data: BulletinData; renderMode?: "
             <MoyLine label="Moyenne classe sur 10" value={formatBulletinNumber(data.moyClasseR2)} valueTone={colorClass(data.moyClasseR2, 10)} variant="class" />
             <div className="etape-block">
               <MoyLine label="Moy. de l'étape" value={data.moyenneEtape} valueTone={colorClass(moyenneEtapeNumber, 10)} variant="step" />
-              <MoyLine label="Appréciation" value={data.appreciation || "—"} variant="appreciation" />
+              <MoyLine label="Appréciation" value={data.appreciation || "—"} valueTone={colorClass(moyenneEtapeNumber, 10)} variant="appreciation" />
               <MoyLine label="Moyenne classe sur 10" value={moyClasse} valueTone={colorClass(moyClasseNumber, 10)} variant="general-class" />
               {moyenneGenerale ? (
                 <MoyLine
@@ -751,8 +803,8 @@ export function BulletinPrintable({ data }: { data: BulletinData; renderMode?: "
               <BehaviorMetricLine label="Nbre de leçons non sues" value={behaviorMetrics.leconsNonSues} />
             </div>
             <div>
-              <BehaviorMetricLine label={"Respect des prescrits de l'uniforme"} value={behaviorMetrics.uniforme} />
-              <BehaviorMetricLine label="Discipline" value={behaviorMetrics.discipline} />
+              <BehaviorMetricLine label={"Respect des prescrits de l'uniforme"} value={behaviorMetrics.uniforme} valueTone={uniformeTone} />
+              <BehaviorMetricLine label="Discipline" value={behaviorMetrics.discipline} valueTone={disciplineTone} />
             </div>
           </div>
 
@@ -898,7 +950,7 @@ const CSS = `
 }
 .btpl .bulletin-header-grid{
   display:grid;
-  grid-template-columns:calc(90pt / var(--template-scale)) calc(8pt / var(--template-scale)) calc(358pt / var(--template-scale)) calc(8pt / var(--template-scale)) calc(76pt / var(--template-scale));
+  grid-template-columns:calc(90pt / var(--template-scale)) calc(8pt / var(--template-scale)) calc(358pt / var(--template-scale)) calc(4pt / var(--template-scale)) calc(80pt / var(--template-scale));
   align-items:start;width:100%;
 }
 .btpl .bulletin-logo-block{
@@ -906,7 +958,7 @@ const CSS = `
   text-align:center;
   padding-top:0;
   margin:0 auto;
-  transform:translateY(calc(-4pt / var(--template-scale)));
+  transform:translateY(calc(-7pt / var(--template-scale)));
 }
 .btpl .bulletin-logo{
   width:100%;max-width:calc(90pt / var(--template-scale));max-height:calc(90pt / var(--template-scale));
@@ -992,11 +1044,11 @@ const CSS = `
   color:#000;margin:0;padding:0;white-space:nowrap;word-break:normal;overflow-wrap:normal;align-self:start;
 }
 .btpl .bulletin-photo-block{
-  width:calc(76pt / var(--template-scale));display:flex;flex-direction:column;
+  width:calc(80pt / var(--template-scale));display:flex;flex-direction:column;
   align-items:center;justify-content:flex-start;margin:0 auto;text-align:center;
 }
 .btpl .bulletin-photo{
-  width:calc(76pt / var(--template-scale));height:calc(86pt / var(--template-scale));margin:0;padding:0;border:1px solid #8f8f8f;background:#f7f7f7;
+  width:calc(80pt / var(--template-scale));height:calc(91pt / var(--template-scale));margin:0;padding:0;border:1px solid #8f8f8f;background:#f7f7f7;
   display:flex;align-items:center;justify-content:center;overflow:hidden;
 }
 .btpl .bulletin-photo-img{width:100%;height:100%;object-fit:cover;object-position:50% 25%;display:block;}
@@ -1054,13 +1106,13 @@ const CSS = `
   font-style:normal;line-height:calc(9.5pt / var(--template-scale));color:#000;
   text-decoration-line:underline;text-decoration-color:#000;text-decoration-thickness:calc(0.5pt / var(--template-scale));
   text-underline-offset:calc(1.5pt / var(--template-scale));margin:0;
-  padding:calc(4pt / var(--template-scale)) 0 calc(1.75pt / var(--template-scale));
+  padding:calc(4pt / var(--template-scale)) calc(2pt / var(--template-scale)) calc(1.75pt / var(--template-scale)) 0;
   min-width:0;overflow-wrap:break-word;word-break:normal;
 }
 .btpl .subject-group-first{padding-top:0;}
 .btpl .subject-item{
   font-family:var(--font-serif);font-size:calc(7.5pt / var(--template-scale));font-weight:400;
-  font-style:normal;line-height:calc(9pt / var(--template-scale));color:#000;margin:0;padding:0;
+  font-style:normal;line-height:calc(9pt / var(--template-scale));color:#000;margin:0;padding:0 calc(2pt / var(--template-scale)) 0 0;
   min-width:0;overflow-wrap:break-word;word-break:normal;
 }
 .btpl .note-cell,.btpl .coeff-cell{
@@ -1228,12 +1280,9 @@ const CSS = `
 .btpl .mline-general{
   background:#DDF1FA;
   border:none;
-  padding:
-    calc(2pt / var(--template-scale))
-    calc(3pt / var(--template-scale))
-    calc(2pt / var(--template-scale));
-  margin-top:calc(4pt / var(--template-scale));
-  align-items:center;
+  padding:0;
+  margin-top:calc(3pt / var(--template-scale));
+  align-items:baseline;
 }
 .btpl .mline-appreciation .ml{
   font-size:calc(7.5pt / var(--template-scale));
@@ -1253,7 +1302,8 @@ const CSS = `
 
 .btpl .mline-general .ml{
   font-weight:700;
-  text-align:left;
+  text-align:right;
+  padding-right:calc(3pt / var(--template-scale));
 }
 
 .btpl .mline-general .leader{
@@ -1421,6 +1471,10 @@ const CSS = `
   text-align:center;
 }
 
+.btpl .behavior-metric-value.red{color:var(--red);}
+.btpl .behavior-metric-value.orange{color:var(--orange);}
+.btpl .behavior-metric-value.green{color:var(--green);}
+
 .btpl .behavior-metrics-grid > div:nth-child(1) .behavior-metric-label{
   text-align:left;
 }
@@ -1449,7 +1503,7 @@ const CSS = `
   text-decoration-color:#000;
   text-decoration-thickness:calc(.5pt / var(--template-scale));
   text-underline-offset:calc(1.5pt / var(--template-scale));
-  margin:0 0 calc(5pt / var(--template-scale));
+  margin:0 0 calc(3pt / var(--template-scale));
   padding:0;
 }
 .btpl .h-maroon2{
@@ -1459,10 +1513,10 @@ const CSS = `
   font-style:normal;
   line-height:calc(8.5pt / var(--template-scale));
   color:#C85C65;
-  margin:0 0 calc(2pt / var(--template-scale));
+  margin:0 0 calc(1pt / var(--template-scale));
   padding:0;
 }
-.btpl .challenge-label{margin-top:calc(7pt / var(--template-scale));}
+.btpl .challenge-label{margin-top:calc(3.5pt / var(--template-scale));}
 .btpl .plain{
   font-family:Arial,Helvetica,sans-serif;
   font-size:calc(6.9pt / var(--template-scale));
@@ -1634,7 +1688,7 @@ const CSS = `
 
 .btpl .plain{
   font-size:calc(6.6pt / var(--template-scale));
-  line-height:calc(8.4pt / var(--template-scale));
+  line-height:calc(7.6pt / var(--template-scale));
 }
 
 .btpl .legend{
