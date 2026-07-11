@@ -321,11 +321,13 @@ function PdfWrappedSvgText({
       ? "—"
       : String(value)
 
+  const words = textValue.trim().split(/\s+/).filter(Boolean)
+
   /*
-   * Le retour à la ligne est volontairement rendu avec du texte HTML natif.
-   * Un <text> SVG ne se replie pas automatiquement et pouvait dépasser jusque
-   * dans les colonnes Notes / Coeff. Le navigateur calcule maintenant la
-   * hauteur de la ligne avant la capture PDF.
+   * Chaque mot est un élément flex distinct. Le navigateur est ainsi forcé
+   * à passer les mots suivants à la ligne lorsque la première colonne de la
+   * rubrique n'a plus de place. Cette solution ne dépend pas du wrapping
+   * d'un <text> SVG et reste stable pendant la capture html2canvas.
    */
   return (
     <span
@@ -335,8 +337,41 @@ function PdfWrappedSvgText({
           : "pdf-wrapped-svg-container"
       }
       data-pdf-text-ready="true"
+      data-subject-wrap="words"
+      aria-label={textValue}
+      style={{
+        display: "flex",
+        flexWrap: "wrap",
+        alignItems: "flex-start",
+        alignContent: "flex-start",
+        columnGap: "0.24em",
+        rowGap: 0,
+        width: "100%",
+        minWidth: 0,
+        maxWidth: "100%",
+        whiteSpace: "normal",
+        overflow: "hidden",
+      }}
     >
-      {textValue}
+      {words.map((word, index) => (
+        <span
+          className="pdf-wrapped-word"
+          key={`${word}-${index}`}
+          aria-hidden="true"
+          style={{
+            display: "inline-block",
+            flex: "0 1 auto",
+            minWidth: 0,
+            maxWidth: "100%",
+            whiteSpace: "normal",
+            overflowWrap: "anywhere",
+            wordBreak: "break-word",
+            lineHeight: "inherit",
+          }}
+        >
+          {word}
+        </span>
+      ))}
     </span>
   )
 }
@@ -571,7 +606,12 @@ function BehTable({
           <div className="behavior-choice-cell">
             {item.oui === true ? (
               <span className="behavior-check">
-                <PdfInlineSvgText value="✓" align="middle" />
+                <PdfInlineSvgText
+                  value="✓"
+                  align="middle"
+                  color="#000000"
+                  className="behavior-check-mark"
+                />
               </span>
             ) : (
               ""
@@ -581,7 +621,12 @@ function BehTable({
           <div className="behavior-choice-cell">
             {item.oui === false ? (
               <span className="behavior-check">
-                <PdfInlineSvgText value="✓" align="middle" />
+                <PdfInlineSvgText
+                  value="✓"
+                  align="middle"
+                  color="#000000"
+                  className="behavior-check-mark"
+                />
               </span>
             ) : (
               ""
@@ -1457,7 +1502,7 @@ const CSS = `
   --blue:${BULLETIN_BLUE};
   --blue2:#4a9bcc;
   --hand:#16335c;
-  --check:#1f5fae;
+  --check:#000000;
   --red:#cf3a35;
   --orange:#d9a21b;
   --maroon:#8a1b1b;
@@ -1862,8 +1907,11 @@ const CSS = `
     minmax(0,1fr)
     var(--mline-leader-width)
     var(--mline-value-width);
+  grid-auto-rows:minmax(min-content,auto);
   align-items:stretch;
   width:100%;
+  min-width:0;
+  max-width:100%;
   box-sizing:border-box;
   margin:0;
   padding:0;
@@ -1927,9 +1975,12 @@ const CSS = `
 
 .btpl .rubrique-row > .subject-item,
 .btpl .rubrique-row > .subject-group{
+  grid-column:1;
   width:100%;
-  min-width:0;
-  max-width:100%;
+  min-width:0 !important;
+  max-width:100% !important;
+  inline-size:100%;
+  max-inline-size:100%;
   box-sizing:border-box;
   white-space:normal !important;
   overflow:hidden;
@@ -1937,10 +1988,17 @@ const CSS = `
 
 
 .btpl .pdf-wrapped-svg-container{
-  display:block;
-  width:100%;
-  min-width:0;
-  max-width:100%;
+  display:flex !important;
+  flex-wrap:wrap !important;
+  align-items:flex-start;
+  align-content:flex-start;
+  column-gap:.24em;
+  row-gap:0;
+  width:100% !important;
+  min-width:0 !important;
+  max-width:100% !important;
+  inline-size:100%;
+  max-inline-size:100%;
   box-sizing:border-box;
   color:inherit;
   font-family:inherit;
@@ -1949,10 +2007,18 @@ const CSS = `
   font-style:inherit;
   line-height:inherit;
   white-space:normal !important;
-  overflow-wrap:anywhere !important;
-  word-break:break-word;
-  hyphens:auto;
   overflow:hidden;
+}
+
+.btpl .pdf-wrapped-word{
+  display:inline-block;
+  flex:0 1 auto;
+  min-width:0;
+  max-width:100%;
+  white-space:normal !important;
+  overflow-wrap:anywhere;
+  word-break:break-word;
+  line-height:inherit;
 }
 
 .btpl .rubrique-data-row .subject-item,
@@ -2267,9 +2333,17 @@ const CSS = `
   display:block;
   width:100%;
   height:calc(9pt / var(--template-scale));
-  color:var(--check);
+  color:#000000 !important;
   font-size:calc(8pt / var(--template-scale));
   font-weight:700;
+}
+
+.btpl .behavior-check .pdf-inline-svg-text,
+.btpl .behavior-check .pdf-inline-svg-text text,
+.btpl .behavior-check .behavior-check-mark,
+.btpl .behavior-check .behavior-check-mark text{
+  color:#000000 !important;
+  fill:#000000 !important;
 }
 
 .btpl .behavior-metrics-grid{
