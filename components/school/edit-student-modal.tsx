@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { isNisuValid, NISU_RULE_LABEL } from "@/lib/nisu";
+import { isNisuValid, normalizeNisu, NISU_RULE_LABEL } from "@/lib/nisu";
 
 export interface EditStudentData {
   // Compte (User)
@@ -80,8 +80,10 @@ export function EditStudentModal({
     (e: React.ChangeEvent<HTMLInputElement>) =>
       setForm((f) => ({ ...f, [field]: e.target.value }));
 
-  // Le NISU est optionnel mais s'il est renseigné il doit être valide
-  const nisuTouchedInvalid = form.nisu.trim() !== "" && !isNisuValid(form.nisu.trim());
+  // Le NISU n'est validé que s'il a été MODIFIÉ (beaucoup de NISU hérités ne
+  // respectent pas le format 20 caractères — on ne bloque pas leur édition).
+  const nisuChanged = normalizeNisu(form.nisu) !== normalizeNisu(initialData.nisu);
+  const nisuTouchedInvalid = nisuChanged && form.nisu.trim() !== "" && !isNisuValid(form.nisu.trim());
   const canSubmit =
     !submitting &&
     form.lastname.trim() !== "" &&
