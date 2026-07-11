@@ -2,7 +2,7 @@
 
 import { clientFetch as apiFetch } from '@/lib/client-fetch'
 import { useEffect, useState, useMemo, useCallback } from "react"
-import { useParams, useRouter } from "next/navigation"
+import { useParams } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -55,11 +55,10 @@ import {
   ArrowRightLeftIcon,
   UserRoundXIcon,
   UserRoundCheckIcon,
-  ClipboardListIcon,
 } from "lucide-react"
 import { ArchivedYearBanner } from "@/components/school/archived-year-banner"
 import { StudentEnrollForm } from "@/components/school/students/student-enroll-form"
-import { EditStudentModal } from "@/components/school/edit-student-modal"
+import { EditStudentModal, type EditStudentData } from "@/components/school/edit-student-modal"
 import { TransferEnrollmentModal } from "@/components/school/transfer-enrollment-modal"
 import { BulkTransferModal } from "@/components/school/bulk-transfer-modal"
 import { StepExemptionModal } from "@/components/school/step-exemption-modal"
@@ -78,6 +77,8 @@ interface StudentRow {
   nisu:          string
   firstname:     string
   lastname:      string
+  birthDate?:    string
+  email?:        string
   profilePhoto?: string
   classSessionId: string
   className:     string
@@ -128,7 +129,6 @@ function StatusBadge({ status }: { status: StudentRow['status'] }) {
 
 export default function StudentsManagementPage() {
   const params = useParams()
-  const router = useRouter()
   const yearId = params.yearId as string
   const { toast } = useToast()
 
@@ -205,7 +205,7 @@ export default function StudentsManagementPage() {
               phone1?: string
               phone2?: string
               parentsEmail?: string
-              user?: { firstname?: string; lastname?: string; profilePhoto?: string }
+              user?: { firstname?: string; lastname?: string; profilePhoto?: string; birthDate?: string; email?: string }
             }
           }>>(`/api/enrollments?classSessionId=${session.id}`)
 
@@ -220,6 +220,8 @@ export default function StudentsManagementPage() {
               nisu:          enr.student?.nisu || '',
               firstname:     enr.student?.user?.firstname || '',
               lastname:      enr.student?.user?.lastname || '',
+              birthDate:     enr.student?.user?.birthDate ? String(enr.student.user.birthDate).slice(0, 10) : '',
+              email:         enr.student?.user?.email || '',
               profilePhoto:  enr.student?.user?.profilePhoto,
               classSessionId: session.id,
               className,
@@ -352,10 +354,7 @@ export default function StudentsManagementPage() {
   }
 
   // ── Modification profil ────────────────────────────────────────────────────
-  const handleEditStudent = async (data: {
-    address: string; motherName: string; fatherName: string
-    phone1: string; phone2: string; parentsEmail: string
-  }) => {
+  const handleEditStudent = async (data: EditStudentData) => {
     if (!editingStudent) return
     setEditSubmitting(true)
     try {
@@ -365,12 +364,17 @@ export default function StudentsManagementPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       })
-      if (!res.ok) throw new Error()
+      const payload = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(payload?.message || undefined)
       toast({ title: "Profil mis à jour" })
       setEditingStudent(null)
       loadStudents()
-    } catch {
-      toast({ title: "Erreur", description: "Impossible de modifier le profil", variant: "destructive" })
+    } catch (err) {
+      toast({
+        title: "Erreur",
+        description: err instanceof Error && err.message ? err.message : "Impossible de modifier le profil",
+        variant: "destructive",
+      })
     } finally {
       setEditSubmitting(false)
     }
@@ -800,10 +804,6 @@ export default function StudentsManagementPage() {
                                 </DropdownMenuItem>
                               ) : (
                                 <>
-                                  <DropdownMenuItem onClick={() => router.push(`/admin/academic-year/${yearId}/students/${student.enrollmentId}/grades`)}>
-                                    <ClipboardListIcon className="mr-2 h-4 w-4" />
-                                    Saisir les notes
-                                  </DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => setEditingStudent(student)}>
                                     <PencilIcon className="mr-2 h-4 w-4" />
                                     Modifier
@@ -963,6 +963,11 @@ export default function StudentsManagementPage() {
           studentName={`${editingStudent.firstname} ${editingStudent.lastname}`}
           studentCode={editingStudent.studentCode}
           initialData={{
+            lastname:     editingStudent.lastname,
+            firstname:    editingStudent.firstname,
+            birthDate:    editingStudent.birthDate,
+            email:        editingStudent.email,
+            nisu:         editingStudent.nisu,
             address:      editingStudent.address,
             motherName:   editingStudent.motherName,
             fatherName:   editingStudent.fatherName,

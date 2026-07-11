@@ -11,9 +11,17 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { AlertTriangleIcon } from "lucide-react";
+import { isNisuValid, NISU_RULE_LABEL } from "@/lib/nisu";
 
-interface EditStudentData {
+export interface EditStudentData {
+  // Compte (User)
+  lastname: string;
+  firstname: string;
+  birthDate: string; // yyyy-mm-dd
+  email: string;
+  // Identité scolaire
+  nisu: string;
+  // Coordonnées
   address: string;
   motherName: string;
   fatherName: string;
@@ -32,6 +40,12 @@ interface EditStudentModalProps {
   onSubmit: (data: EditStudentData) => void;
 }
 
+const EMPTY: EditStudentData = {
+  lastname: "", firstname: "", birthDate: "", email: "",
+  nisu: "",
+  address: "", motherName: "", fatherName: "", phone1: "", phone2: "", parentsEmail: "",
+};
+
 export function EditStudentModal({
   open,
   onOpenChange,
@@ -41,23 +55,21 @@ export function EditStudentModal({
   submitting = false,
   onSubmit,
 }: EditStudentModalProps) {
-  const [form, setForm] = useState<EditStudentData>({
-    address: "",
-    motherName: "",
-    fatherName: "",
-    phone1: "",
-    phone2: "",
-    parentsEmail: "",
-  });
+  const [form, setForm] = useState<EditStudentData>(EMPTY);
 
   useEffect(() => {
     if (open) {
       setForm({
-        address: initialData.address || "",
-        motherName: initialData.motherName || "",
-        fatherName: initialData.fatherName || "",
-        phone1: initialData.phone1 || "",
-        phone2: initialData.phone2 || "",
+        lastname:     initialData.lastname || "",
+        firstname:    initialData.firstname || "",
+        birthDate:    initialData.birthDate || "",
+        email:        initialData.email || "",
+        nisu:         initialData.nisu || "",
+        address:      initialData.address || "",
+        motherName:   initialData.motherName || "",
+        fatherName:   initialData.fatherName || "",
+        phone1:       initialData.phone1 || "",
+        phone2:       initialData.phone2 || "",
         parentsEmail: initialData.parentsEmail || "",
       });
     }
@@ -68,136 +80,99 @@ export function EditStudentModal({
     (e: React.ChangeEvent<HTMLInputElement>) =>
       setForm((f) => ({ ...f, [field]: e.target.value }));
 
+  // Le NISU est optionnel mais s'il est renseigné il doit être valide
+  const nisuTouchedInvalid = form.nisu.trim() !== "" && !isNisuValid(form.nisu.trim());
+  const canSubmit =
+    !submitting &&
+    form.lastname.trim() !== "" &&
+    form.firstname.trim() !== "" &&
+    !nisuTouchedInvalid;
+
+  const labelCls = "text-sm font-medium text-neutral-900";
+  const inputCls = "border-neutral-300 rounded-lg";
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[480px] bg-white rounded-xl">
+      <DialogContent className="max-w-[560px] max-h-[85vh] overflow-y-auto bg-white rounded-xl">
         <DialogHeader>
           <DialogTitle className="font-serif text-2xl font-bold text-primary-800">
-            Modifier le profil
+            Modifier l&apos;élève
           </DialogTitle>
           <p className="text-sm text-neutral-500 mt-0.5">
             {studentName} · <span className="font-mono">{studentCode}</span>
           </p>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
-          {/* Adresse */}
-          <div className="space-y-2">
-            <Label
-              htmlFor="student-address"
-              className="text-sm font-medium text-neutral-900"
-            >
-              Adresse
-            </Label>
-            <Input
-              id="student-address"
-              value={form.address}
-              onChange={set("address")}
-              placeholder="Adresse de l'élève"
-              className="border-neutral-300 rounded-lg"
-            />
-          </div>
-
-          {/* Mère + Père */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label
-                htmlFor="student-mother-name"
-                className="text-sm font-medium text-neutral-900"
-              >
-                Nom de la mère
-              </Label>
-              <Input
-                id="student-mother-name"
-                value={form.motherName}
-                onChange={set("motherName")}
-                placeholder="Prénom Nom"
-                className="border-neutral-300 rounded-lg"
-              />
+        <div className="space-y-5 py-2">
+          {/* ── Identité ──────────────────────────────────────────── */}
+          <div className="space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Identité</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="edit-lastname" className={labelCls}>Nom <span className="text-error">*</span></Label>
+                <Input id="edit-lastname" value={form.lastname} onChange={set("lastname")} placeholder="Nom" className={inputCls} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-firstname" className={labelCls}>Prénom <span className="text-error">*</span></Label>
+                <Input id="edit-firstname" value={form.firstname} onChange={set("firstname")} placeholder="Prénom" className={inputCls} />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="edit-birthdate" className={labelCls}>Date de naissance</Label>
+                <Input id="edit-birthdate" type="date" value={form.birthDate} onChange={set("birthDate")} className={inputCls} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-nisu" className={labelCls}>NISU</Label>
+                <Input
+                  id="edit-nisu"
+                  value={form.nisu}
+                  onChange={set("nisu")}
+                  placeholder="20 caractères alphanumériques"
+                  className={`${inputCls} font-mono uppercase ${nisuTouchedInvalid ? "border-destructive focus-visible:ring-destructive" : ""}`}
+                />
+                {nisuTouchedInvalid && (
+                  <p className="text-xs text-destructive">{NISU_RULE_LABEL}</p>
+                )}
+              </div>
             </div>
             <div className="space-y-2">
-              <Label
-                htmlFor="student-father-name"
-                className="text-sm font-medium text-neutral-900"
-              >
-                Nom du père
-              </Label>
-              <Input
-                id="student-father-name"
-                value={form.fatherName}
-                onChange={set("fatherName")}
-                placeholder="Prénom Nom"
-                className="border-neutral-300 rounded-lg"
-              />
+              <Label htmlFor="edit-email" className={labelCls}>Email de l&apos;élève</Label>
+              <Input id="edit-email" type="email" value={form.email} onChange={set("email")} placeholder="email@exemple.com" className={inputCls} />
             </div>
           </div>
 
-          {/* Téléphone 1 + 2 */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {/* ── Coordonnées ───────────────────────────────────────── */}
+          <div className="space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Coordonnées</p>
             <div className="space-y-2">
-              <Label
-                htmlFor="student-phone1"
-                className="text-sm font-medium text-neutral-900"
-              >
-                Téléphone 1
-              </Label>
-              <Input
-                id="student-phone1"
-                type="tel"
-                value={form.phone1}
-                onChange={set("phone1")}
-                placeholder="+509..."
-                className="border-neutral-300 rounded-lg"
-              />
+              <Label htmlFor="edit-address" className={labelCls}>Adresse</Label>
+              <Input id="edit-address" value={form.address} onChange={set("address")} placeholder="Adresse de l'élève" className={inputCls} />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="edit-mother" className={labelCls}>Nom de la mère</Label>
+                <Input id="edit-mother" value={form.motherName} onChange={set("motherName")} placeholder="Prénom Nom" className={inputCls} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-father" className={labelCls}>Nom du père</Label>
+                <Input id="edit-father" value={form.fatherName} onChange={set("fatherName")} placeholder="Prénom Nom" className={inputCls} />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="edit-phone1" className={labelCls}>Téléphone 1</Label>
+                <Input id="edit-phone1" type="tel" value={form.phone1} onChange={set("phone1")} placeholder="+509..." className={inputCls} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-phone2" className={labelCls}>Téléphone 2</Label>
+                <Input id="edit-phone2" type="tel" value={form.phone2} onChange={set("phone2")} placeholder="+509..." className={inputCls} />
+              </div>
             </div>
             <div className="space-y-2">
-              <Label
-                htmlFor="student-phone2"
-                className="text-sm font-medium text-neutral-900"
-              >
-                Téléphone 2
-              </Label>
-              <Input
-                id="student-phone2"
-                type="tel"
-                value={form.phone2}
-                onChange={set("phone2")}
-                placeholder="+509..."
-                className="border-neutral-300 rounded-lg"
-              />
+              <Label htmlFor="edit-parents-email" className={labelCls}>Email des parents</Label>
+              <Input id="edit-parents-email" type="email" value={form.parentsEmail} onChange={set("parentsEmail")} placeholder="email@exemple.com" className={inputCls} />
             </div>
-          </div>
-
-          {/* Email parents */}
-          <div className="space-y-2">
-            <Label
-              htmlFor="student-parents-email"
-              className="text-sm font-medium text-neutral-900"
-            >
-              Email des parents
-            </Label>
-            <Input
-              id="student-parents-email"
-              type="email"
-              value={form.parentsEmail}
-              onChange={set("parentsEmail")}
-              placeholder="email@exemple.com"
-              className="border-neutral-300 rounded-lg"
-            />
-          </div>
-
-          {/* Warning : NISU non modifiable */}
-          <div
-            className="flex items-start gap-2 bg-warning-soft border border-warning rounded-lg px-3 py-2.5 text-xs text-warning"
-            role="note"
-          >
-            <AlertTriangleIcon
-              className="h-4 w-4 mt-0.5 flex-shrink-0"
-              aria-hidden="true"
-            />
-            <span>
-              Le NISU n&apos;est pas modifiable après l&apos;inscription.
-            </span>
           </div>
         </div>
 
@@ -212,7 +187,7 @@ export function EditStudentModal({
           </Button>
           <Button
             onClick={() => onSubmit(form)}
-            disabled={submitting}
+            disabled={!canSubmit}
             className="bg-primary-500 hover:bg-primary-600 text-white rounded-lg disabled:bg-neutral-400 disabled:cursor-not-allowed"
           >
             {submitting ? "Enregistrement..." : "Enregistrer"}

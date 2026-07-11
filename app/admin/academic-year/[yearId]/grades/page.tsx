@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CPMSLGradesGrid } from "@/components/school/cpmsl-grades-grid"
+import { CPMSLGradesByStudent } from "@/components/school/cpmsl-grades-by-student"
 import { CPMSLBehaviorGrid } from "@/components/school/cpmsl-behavior-grid"
 import { CPMSLProgressionTab } from "@/components/school/cpmsl-progression-tab"
 import { GradesViewContent } from "@/components/school/grades-view-content"
@@ -59,6 +60,8 @@ export default function GradesPage() {
   const [loadingContext, setLoadingContext] = useState(false)
   const [error,          setError]          = useState<string | null>(null)
   const [activeTab,      setActiveTab]      = useState<string>("notes")
+  // Mode de saisie dans l'onglet "Saisie" : par matière (grille) ou par élève.
+  const [entryMode,      setEntryMode]      = useState<"subject" | "student">("subject")
 
   // ── Chargement contexte ───────────────────────────────────────────────────
   useEffect(() => {
@@ -210,24 +213,53 @@ export default function GradesPage() {
         </TabsList>
 
         {/* Saisie — W3 */}
-        <TabsContent value="notes">
-          <CPMSLGradesGrid
-            sessions={apiSessions}
-            steps={steps}
-            classSubjects={classSubjects}
-            enrollments={enrollments}
-            existingGrades={existingGrades}
-            selectedSessionId={selectedSessionId}
-            selectedClassSubjectId={selectedClassSubjectId}
-            selectedStepId={selectedStepId}
-            loadingSession={loadingSession}
-            loadingGrades={loadingGrades}
-            saving={saving}
-            onSessionChange={handleSessionChange}
-            onClassSubjectChange={handleClassSubjectChange}
-            onStepChange={handleStepChange}
-            onSaveGrades={handleSaveGrades}
-          />
+        <TabsContent value="notes" className="space-y-4">
+          {/* Bascule du mode de saisie */}
+          <div className="inline-flex rounded-lg border bg-muted/40 p-1">
+            <button
+              type="button"
+              onClick={() => setEntryMode("subject")}
+              className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${entryMode === "subject" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              Par matière
+            </button>
+            <button
+              type="button"
+              onClick={() => setEntryMode("student")}
+              className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${entryMode === "student" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              Par élève
+            </button>
+          </div>
+
+          {entryMode === "subject" ? (
+            <CPMSLGradesGrid
+              sessions={apiSessions}
+              steps={steps}
+              classSubjects={classSubjects}
+              enrollments={enrollments}
+              existingGrades={existingGrades}
+              selectedSessionId={selectedSessionId}
+              selectedClassSubjectId={selectedClassSubjectId}
+              selectedStepId={selectedStepId}
+              loadingSession={loadingSession}
+              loadingGrades={loadingGrades}
+              saving={saving}
+              onSessionChange={handleSessionChange}
+              onClassSubjectChange={handleClassSubjectChange}
+              onStepChange={handleStepChange}
+              onSaveGrades={handleSaveGrades}
+            />
+          ) : (
+            <CPMSLGradesByStudent
+              yearId={yearId}
+              sessions={apiSessions}
+              enrollments={enrollments}
+              selectedSessionId={selectedSessionId}
+              loadingSession={loadingSession}
+              onSessionChange={handleSessionChange}
+            />
+          )}
         </TabsContent>
 
         {/* Consultation — W4 */}

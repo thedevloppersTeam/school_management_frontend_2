@@ -250,8 +250,8 @@ export default function StudentGradesPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <Button variant="ghost" size="sm" className="mb-1 -ml-2 text-muted-foreground" onClick={() => router.push(`/admin/academic-year/${yearId}/students`)}>
-            <ArrowLeftIcon className="mr-1 h-4 w-4" /> Retour aux élèves
+          <Button variant="ghost" size="sm" className="mb-1 -ml-2 text-muted-foreground" onClick={() => router.push(`/admin/academic-year/${yearId}/grades`)}>
+            <ArrowLeftIcon className="mr-1 h-4 w-4" /> Retour aux notes
           </Button>
           <h1 className="font-serif text-2xl font-bold text-foreground">{studentName}</h1>
           <p className="text-sm text-muted-foreground">{className} — saisie des notes par élève</p>

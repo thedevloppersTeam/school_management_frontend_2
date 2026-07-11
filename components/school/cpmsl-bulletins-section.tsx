@@ -148,6 +148,32 @@ export function CPMSLBulletinsSection({
   // ── Sélections ───────────────────────────────────────────────────────────────
   const [selectedStep, setSelectedStep] = useState("");
   const [selectedSession, setSelectedSession] = useState("");
+  // Classe (niveau) puis Salle (lettre) — sélecteurs en cascade
+  const [selectedClassTypeId, setSelectedClassTypeId] = useState("");
+
+  const bulletinClassTypes = (() => {
+    const map = new Map<string, { id: string; name: string }>();
+    sessions.forEach((s) => {
+      const ct = s.class.classType;
+      if (!map.has(ct.id)) map.set(ct.id, { id: ct.id, name: ct.name });
+    });
+    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, "fr", { numeric: true }));
+  })();
+
+  const bulletinSalles = !selectedClassTypeId
+    ? []
+    : sessions
+        .filter((s) => s.class.classType.id === selectedClassTypeId)
+        .map((s) => ({
+          sessionId: s.id,
+          label: s.class.track ? `${s.class.letter} — ${s.class.track.code}` : s.class.letter,
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label, "fr", { numeric: true }));
+
+  const handleBulletinClassChange = (classTypeId: string) => {
+    setSelectedClassTypeId(classTypeId);
+    setSelectedSession(""); // reset la salle
+  };
 
   // ── PDF Generator ─────────────────────────────────────────────────────────────
   const [pdfOpen, setPdfOpen] = useState(false);
@@ -513,12 +539,12 @@ export function CPMSLBulletinsSection({
         <CardHeader className="pb-3">
           <CardTitle className="text-base font-semibold">Sélection</CardTitle>
           <CardDescription>
-            Classe et étape pour la génération des bulletins
+            Classe, salle et étape pour la génération des bulletins
           </CardDescription>
         </CardHeader>
         <Separator />
         <CardContent className="p-4">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <Select value={selectedStep} onValueChange={setSelectedStep}>
               <SelectTrigger>
                 <SelectValue placeholder="Sélectionner une étape" />
@@ -532,14 +558,31 @@ export function CPMSLBulletinsSection({
               </SelectContent>
             </Select>
 
-            <Select value={selectedSession} onValueChange={setSelectedSession}>
+            <Select value={selectedClassTypeId} onValueChange={handleBulletinClassChange}>
               <SelectTrigger>
                 <SelectValue placeholder="Sélectionner une classe" />
               </SelectTrigger>
               <SelectContent>
-                {sessions.map((session) => (
-                  <SelectItem key={session.id} value={session.id}>
-                    {getClassSessionName(session)}
+                {bulletinClassTypes.map((ct) => (
+                  <SelectItem key={ct.id} value={ct.id}>
+                    {ct.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={selectedSession}
+              onValueChange={setSelectedSession}
+              disabled={!selectedClassTypeId}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={selectedClassTypeId ? "Sélectionner une salle" : "Choisir une classe d'abord"} />
+              </SelectTrigger>
+              <SelectContent>
+                {bulletinSalles.map((s) => (
+                  <SelectItem key={s.sessionId} value={s.sessionId}>
+                    {s.label}
                   </SelectItem>
                 ))}
               </SelectContent>
