@@ -342,13 +342,13 @@ export function CPMSLYearConfigTabs({
   >([]);
   const [loadingClassSubjects, setLoadingClassSubjects] = useState(false);
 
-  // ── Modal assignation ────────────────────────────────────────────────────
+  // ── Modal assignation (classe d'abord, puis plusieurs matières) ──────────
   const [assignModalOpen, setAssignModalOpen] = useState(false);
-  const [assignSubjectId, setAssignSubjectId] = useState("");
-  const [assignSelectedSessions, setAssignSelectedSessions] = useState<
+  const [assignClassSessionId, setAssignClassSessionId] = useState("");
+  const [assignSelectedSubjects, setAssignSelectedSubjects] = useState<
     Set<string>
   >(new Set());
-  const [assignCoeffOverride, setAssignCoeffOverride] = useState("");
+  const [assignSubjectSearch, setAssignSubjectSearch] = useState("");
   const [assignSubmitting, setAssignSubmitting] = useState(false);
 
   // ── Modal edit coefficient override ──────────────────────────────────────
@@ -723,69 +723,68 @@ export function CPMSLYearConfigTabs({
     }
   };
 
-  // ── Modal assignation ────────────────────────────────────────────────────
+  // ── Modal assignation (classe d'abord, puis plusieurs matières) ──────────
   const openAssignModal = () => {
-    setAssignSubjectId("");
-    setAssignSelectedSessions(new Set());
-    setAssignCoeffOverride("");
+    // Pré-sélectionne la salle déjà consultée dans le tableau, le cas échéant.
+    setAssignClassSessionId(selectedSessionForAssign || "");
+    setAssignSelectedSubjects(new Set());
+    setAssignSubjectSearch("");
     setAssignModalOpen(true);
   };
 
-  const handleAssignSubjectChange = (subjectId: string) => {
-    const subject = subjectParents.find((s) => s.id === subjectId);
-    setAssignSubjectId(subjectId);
-    setAssignSelectedSessions((prev) => {
+  const handleAssignClassChange = (classSessionId: string) => {
+    setAssignClassSessionId(classSessionId);
+    // Retire les matières devenues incompatibles avec le niveau de la classe.
+    const classroom = classrooms.find((c) => c.id === classSessionId);
+    setAssignSelectedSubjects((prev) => {
+      if (!classroom) return new Set();
       const compatibleIds = new Set(
-        classrooms
-          .filter((classroom) =>
-            !subject?.classTypeId || classroom.levelId === subject.classTypeId,
-          )
-          .map((classroom) => classroom.id),
+        subjectParents
+          .filter((s) => !s.classTypeId || s.classTypeId === classroom.levelId)
+          .map((s) => s.id),
       );
       return new Set(Array.from(prev).filter((id) => compatibleIds.has(id)));
     });
   };
 
-  const toggleAssignSession = (sessionId: string) => {
-    setAssignSelectedSessions((prev) => {
+  const toggleAssignSubject = (subjectId: string) => {
+    setAssignSelectedSubjects((prev) => {
       const n = new Set(prev);
-      if (n.has(sessionId)) n.delete(sessionId);
-      else n.add(sessionId);
+      if (n.has(subjectId)) n.delete(subjectId);
+      else n.add(subjectId);
       return n;
     });
   };
 
-  const toggleSelectAll = () => {
-    if (assignableClassrooms.length === 0) return;
-    const allCompatibleSelected = assignableClassrooms.every((classroom) =>
-      assignSelectedSessions.has(classroom.id),
+  const toggleSelectAllSubjects = () => {
+    if (assignableSubjects.length === 0) return;
+    const allSelected = assignableSubjects.every((s) =>
+      assignSelectedSubjects.has(s.id),
     );
-    if (allCompatibleSelected) {
-      setAssignSelectedSessions((prev) => {
+    if (allSelected) {
+      setAssignSelectedSubjects((prev) => {
         const next = new Set(prev);
-        assignableClassrooms.forEach((classroom) => next.delete(classroom.id));
+        assignableSubjects.forEach((s) => next.delete(s.id));
         return next;
       });
     } else {
-      setAssignSelectedSessions(
-        new Set(assignableClassrooms.map((classroom) => classroom.id)),
+      setAssignSelectedSubjects(
+        new Set(assignableSubjects.map((s) => s.id)),
       );
     }
   };
 
-  const handleAssignSubjectToClasses = async () => {
-    if (!assignSubjectId || assignSelectedSessions.size === 0) return;
+  const handleAssignSubjectsToClass = async () => {
+    if (!assignClassSessionId || assignSelectedSubjects.size === 0) return;
     setAssignSubmitting(true);
     try {
       await Promise.all(
-        Array.from(assignSelectedSessions).map(async (sessionId) => {
+        Array.from(assignSelectedSubjects).map(async (subjectId) => {
           const payload = {
-            classSessionId: sessionId,
-            subjectId: assignSubjectId,
+            classSessionId: assignClassSessionId,
+            subjectId,
             teacherId: null,
-            coefficientOverride: assignCoeffOverride.trim()
-              ? Number.parseFloat(assignCoeffOverride)
-              : null,
+            coefficientOverride: null,
           };
           const res = await fetch("/api/class-subjects/create", {
             method: "POST",
@@ -794,6 +793,7 @@ export function CPMSLYearConfigTabs({
             body: JSON.stringify(payload),
           });
           if (!res.ok) {
+            // 409/500 = déjà assignée : on tolère (idempotent).
             if (res.status === 500 || res.status === 409) return;
             const err = await res.json().catch(() => ({}));
             throw new Error(
@@ -802,14 +802,20 @@ export function CPMSLYearConfigTabs({
           }
         }),
       );
+      const count = assignSelectedSubjects.size;
+      toast({
+        title: "Matières assignées",
+        description: `${count} matière${count > 1 ? "s" : ""} assignée${count > 1 ? "s" : ""} à la classe`,
+      });
       setAssignModalOpen(false);
-      if (selectedSessionForAssign)
-        await loadClassSubjects(selectedSessionForAssign);
+      // Affiche la classe qu'on vient de configurer et rafraîchit sa liste.
+      setSelectedSessionForAssign(assignClassSessionId);
+      await loadClassSubjects(assignClassSessionId);
     } catch (err) {
       console.error("[affectation] erreur:", err);
       toast({
         title: "Erreur assignation",
-        description: toMessage(err, "lors de l'assignation de la matière"),
+        description: toMessage(err, "lors de l'assignation des matières"),
         variant: "destructive",
       });
     } finally {
@@ -925,19 +931,28 @@ export function CPMSLYearConfigTabs({
       };
       return cmp(val(a), val(b), subjectSort.dir);
     });
-  const assignSelectedSubject = subjectParents.find(
-    (s) => s.id === assignSubjectId,
+  // Classe (salle) choisie dans le modal + matières compatibles avec son niveau
+  const assignSelectedClassroom = classrooms.find(
+    (c) => c.id === assignClassSessionId,
   );
-  const assignableClassrooms = assignSelectedSubject?.classTypeId
-    ? classrooms.filter(
-        (classroom) => classroom.levelId === assignSelectedSubject.classTypeId,
-      )
-    : classrooms;
-  const allCompatibleClassesSelected =
-    assignableClassrooms.length > 0 &&
-    assignableClassrooms.every((classroom) =>
-      assignSelectedSessions.has(classroom.id),
-    );
+  const assignableSubjects = !assignSelectedClassroom
+    ? []
+    : subjectParents
+        .filter(
+          (s) =>
+            !s.classTypeId || s.classTypeId === assignSelectedClassroom.levelId,
+        )
+        .filter((s) => {
+          const q = assignSubjectSearch.trim().toLowerCase();
+          return (
+            !q ||
+            s.name.toLowerCase().includes(q) ||
+            s.code.toLowerCase().includes(q)
+          );
+        });
+  const allCompatibleSubjectsSelected =
+    assignableSubjects.length > 0 &&
+    assignableSubjects.every((s) => assignSelectedSubjects.has(s.id));
 
   // ─────────────────────────────────────────────────────────────────────────
   // RENDER
@@ -1613,7 +1628,7 @@ export function CPMSLYearConfigTabs({
                   Affectation aux classes
                 </h3>
                 <p className={SECTION_HEADER_SUBTITLE_CLASS}>
-                  Assignez une matière à une ou plusieurs classes de cette année
+                  Assignez plusieurs matières à une classe de cette année
                 </p>
               </div>
               {!isArchived &&
@@ -1639,7 +1654,7 @@ export function CPMSLYearConfigTabs({
                       className={BTN_PRIMARY_CLASS}
                     >
                       <PlusIcon className="mr-2 h-4 w-4" aria-hidden="true" />
-                      Assigner une matière
+                      Assigner des matières
                     </Button>
                   </div>
                 )}
@@ -1892,121 +1907,107 @@ export function CPMSLYearConfigTabs({
         </DialogContent>
       </Dialog>
 
-      {/* ═══════════════════ Modal Assignation matière ══════════════════════ */}
+      {/* ═══════════════════ Modal Assignation de matières à une classe ═════ */}
       <Dialog open={assignModalOpen} onOpenChange={setAssignModalOpen}>
         <DialogContent className="bg-white rounded-xl max-w-lg max-h-[85vh] overflow-y-auto cpmsl-scroll">
           <DialogHeader>
             <DialogTitle className="font-serif text-xl font-bold text-primary-800">
-              Assigner une matière aux classes
+              Assigner des matières à une classe
             </DialogTitle>
-            <DialogDescription className="sr-only">
-              Sélectionnez une matière et les classes à qui l&apos;assigner
+            <DialogDescription className="text-sm text-neutral-500">
+              Choisissez la classe, puis sélectionnez les matières à lui
+              assigner.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
+            {/* Classe */}
             <div className="space-y-1.5">
-              <Label
-                htmlFor="assign-subject-select"
-                className={FIELD_LABEL_CLASS}
-              >
-                Matière{" "}
+              <Label htmlFor="assign-class-select" className={FIELD_LABEL_CLASS}>
+                Classe{" "}
                 <span className="text-error" aria-label="obligatoire">
                   *
                 </span>
-                <span className="ml-2 text-xs text-neutral-500 font-normal">
-                  — choisir la matière à assigner
-                </span>
               </Label>
               <select
-                id="assign-subject-select"
-                value={assignSubjectId}
-                onChange={(e) => handleAssignSubjectChange(e.target.value)}
+                id="assign-class-select"
+                value={assignClassSessionId}
+                onChange={(e) => handleAssignClassChange(e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border border-neutral-300 text-sm text-neutral-900 bg-white focus-visible:border-primary-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/20"
                 required
                 aria-required="true"
               >
-                <option value="">Sélectionner une matière</option>
-                {subjectParents.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.code} — {s.name} ({s.rubrique})
+                <option value="">Sélectionner une classe</option>
+                {classrooms.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
                   </option>
                 ))}
               </select>
-              {assignSelectedSubject?.classTypeId && (
-                <p className="text-xs text-neutral-500 mt-1.5">
-                  Cette matière est liée à un type de classe. Seules les classes
-                  compatibles seront proposées.
-                </p>
-              )}
             </div>
 
-            <div className="space-y-1.5">
-              <Label
-                htmlFor="assign-coeff-override"
-                className={FIELD_LABEL_CLASS}
-              >
-                Coefficient override
-                <span className="ml-2 text-xs text-neutral-500 font-normal">
-                  (optionnel)
-                </span>
-              </Label>
-              <Input
-                id="assign-coeff-override"
-                type="number"
-                step="0.5"
-                inputMode="decimal"
-                value={assignCoeffOverride}
-                onChange={(e) => setAssignCoeffOverride(e.target.value)}
-                placeholder={
-                  assignSelectedSubject
-                    ? `Coefficient global : ${assignSelectedSubject.coefficient}`
-                    : "Ex: 3"
-                }
-                className={INPUT_CLASS}
-              />
-            </div>
-
+            {/* Matières */}
             <div>
               <div className="flex items-center justify-between mb-2">
                 <span className={FIELD_LABEL_CLASS}>
-                  Classes{" "}
+                  Matières{" "}
                   <span className="text-error" aria-label="obligatoire">
                     *
                   </span>
                   <span className="ml-2 text-xs text-neutral-500 font-normal">
-                    ({assignSelectedSessions.size} sélectionnée
-                    {assignSelectedSessions.size > 1 ? "s" : ""})
+                    ({assignSelectedSubjects.size} sélectionnée
+                    {assignSelectedSubjects.size > 1 ? "s" : ""})
                   </span>
                 </span>
                 <button
                   type="button"
-                  onClick={toggleSelectAll}
+                  onClick={toggleSelectAllSubjects}
                   className="text-xs text-primary-800 font-medium hover:underline disabled:text-neutral-400 disabled:no-underline focus-visible:outline-2 focus-visible:outline-primary-800"
-                  disabled={assignableClassrooms.length === 0}
+                  disabled={assignableSubjects.length === 0}
                 >
-                  {allCompatibleClassesSelected
+                  {allCompatibleSubjectsSelected
                     ? "Tout désélectionner"
                     : "Tout sélectionner"}
                 </button>
               </div>
 
+              {/* Recherche */}
+              <div className="relative mb-2">
+                <SearchIcon
+                  className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400"
+                  aria-hidden="true"
+                />
+                <Input
+                  placeholder="Rechercher par nom ou code..."
+                  value={assignSubjectSearch}
+                  onChange={(e) => setAssignSubjectSearch(e.target.value)}
+                  className={`${INPUT_CLASS} pl-9`}
+                  disabled={!assignClassSessionId}
+                  aria-label="Rechercher une matière"
+                />
+              </div>
+
               <div className="border border-neutral-200 rounded-lg overflow-auto max-h-60 cpmsl-scroll">
-                {classrooms.length === 0 ? (
-                  <p className="p-4 text-center text-sm text-neutral-500">
-                    Aucune classe dans cette année
+                {!assignClassSessionId ? (
+                  <p className="p-6 text-center text-sm text-neutral-500">
+                    Choisissez d&apos;abord une classe ci-dessus.
                   </p>
-                ) : assignSubjectId && assignableClassrooms.length === 0 ? (
-                  <p className="p-4 text-center text-sm text-neutral-500">
-                    Aucune classe compatible avec cette matière
+                ) : assignableSubjects.length === 0 ? (
+                  <p className="p-6 text-center text-sm text-neutral-500">
+                    {subjectParents.length === 0
+                      ? "Aucune matière disponible"
+                      : assignSubjectSearch.trim()
+                        ? "Aucune matière ne correspond à la recherche"
+                        : "Aucune matière compatible avec le niveau de cette classe"}
                   </p>
                 ) : (
-                  assignableClassrooms.map((classroom, i) => {
-                    const checked = assignSelectedSessions.has(classroom.id);
-                    const inputId = `assign-classroom-${classroom.id}`;
+                  assignableSubjects.map((s, i) => {
+                    const checked = assignSelectedSubjects.has(s.id);
+                    const inputId = `assign-subject-${s.id}`;
+                    const cR = rubricClasses(s.rubrique);
                     return (
                       <label
-                        key={classroom.id}
+                        key={s.id}
                         htmlFor={inputId}
                         className={`
                         flex items-center gap-3 px-4 py-2.5 cursor-pointer
@@ -2018,14 +2019,22 @@ export function CPMSLYearConfigTabs({
                           id={inputId}
                           type="checkbox"
                           checked={checked}
-                          onChange={() => toggleAssignSession(classroom.id)}
+                          onChange={() => toggleAssignSubject(s.id)}
                           className="h-4 w-4 cursor-pointer accent-primary-800"
                         />
-                        <span
-                          className={`text-sm text-neutral-900 ${checked ? "font-semibold" : ""}`}
-                        >
-                          {classroom.name}
+                        <span className="font-mono text-xs font-semibold text-neutral-500 uppercase">
+                          {s.code}
                         </span>
+                        <span
+                          className={`flex-1 text-sm text-neutral-900 ${checked ? "font-semibold" : ""}`}
+                        >
+                          {s.name}
+                        </span>
+                        <Badge
+                          className={`text-xs font-medium border-0 ${cR.badge}`}
+                        >
+                          {s.rubrique}
+                        </Badge>
                       </label>
                     );
                   })
@@ -2034,28 +2043,35 @@ export function CPMSLYearConfigTabs({
             </div>
           </div>
 
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setAssignModalOpen(false)}
-              disabled={assignSubmitting}
-              className={BTN_OUTLINE_CLASS}
-            >
-              Annuler
-            </Button>
-            <Button
-              onClick={handleAssignSubjectToClasses}
-              disabled={
-                assignSubmitting ||
-                !assignSubjectId ||
-                assignSelectedSessions.size === 0
-              }
-              className={BTN_DIALOG_PRIMARY_CLASS}
-            >
-              {assignSubmitting
-                ? "Assignation..."
-                : `Assigner à ${assignSelectedSessions.size} classe${assignSelectedSessions.size > 1 ? "s" : ""}`}
-            </Button>
+          <DialogFooter className="flex items-center sm:justify-between">
+            <span className="text-xs text-neutral-500">
+              {assignSelectedClassroom
+                ? `Classe : ${assignSelectedClassroom.name}`
+                : "Aucune classe sélectionnée"}
+            </span>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setAssignModalOpen(false)}
+                disabled={assignSubmitting}
+                className={BTN_OUTLINE_CLASS}
+              >
+                Annuler
+              </Button>
+              <Button
+                onClick={handleAssignSubjectsToClass}
+                disabled={
+                  assignSubmitting ||
+                  !assignClassSessionId ||
+                  assignSelectedSubjects.size === 0
+                }
+                className={BTN_DIALOG_PRIMARY_CLASS}
+              >
+                {assignSubmitting
+                  ? "Assignation..."
+                  : `Assigner ${assignSelectedSubjects.size > 0 ? assignSelectedSubjects.size + " " : ""}matière${assignSelectedSubjects.size > 1 ? "s" : ""}`}
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
