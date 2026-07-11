@@ -358,11 +358,16 @@ export default function StudentsManagementPage() {
     if (!editingStudent) return
     setEditSubmitting(true)
     try {
+      // N'envoyer le NISU que s'il a changé : un NISU hérité (format < 20 car.)
+      // laissé tel quel serait rejeté par la validation stricte du backend.
+      const nisuChanged =
+        (data.nisu ?? '').trim().toUpperCase() !== (editingStudent.nisu ?? '').trim().toUpperCase()
+      const requestBody = nisuChanged ? data : { ...data, nisu: undefined }
       const res = await fetch(`/api/students/update/${editingStudent.studentId}`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify(requestBody),
       })
       const payload = await res.json().catch(() => null)
       if (!res.ok) throw new Error(payload?.message || undefined)
