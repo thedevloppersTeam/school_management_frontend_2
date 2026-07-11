@@ -10,7 +10,7 @@ import {
   formatBulletinNumber,
 } from "@/lib/bulletin-calculations"
 import { normalizeUploadUrl } from "@/lib/upload-url"
-import { useLayoutEffect, useRef, useState } from "react"
+import { useLayoutEffect, useRef } from "react"
 
 const fmtC = (n: number | null | undefined): string =>
   n === null || n === undefined ? "—" : String(n)
@@ -321,177 +321,22 @@ function PdfWrappedSvgText({
       ? "—"
       : String(value)
 
-  const wrapperRef = useRef<HTMLSpanElement>(null)
-  const [lines, setLines] = useState<string[]>([textValue])
-
-  useLayoutEffect(() => {
-    const wrapper = wrapperRef.current
-
-    if (!wrapper) return
-
-    let disposed = false
-    let animationFrame = 0
-
-    const wrapText = () => {
-      if (disposed) return
-
-      const computedStyle = window.getComputedStyle(wrapper)
-      const horizontalPadding =
-        Number.parseFloat(computedStyle.paddingLeft || "0") +
-        Number.parseFloat(computedStyle.paddingRight || "0")
-      const availableWidth = Math.max(
-        1,
-        wrapper.clientWidth - horizontalPadding - 1,
-      )
-
-      const canvas = document.createElement("canvas")
-      const context = canvas.getContext("2d")
-
-      if (!context) return
-
-      context.font = [
-        computedStyle.fontStyle,
-        computedStyle.fontWeight,
-        computedStyle.fontSize,
-        computedStyle.fontFamily,
-      ].join(" ")
-
-      const fits = (candidate: string) =>
-        context.measureText(candidate).width <= availableWidth
-
-      const splitLongWord = (word: string): string[] => {
-        if (fits(word)) return [word]
-
-        const chunks: string[] = []
-        let chunk = ""
-
-        for (const character of word) {
-          const candidate = `${chunk}${character}`
-
-          if (chunk && !fits(candidate)) {
-            chunks.push(chunk)
-            chunk = character
-          } else {
-            chunk = candidate
-          }
-        }
-
-        if (chunk) chunks.push(chunk)
-
-        return chunks.length > 0 ? chunks : [word]
-      }
-
-      const words = textValue.trim().split(/\s+/).filter(Boolean)
-      const nextLines: string[] = []
-      let currentLine = ""
-
-      for (const word of words) {
-        const chunks = splitLongWord(word)
-
-        for (const chunk of chunks) {
-          const candidate = currentLine
-            ? `${currentLine} ${chunk}`
-            : chunk
-
-          if (!currentLine || fits(candidate)) {
-            currentLine = candidate
-          } else {
-            nextLines.push(currentLine)
-            currentLine = chunk
-          }
-        }
-      }
-
-      if (currentLine) nextLines.push(currentLine)
-      if (nextLines.length === 0) nextLines.push("—")
-
-      setLines((currentLines) =>
-        currentLines.length === nextLines.length &&
-        currentLines.every((line, index) => line === nextLines[index])
-          ? currentLines
-          : nextLines,
-      )
-
-      wrapper.dataset.pdfTextReady = "true"
-    }
-
-    const scheduleWrap = () => {
-      wrapper.dataset.pdfTextReady = "false"
-      cancelAnimationFrame(animationFrame)
-      animationFrame = requestAnimationFrame(wrapText)
-    }
-
-    const resizeObserver = new ResizeObserver(scheduleWrap)
-    resizeObserver.observe(wrapper)
-
-    wrapText()
-
-    if (document.fonts?.load) {
-      const computedStyle = window.getComputedStyle(wrapper)
-      const canvasFont = [
-        computedStyle.fontStyle,
-        computedStyle.fontWeight,
-        computedStyle.fontSize,
-        computedStyle.fontFamily,
-      ].join(" ")
-
-      void document.fonts
-        .load(canvasFont, textValue)
-        .then(scheduleWrap)
-        .catch(() => undefined)
-    }
-
-    if (document.fonts?.ready) {
-      void document.fonts.ready.then(scheduleWrap)
-    }
-
-    return () => {
-      disposed = true
-      cancelAnimationFrame(animationFrame)
-      resizeObserver.disconnect()
-    }
-  }, [textValue])
-
-  const lineHeightEm = 1.2
-  const svgHeightEm = Math.max(1, lines.length) * lineHeightEm
-
+  /*
+   * Le retour à la ligne est volontairement rendu avec du texte HTML natif.
+   * Un <text> SVG ne se replie pas automatiquement et pouvait dépasser jusque
+   * dans les colonnes Notes / Coeff. Le navigateur calcule maintenant la
+   * hauteur de la ligne avant la capture PDF.
+   */
   return (
     <span
-      ref={wrapperRef}
       className={
         className
           ? `pdf-wrapped-svg-container ${className}`
           : "pdf-wrapped-svg-container"
       }
-      data-pdf-text-ready="false"
-      aria-hidden="true"
+      data-pdf-text-ready="true"
     >
-      <svg
-        className="pdf-wrapped-svg-text"
-        width="100%"
-        height={`${svgHeightEm}em`}
-        focusable="false"
-        preserveAspectRatio="none"
-        style={{ height: `${svgHeightEm}em` }}
-      >
-        <text
-          x="0"
-          y="0.6em"
-          textAnchor="start"
-          dominantBaseline="middle"
-          fill="currentColor"
-        >
-          {lines.map((line, index) => (
-            <tspan
-              x="0"
-              dy={index === 0 ? "0" : `${lineHeightEm}em`}
-              key={`${line}-${index}`}
-            >
-              {line}
-            </tspan>
-          ))}
-        </text>
-      </svg>
+      {textValue}
     </span>
   )
 }
@@ -2080,38 +1925,34 @@ const CSS = `
   overflow-wrap:break-word;
 }
 
+.btpl .rubrique-row > .subject-item,
+.btpl .rubrique-row > .subject-group{
+  width:100%;
+  min-width:0;
+  max-width:100%;
+  box-sizing:border-box;
+  white-space:normal !important;
+  overflow:hidden;
+}
+
 
 .btpl .pdf-wrapped-svg-container{
   display:block;
   width:100%;
   min-width:0;
   max-width:100%;
-  line-height:inherit;
-  color:inherit;
-  overflow:hidden;
   box-sizing:border-box;
-}
-
-.btpl .pdf-wrapped-svg-text{
-  display:block;
-  width:100%;
-  max-width:100%;
-  overflow:hidden;
   color:inherit;
   font-family:inherit;
   font-size:inherit;
   font-weight:inherit;
   font-style:inherit;
   line-height:inherit;
-}
-
-.btpl .pdf-wrapped-svg-text text,
-.btpl .pdf-wrapped-svg-text tspan{
-  fill:currentColor;
-  font-family:inherit;
-  font-size:inherit;
-  font-weight:inherit;
-  font-style:inherit;
+  white-space:normal !important;
+  overflow-wrap:anywhere !important;
+  word-break:break-word;
+  hyphens:auto;
+  overflow:hidden;
 }
 
 .btpl .rubrique-data-row .subject-item,
@@ -2670,6 +2511,7 @@ const CSS = `
 /* Soulignement SVG stable. */
 .btpl .subject-group .pdf-inline-svg-text text,
 .btpl .subject-group .pdf-wrapped-svg-text text,
+.btpl .subject-group .pdf-wrapped-svg-container,
 .btpl .behav-title .pdf-inline-svg-text text,
 .btpl .h-maroon .pdf-inline-svg-text text,
 .btpl .h-maroon2 .pdf-inline-svg-text text,
