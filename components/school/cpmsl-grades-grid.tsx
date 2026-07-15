@@ -42,6 +42,7 @@ import { useToast } from "@/components/ui/use-toast"
 import type { ApiClassSession } from "@/lib/api/students"
 import type { AcademicYearStep } from "@/lib/api/dashboard"
 import type { ApiClassSubject, ApiEnrollment, ApiGrade, CreateGradePayload } from "@/lib/api/grades"
+import { effectiveMaxScore } from "@/lib/api/grades"
 import { cn } from "@/lib/utils"
 import { parseDecimal } from "@/lib/decimal"
 import { useUnsavedChangesWarning } from "@/hooks/use-unsaved-changes-warning"
@@ -208,7 +209,11 @@ export function CPMSLGradesGrid({
     () => classSubjects.find(cs => cs.id === selectedClassSubjectId),
     [classSubjects, selectedClassSubjectId]
   )
-  const maxScore = parseDecimal(selectedClassSubject?.subject.maxScore) ?? 10
+  // Note max effective : l'override de l'affectation (par filière) prime sur la
+  // note max de la matière.
+  const maxScore = selectedClassSubject
+    ? effectiveMaxScore(selectedClassSubject)
+    : 10
 
   // ── Portée : tronc commun / examen officiel (filière) / toutes ────────────
   // La salle a-t-elle des matières d'examen ? (sinon on masque le filtre)

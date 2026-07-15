@@ -340,6 +340,8 @@ export function CPMSLYearConfigTabs({
       coefficient: number;
       coefficientOverride: number | null;
       subjectMaxScore: number;
+      maxScoreOverride: number | null; // note max propre à cette affectation
+      hasSections: boolean;
     }>
   >([]);
   const [loadingClassSubjects, setLoadingClassSubjects] = useState(false);
@@ -365,9 +367,13 @@ export function CPMSLYearConfigTabs({
     coefficient: number;
     coefficientOverride: number | null;
     subjectMaxScore: number;
+    maxScoreOverride: number | null;
+    trackCode?: string | null;
+    hasSections: boolean;
   } | null>(null);
   const [editCoeffValue, setEditCoeffValue] = useState("");
   const [editMaxScoreGlobalValue, setEditMaxScoreGlobalValue] = useState("");
+  const [editMaxScoreOverrideValue, setEditMaxScoreOverrideValue] = useState("");
   const [editCoeffSubmitting, setEditCoeffSubmitting] = useState(false);
 
   // ── Modal copie de matières ──────────────────────────────────────────────
@@ -568,11 +574,13 @@ export function CPMSLYearConfigTabs({
             subject?: {
               name?: string;
               code?: string;
+              hasSections?: boolean;
               rubric?: { code?: string };
               coefficient?: { d?: number[] } | number;
               maxScore?: { d?: number[] } | number;
             };
             coefficientOverride?: { d?: number[] } | number | null;
+            maxScoreOverride?: { d?: number[] } | number | null;
           }) => ({
             id: cs.id,
             subjectId: cs.subjectId,
@@ -580,6 +588,7 @@ export function CPMSLYearConfigTabs({
             subjectCode: cs.subject?.code || "—",
             rubriqueCode: cs.subject?.rubric?.code,
             trackCode: cs.track?.code ?? null,
+            hasSections: cs.subject?.hasSections === true,
             coefficient:
               Number(
                 (cs.subject?.coefficient as { d?: number[] })?.d?.[0] ??
@@ -597,6 +606,13 @@ export function CPMSLYearConfigTabs({
                 (cs.subject?.maxScore as { d?: number[] })?.d?.[0] ??
                   cs.subject?.maxScore,
               ) || 0,
+            maxScoreOverride:
+              cs.maxScoreOverride != null
+                ? Number(
+                    (cs.maxScoreOverride as { d?: number[] })?.d?.[0] ??
+                      cs.maxScoreOverride,
+                  )
+                : null,
           }),
         ),
       );
@@ -631,12 +647,18 @@ export function CPMSLYearConfigTabs({
       coefficient: cs.coefficient,
       coefficientOverride: cs.coefficientOverride ?? null,
       subjectMaxScore: cs.subjectMaxScore,
+      maxScoreOverride: cs.maxScoreOverride ?? null,
+      trackCode: cs.trackCode ?? null,
+      hasSections: cs.hasSections,
     });
     setEditCoeffValue(
       cs.coefficientOverride != null ? String(cs.coefficientOverride) : "",
     );
     setEditMaxScoreGlobalValue(
       cs.subjectMaxScore > 0 ? String(cs.subjectMaxScore) : "",
+    );
+    setEditMaxScoreOverrideValue(
+      cs.maxScoreOverride != null ? String(cs.maxScoreOverride) : "",
     );
     setEditCoeffModalOpen(true);
   };
@@ -685,14 +707,27 @@ export function CPMSLYearConfigTabs({
       const overrideChanged =
         newOverride !== editCoeffClassSubject.coefficientOverride;
 
-      if (overrideChanged) {
+      // Note max propre à cette affectation (par filière)
+      const rawMaxOverride = editMaxScoreOverrideValue.trim();
+      const newMaxOverride =
+        rawMaxOverride !== "" ? Number.parseFloat(rawMaxOverride) : null;
+      if (rawMaxOverride !== "" && (!Number.isFinite(newMaxOverride) || (newMaxOverride as number) <= 0)) {
+        throw new Error("La note max de la filière doit être un nombre positif.");
+      }
+      const maxOverrideChanged =
+        newMaxOverride !== editCoeffClassSubject.maxScoreOverride;
+
+      if (overrideChanged || maxOverrideChanged) {
         const res = await fetch(
           `/api/class-subjects/update/${editCoeffClassSubject.id}`,
           {
             method: "POST",
             credentials: "include",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ coefficientOverride: newOverride }),
+            body: JSON.stringify({
+              ...(overrideChanged && { coefficientOverride: newOverride }),
+              ...(maxOverrideChanged && { maxScoreOverride: newMaxOverride }),
+            }),
           },
         );
         if (!res.ok) {
@@ -700,19 +735,16 @@ export function CPMSLYearConfigTabs({
         }
       }
 
-      if (!globalMaxScoreChanged && !overrideChanged) {
+      if (!globalMaxScoreChanged && !overrideChanged && !maxOverrideChanged) {
         toast({ title: "Aucun changement" });
       } else {
         toast({
-          title:
-            globalMaxScoreChanged && overrideChanged
-              ? "Note globale et coefficient modifiés"
-              : globalMaxScoreChanged
-                ? "Note globale modifiée"
-                : "Coefficient modifié",
+          title: "Modifications enregistrées",
           description: globalMaxScoreChanged
             ? "La note globale s'applique à toutes les classes qui utilisent cette matière."
-            : undefined,
+            : maxOverrideChanged
+              ? "La note max de la filière ne s'applique qu'à cette affectation."
+              : undefined,
         });
       }
 
@@ -1911,6 +1943,38 @@ export function CPMSLYearConfigTabs({
                   className={INPUT_CLASS}
                 />
               </div>
+
+              {/* Note max propre à cette affectation (par filière) — pour les
+                  matières sans sous-matières (sinon ce sont les sections qui
+                  pilotent le total). */}
+              {!editCoeffClassSubject.hasSections && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="max-override-value" className={FIELD_LABEL_CLASS}>
+                    Note max de cette affectation
+                    {editCoeffClassSubject.trackCode && (
+                      <span className="ml-2 rounded border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-xs font-medium text-sky-700">
+                        Filière {editCoeffClassSubject.trackCode}
+                      </span>
+                    )}
+                  </Label>
+                  <Input
+                    id="max-override-value"
+                    type="number"
+                    step="1"
+                    min="0"
+                    inputMode="decimal"
+                    value={editMaxScoreOverrideValue}
+                    onChange={(e) => setEditMaxScoreOverrideValue(e.target.value)}
+                    placeholder={`Défaut : ${editCoeffClassSubject.subjectMaxScore}`}
+                    className={INPUT_CLASS}
+                  />
+                  <p className="text-xs text-neutral-500">
+                    Laisser vide = note max de la matière ({editCoeffClassSubject.subjectMaxScore}).
+                    Sinon, cette note max ne s&apos;applique qu&apos;à cette affectation
+                    {editCoeffClassSubject.trackCode ? ` (filière ${editCoeffClassSubject.trackCode})` : ""}.
+                  </p>
+                </div>
+              )}
             </div>
           )}
 

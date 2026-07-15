@@ -20,6 +20,7 @@ import {
   updateGrade,
   deleteGrade,
   filterSubjectsByScope,
+  effectiveMaxScore,
   type ApiClassSubject,
   type ApiGrade,
   type CreateGradePayload,
@@ -372,14 +373,14 @@ export default function StudentGradesPage() {
                           </td>
                           <td className="px-4 py-2 text-center">
                             <Input
-                              type="number" step="0.25" min="0" max={subj.maxScore}
+                              type="number" step="0.25" min="0" max={effectiveMaxScore(cs)}
                               inputMode="decimal" placeholder="—"
                               value={entry?.value ?? ""}
-                              onChange={e => setEntry(key, e.target.value, subj.maxScore)}
+                              onChange={e => setEntry(key, e.target.value, effectiveMaxScore(cs))}
                               className={`h-8 text-center ${err ? "border-destructive focus-visible:ring-destructive" : ""}`}
                             />
                           </td>
-                          <td className="px-4 py-2.5 text-muted-foreground">/ {subj.maxScore}</td>
+                          <td className="px-4 py-2.5 text-muted-foreground">/ {effectiveMaxScore(cs)}</td>
                         </tr>,
                       )
                     } else {
