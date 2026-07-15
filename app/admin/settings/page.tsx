@@ -40,6 +40,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 
 import { CPMSLSchoolInfoForm } from "@/components/school/cpmsl-school-info-form"
 import { CPMSLCalendarManagement } from "@/components/school/cpmsl-calendar-management"
+import { FilieresTab } from "@/components/school/filieres-tab"
 
 import {
   PlusIcon,
@@ -129,6 +130,7 @@ const TAB_LABELS: Record<string, string> = {
   calendar:    'Calendrier scolaire',
   referentiel: 'Matières & Rubriques',
   classes:     'Classes',
+  filieres:    'Filières',
   attitudes:   'Attitudes',
 }
 
@@ -1775,6 +1777,10 @@ export default function SchoolSettingsPage() {
             onInitialize={s.handleInitializeClasses}
             onEditClass={s.openEditClass}
           />
+        </TabsContent>
+
+        <TabsContent value="filieres" className="space-y-6">
+          <FilieresTab />
         </TabsContent>
 
         <TabsContent value="attitudes" className="space-y-6">
