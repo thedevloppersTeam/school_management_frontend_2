@@ -1007,6 +1007,7 @@ export function CPMSLBulletinsSection({
             sessions.find((s) => s.id === pdfStudent.classSessionId)?.academicYear?.name
           }
           stepIsCurrent={selectedStepObj.isCurrent}
+          scope={bulletinScope}
         />
       )}
 

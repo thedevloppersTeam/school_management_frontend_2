@@ -93,16 +93,19 @@ export function waitForTwoFrames(): Promise<void> {
 }
 
 /**
- * Crée un hôte DOM hors de la zone visible.
+ * Nettoie les hôtes de capture créés MANUELLEMENT (via createBulletinPdfHost),
+ * orphelins après un échec de génération.
  *
- * Cet hôte sert aussi aux générations en lot qui montent temporairement un
- * composant React avant d'appeler captureBulletinElement().
+ * ⚠️ On ne cible QUE `data-bulletin-pdf-host` : le conteneur de lot
+ * (`data-pdf-capture-host` / #PDF_CAPTURE_HOST_ID) est rendu par React, c'est
+ * React qui doit le retirer (setLotData(null)). Le supprimer ici arracherait un
+ * nœud que React croit posséder → "Failed to execute 'removeChild' on 'Node'".
  */
 export function removeStalePdfCaptureHosts(): void {
   if (typeof document === "undefined") return
 
   const hosts = document.querySelectorAll<HTMLElement>(
-    `[data-bulletin-pdf-host="true"], [data-pdf-capture-host="true"], #${PDF_CAPTURE_HOST_ID}`,
+    `[data-bulletin-pdf-host="true"]`,
   )
 
   hosts.forEach((host) => host.remove())

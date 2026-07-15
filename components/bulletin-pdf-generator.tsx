@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Download, Eye, Printer, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
-import { buildBulletinData } from "@/lib/api/bulletin";
+import { buildBulletinData, type BulletinScope } from "@/lib/api/bulletin";
 import { clientFetch as apiFetch } from "@/lib/client-fetch";
 import { toMessage } from "@/lib/errors";
 import { type BulletinData } from "./BulletinScolaire";
@@ -44,6 +44,8 @@ interface BulletinPDFGeneratorProps {
   stepIsCurrent?: boolean;
   snapshotData?: BulletinData;
   onDownload?: () => void;
+  /** 'common' = bulletin normal (défaut) ; 'exam' = bulletin examen officiel (filière) */
+  scope?: BulletinScope;
 }
 
 // ── Helper archive (EP-003 : retourne un résultat, ne swallow plus) ──────────
@@ -145,6 +147,7 @@ export function BulletinPDFGenerator({
   stepIsCurrent = true,
   snapshotData,
   onDownload,
+  scope = 'common',
 }: Readonly<BulletinPDFGeneratorProps>) {
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -190,6 +193,7 @@ export function BulletinPDFGenerator({
         className,
         yearId,
         academicYearLabel,
+        scope,
       });
       setBulletinData(data);
       setHasFetched(true);
@@ -214,6 +218,7 @@ export function BulletinPDFGenerator({
     yearId,
     academicYearLabel,
     snapshotData,
+    scope,
   ]);
 
   // ── PDF generation ─────────────────────────────────────────────────────────
@@ -261,6 +266,7 @@ export function BulletinPDFGenerator({
           yearId,
           academicYearLabel,
           includeGeneralAverage: true,
+          scope,
         });
         bulletinSnapshot = refreshedData;
         flushSync(() => setBulletinData(refreshedData));
@@ -279,8 +285,18 @@ export function BulletinPDFGenerator({
       });
       addBulletinCanvasToPdf(pdf, canvas);
 
-      pdf.save(`bulletin_${bulletinSnapshot.nom ?? studentName}_${stepName}.pdf`);
+      const scopeSuffix = scope === 'exam' ? '_examen' : '';
+      pdf.save(`bulletin${scopeSuffix}_${bulletinSnapshot.nom ?? studentName}_${stepName}.pdf`);
       pdfSaved = true;
+
+      // Le bulletin d'examen officiel n'est PAS archivé : l'archive est
+      // versionnée par (élève, étape) sans notion de type, l'y ajouter le
+      // ferait passer pour une correction du bulletin normal.
+      if (scope === 'exam') {
+        toast.success("Bulletin d'examen officiel téléchargé");
+        onDownload?.();
+        return;
+      }
 
       // ── REQ-F-007 : archiver après génération ─────────────────────────
       // WF-008 + EP-003 : le résultat est remonté à l'utilisateur
