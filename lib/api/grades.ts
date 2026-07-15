@@ -30,10 +30,17 @@ export interface ApiClassSubject {
   subjectId: string
   classSessionId: string
   coefficientOverride: number | null
+  /** Note max propre à cette affectation (par filière). null = celle de la matière. */
+  maxScoreOverride: number | null
   /** null = matière du tronc commun ; sinon matière d'examen officiel de cette filière */
   trackId: string | null
   track?: ApiTrack | null
   subject: ApiSubject
+}
+
+/** Note max effective d'une affectation : l'override s'il existe, sinon celle de la matière. */
+export function effectiveMaxScore(cs: ApiClassSubject): number {
+  return cs.maxScoreOverride != null ? cs.maxScoreOverride : cs.subject.maxScore
 }
 
 export interface ApiEnrollmentStudent {
@@ -109,6 +116,7 @@ export async function fetchClassSubjects(classSessionId: string): Promise<ApiCla
   return data.map((cs: ApiClassSubject) => ({
     ...cs,
     coefficientOverride: cs.coefficientOverride != null ? parseDecimal(cs.coefficientOverride) : null,
+    maxScoreOverride: cs.maxScoreOverride != null ? parseDecimal(cs.maxScoreOverride) : null,
     subject: {
       ...cs.subject,
       maxScore:    parseDecimal(cs.subject.maxScore) ?? 0,

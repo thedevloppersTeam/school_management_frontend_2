@@ -235,7 +235,14 @@ function buildSubjectEntries(
   excludedSectionIds?: Set<string>,
 ): RubriqueEntry[] {
   const subject = cs.subject
-  const subjectMax = decimalToNumber(subject.maxScore, 0)
+  // Note max effective : l'override de l'affectation (ex: /80 en SVT) prime sur
+  // la note max de la matière (ex: /100). Concerne les matières SANS sections
+  // (pour les matières à sous-matières, ce sont les notes max des sections qui
+  // pilotent le total).
+  const subjectMax =
+    cs.maxScoreOverride != null
+      ? decimalToNumber(cs.maxScoreOverride, 0)
+      : decimalToNumber(subject.maxScore, 0)
 
   // Sections dispensées pour cette étape : elles sont totalement retirées
   // (ni au numérateur, ni au dénominateur) → elles ne contribuent pas à la
