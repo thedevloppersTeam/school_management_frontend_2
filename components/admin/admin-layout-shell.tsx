@@ -219,7 +219,9 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     getMe().then((user) => {
       if (!user) {
-        window.location.href = "/login";
+        // `?expired=1` : sinon proxy.ts renverrait ici (le cookie mort est
+        // toujours présent) → boucle /login ↔ /admin.
+        window.location.href = "/login?expired=1";
       } else {
         setCurrentUser(user);
         setAuthLoading(false);

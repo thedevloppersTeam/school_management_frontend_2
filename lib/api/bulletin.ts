@@ -2,7 +2,12 @@
 // Logique partagée de construction des données bulletin (individuel + lot)
 // IMPORTANT : ce fichier ne contient aucun JSX — extension .ts correcte
 import { clientFetch as apiFetch } from '@/lib/client-fetch'
-import { fetchClassSubjects, type ApiClassSubject, type ApiGrade } from "@/lib/api/grades"
+import {
+  fetchClassSubjects,
+  filterSubjectsByScope,
+  type ApiClassSubject,
+  type ApiGrade,
+} from "@/lib/api/grades"
 import { fetchSteps } from "@/lib/api/dashboard"
 import { parseDecimal } from "@/lib/decimal"
 import { formatFrenchLongDate } from "@/lib/date-format"
@@ -48,6 +53,7 @@ type PromotionPhotoPayload = {
 
 type EnrollmentForClassAverage = {
   id: string
+  trackId?: string | null
 }
 
 type StudentPayload = {
@@ -70,10 +76,20 @@ type AcademicYearPayload = {
 }
 
 type EnrollmentContextPayload = {
+  trackId?: string | null
+  track?: { id: string; code: string; name: string } | null
   classSession?: {
     academicYear?: AcademicYearPayload | null
   } | null
 }
+
+/**
+ * Portée d'un bulletin :
+ *   'common' → bulletin NORMAL (matières du tronc commun uniquement)
+ *   'exam'   → bulletin EXAMEN OFFICIEL (matières de la filière de l'élève)
+ * Deux documents distincts, deux moyennes indépendantes.
+ */
+export type BulletinScope = 'common' | 'exam'
 
 type BehaviorPayload = {
   attitudeResponses?: Array<{
@@ -318,18 +334,28 @@ async function getClassAverages(params: {
   classSessionId: string
   stepId: string
   classSubjects: ApiClassSubject[]
+  scope: BulletinScope
+  trackId: string | null
 }): Promise<BulletinClassAverages> {
-  const cacheKey = `${params.classSessionId}:${params.stepId}`
+  // La moyenne de classe dépend de la portée : pour un bulletin d'examen, on ne
+  // compare qu'aux élèves de LA MÊME filière (les autres ne passent pas ces
+  // épreuves) ; pour le tronc commun, à toute la salle.
+  const cacheKey = `${params.classSessionId}:${params.stepId}:${params.scope}:${params.trackId ?? "-"}`
   const cached = classAveragesCache.get(cacheKey)
   if (cached) return cached
 
   const promise = (async () => {
-    const [enrollments, exclusions] = await Promise.all([
+    const [allEnrollments, exclusions] = await Promise.all([
       apiFetch<EnrollmentForClassAverage[]>(
         `/api/enrollments?classSessionId=${params.classSessionId}&status=ACTIVE`,
       ),
       fetchSessionStepExclusions(params.classSessionId, params.stepId),
     ])
+
+    const enrollments =
+      params.scope === 'exam'
+        ? allEnrollments.filter((e) => e.trackId === params.trackId)
+        : allEnrollments
 
     const averages = await Promise.all(
       enrollments.map(async (enrollment) => {
@@ -571,6 +597,8 @@ export async function buildBulletinData(params: {
   yearId:                  string
   academicYearLabel?:      string | null
   includeGeneralAverage?:  boolean
+  /** 'common' = bulletin normal (défaut) ; 'exam' = bulletin examen officiel */
+  scope?:                  BulletinScope
 }): Promise<BulletinData> {
   const {
     enrollmentId,
@@ -582,6 +610,7 @@ export async function buildBulletinData(params: {
     yearId,
     academicYearLabel,
     includeGeneralAverage = false,
+    scope = 'common',
   } = params
 
   // 1. Fetch toutes les données en parallèle
@@ -616,9 +645,15 @@ export async function buildBulletinData(params: {
   // 3. Index des notes
   const gradeIndex = buildGradeIndex(allGrades)
 
+  // 3bis. Portée filière — le bulletin normal ne contient que le tronc commun ;
+  // le bulletin d'examen officiel, uniquement les matières de LA filière de
+  // l'élève (jamais celles d'une autre filière).
+  const studentTrackId = enrollmentContext?.trackId ?? null
+  const scopedClassSubjects = filterSubjectsByScope(classSubjects, scope, studentTrackId)
+
   // 4. Rubriques — les sections dispensées pour cette étape sont retirées
   const excludedForStep = stepExclusions.get(enrollmentId)
-  const { r1, r1Name, r2, r2Name, r3, r3Name } = buildRubriques(classSubjects, gradeIndex, excludedForStep)
+  const { r1, r1Name, r2, r2Name, r3, r3Name } = buildRubriques(scopedClassSubjects, gradeIndex, excludedForStep)
 
   // 5. Resultats calcules CPMSL, centralises hors JSX.
   const averages = calculateBulletinAverages({
@@ -628,7 +663,13 @@ export async function buildBulletinData(params: {
   })
   const moyenneEtape = formatBulletinNumber(averages.moyenneEtape)
   const appreciation = averages.appreciation
-  const classAverages = await getClassAverages({ classSessionId, stepId, classSubjects })
+  const classAverages = await getClassAverages({
+    classSessionId,
+    stepId,
+    classSubjects: scopedClassSubjects,
+    scope,
+    trackId: studentTrackId,
+  })
   const backendMoyenneClasse = firstString(student, ['moyenneClasse', 'classAverage', 'bulletin.moyenneClasse', 'bulletin.classAverage'])
   const moyenneClasse = backendMoyenneClasse !== '—'
     ? backendMoyenneClasse
@@ -639,7 +680,7 @@ export async function buildBulletinData(params: {
         classSessionId,
         academicYearId: yearId,
         selectedStepId: stepId,
-        classSubjects,
+        classSubjects: scopedClassSubjects,
       }))
     : undefined
 

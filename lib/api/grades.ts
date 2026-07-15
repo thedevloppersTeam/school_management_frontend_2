@@ -19,11 +19,20 @@ export interface ApiSubject {
   rubric?: { id: string; name: string; code: string } | null
 }
 
+export interface ApiTrack {
+  id: string
+  code: string
+  name: string
+}
+
 export interface ApiClassSubject {
   id: string
   subjectId: string
   classSessionId: string
   coefficientOverride: number | null
+  /** null = matière du tronc commun ; sinon matière d'examen officiel de cette filière */
+  trackId: string | null
+  track?: ApiTrack | null
   subject: ApiSubject
 }
 
@@ -37,6 +46,9 @@ export interface ApiEnrollmentStudent {
 export interface ApiEnrollment {
   id: string
   status: string
+  /** Filière de l'élève (obligatoire en classe terminale, null sinon) */
+  trackId?: string | null
+  track?: ApiTrack | null
   student: ApiEnrollmentStudent
 }
 
@@ -59,6 +71,30 @@ export interface CreateGradePayload {
   studentScore: number
   gradeType: 'EXAM' | 'HOMEWORK' | 'ORAL'
   comment?: string
+}
+
+// ── Portée des matières (filière) ─────────────────────────────────────────────
+// 'common' = tronc commun (trackId null) — concerne TOUS les élèves de la salle.
+// 'exam'   = examen officiel — uniquement les matières de la filière de l'élève.
+// 'all'    = les deux (vue de saisie).
+export type SubjectScope = 'common' | 'exam' | 'all'
+
+/**
+ * Matières visibles pour un élève selon la portée.
+ * Un élève ne voit JAMAIS les matières d'examen d'une autre filière que la sienne.
+ */
+export function filterSubjectsByScope(
+  classSubjects: ApiClassSubject[],
+  scope: SubjectScope,
+  studentTrackId: string | null | undefined,
+): ApiClassSubject[] {
+  return classSubjects.filter((cs) => {
+    const isCommon = cs.trackId == null
+    if (scope === 'common') return isCommon
+    const isOwnExam = !isCommon && !!studentTrackId && cs.trackId === studentTrackId
+    if (scope === 'exam') return isOwnExam
+    return isCommon || isOwnExam // 'all'
+  })
 }
 
 // ── Fetch class subjects — normalise les Decimal Prisma ───────────────────────

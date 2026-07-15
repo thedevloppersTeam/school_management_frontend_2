@@ -55,6 +55,7 @@ import {
   ArrowRightLeftIcon,
   UserRoundXIcon,
   UserRoundCheckIcon,
+  GraduationCapIcon,
 } from "lucide-react"
 import { ArchivedYearBanner } from "@/components/school/archived-year-banner"
 import { StudentEnrollForm } from "@/components/school/students/student-enroll-form"
@@ -62,6 +63,7 @@ import { EditStudentModal, type EditStudentData } from "@/components/school/edit
 import { TransferEnrollmentModal } from "@/components/school/transfer-enrollment-modal"
 import { BulkTransferModal } from "@/components/school/bulk-transfer-modal"
 import { StepExemptionModal } from "@/components/school/step-exemption-modal"
+import { StudentTrackModal } from "@/components/school/student-track-modal"
 import { Checkbox } from "@/components/ui/checkbox"
 import { StatCard } from "@/components/school/stat-card"
 import { fetchClassSessions, type AcademicYear, type ClassSession } from "@/lib/api/dashboard"
@@ -83,6 +85,10 @@ interface StudentRow {
   classSessionId: string
   className:     string
   status:        'ACTIVE' | 'TRANSFERRED' | 'DROPPED' | 'GRADUATED'
+  // Filière (portée par l'inscription) — obligatoire en classe terminale
+  trackId?:      string | null
+  trackCode?:    string | null
+  isTerminal?:   boolean
   address?:      string
   motherName?:   string
   fatherName?:   string
@@ -163,6 +169,9 @@ export default function StudentsManagementPage() {
   // Dispense d'étape
   const [exemptingStudent, setExemptingStudent] = useState<StudentRow | null>(null)
 
+  // Filière (classes terminales)
+  const [trackStudent, setTrackStudent] = useState<StudentRow | null>(null)
+
   // Transfert groupé
   const [selectedEnrollmentIds, setSelectedEnrollmentIds] = useState<Set<string>>(new Set())
   const [bulkTransferOpen, setBulkTransferOpen] = useState(false)
@@ -195,6 +204,8 @@ export default function StudentsManagementPage() {
             studentId: string
             classSessionId: string
             status: 'ACTIVE' | 'TRANSFERRED' | 'DROPPED' | 'GRADUATED'
+            trackId?: string | null
+            track?: { id: string; code: string; name: string } | null
             student?: {
               id: string
               studentCode?: string
@@ -223,6 +234,9 @@ export default function StudentsManagementPage() {
               birthDate:     enr.student?.user?.birthDate ? String(enr.student.user.birthDate).slice(0, 10) : '',
               email:         enr.student?.user?.email || '',
               profilePhoto:  enr.student?.user?.profilePhoto,
+              trackId:       enr.trackId ?? null,
+              trackCode:     enr.track?.code ?? null,
+              isTerminal:    session.class.classType.isTerminal === true,
               classSessionId: session.id,
               className,
               status:        enr.status,
@@ -782,7 +796,20 @@ export default function StudentsManagementPage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {student.className}
+                        <div className="flex flex-col">
+                          <span>{student.className}</span>
+                          {student.isTerminal && (
+                            student.trackCode ? (
+                              <span className="text-[11px] font-medium text-sky-700">
+                                Filière {student.trackCode}
+                              </span>
+                            ) : (
+                              <span className="text-[11px] font-medium text-amber-600">
+                                Filière manquante
+                              </span>
+                            )
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <StatusBadge status={student.status} />
@@ -817,6 +844,12 @@ export default function StudentsManagementPage() {
                                     <ArrowRightLeftIcon className="mr-2 h-4 w-4" />
                                     Transférer
                                   </DropdownMenuItem>
+                                  {student.isTerminal && (
+                                    <DropdownMenuItem onClick={() => setTrackStudent(student)}>
+                                      <GraduationCapIcon className="mr-2 h-4 w-4" />
+                                      {student.trackId ? 'Changer la filière' : 'Définir la filière'}
+                                    </DropdownMenuItem>
+                                  )}
                                   <DropdownMenuItem onClick={() => setExemptingStudent(student)}>
                                     <BadgeAlertIcon className="mr-2 h-4 w-4" />
                                     Dispenser d&apos;une étape
@@ -1005,6 +1038,19 @@ export default function StudentsManagementPage() {
             })}
           submitting={transferSubmitting}
           onSubmit={handleTransfer}
+        />
+      )}
+
+      {/* Modal filière (classes terminales) */}
+      {trackStudent && (
+        <StudentTrackModal
+          open={!!trackStudent}
+          onOpenChange={open => !open && setTrackStudent(null)}
+          enrollmentId={trackStudent.enrollmentId}
+          studentName={`${trackStudent.firstname} ${trackStudent.lastname}`}
+          className={trackStudent.className}
+          currentTrackId={trackStudent.trackId}
+          onSaved={loadStudents}
         />
       )}
 

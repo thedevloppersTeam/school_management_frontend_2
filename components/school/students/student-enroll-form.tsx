@@ -47,6 +47,13 @@ import {
 export interface ClassSessionOption {
   id: string;
   name: string;
+  isTerminal: boolean; // classe terminale → filière obligatoire
+}
+
+interface TrackOption {
+  id: string;
+  code: string;
+  name: string;
 }
 
 interface StudentEnrollFormProps {
@@ -63,6 +70,7 @@ interface FormState {
   lastName: string;
   birthDate: string;
   classSessionId: string;
+  trackId: string; // filière — obligatoire si la classe est terminale
   address: string;
   fatherName: string;
   motherName: string;
@@ -78,6 +86,7 @@ const EMPTY_FORM: FormState = {
   lastName: "",
   birthDate: "",
   classSessionId: "",
+  trackId: "",
   address: "",
   fatherName: "",
   motherName: "",
@@ -120,6 +129,7 @@ export function StudentEnrollForm({
   const [photoSubmitting, setPhotoSubmitting] = useState(false);
   const [classSessions, setClassSessions] = useState<ClassSessionOption[]>([]);
   const [loadingClasses, setLoadingClasses] = useState(false);
+  const [tracks, setTracks] = useState<TrackOption[]>([]);
   const [customGroups, setCustomGroups] = useState<ApiFieldGroup[]>([]);
   const [customValues, setCustomValues] = useState<Record<string, unknown>>({});
   const [customErrors, setCustomErrors] = useState<Record<string, string>>({});
@@ -154,7 +164,7 @@ export function StudentEnrollForm({
           data: Array<{
             id: string;
             class: {
-              classType: { name: string };
+              classType: { name: string; isTerminal?: boolean };
               letter: string;
               track?: { code: string } | null;
             };
@@ -165,6 +175,7 @@ export function StudentEnrollForm({
               .map((s) => ({
                 id: s.id,
                 name: `${s.class.classType.name} ${s.class.letter}${s.class.track ? ` ${s.class.track.code}` : ""}`,
+                isTerminal: s.class.classType.isTerminal === true,
               }))
               .sort((a, b) => a.name.localeCompare(b.name)),
           );
@@ -173,6 +184,15 @@ export function StudentEnrollForm({
       .catch(() => setClassSessions([]))
       .finally(() => setLoadingClasses(false));
   }, [open, academicYearId]);
+
+  // Filières disponibles (pour les classes terminales)
+  useEffect(() => {
+    if (!open) return;
+    fetch("/api/class-tracks", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data: TrackOption[]) => setTracks(Array.isArray(data) ? data : []))
+      .catch(() => setTracks([]));
+  }, [open]);
 
   const set =
     (field: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -306,12 +326,17 @@ export function StudentEnrollForm({
   // ─── Validation ──────────────────────────────────────────────────────────
   const nisuValid = isNisuValid(form.nisu);
 
+  // La classe choisie est-elle terminale ? → filière obligatoire
+  const selectedClassIsTerminal =
+    classSessions.find((s) => s.id === form.classSessionId)?.isTerminal === true;
+
   const canSubmit =
     nisuValid &&
     form.firstName.trim() !== "" &&
     form.lastName.trim() !== "" &&
     form.birthDate !== "" &&
     form.classSessionId !== "" &&
+    (!selectedClassIsTerminal || form.trackId !== "") &&
     form.fatherName.trim() !== "" &&
     form.motherName.trim() !== "" &&
     form.phone1.trim() !== "";
@@ -368,6 +393,8 @@ export function StudentEnrollForm({
           lastName: form.lastName.trim(),
           birthDate: form.birthDate,
           classSessionId: form.classSessionId,
+          // Filière : envoyée uniquement pour une classe terminale
+          trackId: selectedClassIsTerminal ? form.trackId : null,
           fatherName: form.fatherName.trim(),
           motherName: form.motherName.trim(),
           phone1: form.phone1.trim(),
@@ -839,7 +866,8 @@ export function StudentEnrollForm({
               <Select
                 value={form.classSessionId}
                 onValueChange={(v) =>
-                  setForm((f) => ({ ...f, classSessionId: v }))
+                  // Changer de classe réinitialise la filière (elle dépend de la classe)
+                  setForm((f) => ({ ...f, classSessionId: v, trackId: "" }))
                 }
                 disabled={loadingClasses}
               >
@@ -865,6 +893,46 @@ export function StudentEnrollForm({
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Filière — uniquement pour les classes terminales (obligatoire) */}
+            {selectedClassIsTerminal && (
+              <div className="space-y-1.5">
+                <Label htmlFor="enroll-track" className={FIELD_LABEL_CLASS}>
+                  Filière{" "}
+                  <span className="text-error" aria-label="obligatoire">
+                    *
+                  </span>
+                  <span className="ml-2 text-xs text-neutral-500 font-normal">
+                    — classe terminale
+                  </span>
+                </Label>
+                <Select
+                  value={form.trackId}
+                  onValueChange={(v) => setForm((f) => ({ ...f, trackId: v }))}
+                >
+                  <SelectTrigger
+                    id="enroll-track"
+                    className={INPUT_CLASS}
+                    aria-required="true"
+                  >
+                    <SelectValue placeholder="Sélectionnez une filière" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {tracks.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.code} — {t.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {tracks.length === 0 && (
+                  <p className="text-xs text-error">
+                    Aucune filière définie. Créez-en une avant d&apos;inscrire un
+                    élève en classe terminale.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* ═════════════════ Section Contact ═════════════════════════ */}

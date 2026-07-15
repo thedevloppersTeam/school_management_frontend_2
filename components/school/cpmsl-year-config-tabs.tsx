@@ -90,6 +90,7 @@ interface Level {
   filiere?: string;
   description?: string;
   category?: "fondamental" | "ns-tronc" | "ns-filiere";
+  isTerminal?: boolean; // classe terminale → matières d'examen par filière
 }
 interface Classroom {
   id: string;
@@ -335,6 +336,7 @@ export function CPMSLYearConfigTabs({
       subjectName: string;
       subjectCode: string;
       rubriqueCode?: string;
+      trackCode?: string | null; // null = tronc commun
       coefficient: number;
       coefficientOverride: number | null;
       subjectMaxScore: number;
@@ -349,6 +351,9 @@ export function CPMSLYearConfigTabs({
     Set<string>
   >(new Set());
   const [assignSubjectSearch, setAssignSubjectSearch] = useState("");
+  // Filière de l'assignation : "" = matière commune (tous les élèves de la
+  // salle), sinon matière d'examen officiel réservée aux élèves de cette filière.
+  const [assignTrackId, setAssignTrackId] = useState("");
   const [assignSubmitting, setAssignSubmitting] = useState(false);
 
   // ── Modal edit coefficient override ──────────────────────────────────────
@@ -558,6 +563,8 @@ export function CPMSLYearConfigTabs({
           (cs: {
             id: string;
             subjectId: string;
+            trackId?: string | null;
+            track?: { id: string; code: string; name: string } | null;
             subject?: {
               name?: string;
               code?: string;
@@ -572,6 +579,7 @@ export function CPMSLYearConfigTabs({
             subjectName: cs.subject?.name || "—",
             subjectCode: cs.subject?.code || "—",
             rubriqueCode: cs.subject?.rubric?.code,
+            trackCode: cs.track?.code ?? null,
             coefficient:
               Number(
                 (cs.subject?.coefficient as { d?: number[] })?.d?.[0] ??
@@ -729,11 +737,13 @@ export function CPMSLYearConfigTabs({
     setAssignClassSessionId(selectedSessionForAssign || "");
     setAssignSelectedSubjects(new Set());
     setAssignSubjectSearch("");
+    setAssignTrackId(""); // par défaut : matière commune
     setAssignModalOpen(true);
   };
 
   const handleAssignClassChange = (classSessionId: string) => {
     setAssignClassSessionId(classSessionId);
+    setAssignTrackId(""); // la filière dépend de la classe → réinitialiser
     // Retire les matières devenues incompatibles avec le niveau de la classe.
     const classroom = classrooms.find((c) => c.id === classSessionId);
     setAssignSelectedSubjects((prev) => {
@@ -785,6 +795,8 @@ export function CPMSLYearConfigTabs({
             subjectId,
             teacherId: null,
             coefficientOverride: null,
+            // null = matière commune ; sinon matière d'examen de cette filière
+            trackId: assignTrackId || null,
           };
           const res = await fetch("/api/class-subjects/create", {
             method: "POST",
@@ -803,9 +815,14 @@ export function CPMSLYearConfigTabs({
         }),
       );
       const count = assignSelectedSubjects.size;
+      const trackLabel = assignTrackId
+        ? tracks.find((t) => t.id === assignTrackId)?.code
+        : null;
       toast({
         title: "Matières assignées",
-        description: `${count} matière${count > 1 ? "s" : ""} assignée${count > 1 ? "s" : ""} à la classe`,
+        description:
+          `${count} matière${count > 1 ? "s" : ""} assignée${count > 1 ? "s" : ""} à la classe` +
+          (trackLabel ? ` — filière ${trackLabel} (examen officiel)` : " — tronc commun"),
       });
       setAssignModalOpen(false);
       // Affiche la classe qu'on vient de configurer et rafraîchit sa liste.
@@ -935,6 +952,10 @@ export function CPMSLYearConfigTabs({
   const assignSelectedClassroom = classrooms.find(
     (c) => c.id === assignClassSessionId,
   );
+  // Classe terminale → on peut rattacher les matières à une filière (examen officiel)
+  const assignClassIsTerminal =
+    levels.find((l) => l.id === assignSelectedClassroom?.levelId)?.isTerminal ===
+    true;
   const assignableSubjects = !assignSelectedClassroom
     ? []
     : subjectParents
@@ -1711,13 +1732,13 @@ export function CPMSLYearConfigTabs({
                           scope="col"
                           className={`${TH_CLASS} px-4 py-2.5 text-left`}
                         >
-                          Coeff. global / note
+                          Rattachement
                         </th>
                         <th
                           scope="col"
                           className={`${TH_CLASS} px-4 py-2.5 text-left`}
                         >
-                          Coeff. override
+                          Coeff. global / note
                         </th>
                         <th
                           scope="col"
@@ -1775,6 +1796,17 @@ export function CPMSLYearConfigTabs({
                                   <span className="text-neutral-400">—</span>
                                 )}
                               </td>
+                              <td className="px-4 py-3">
+                                {cs.trackCode ? (
+                                  <span className="px-2 py-0.5 rounded text-xs font-bold bg-sky-50 text-sky-700 border border-sky-200">
+                                    Examen · {cs.trackCode}
+                                  </span>
+                                ) : (
+                                  <span className="text-xs text-neutral-500">
+                                    Tronc commun
+                                  </span>
+                                )}
+                              </td>
                               <td className="px-4 py-3 text-sm text-neutral-900">
                                 <div className="flex flex-col">
                                   <span>{cs.coefficient}</span>
@@ -1782,11 +1814,6 @@ export function CPMSLYearConfigTabs({
                                     /{cs.subjectMaxScore || "—"}
                                   </span>
                                 </div>
-                              </td>
-                              <td
-                                className={`px-4 py-3 text-sm ${cs.coefficientOverride ? "text-info font-semibold" : "text-neutral-400"}`}
-                              >
-                                {cs.coefficientOverride ?? "—"}
                               </td>
                               <td className="px-4 py-3">
                                 {!isArchived && (
@@ -1945,6 +1972,38 @@ export function CPMSLYearConfigTabs({
                 ))}
               </select>
             </div>
+
+            {/* Rattachement filière — uniquement pour les classes terminales */}
+            {assignClassIsTerminal && (
+              <div className="space-y-1.5">
+                <Label htmlFor="assign-track-select" className={FIELD_LABEL_CLASS}>
+                  Rattachement
+                  <span className="ml-2 text-xs text-neutral-500 font-normal">
+                    — classe terminale
+                  </span>
+                </Label>
+                <select
+                  id="assign-track-select"
+                  value={assignTrackId}
+                  onChange={(e) => setAssignTrackId(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-neutral-300 text-sm text-neutral-900 bg-white focus-visible:border-primary-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/20"
+                >
+                  <option value="">
+                    Tronc commun — tous les élèves de la salle
+                  </option>
+                  {tracks.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      Examen officiel — filière {t.code} ({t.name})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-neutral-500 mt-1.5">
+                  {assignTrackId
+                    ? "Ces matières ne concerneront que les élèves de cette filière."
+                    : "Ces matières concerneront tous les élèves de la salle, quelle que soit leur filière."}
+                </p>
+              </div>
+            )}
 
             {/* Matières */}
             <div>

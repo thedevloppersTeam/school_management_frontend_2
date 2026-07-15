@@ -19,9 +19,11 @@ import {
   bulkCreateGrades,
   updateGrade,
   deleteGrade,
+  filterSubjectsByScope,
   type ApiClassSubject,
   type ApiGrade,
   type CreateGradePayload,
+  type SubjectScope,
 } from "@/lib/api/grades"
 import { parseDecimal } from "@/lib/decimal"
 import { useUnsavedChangesWarning } from "@/hooks/use-unsaved-changes-warning"
@@ -31,9 +33,11 @@ interface Step { id: string; name: string; stepNumber: number; isCurrent: boolea
 interface EnrollmentPayload {
   id: string
   classSessionId: string
+  trackId?: string | null
+  track?: { id: string; code: string; name: string } | null
   student?: { user?: { firstname?: string; lastname?: string }; studentCode?: string }
   classSession?: {
-    class?: { letter?: string; classType?: { name?: string } }
+    class?: { letter?: string; classType?: { name?: string; isTerminal?: boolean } }
     academicYear?: { steps?: Step[] }
   }
 }
@@ -78,6 +82,9 @@ export default function StudentGradesPage() {
 
   // key = classSubjectId (global) ou `${classSubjectId}::${sectionId}` (section)
   const [entries, setEntries] = useState<Map<string, Entry>>(new Map())
+
+  // Portée : tronc commun / examen officiel (filière de l'élève) / toutes
+  const [scope, setScope] = useState<SubjectScope>('all')
 
   // ── Chargement contexte élève ────────────────────────────────────────────
   useEffect(() => {
@@ -154,7 +161,20 @@ export default function StudentGradesPage() {
     [entries],
   )
 
+  // Matières visibles pour CET élève : tronc commun + celles de SA filière.
+  // Un élève ne voit jamais les matières d'examen d'une autre filière.
+  const visibleSubjects = useMemo(
+    () => filterSubjectsByScope(classSubjects, scope, enrollment?.trackId),
+    [classSubjects, scope, enrollment],
+  )
+  const hasExamSubjects = useMemo(
+    () => filterSubjectsByScope(classSubjects, 'exam', enrollment?.trackId).length > 0,
+    [classSubjects, enrollment],
+  )
+
   // Diff avec l'existant → create / update / delete
+  // Basé sur les matières VISIBLES : on n'enregistre jamais une note pour une
+  // matière masquée (autre filière, ou hors du filtre courant).
   const diff = useMemo(() => {
     const existingByKey = new Map<string, ApiGrade>()
     for (const g of existingGrades) {
@@ -165,7 +185,7 @@ export default function StudentGradesPage() {
     const toUpdate: { gradeId: string; studentScore: number }[] = []
     const toDelete: string[] = []
 
-    for (const cs of classSubjects) {
+    for (const cs of visibleSubjects) {
       const hasSections = cs.subject.hasSections && cs.subject.sections.length > 0
       const targets = hasSections
         ? cs.subject.sections.map(sec => ({ key: `${cs.id}::${sec.id}`, sectionId: sec.id }))
@@ -198,7 +218,7 @@ export default function StudentGradesPage() {
       }
     }
     return { toCreate, toUpdate, toDelete }
-  }, [classSubjects, entries, existingGrades, excludedSections, enrollmentId, selectedStepId])
+  }, [visibleSubjects, entries, existingGrades, excludedSections, enrollmentId, selectedStepId])
 
   const dirtyCount = diff.toCreate.length + diff.toUpdate.length + diff.toDelete.length
   useUnsavedChangesWarning(dirtyCount > 0)
@@ -239,8 +259,8 @@ export default function StudentGradesPage() {
   const studentName = `${enrollment?.student?.user?.firstname ?? ""} ${enrollment?.student?.user?.lastname ?? ""}`.trim()
   const className = `${enrollment?.classSession?.class?.classType?.name ?? ""} ${enrollment?.classSession?.class?.letter ?? ""}`.trim()
 
-  // Matières groupées par rubrique R1 → R2 → R3
-  const ordered = [...classSubjects].sort((a, b) => {
+  // Matières groupées par rubrique R1 → R2 → R3 (dans la portée choisie)
+  const ordered = [...visibleSubjects].sort((a, b) => {
     const ra = a.subject.rubric?.code ?? "ZZ"
     const rb = b.subject.rubric?.code ?? "ZZ"
     return ra.localeCompare(rb) || a.subject.name.localeCompare(b.subject.name, "fr")
@@ -254,7 +274,14 @@ export default function StudentGradesPage() {
             <ArrowLeftIcon className="mr-1 h-4 w-4" /> Retour aux notes
           </Button>
           <h1 className="font-serif text-2xl font-bold text-foreground">{studentName}</h1>
-          <p className="text-sm text-muted-foreground">{className} — saisie des notes par élève</p>
+          <p className="text-sm text-muted-foreground">
+            {className} — saisie des notes par élève
+            {enrollment?.track && (
+              <span className="ml-2 rounded border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-xs font-medium text-sky-700">
+                Filière {enrollment.track.code}
+              </span>
+            )}
+          </p>
         </div>
         <div className="flex items-center gap-3">
           <Select value={selectedStepId} onValueChange={setSelectedStepId}>
@@ -276,6 +303,30 @@ export default function StudentGradesPage() {
           <CardDescription>
             Videz une case pour retirer une note. Les sections dispensées sont grisées.
           </CardDescription>
+
+          {/* Portée — seulement si l'élève a des matières d'examen officiel */}
+          {hasExamSubjects && (
+            <div className="mt-2 inline-flex rounded-lg border bg-muted/40 p-0.5">
+              {([
+                { key: 'all',    label: 'Toutes' },
+                { key: 'common', label: 'Tronc commun' },
+                { key: 'exam',   label: 'Examen officiel' },
+              ] as const).map(opt => (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => setScope(opt.key)}
+                  className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                    scope === opt.key
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
         </CardHeader>
         <CardContent className="p-0">
           {loadingGrades ? (
@@ -308,7 +359,14 @@ export default function StudentGradesPage() {
                       const err = entry && !entry.isValid
                       rows.push(
                         <tr key={cs.id} className={ci > 0 ? "border-t" : ""}>
-                          <td className="px-4 py-2.5 font-semibold text-foreground">{subj.name}</td>
+                          <td className="px-4 py-2.5 font-semibold text-foreground">
+                            {subj.name}
+                            {cs.track && (
+                              <span className="ml-2 rounded border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-700">
+                                Examen · {cs.track.code}
+                              </span>
+                            )}
+                          </td>
                           <td className="px-4 py-2.5">
                             {subj.rubric?.code && <Badge variant="outline" className={rubricBadge(subj.rubric.code)}>{subj.rubric.code}</Badge>}
                           </td>
@@ -328,7 +386,14 @@ export default function StudentGradesPage() {
                       // Ligne parent (matière)
                       rows.push(
                         <tr key={cs.id} className={`bg-muted/20 ${ci > 0 ? "border-t" : ""}`}>
-                          <td className="px-4 py-2.5 font-semibold text-foreground">{subj.name}</td>
+                          <td className="px-4 py-2.5 font-semibold text-foreground">
+                            {subj.name}
+                            {cs.track && (
+                              <span className="ml-2 rounded border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-700">
+                                Examen · {cs.track.code}
+                              </span>
+                            )}
+                          </td>
                           <td className="px-4 py-2.5">
                             {subj.rubric?.code && <Badge variant="outline" className={rubricBadge(subj.rubric.code)}>{subj.rubric.code}</Badge>}
                           </td>

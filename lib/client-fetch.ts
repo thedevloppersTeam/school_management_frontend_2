@@ -43,6 +43,35 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Session invalide (401) — purge le cookie mort AVANT de rediriger.
+ *
+ * Sans ça : le cookie `connect.sid` existe encore côté navigateur mais le
+ * backend le rejette → proxy.ts laisse passer /admin/*, la page appelle l'API,
+ * reçoit 401, redirige vers /login… que proxy.ts renvoie vers /admin/* puisque
+ * le cookie est toujours là. Boucle infinie.
+ *
+ * Le paramètre `?expired=1` indique à proxy.ts de ne pas rebondir et de
+ * supprimer le cookie (filet de sécurité si le logout échoue).
+ */
+let redirectingToLogin = false
+
+async function handleUnauthorized(): Promise<void> {
+  if (typeof window === 'undefined') return
+  if (window.location.pathname.startsWith('/login')) return
+  if (redirectingToLogin) return // plusieurs 401 en parallèle → une seule redirection
+  redirectingToLogin = true
+
+  try {
+    // Efface la session morte (le backend + le cookie local)
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
+  } catch {
+    // ignoré : proxy.ts purge aussi le cookie sur /login?expired=1
+  }
+
+  window.location.href = '/login?expired=1'
+}
+
 export async function clientFetch<T>(
   path: string,
   options?: RequestInit
@@ -52,11 +81,9 @@ export async function clientFetch<T>(
     ...options,
   })
 
-  // FF7 — Session expirée : redirect vers /login
+  // FF7 — Session expirée : purge du cookie puis redirect vers /login
   if (res.status === 401 && typeof window !== 'undefined') {
-    if (!window.location.pathname.startsWith('/login')) {
-      window.location.href = '/login'
-    }
+    void handleUnauthorized()
     throw new ApiError(401, path, 'Unauthorized — redirecting to login')
   }
 

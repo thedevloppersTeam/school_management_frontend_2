@@ -74,8 +74,17 @@ export function proxy(request: NextRequest) {
   }
 
   // ── Cas 2 : page /login ──────────────────────────────────────────────
-  // User déjà authentifié sur /login → redirect vers dashboard (UX)
   if (pathname === "/login") {
+    // Session invalide signalée par le client (?expired=1) : on affiche le
+    // login ET on purge le cookie mort. Sans ce cas, on rebondirait vers
+    // /admin/* (le cookie existe) alors que le backend le rejette → boucle.
+    if (request.nextUrl.searchParams.has("expired")) {
+      const response = NextResponse.next();
+      response.cookies.delete(SESSION_COOKIE_NAME);
+      return response;
+    }
+
+    // User déjà authentifié sur /login → redirect vers dashboard (UX)
     if (hasSession) {
       const from = request.nextUrl.searchParams.get("from");
       const destination = isSafeRedirectPath(from) ? from! : "/admin/dashboard";

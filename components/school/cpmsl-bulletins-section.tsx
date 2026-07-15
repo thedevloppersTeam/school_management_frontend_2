@@ -150,6 +150,8 @@ export function CPMSLBulletinsSection({
   const [selectedSession, setSelectedSession] = useState("");
   // Classe (niveau) puis Salle (lettre) — sélecteurs en cascade
   const [selectedClassTypeId, setSelectedClassTypeId] = useState("");
+  // Type de bulletin : normal (tronc commun) ou examen officiel (filière)
+  const [bulletinScope, setBulletinScope] = useState<'common' | 'exam'>('common');
 
   const bulletinClassTypes = (() => {
     const map = new Map<string, { id: string; name: string }>();
@@ -170,9 +172,15 @@ export function CPMSLBulletinsSection({
         }))
         .sort((a, b) => a.label.localeCompare(b.label, "fr", { numeric: true }));
 
+  // La classe choisie est-elle terminale ? → possibilité du bulletin d'examen
+  const bulletinClassIsTerminal =
+    sessions.find((s) => s.class.classType.id === selectedClassTypeId)?.class
+      .classType.isTerminal === true;
+
   const handleBulletinClassChange = (classTypeId: string) => {
     setSelectedClassTypeId(classTypeId);
     setSelectedSession(""); // reset la salle
+    setBulletinScope('common'); // le type de bulletin dépend de la classe
   };
 
   // ── PDF Generator ─────────────────────────────────────────────────────────────
@@ -414,6 +422,7 @@ export function CPMSLBulletinsSection({
               sessionObj?.academicYear?.yearString ??
               sessionObj?.academicYear?.name,
             includeGeneralAverage,
+            scope: bulletinScope,
           });
 
           flushSync(() => setLotData(data));
@@ -429,21 +438,26 @@ export function CPMSLBulletinsSection({
           addBulletinCanvasToPdf(pdf, canvas);
           firstPage = false;
 
-          // WF-005 + EP-003 : archivage avec auditNote + remontée des échecs
-          const archiveResult = await archiveBulletin({
-            enrollmentId: student.enrollmentId,
-            stepId: selectedStep,
-            source: "batch",
-            bulletinSnapshot: data,
-            isCorrection,
-            auditNote: audit ? `[${audit.reason}] ${audit.note}` : undefined,
-          });
+          // WF-005 + EP-003 : archivage avec auditNote + remontée des échecs.
+          // Seul le bulletin NORMAL est archivé : l'archive est versionnée par
+          // (élève, étape) sans notion de type, donc archiver l'examen dans la
+          // même chaîne le ferait passer pour une correction du normal.
+          if (bulletinScope === 'common') {
+            const archiveResult = await archiveBulletin({
+              enrollmentId: student.enrollmentId,
+              stepId: selectedStep,
+              source: "batch",
+              bulletinSnapshot: data,
+              isCorrection,
+              auditNote: audit ? `[${audit.reason}] ${audit.note}` : undefined,
+            });
 
-          if (!archiveResult.ok) {
-            archiveFailures++;
-            const archiveMessage = toMessage(archiveResult.error);
-            firstArchiveFailure ??= archiveMessage;
-            console.warn("[archive lot] échec pour", student.studentCode, archiveMessage);
+            if (!archiveResult.ok) {
+              archiveFailures++;
+              const archiveMessage = toMessage(archiveResult.error);
+              firstArchiveFailure ??= archiveMessage;
+              console.warn("[archive lot] échec pour", student.studentCode, archiveMessage);
+            }
           }
         } catch (studentError) {
           generationFailures++;
@@ -464,8 +478,9 @@ export function CPMSLBulletinsSection({
         return;
       }
 
-      // Téléchargement du PDF combiné
-      const lotFilename = `bulletins_lot_${className}_${stepName}_${new Date().toISOString().slice(0, 10)}.pdf`;
+      // Téléchargement du PDF combiné (le type figure dans le nom de fichier)
+      const scopeLabel = bulletinScope === 'exam' ? 'examen' : 'normal';
+      const lotFilename = `bulletins_lot_${scopeLabel}_${className}_${stepName}_${new Date().toISOString().slice(0, 10)}.pdf`;
       pdf.save(lotFilename);
       pdfSaved = true;
 
@@ -588,6 +603,39 @@ export function CPMSLBulletinsSection({
               </SelectContent>
             </Select>
           </div>
+
+          {/* Type de bulletin — uniquement pour les classes terminales */}
+          {bulletinClassIsTerminal && (
+            <div className="mt-3 flex flex-wrap items-center gap-2 border-t pt-3">
+              <span className="text-xs font-medium text-muted-foreground">
+                Type de bulletin :
+              </span>
+              <div className="inline-flex rounded-lg border bg-muted/40 p-0.5">
+                {([
+                  { key: 'common', label: 'Normal (tronc commun)' },
+                  { key: 'exam',   label: 'Examen officiel (filière)' },
+                ] as const).map((opt) => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => setBulletinScope(opt.key)}
+                    className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                      bulletinScope === opt.key
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <span className="text-xs text-muted-foreground">
+                {bulletinScope === 'exam'
+                  ? "Chaque élève reçoit les matières de SA filière."
+                  : "Matières communes à toute la salle."}
+              </span>
+            </div>
+          )}
         </CardContent>
       </Card>
 

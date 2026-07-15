@@ -210,6 +210,20 @@ export function CPMSLGradesGrid({
   )
   const maxScore = parseDecimal(selectedClassSubject?.subject.maxScore) ?? 10
 
+  // ── Portée : tronc commun / examen officiel (filière) / toutes ────────────
+  // La salle a-t-elle des matières d'examen ? (sinon on masque le filtre)
+  const hasExamSubjects = useMemo(
+    () => classSubjects.some(cs => cs.trackId != null),
+    [classSubjects]
+  )
+  const [subjectScope, setSubjectScope] = useState<'all' | 'common' | 'exam'>('all')
+
+  const visibleClassSubjects = useMemo(() => {
+    if (subjectScope === 'common') return classSubjects.filter(cs => cs.trackId == null)
+    if (subjectScope === 'exam') return classSubjects.filter(cs => cs.trackId != null)
+    return classSubjects
+  }, [classSubjects, subjectScope])
+
   const subjectSections = useMemo(
     () => (selectedClassSubject?.subject.sections ?? [])
       .map(sec => ({ ...sec, maxScore: parseDecimal(sec.maxScore) ?? 0 }))
@@ -693,8 +707,16 @@ useUnsavedChangesWarning(hasUnsavedChanges)
 
   // ── Recherche + tri stable ────────────────────────────────────────────────
 
+  // Filière : une matière d'examen officiel ne concerne QUE les élèves de sa
+  // filière. Une matière du tronc commun concerne toute la salle.
+  const enrollmentsForSubject = useMemo(() => {
+    const trackId = selectedClassSubject?.trackId ?? null
+    if (!trackId) return enrollments
+    return enrollments.filter(e => e.trackId === trackId)
+  }, [enrollments, selectedClassSubject])
+
   const initialSortedEnrollments = useMemo(() => {
-    return enrollments
+    return enrollmentsForSubject
       .map((enrollment, index) => ({ enrollment, index }))
       .sort((a, b) => {
         const byLastName = compareTextValues(a.enrollment.student.user.lastname, b.enrollment.student.user.lastname)
@@ -704,7 +726,7 @@ useUnsavedChangesWarning(hasUnsavedChanges)
         return a.index - b.index
       })
       .map(({ enrollment }, index) => ({ enrollment, index }))
-  }, [enrollments])
+  }, [enrollmentsForSubject])
 
   const filteredEnrollmentsBeforeSort = useMemo(() => {
     const q = searchQuery.trim().toLocaleLowerCase('fr')
@@ -1361,13 +1383,48 @@ useUnsavedChangesWarning(hasUnsavedChanges)
                   <SelectValue placeholder={loadingSession ? "Chargement..." : "Sélectionner une matière"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {classSubjects.map(cs => (
-                    <SelectItem key={cs.id} value={cs.id}>{cs.subject.name}</SelectItem>
+                  {visibleClassSubjects.map(cs => (
+                    <SelectItem key={cs.id} value={cs.id}>
+                      {cs.subject.name}
+                      {cs.track ? ` — Examen ${cs.track.code}` : ""}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
           </div>
+
+          {/* Portée — visible seulement si la salle a des matières d'examen */}
+          {hasExamSubjects && (
+            <div className="mt-3 flex flex-wrap items-center gap-2 border-t pt-3">
+              <span className="text-xs font-medium text-muted-foreground">Matières :</span>
+              <div className="inline-flex rounded-lg border bg-muted/40 p-0.5">
+                {([
+                  { key: 'all',    label: 'Toutes' },
+                  { key: 'common', label: 'Tronc commun' },
+                  { key: 'exam',   label: 'Examen officiel' },
+                ] as const).map(opt => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => setSubjectScope(opt.key)}
+                    className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                      subjectScope === opt.key
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              {selectedClassSubject?.track && (
+                <span className="text-xs text-sky-700">
+                  Seuls les élèves de la filière {selectedClassSubject.track.code} sont affichés.
+                </span>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 

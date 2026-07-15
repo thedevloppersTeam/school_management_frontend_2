@@ -51,6 +51,9 @@ function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Session expirée/invalide : on explique pourquoi l'utilisateur est ici.
+  const sessionExpired = searchParams.has("expired");
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -127,6 +130,15 @@ function LoginForm() {
           Connectez-vous à votre espace d&apos;administration
         </p>
       </div>
+
+      {sessionExpired && (
+        <div
+          role="status"
+          className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+        >
+          Votre session a expiré. Veuillez vous reconnecter.
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Champ Nom d'utilisateur */}
