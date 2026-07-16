@@ -172,6 +172,12 @@ export default function StudentGradesPage() {
     () => filterSubjectsByScope(classSubjects, 'exam', enrollment?.trackId).length > 0,
     [classSubjects, enrollment],
   )
+  // Classe terminale mais filière non configurée → on l'explique à l'utilisateur.
+  const isTerminal = enrollment?.classSession?.class?.classType?.isTerminal === true
+  const anyExamSubjectInClass = useMemo(
+    () => classSubjects.some(cs => cs.trackId != null),
+    [classSubjects],
+  )
 
   // Diff avec l'existant → create / update / delete
   // Basé sur les matières VISIBLES : on n'enregistre jamais une note pour une
@@ -326,6 +332,22 @@ export default function StudentGradesPage() {
                   {opt.label}
                 </button>
               ))}
+            </div>
+          )}
+
+          {/* Aide filière : classe terminale mais configuration incomplète */}
+          {isTerminal && !enrollment?.trackId && (
+            <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Cet élève n&apos;a pas de filière définie pour cette année : ses matières
+              d&apos;examen officiel ne peuvent pas s&apos;afficher. Définissez sa filière
+              depuis la page <span className="font-medium">Élèves inscrits</span> (menu ⋮ → Définir la filière).
+            </div>
+          )}
+          {isTerminal && enrollment?.trackId && !anyExamSubjectInClass && (
+            <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Aucune matière d&apos;examen officiel n&apos;est encore rattachée à une filière
+              dans cette classe. Assignez-en depuis <span className="font-medium">Configuration → Matières →
+              Assigner des matières</span> (choisir « Examen officiel — filière »).
             </div>
           )}
         </CardHeader>

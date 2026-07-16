@@ -599,7 +599,9 @@ function BulletinHeader({ data }: Readonly<{ data: BulletinData }>) {
   const cycleLabel = getCycleLabel(data.niveau);
   const periodDetails = getPeriodDetails(data.periode);
   const firstName = data.prenoms || "—";
-  const lastName = (data.nom || "—").toLocaleUpperCase("fr");
+  // Filière (SVT, SES…) affichée à côté du nom, ex: "DUPONT (SVT)".
+  const filiereSuffix = data.filiere ? ` (${data.filiere})` : "";
+  const lastName = (data.nom || "—").toLocaleUpperCase("fr") + filiereSuffix;
   const level = formatLevelForBulletin(data.niveau || "—");
   const period = data.periode || "—";
   const birthDate = data.dateNaissance || "—";

@@ -710,7 +710,9 @@ export async function buildBulletinData(params: {
     nom:           student?.user?.lastname  ?? '',
     sexe:          student?.user?.gender    ?? '—',
     niveau:        normalizeBulletinLevel(className),
-    filiere:       student?.filiere         ?? '—',
+    // Filière = le vrai track de l'inscription (SVT, SES…), avec repli sur le
+    // champ hérité si absent.
+    filiere:       enrollmentContext?.track?.code ?? student?.filiere ?? '',
     dateNaissance: formatFrenchLongDate(student?.user?.birth_date ?? student?.user?.birthDate),
     anneeScolaire: resolvedAcademicYear,
     periode:       stepName,
