@@ -596,7 +596,11 @@ function getPeriodDetails(period: string): {
 
 function BulletinHeader({ data }: Readonly<{ data: BulletinData }>) {
   const etab = data.etablissement;
-  const cycleLabel = getCycleLabel(data.niveau);
+  // Pour un élève de filière, on affiche la filière à la place du cycle ;
+  // sinon le cycle habituel (Cycle 1, 2, 3, 4).
+  const cycleLabel = data.filiere
+    ? `Filière ${data.filiere}`
+    : getCycleLabel(data.niveau);
   const periodDetails = getPeriodDetails(data.periode);
   const firstName = data.prenoms || "—";
   // Filière (SVT, SES…) affichée à côté du nom, ex: "DUPONT (SVT)".

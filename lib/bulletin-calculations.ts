@@ -47,8 +47,22 @@ export function calculateStepAverage(
   moyR2: number | null,
   moyR3: number | null,
 ): number | null {
-  if (moyR1 === null || moyR2 === null || moyR3 === null) return null
-  return moyR1 * 0.7 + moyR2 * 0.25 + moyR3 * 0.05
+  // Poids R1/R2/R3 = 70/25/5. On RENORMALISE sur les rubriques réellement
+  // présentes : sinon une rubrique vide (fréquent sur un bulletin d'examen
+  // officiel où les matières de filière ne couvrent pas les 3 rubriques)
+  // annulait toute la moyenne. Si les 3 sont présentes, le total des poids
+  // vaut 1 → résultat identique à avant.
+  const parts = [
+    { moy: moyR1, weight: 0.7 },
+    { moy: moyR2, weight: 0.25 },
+    { moy: moyR3, weight: 0.05 },
+  ].filter((p): p is { moy: number; weight: number } => p.moy !== null)
+
+  if (parts.length === 0) return null
+
+  const totalWeight = parts.reduce((sum, p) => sum + p.weight, 0)
+  const weighted = parts.reduce((sum, p) => sum + p.moy * p.weight, 0)
+  return weighted / totalWeight
 }
 
 export function getBulletinAppreciation(average: number | null): string {
