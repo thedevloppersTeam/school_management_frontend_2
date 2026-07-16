@@ -596,17 +596,15 @@ function getPeriodDetails(period: string): {
 
 function BulletinHeader({ data }: Readonly<{ data: BulletinData }>) {
   const etab = data.etablissement;
-  // Pour un élève de filière, on affiche la filière à la place du cycle ;
-  // sinon le cycle habituel (Cycle 1, 2, 3, 4).
-  const cycleLabel = data.filiere
-    ? `Filière ${data.filiere}`
-    : getCycleLabel(data.niveau);
+  // Élève de filière : on masque le cycle (la filière est affichée à côté du
+  // niveau, ex "NS4 (SVT)") ; sinon le cycle habituel (Cycle 1, 2, 3, 4).
+  const cycleLabel = data.filiere ? "" : getCycleLabel(data.niveau);
   const periodDetails = getPeriodDetails(data.periode);
   const firstName = data.prenoms || "—";
-  // Filière (SVT, SES…) affichée à côté du nom, ex: "DUPONT (SVT)".
+  const lastName = (data.nom || "—").toLocaleUpperCase("fr");
+  // Filière (SVT, SES…) affichée entre parenthèses à côté du niveau, ex "NS4 (SVT)".
   const filiereSuffix = data.filiere ? ` (${data.filiere})` : "";
-  const lastName = (data.nom || "—").toLocaleUpperCase("fr") + filiereSuffix;
-  const level = formatLevelForBulletin(data.niveau || "—");
+  const level = formatLevelForBulletin(data.niveau || "—") + filiereSuffix;
   const period = data.periode || "—";
   const birthDate = data.dateNaissance || "—";
   const academicYear = data.anneeScolaire || "—";
