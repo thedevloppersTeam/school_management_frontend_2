@@ -340,14 +340,20 @@ function fetchSessionStepExclusions(
 async function getClassAverages(params: {
   classSessionId: string
   stepId: string
+  /**
+   * TOUTES les matières de la salle, NON filtrées : chaque élève est évalué sur
+   * SES propres matières (tronc commun, ou celles de SA filière — qui ont leurs
+   * propres coefficients / notes max).
+   */
   classSubjects: ApiClassSubject[]
   scope: BulletinScope
-  trackId: string | null
 }): Promise<BulletinClassAverages> {
-  // La moyenne de classe dépend de la portée : pour un bulletin d'examen, on ne
-  // compare qu'aux élèves de LA MÊME filière (les autres ne passent pas ces
-  // épreuves) ; pour le tronc commun, à toute la salle.
-  const cacheKey = `${params.classSessionId}:${params.stepId}:${params.scope}:${params.trackId ?? "-"}`
+  // La moyenne de classe couvre TOUTE la salle (ex. tout NS4 A) : elle ne se
+  // sépare PAS par filière. Sur un bulletin d'examen, on n'exclut donc plus les
+  // élèves des autres filières — sinon un élève seul dans sa filière obtenait
+  // une « moyenne classe » égale à sa propre note. Chaque élève est simplement
+  // évalué sur les matières de sa propre filière, puis on moyenne sur la salle.
+  const cacheKey = `${params.classSessionId}:${params.stepId}:${params.scope}`
   const cached = classAveragesCache.get(cacheKey)
   if (cached) return cached
 
@@ -359,19 +365,23 @@ async function getClassAverages(params: {
       fetchSessionStepExclusions(params.classSessionId, params.stepId),
     ])
 
-    const enrollments =
-      params.scope === 'exam'
-        ? allEnrollments.filter((e) => e.trackId === params.trackId)
-        : allEnrollments
-
     const averages = await Promise.all(
-      enrollments.map(async (enrollment) => {
+      allEnrollments.map(async (enrollment) => {
         try {
+          // Matières propres à CET élève : le tronc commun est partagé, les
+          // matières d'examen sont celles de SA filière.
+          const subjects = filterSubjectsByScope(
+            params.classSubjects,
+            params.scope,
+            enrollment.trackId,
+          )
+          if (subjects.length === 0) return null
+
           const grades = await apiFetch<ApiGrade[]>(
             `/api/grades/enrollment/${enrollment.id}?stepId=${params.stepId}`,
           )
           const gradeIndex = buildGradeIndex(grades)
-          const rubriques = buildRubriques(params.classSubjects, gradeIndex, exclusions.get(enrollment.id))
+          const rubriques = buildRubriques(subjects, gradeIndex, exclusions.get(enrollment.id))
           return calculateBulletinAverages({
             rubrique1: rubriques.r1,
             rubrique2: rubriques.r2,
@@ -673,9 +683,10 @@ export async function buildBulletinData(params: {
   const classAverages = await getClassAverages({
     classSessionId,
     stepId,
-    classSubjects: scopedClassSubjects,
+    // Liste COMPLÈTE : getClassAverages filtre lui-même par élève, afin que la
+    // moyenne porte sur toute la salle et non sur la seule filière de l'élève.
+    classSubjects,
     scope,
-    trackId: studentTrackId,
   })
   const backendMoyenneClasse = firstString(student, ['moyenneClasse', 'classAverage', 'bulletin.moyenneClasse', 'bulletin.classAverage'])
   const moyenneClasse = backendMoyenneClasse !== '—'
