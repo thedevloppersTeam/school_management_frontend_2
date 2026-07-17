@@ -681,13 +681,23 @@ export async function buildBulletinData(params: {
   const moyenneClasse = backendMoyenneClasse !== '—'
     ? backendMoyenneClasse
     : formatBulletinNumber(classAverages.moyenneClasseEtape)
+  // Moyenne générale : elle « mélange » toutes les étapes. Sur le bulletin
+  // d'EXAMEN, on ne se limite PAS aux seules matières d'examen (qui ne sont
+  // notées qu'à l'étape d'examen → une seule étape à moyenner) : la générale
+  // cumule tronc commun + matières de la filière de l'élève sur TOUTES les
+  // étapes, pour refléter le parcours annuel complet. Sur le bulletin normal,
+  // elle reste sur le tronc commun.
+  const generalAverageSubjects =
+    scope === 'exam'
+      ? filterSubjectsByScope(classSubjects, 'all', studentTrackId)
+      : scopedClassSubjects
   const moyenneGenerale = includeGeneralAverage
     ? formatBulletinNumber(await calculateGeneralAverageForEnrollment({
         enrollmentId,
         classSessionId,
         academicYearId: yearId,
         selectedStepId: stepId,
-        classSubjects: scopedClassSubjects,
+        classSubjects: generalAverageSubjects,
       }))
     : undefined
 
