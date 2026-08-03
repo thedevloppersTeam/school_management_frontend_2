@@ -67,7 +67,10 @@ import {
   ArchiveIcon,
   UserPlusIcon,
   UploadIcon,
-  BookOpenIcon
+  BookOpenIcon,
+  GraduationCapIcon,
+  CopyIcon,
+  CalendarCheckIcon
 } from "lucide-react";
 
 import { getMe, logout, type AuthUser } from "@/lib/data/auth-data";
@@ -141,6 +144,22 @@ const navItems: NavItem[] = [
     ],
   },
   {
+    label: "Fin d'année",
+    icon: CalendarCheckIcon,
+    children: [
+      {
+        label: "Promotion des élèves",
+        href: "/admin/fin-annee/promotion",
+        icon: GraduationCapIcon,
+      },
+      {
+        label: "Reprendre une année",
+        href: "/admin/fin-annee/configuration",
+        icon: CopyIcon,
+      },
+    ],
+  },
+  {
     label: "Archives",
     icon: ArchiveIcon,
     children: [
@@ -184,6 +203,8 @@ const breadcrumbMap: Record<string, string> = {
   "/admin/academic-years": "Années Scolaires",
   "/admin/settings": "Établissement",
   "/admin/archives": "Bulletins archivés",
+  "/admin/fin-annee/promotion": "Promotion des élèves",
+  "/admin/fin-annee/configuration": "Reprendre une année",
 };
 
 function getBreadcrumbLabel(pathname: string): string {
