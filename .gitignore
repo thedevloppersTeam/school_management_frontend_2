@@ -68,3 +68,13 @@ audit-report.json
 /artifacts/
 /outputs/
 /tmp/
+
+_dumps/
+*.sql.gz
+
+# Exports de session / secrets
+cookies.txt
+*.cookies
+cookiejar*
+*.pem
+*.key
