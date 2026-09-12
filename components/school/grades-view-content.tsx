@@ -29,7 +29,14 @@ import {
 } from "lucide-react"
 import { fetchClassSessions, fetchSteps, type AcademicYearStep, type ClassSession } from "@/lib/api/dashboard"
 import { fetchClassSubjects, fetchEnrollments, type ApiClassSubject, type ApiEnrollment } from "@/lib/api/grades"
-import { parseDecimal } from "@/lib/decimal"
+import { computeStep } from "@/lib/bulletin/compute"
+import {
+  toSubjectInputs,
+  buildExclusionSet,
+  rubricIndex,
+  type ApiExclusionLike,
+  type ToSubjectInputsResult,
+} from "@/lib/bulletin/from-api"
 import { cn } from "@/lib/utils"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -46,36 +53,16 @@ interface GradeRow {
   average:      number | null
   isComplete:   boolean
   rang:         number | null
-}
-
-// ── Helper BR-001 ─────────────────────────────────────────────────────────────
-
-function computeAverage(
-  grades: Record<string, number | null>,
-  classSubjects: ApiClassSubject[],
-  rubrics: Rubric[]
-): number | null {
-  const rubricMap: Record<string, string> = {}
-  rubrics.forEach(r => { rubricMap[r.id] = r.code })
-
-  const byRubric: Record<string, number[]> = { R1: [], R2: [], R3: [] }
-  classSubjects.forEach(cs => {
-    const rid  = cs.subject.rubric?.id
-    const code = rid ? rubricMap[rid] : null
-    const note = grades[cs.id]
-    if (code && note !== null && note !== undefined && (code === 'R1' || code === 'R2' || code === 'R3')) {
-      byRubric[code].push(note)
-    }
-  })
-
-  const avg = (arr: number[]) =>
-    arr.length > 0 ? arr.reduce((s, v) => s + v, 0) / arr.length : null
-
-  const a1 = avg(byRubric.R1)
-  const a2 = avg(byRubric.R2)
-  const a3 = avg(byRubric.R3)
-  if (a1 === null && a2 === null && a3 === null) return null
-  return (a1 ?? 0) * 0.7 + (a2 ?? 0) * 0.25 + (a3 ?? 0) * 0.05
+  /**
+   * Etat par matiere. Distingue une dispense (neutre) d'une absence de note
+   * (qui penalise). Pas encore lu par le rendu — chantier UI a venir.
+   */
+  subjectStates: Record<string, 'noted' | 'missing' | 'exempted'>
+  /**
+   * Bareme effectif par matiere, issu de SubjectOutput.denominator : il tient
+   * compte de maxScoreOverride et des sous-matieres dispensees.
+   */
+  maxScores:    Record<string, number>
 }
 
 function getAppreciation(m: number | null): string {
@@ -124,6 +111,8 @@ export function GradesViewContent({
   }, [steps, selectedStep])
   const [gradeRows,   setGradeRows]   = useState<GradeRow[]>([])
   const [loadingGrid, setLoadingGrid] = useState(false)
+  // DR-003 — matieres dont la rubrique est inconnue. Signalees, jamais ignorees.
+  const [unmappedSubjects, setUnmappedSubjects] = useState<ToSubjectInputsResult['unmapped']>([])
 
   // ── Chargement contexte ───────────────────────────────────────────────────
   useEffect(() => {
@@ -154,11 +143,24 @@ export function GradesViewContent({
     setLoadingGrid(true)
     setGradeRows([])
     try {
-      const [cs, enr] = await Promise.all([
+      const [cs, enr, exclusionRows] = await Promise.all([
         fetchClassSubjects(sessionId),
         fetchEnrollments(sessionId),
+        // MEME source que le bulletin : une seule verite sur les dispenses.
+        fetch(`/api/enrollments/excluded-sections?classSessionId=${sessionId}&stepId=${stepId}`, { credentials: 'include' })
+          .then((r) => (r.ok ? r.json() as Promise<ApiExclusionLike[]> : []))
+          .catch(() => [] as ApiExclusionLike[]),
       ])
       setClassSubjects(cs)
+
+      const rubricCodeById = rubricIndex(rubrics)
+      const exclusions     = buildExclusionSet(exclusionRows)
+
+      // DR-003 — le mapping ne depend ni de l'eleve ni des notes : on le
+      // constate une fois pour la salle.
+      setUnmappedSubjects(
+        toSubjectInputs({ classSubjects: cs, grades: [], rubricCodeById, enrollmentId: '' }).unmapped,
+      )
 
       const rows = await Promise.all(
         enr.map(async (enrollment) => {
@@ -166,23 +168,31 @@ export function GradesViewContent({
             const res       = await fetch(`/api/grades/enrollment/${enrollment.id}?stepId=${stepId}`, { credentials: 'include' })
             const rawGrades = res.ok ? await res.json() : []
 
-            const gradeMap: Record<string, number | null> = {}
-            cs.forEach(c => { gradeMap[c.id] = null })
-            const sectionTotals: Record<string, number> = {}
-            rawGrades.forEach((g: { classSubjectId: string; sectionId: string | null; studentScore: number }) => {
-              const score = parseDecimal(g.studentScore)
-              if (score === null) return
-              if (g.sectionId === null) {
-                gradeMap[g.classSubjectId] = score
-              } else {
-                sectionTotals[g.classSubjectId] = (sectionTotals[g.classSubjectId] ?? 0) + score
-              }
+            const { subjects } = toSubjectInputs({
+              classSubjects: cs,
+              grades:        rawGrades,
+              rubricCodeById,
+              enrollmentId:  enrollment.id,
+              exclusions,
             })
-            Object.entries(sectionTotals).forEach(([classSubjectId, total]) => {
-              if (gradeMap[classSubjectId] === null) gradeMap[classSubjectId] = total
-            })
+            const step = computeStep(subjects)
 
-            const isComplete = cs.length > 0 && cs.every(c => gradeMap[c.id] !== null)
+            const grades:        Record<string, number | null> = {}
+            const subjectStates: GradeRow['subjectStates']     = {}
+            const maxScores:     Record<string, number>        = {}
+            let anyDenominator = false
+            let anyMissing     = false
+
+            for (const rubrique of [step.r1, step.r2, step.r3]) {
+              if (!rubrique.denominator.isZero()) anyDenominator = true
+              for (const s of rubrique.subjects) {
+                subjectStates[s.classSubjectId] = s.state
+                maxScores[s.classSubjectId]     = s.denominator.toNumber()
+                // La colonne affiche la note dans SON bareme, pas ramenee sur 10.
+                grades[s.classSubjectId]        = s.state === 'noted' ? s.numerator.toNumber() : null
+                if (s.state === 'missing') anyMissing = true
+              }
+            }
 
             return {
               enrollmentId: enrollment.id,
@@ -190,10 +200,15 @@ export function GradesViewContent({
               lastname:     enrollment.student.user.lastname,
               firstname:    enrollment.student.user.firstname,
               studentCode:  enrollment.student.studentCode,
-              grades:       gradeMap,
-              average:      computeAverage(gradeMap, cs, rubrics),
-              isComplete,
+              grades,
+              // Desormais sur /10. Null si les trois rubriques ont un
+              // denominateur nul : rien d'exploitable.
+              average:      anyDenominator ? step.average.toNumber() : null,
+              // Une matiere DISPENSEE ne rend pas l'eleve incomplet.
+              isComplete:   !anyMissing,
               rang:         null,
+              subjectStates,
+              maxScores,
             } as GradeRow
           } catch {
             return {
@@ -206,6 +221,8 @@ export function GradesViewContent({
               average:      null,
               isComplete:   false,
               rang:         null,
+              subjectStates: {},
+              maxScores:    {},
             } as GradeRow
           }
         })
@@ -238,7 +255,7 @@ export function GradesViewContent({
 
   useEffect(() => {
     if (selectedSession && selectedStep) loadGrid(selectedSession, selectedStep)
-    else { setGradeRows([]); setClassSubjects([]) }
+    else { setGradeRows([]); setClassSubjects([]); setUnmappedSubjects([]) }
   }, [selectedSession, selectedStep, loadGrid])
 
   // ── Groupes rubriques ─────────────────────────────────────────────────────
@@ -261,7 +278,13 @@ export function GradesViewContent({
   const columnAverages = useMemo(() => {
     const avgs: Record<string, number | null> = {}
     classSubjects.forEach(cs => {
-      const notes = gradeRows.map(r => r.grades[cs.id]).filter((n): n is number => n !== null)
+      // Une dispense sort de la moyenne de colonne ; une note manquante y
+      // compte ZERO. C'est la difference entre 27/30 et 27/27.
+      const notes = gradeRows.flatMap(r => {
+        const state = r.subjectStates[cs.id]
+        if (state === undefined || state === 'exempted') return []
+        return [state === 'missing' ? 0 : (r.grades[cs.id] ?? 0)]
+      })
       avgs[cs.id] = notes.length > 0 ? notes.reduce((s, v) => s + v, 0) / notes.length : null
     })
     return avgs
@@ -381,6 +404,20 @@ export function GradesViewContent({
           <LockIcon className="h-4 w-4 !text-amber-600" />
           <AlertTitle>Étape clôturée</AlertTitle>
           <AlertDescription>Consultation en lecture seule</AlertDescription>
+        </Alert>
+      )}
+
+      {/* ── DR-003 : matières non rattachées à une rubrique ── */}
+      {unmappedSubjects.length > 0 && (
+        <Alert className="border-destructive/30 bg-destructive/5">
+          <AlertCircleIcon className="h-4 w-4 !text-destructive" />
+          <AlertTitle>Matières non rattachées à une rubrique</AlertTitle>
+          <AlertDescription>
+            {unmappedSubjects.length === 1 ? 'Cette matière est exclue' : 'Ces matières sont exclues'}
+            {' '}du calcul de la moyenne : {unmappedSubjects.map(u => u.name).join(', ')}.
+            Rattachez-{unmappedSubjects.length === 1 ? 'la' : 'les'} à R1, R2 ou R3 pour
+            {unmappedSubjects.length === 1 ? " qu'elle soit prise" : " qu'elles soient prises"} en compte.
+          </AlertDescription>
         </Alert>
       )}
 
@@ -565,11 +602,9 @@ export function GradesViewContent({
                               const rc = rubricClasses(group.rubric.code)
                               return group.subjects.map((cs, i) => {
                                 const note = row.grades[cs.id]
-                                const raw = cs.subject.maxScore
-                                const max =
-                                  (typeof raw === 'object' && (raw as unknown as { d?: unknown[] })?.d)
-                                    ? Number((raw as unknown as { d: unknown[] }).d[0])
-                                    : Number(raw) || 10
+                                // Bareme effectif calcule par le module : plus de
+                                // troncature d[0], plus de bareme magique 10.
+                                const max = row.maxScores[cs.id] ?? 0
                                 return (
                                   <TableCell
                                     key={cs.id}
