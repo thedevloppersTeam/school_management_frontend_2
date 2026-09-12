@@ -232,7 +232,7 @@ function decimalToNumber(raw: unknown, fallback = 0): number {
 function buildSubjectEntries(
   cs: ApiClassSubject,
   bucket: GradeBucket | undefined,
-  excludedSectionIds?: Set<string>,
+  excludedKeys?: Set<string>,
 ): RubriqueEntry[] {
   const subject = cs.subject
   // Note max effective : l'override de l'affectation (ex: /80 en SVT) prime sur
@@ -244,11 +244,17 @@ function buildSubjectEntries(
       ? decimalToNumber(cs.maxScoreOverride, 0)
       : decimalToNumber(subject.maxScore, 0)
 
-  // Sections dispensées pour cette étape : elles sont totalement retirées
+  // Dispense de la matière entière (sectionId null en base) : la matière sort
+  // du numérateur ET du dénominateur.
+  if (excludedKeys?.has(exclusionKey(cs.id, null))) return []
+
+  // Sections dispensées pour cette étape : la clé porte désormais
+  // classSubjectId, de sorte qu'une dispense sur le tronc commun n'affecte pas
+  // l'affectation de filière, et inversement. Elles sont totalement retirées
   // (ni au numérateur, ni au dénominateur) → elles ne contribuent pas à la
   // moyenne de CETTE étape uniquement.
   const activeSections = subject.sections.filter(
-    (sec) => !excludedSectionIds?.has(sec.id),
+    (sec) => !excludedKeys?.has(exclusionKey(cs.id, sec.id)),
   )
 
   if (!subject.hasSections || activeSections.length === 0) {
@@ -288,7 +294,7 @@ function pushToRubrique(set: RubriqueSet, code: string, entries: RubriqueEntry[]
 function buildRubriques(
   classSubjects: ApiClassSubject[],
   gradeIndex: GradeIndex,
-  excludedSectionIds?: Set<string>,
+  excludedKeys?: Set<string>,
 ): RubriqueSet {
   const set: RubriqueSet = {
     r1: [], r1Name: normalizeRubriqueLabel(1),
@@ -298,19 +304,43 @@ function buildRubriques(
   for (const cs of classSubjects) {
     const { rubric } = cs.subject
     const code = rubric?.code ?? ''
-    const entries = buildSubjectEntries(cs, gradeIndex.get(cs.id), excludedSectionIds)
+    const entries = buildSubjectEntries(cs, gradeIndex.get(cs.id), excludedKeys)
     pushToRubrique(set, code, entries)
   }
   return set
 }
 
-// ── Dispenses (exclusions de sections) par étape ────────────────────────────
-// Une dispense est scoped par (élève + matière + section + étape). Pour le
-// calcul du bulletin on charge, en un seul appel, toutes les dispenses d'une
-// session pour UNE étape, puis on retire les sections dispensées de la moyenne
-// de cette étape uniquement — jamais des autres étapes de l'année.
-type SessionStepExclusions = Map<string, Set<string>> // enrollmentId -> Set<sectionId>
+// ── Dispenses (exclusions) par étape ────────────────────────────────────────
+// Une dispense est scopée par (élève + matière + section + étape). L'étape est
+// portée par la requête ; les trois autres parties par la clé ci-dessous.
+//
+// La clé DOIT inclure classSubjectId : une même matière peut être affectée deux
+// fois à une session — tronc commun (trackId null) et examen de filière — via
+// @@unique([classSessionId, subjectId, trackId]). Les deux affectations
+// partagent le même subject, donc les mêmes sectionId. Une clé réduite à
+// (enrollmentId, sectionId) dispensait l'élève sur les DEUX affectations.
+//
+// sectionId null = dispense de la matière entière, symétrique de
+// grades.section_id IS NULL qui signifie « note globale » (classes d'examen
+// 9e et NS4, qui notent directement la matière sans sous-matières).
+const WHOLE_SUBJECT = '*'
+
+function exclusionKey(classSubjectId: string, sectionId: string | null): string {
+  return `${classSubjectId}::${sectionId ?? WHOLE_SUBJECT}`
+}
+
+type SessionStepExclusions = Map<string, Set<string>> // enrollmentId -> Set<clé>
+
 const exclusionsCache = new Map<string, Promise<SessionStepExclusions>>()
+
+/** À appeler après l'enregistrement ou la suppression d'une dispense. */
+export function invalidateExclusionsCache(classSessionId?: string, stepId?: string): void {
+  if (!classSessionId) { exclusionsCache.clear(); return }
+  if (stepId) { exclusionsCache.delete(`${classSessionId}:${stepId}`); return }
+  for (const k of exclusionsCache.keys()) {
+    if (k.startsWith(`${classSessionId}:`)) exclusionsCache.delete(k)
+  }
+}
 
 function fetchSessionStepExclusions(
   classSessionId: string,
@@ -321,14 +351,35 @@ function fetchSessionStepExclusions(
   if (cached) return cached
 
   const promise = (async () => {
-    const rows = await safeFetch<Array<{ enrollmentId: string; sectionId: string }>>(
+    // Le backend renvoie les QUATRE parties de la clé. Le type les déclare
+    // toutes : en n'en déclarant que deux, classSubjectId arrivait et était
+    // silencieusement jeté.
+    const rows = await safeFetch<
+      Array<{
+        enrollmentId: string
+        classSubjectId: string
+        sectionId: string | null
+        stepId?: string
+      }>
+    >(
       `/api/enrollments/excluded-sections?classSessionId=${classSessionId}&stepId=${stepId}`,
       [],
     )
     const map: SessionStepExclusions = new Map()
     for (const row of rows) {
+      // Une dispense sans portee ne peut pas etre appliquee : sans
+      // classSubjectId on ne sait pas SUR QUELLE affectation elle porte.
+      // Signale au lieu d'absorber en silence.
+      if (!row.classSubjectId) {
+        console.warn(
+          `[dispenses] ligne ignoree : classSubjectId absent (eleve ${row.enrollmentId}, ` +
+          `section ${row.sectionId}). Dispense sans portee dans ` +
+          `enrollment_section_exclusions.`,
+        )
+        continue
+      }
       if (!map.has(row.enrollmentId)) map.set(row.enrollmentId, new Set())
-      map.get(row.enrollmentId)!.add(row.sectionId)
+      map.get(row.enrollmentId)!.add(exclusionKey(row.classSubjectId, row.sectionId))
     }
     return map
   })()

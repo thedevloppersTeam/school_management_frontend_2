@@ -45,6 +45,7 @@ import type { ApiClassSubject, ApiEnrollment, ApiGrade, CreateGradePayload } fro
 import { effectiveMaxScore } from "@/lib/api/grades"
 import { cn } from "@/lib/utils"
 import { parseDecimal } from "@/lib/decimal"
+import { invalidateExclusionsCache } from "@/lib/api/bulletin"
 import { useUnsavedChangesWarning } from "@/hooks/use-unsaved-changes-warning"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -366,6 +367,11 @@ export function CPMSLGradesGrid({
         }),
       })
       if (!res.ok) throw new Error((await res.json().catch(() => null))?.message ?? 'Échec')
+
+      // Le bulletin met les dispenses en cache par (session, étape). Sans cette
+      // invalidation, accorder ou retirer une dispense ne change rien au
+      // bulletin jusqu'au rechargement complet de la page.
+      invalidateExclusionsCache(selectedSessionId, selectedStepId)
 
       setExclusionsByEnrollment((prev) => {
         const next = new Map(prev)
