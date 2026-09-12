@@ -64,3 +64,9 @@ README.md
 errors.ts
 audit-report.json
 payload.json
+
+# Sorties locales
+.pnpm-store/
+artifacts/
+outputs/
+tmp/
