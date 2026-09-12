@@ -43,10 +43,9 @@ yarn-error.log*
 next-env.d.ts
 cookies.txt
 .gitignore
-.gitignore
+
 
 .claude/
-tests/
 playwright.config.ts
 playwright-report/
 test-results/
@@ -63,3 +62,8 @@ login.json
 README.md
 errors.ts
 audit-report.json
+
+
+!playwright.config.ts
+!.github/workflows/*.yml
+!scripts/*.sh
