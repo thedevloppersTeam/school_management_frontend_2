@@ -63,3 +63,18 @@ login.json
 README.md
 errors.ts
 audit-report.json
+# --- Sorties locales et cache (ajout du 08/09/2026) ---
+/.pnpm-store/
+/artifacts/
+/outputs/
+/tmp/
+
+_dumps/
+*.sql.gz
+
+# Exports de session / secrets
+cookies.txt
+*.cookies
+cookiejar*
+*.pem
+*.key
