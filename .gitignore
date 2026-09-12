@@ -46,8 +46,6 @@ cookies.txt
 .gitignore
 
 .claude/
-tests/
-playwright.config.ts
 playwright-report/
 test-results/
 postman/
@@ -70,3 +68,9 @@ payload.json
 artifacts/
 outputs/
 tmp/
+
+
+!playwright.config.ts
+!.github/workflows/*.yml
+!scripts/*.sh
+
