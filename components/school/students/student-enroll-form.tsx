@@ -69,6 +69,9 @@ interface FormState {
   firstName: string;
   lastName: string;
   birthDate: string;
+  // Donnee de gestion (statistiques, listes, export MENFP). "" = non renseigne :
+  // le champ est optionnel et n'est alors pas envoye du tout.
+  gender: "MALE" | "FEMALE" | "";
   classSessionId: string;
   trackId: string; // filière — obligatoire si la classe est terminale
   address: string;
@@ -85,6 +88,7 @@ const EMPTY_FORM: FormState = {
   firstName: "",
   lastName: "",
   birthDate: "",
+  gender: "",
   classSessionId: "",
   trackId: "",
   address: "",
@@ -373,7 +377,7 @@ export function StudentEnrollForm({
     if (!canSubmit) return;
     const customPayloadBase = buildCustomPayload();
     if (customPayloadBase === null) {
-      setApiError("Un ou plusieurs champs personnalis?s obligatoires sont vides.");
+      setApiError("Un ou plusieurs champs personnalisés obligatoires sont vides.");
       return;
     }
 
@@ -392,6 +396,8 @@ export function StudentEnrollForm({
           firstName: form.firstName.trim(),
           lastName: form.lastName.trim(),
           birthDate: form.birthDate,
+          // Sexe : omis du payload quand il n'est pas renseigne.
+          ...(form.gender && { gender: form.gender }),
           classSessionId: form.classSessionId,
           // Filière : envoyée uniquement pour une classe terminale
           trackId: selectedClassIsTerminal ? form.trackId : null,
@@ -406,7 +412,7 @@ export function StudentEnrollForm({
 
       const studentId = result?.enrollment?.student?.id;
       if (!studentId) {
-        throw new Error("Le serveur n'a pas retourn? l'identifiant de l'?l?ve.");
+        throw new Error("Le serveur n'a pas retourné l'identifiant de l'élève.");
       }
 
       if (photoFile) {
@@ -434,13 +440,13 @@ export function StudentEnrollForm({
         });
       }
 
-      setSuccessMsg(`${form.firstName} ${form.lastName} inscrit(e) avec succ?s.`);
+      setSuccessMsg(`${form.firstName} ${form.lastName} inscrit(e) avec succès.`);
       setForm(EMPTY_FORM);
       setPhotoFile(null);
       setCustomValues({});
       onSuccess();
     } catch (err) {
-      setApiError(toMessage(err, "lors de l'inscription de l'?l?ve"));
+      setApiError(toMessage(err, "lors de l'inscription de l'élève"));
     } finally {
       setPhotoSubmitting(false);
       setSubmitting(false);
@@ -512,7 +518,7 @@ export function StudentEnrollForm({
         {field.type === "SELECT" && (
           <Select value={typeof raw === "string" ? raw : ""} onValueChange={(v) => setCustomValue(field.id, v)}>
             <SelectTrigger id={fieldId} className={INPUT_CLASS}>
-              <SelectValue placeholder={field.placeholder ?? "S?lectionner"} />
+              <SelectValue placeholder={field.placeholder ?? "Sélectionner"} />
             </SelectTrigger>
             <SelectContent>
               {(field.config?.options ?? []).map((option) => (
@@ -580,7 +586,7 @@ export function StudentEnrollForm({
                 if (!file) return;
                 setCustomImageWarning((prev) => ({ ...prev, [field.id]: "" }));
                 if (!PHOTO_ACCEPTED_TYPES.includes(file.type)) {
-                  setCustomImageWarning((prev) => ({ ...prev, [field.id]: "Format non support? (JPG, PNG, WEBP)." }));
+                  setCustomImageWarning((prev) => ({ ...prev, [field.id]: "Format non supporté (JPG, PNG, WEBP)." }));
                   e.target.value = "";
                   return;
                 }
@@ -617,8 +623,7 @@ export function StudentEnrollForm({
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-white rounded-xl cpmsl-scroll"></DialogContent>{" "}
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-white rounded-xl cpmsl-scroll">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-white rounded-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <DialogHeader>
           <DialogTitle className="font-serif text-2xl font-bold tracking-tight text-neutral-900 leading-tight">
             Inscrire un élève
@@ -753,7 +758,7 @@ export function StudentEnrollForm({
                 <Input
                   id="enroll-nisu"
                   type="text"
-                  placeholder="Ex: M4XGKTJTXYN4SM"
+                  placeholder="Ex: EXEMPLE12345ABCDE678"
                   value={form.nisu}
                   onChange={(e) =>
                     setForm((f) => ({
@@ -1065,9 +1070,43 @@ export function StudentEnrollForm({
             </div>
           </div>
 
-          {customGroups.length > 0 && (
-            <div className="space-y-3">
-              <h3 className={SECTION_TITLE_CLASS}>Informations compl?mentaires</h3>
+          <div className="space-y-3">
+            <h3 className={SECTION_TITLE_CLASS}>Informations complémentaires</h3>
+
+            {/* Sexe — donnee de gestion : statistiques de classe, listes, export
+                MENFP. N'apparait PAS sur le bulletin : le backend l'exclut via
+                GET /api/students/:id/bulletin (decision MOA du 2026-09-13).
+                Groupe de radios : nomme par sa <legend>, pas par un <Label>. */}
+            <fieldset className="space-y-1.5">
+              <legend className={FIELD_LABEL_CLASS}>
+                Sexe{" "}
+                <span className={FIELD_HINT_CLASS}>optionnel</span>
+              </legend>
+              <RadioGroup
+                value={form.gender}
+                onValueChange={(v) =>
+                  setForm((f) => ({ ...f, gender: v as FormState["gender"] }))
+                }
+                className="flex flex-wrap gap-2"
+              >
+                <Label
+                  htmlFor="enroll-gender-male"
+                  className="flex items-center gap-2 rounded-md border border-neutral-300 px-3 py-2 text-sm font-normal text-neutral-900"
+                >
+                  <RadioGroupItem value="MALE" id="enroll-gender-male" />
+                  Masculin
+                </Label>
+                <Label
+                  htmlFor="enroll-gender-female"
+                  className="flex items-center gap-2 rounded-md border border-neutral-300 px-3 py-2 text-sm font-normal text-neutral-900"
+                >
+                  <RadioGroupItem value="FEMALE" id="enroll-gender-female" />
+                  Féminin
+                </Label>
+              </RadioGroup>
+            </fieldset>
+
+            {customGroups.length > 0 && (
               <div className="space-y-4">
                 {customGroups.map((group) => {
                   const visibleFields = group.fields.filter((field) => isFieldVisible(field));
@@ -1087,8 +1126,8 @@ export function StudentEnrollForm({
                   );
                 })}
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         <DialogFooter>
