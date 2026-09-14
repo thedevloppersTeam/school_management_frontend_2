@@ -19,19 +19,24 @@
     letter-spacing: -0.03em;
     font-weight: 700;
   }
+  /* Libre Baskerville n'est charge qu'en 400 et 700 (app/layout.tsx), et
+     `font-synthesis: none` interdit la graisse synthetique : un poids 600
+     demande se resout en 700. Les pas serif declarent donc 700 — ils le
+     rendaient deja. La hierarchie serif tient par la taille et l'approche,
+     pas par la graisse. */
   .heading-2 {
     font-family: var(--font-serif);
     font-size: var(--text-2xl);
     line-height: 1.2;
     letter-spacing: -0.025em;
-    font-weight: 600;
+    font-weight: 700;
   }
   .heading-3 {
     font-family: var(--font-serif);
     font-size: var(--text-xl);
     line-height: 1.25;
     letter-spacing: -0.02em;
-    font-weight: 600;
+    font-weight: 700;
   }
   .heading-4 {
     font-family: var(--font-sans);
@@ -92,6 +97,11 @@
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
     "Courier New", monospace;
 
+  /* Bande de densite de donnee. DESIGN.md la decrit en prose
+     (« surface de donnee [...] corps 10-11 px ») sans la nommer ;
+     elle est nommee ici pour cesser d'etre ecrite en valeur arbitraire. */
+  --text-3xs: 0.625rem;
+  --text-2xs: 0.6875rem;
   --text-xs: 0.75rem;
   --text-sm: 0.8125rem;
   --text-base: 0.9375rem;
@@ -104,6 +114,7 @@
   --leading-snug: 1.2;
   --leading-normal: 1.5;
   --leading-relaxed: 1.6;
+  --leading-body: 1.65;
 
   --background: 40 14% 98%;
   --foreground: 240 10% 3.9%;
@@ -119,7 +130,9 @@
   --muted-foreground: 240 3.8% 46.1%;
   --accent: 240 4.8% 95.9%;
   --accent-foreground: 209 19% 25%;
-  --destructive: 0 84.2% 60.2%;
+  /* erreur, un pas plus profond : l'action qui detruit, pas le constat.
+     6,93:1 avec --destructive-foreground, contre 3,61:1 auparavant. */
+  --destructive: 0 54% 40%;
   --destructive-foreground: 0 0% 98%;
   --border: 240 5.9% 90%;
   --input: 240 5.9% 90%;
@@ -177,7 +190,10 @@
 
 body {
   font-family: var(--font-sans);
-  font-size: 15px;
+  /* Le jeton, pas 15px en dur : la rampe est en rem, donc relative a la racine.
+     Une valeur figee ici faisait cohabiter deux regimes de taille des que
+     l'utilisateur touchait au reglage de police de son navigateur. */
+  font-size: var(--text-base);
   line-height: 1.65;
   font-weight: 400;
   color: hsl(var(--foreground));

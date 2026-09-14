@@ -1,0 +1,297 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-13T10:45:52Z",
+  "title": "Design System: CPMSL — Gestion Scolaire",
+  "extensions": {
+    "colorMeta": {
+      "ardoise-profonde": {
+        "role": "primary",
+        "displayName": "Ardoise Profonde",
+        "canonical": "#2A3740",
+        "tonalRamp": ["#1A242A", "#2A3740", "#3A4A57", "#4A5D6E", "#5A7085", "#8DABC0", "#D9E3EA", "#F0F4F7"]
+      },
+      "bleu-ardoise": {
+        "role": "primary",
+        "displayName": "Bleu Ardoise",
+        "canonical": "hsl(209 19% 44%)",
+        "hover": "#4A5D6E",
+        "tonalRamp": ["#1A242A", "#2A3740", "#3A4A57", "#4A5D6E", "#5A7085", "#8DABC0", "#D9E3EA", "#F0F4F7"]
+      },
+      "vieil-or": {
+        "role": "secondary",
+        "displayName": "Vieil Or",
+        "canonical": "#C3B594",
+        "tonalRamp": ["#3A3628", "#5A523C", "#7A6E50", "#9A8A65", "#B0A07A", "#C3B594", "#E0D6BF", "#FAF8F3"]
+      },
+      "vieil-or-clair": {
+        "role": "secondary",
+        "displayName": "Vieil Or Clair",
+        "canonical": "#D1C19F",
+        "tonalRamp": ["#3A3628", "#5A523C", "#7A6E50", "#9A8A65", "#B0A07A", "#C3B594", "#E0D6BF", "#FAF8F3"]
+      },
+      "papier-creme": {
+        "role": "neutral",
+        "displayName": "Papier Crème",
+        "canonical": "hsl(40 14% 98%)",
+        "tonalRamp": ["#1E1A17", "#2A2725", "#403D3A", "#5C5955", "#78756F", "#A8A5A2", "#E8E6E3", "#FAFAF8"]
+      },
+      "surface-carte": {
+        "role": "neutral",
+        "displayName": "Surface Fiche",
+        "canonical": "#FFFFFF",
+        "tonalRamp": ["#1E1A17", "#2A2725", "#403D3A", "#5C5955", "#78756F", "#A8A5A2", "#F5F4F2", "#FFFFFF"]
+      },
+      "encre": {
+        "role": "neutral",
+        "displayName": "Encre",
+        "canonical": "hsl(240 10% 3.9%)",
+        "tonalRamp": ["#09090B", "#18181B", "#27272A", "#3F3F46", "#71717A", "#A1A1AA", "#E4E4E7", "#FAFAFA"]
+      },
+      "encre-attenuee": {
+        "role": "neutral",
+        "displayName": "Encre Atténuée",
+        "canonical": "hsl(240 3.8% 46.1%)",
+        "tonalRamp": ["#09090B", "#18181B", "#27272A", "#3F3F46", "#71717A", "#A1A1AA", "#E4E4E7", "#FAFAFA"]
+      },
+      "filet": {
+        "role": "neutral",
+        "displayName": "Filet",
+        "canonical": "hsl(240 5.9% 90%)",
+        "tonalRamp": ["#09090B", "#18181B", "#27272A", "#3F3F46", "#71717A", "#A1A1AA", "#E4E4E7", "#FAFAFA"]
+      },
+      "sourdine": {
+        "role": "neutral",
+        "displayName": "Sourdine",
+        "canonical": "hsl(240 4.8% 95.9%)",
+        "tonalRamp": ["#09090B", "#18181B", "#27272A", "#3F3F46", "#71717A", "#A1A1AA", "#E4E4E7", "#FAFAFA"]
+      },
+      "tranche-registre": {
+        "role": "neutral",
+        "displayName": "Tranche du Registre",
+        "canonical": "hsl(205 17% 21%)",
+        "tonalRamp": ["#1A242A", "#2C373F", "#3A474F", "#4A5D6E", "#587183", "#8DABC0", "#D6DEE6", "#F0F4F7"]
+      },
+      "tranche-texte": {
+        "role": "neutral",
+        "displayName": "Tranche Texte",
+        "canonical": "hsl(210 25% 87%)",
+        "tonalRamp": ["#1A242A", "#2C373F", "#3A474F", "#4A5D6E", "#587183", "#8DABC0", "#D6DEE6", "#F0F4F7"]
+      },
+      "tranche-actif": {
+        "role": "neutral",
+        "displayName": "Tranche Actif",
+        "canonical": "hsl(205 16% 27%)",
+        "tonalRamp": ["#1A242A", "#2C373F", "#3A474F", "#4A5D6E", "#587183", "#8DABC0", "#D6DEE6", "#F0F4F7"]
+      },
+      "succes": {
+        "role": "tertiary",
+        "displayName": "Succès",
+        "canonical": "#2D7D46",
+        "tonalRamp": ["#0E2B18", "#154023", "#1D562F", "#25693A", "#2D7D46", "#5AA773", "#A8D5B8", "#E8F5EC"]
+      },
+      "avertissement": {
+        "role": "tertiary",
+        "displayName": "Avertissement",
+        "canonical": "#C48B1A",
+        "tonalRamp": ["#3D2B08", "#5C410C", "#7A5610", "#9E7014", "#C48B1A", "#DCAE52", "#EED49B", "#FEF6E0"]
+      },
+      "erreur": {
+        "role": "tertiary",
+        "displayName": "Erreur",
+        "canonical": "#C43C3C",
+        "tonalRamp": ["#3D1212", "#5C1B1B", "#7A2424", "#9E2F2F", "#C43C3C", "#D97070", "#EDAFAF", "#FDE8E8"]
+      },
+      "information": {
+        "role": "tertiary",
+        "displayName": "Information",
+        "canonical": "#2B6CB0",
+        "tonalRamp": ["#0C2038", "#123054", "#184070", "#20548F", "#2B6CB0", "#5F94CA", "#A6C6E6", "#E3EFF9"]
+      },
+      "destructif": {
+        "role": "tertiary",
+        "displayName": "Destructif",
+        "canonical": "#9E2F2F",
+        "tonalRamp": ["#3D1212", "#5C1B1B", "#7A2424", "#9E2F2F", "#C43C3C", "#D97070", "#EDAFAF", "#FDE8E8"],
+        "note": "Issu de la rampe erreur (erreur-700), un pas plus profond que erreur #C43C3C. 7,2:1 avec du texte blanc. Cible normative : --destructive vaut encore hsl(0 84.2% 60.2%) dans app/globals.css:122."
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display — .heading-1", "purpose": "Titre de page unique. Un seul h1 par route." },
+      "headline": { "displayName": "Headline — .heading-2", "purpose": "Titre de section majeure, colonne de branding du login." },
+      "title": { "displayName": "Title — .heading-3", "purpose": "Titre de carte importante, en-tête d'année scolaire." },
+      "subtitle": { "displayName": "Subtitle — .heading-4", "purpose": "Premier niveau en sans-serif. Sous-sections, titres de modales." },
+      "body": { "displayName": "Body — .body-base", "purpose": "Corps de texte et valeur des champs. Interligne 1.65 malgré 15px." },
+      "label": { "displayName": "Label — .label-ui", "purpose": "Libellés de formulaire, texte des boutons, cellules de tableau." },
+      "caption": { "displayName": "Caption — .caption", "purpose": "Mentions légales, horodatages, sous-titres d'avatar." }
+    },
+    "shadows": [
+      { "name": "shadow-2xs", "value": "0 1px rgb(0 0 0 / 0.05)", "purpose": "Liseré de séparation, quasi invisible. Rarement utile." },
+      { "name": "shadow-xs", "value": "0 1px 2px 0 rgb(0 0 0 / 0.05)", "purpose": "Contrôles qui se détachent à peine du fond." },
+      { "name": "shadow-sm", "value": "0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)", "purpose": "Plafond au repos. Cartes, boutons, champs." },
+      { "name": "shadow-md", "value": "0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)", "purpose": "Réponse au survol d'une carte cliquable, et rien d'autre." },
+      { "name": "shadow-lg", "value": "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)", "purpose": "Superpositions réelles : popover, dropdown, dialogue." },
+      { "name": "shadow-xl", "value": "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)", "purpose": "Feuille latérale, superposition de premier plan." },
+      { "name": "shadow-2xl", "value": "0 25px 50px -12px rgb(0 0 0 / 0.25)", "purpose": "Disponible mais non employé. Ne pas l'introduire." },
+      { "name": "seal-shadow", "value": "0 4px 12px rgba(42, 55, 64, 0.15)", "purpose": "Ombre propre au sceau SL. Seule ombre teintée admise du système." }
+    ],
+    "motion": [
+      { "name": "transition-colors", "value": "150ms cubic-bezier(0.4, 0, 0.2, 1)", "purpose": "Transition par défaut de tous les états de survol et de focus. Porte sur la couleur, jamais sur la géométrie." },
+      { "name": "sidebar-slide-in", "value": "slide-from-left 0.3s cubic-bezier(0.82, 0.085, 0.395, 0.895)", "purpose": "Entrée du tiroir de navigation mobile." },
+      { "name": "sidebar-slide-out", "value": "slide-to-left 0.25s cubic-bezier(0.82, 0.085, 0.395, 0.895)", "purpose": "Sortie du tiroir, légèrement plus rapide que l'entrée." },
+      { "name": "accordion", "value": "accordion-down / accordion-up 0.2s ease-out", "purpose": "Ouverture et fermeture des groupes repliables (navigation, accordéons)." },
+      { "name": "chevron-rotate", "value": "transform 200ms", "purpose": "Rotation de 90° du chevron d'un groupe de navigation ouvert." },
+      { "name": "notification-ping", "value": "ping 1s cubic-bezier(0, 0, 0.2, 1) infinite", "purpose": "Halo de la pastille de notification non lue. Seule animation en boucle du système." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" },
+      { "name": "2xl", "value": "1400px" }
+    ],
+    "layout": [
+      { "name": "sidebar-width", "value": "16rem", "purpose": "Largeur de la barre latérale ouverte." },
+      { "name": "sidebar-width-icon", "value": "3rem", "purpose": "Largeur repliée en mode icônes." },
+      { "name": "sidebar-width-mobile", "value": "18rem", "purpose": "Largeur du tiroir mobile." },
+      { "name": "header-height", "value": "56px", "purpose": "Barre d'en-tête collante, z-index 40." },
+      { "name": "content-padding", "value": "16px / 24px / 32px", "purpose": "p-4, sm:p-6, lg:p-8 lg:pt-6." },
+      { "name": "control-height", "value": "36px", "purpose": "Hauteur de référence des boutons et des champs." },
+      { "name": "grid-cell-padding", "value": "4px 8px", "purpose": "Cellule de grille de saisie (px-2 py-1). Surface de données, pas de lecture." },
+      { "name": "grid-header-padding", "value": "6px 12px", "purpose": "En-tête collant de grille (px-3 py-1.5)." },
+      { "name": "grid-row-height", "value": "28px", "purpose": "Hauteur de ligne visée dans une grille de notes." },
+      { "name": "grid-font-size", "value": "10px – 11px", "purpose": "Corps des cellules de grille. En dessous de l'échelle d'interface, assumé." }
+    ]
+  },
+  "components": [
+    {
+      "name": "Bouton primaire",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Action principale d'un écran. Transition sur la couleur uniquement.",
+      "html": "<button class=\"ds-btn-primary\">Configurer<svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M5 12h14\"/><path d=\"m12 5 7 7-7 7\"/></svg></button>",
+      "css": ".ds-btn-primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:8px 16px;border:none;border-radius:8px;background:hsl(209 19% 44%);color:#FAFAFA;font-family:Inter,system-ui,sans-serif;font-size:.8125rem;font-weight:500;letter-spacing:.02em;white-space:nowrap;cursor:pointer;box-shadow:0 1px 3px 0 rgb(0 0 0/.1),0 1px 2px -1px rgb(0 0 0/.1);transition:background-color 150ms cubic-bezier(.4,0,.2,1)}.ds-btn-primary:hover{background:hsl(209 19% 44%/.9)}.ds-btn-primary:focus-visible{outline:none;box-shadow:0 0 0 1px hsl(209 19% 44%)}.ds-btn-primary:disabled{opacity:.5;pointer-events:none}"
+    },
+    {
+      "name": "Bouton outline",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Action secondaire. Bordure 1px, fond papier, ombre au repos minimale.",
+      "html": "<button class=\"ds-btn-outline\">Consulter</button>",
+      "css": ".ds-btn-outline{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:8px 16px;border:1px solid hsl(240 5.9% 90%);border-radius:8px;background:hsl(40 14% 98%);color:hsl(240 10% 3.9%);font-family:Inter,system-ui,sans-serif;font-size:.8125rem;font-weight:500;letter-spacing:.02em;cursor:pointer;box-shadow:0 1px 3px 0 rgb(0 0 0/.1),0 1px 2px -1px rgb(0 0 0/.1);transition:background-color 150ms cubic-bezier(.4,0,.2,1),color 150ms cubic-bezier(.4,0,.2,1)}.ds-btn-outline:hover{background:hsl(240 4.8% 95.9%)}.ds-btn-outline:focus-visible{outline:none;box-shadow:0 0 0 1px hsl(209 19% 44%)}"
+    },
+    {
+      "name": "Bouton ghost (icône)",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Actions d'en-tête : notifications, menu utilisateur. Carré 36px. La pastille de non-lu signale une nouveauté et prend « information » — le code actuel utilise encore bg-destructive (admin-layout-shell.tsx:589-590).",
+      "html": "<button class=\"ds-btn-ghost\" aria-label=\"Notifications\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M10.268 21a2 2 0 0 0 3.464 0\"/><path d=\"M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326\"/></svg><span class=\"ds-btn-ghost-dot\"></span></button>",
+      "css": ".ds-btn-ghost{position:relative;display:inline-flex;align-items:center;justify-content:center;height:36px;width:36px;border:none;border-radius:8px;background:transparent;color:hsl(240 3.8% 46.1%);cursor:pointer;transition:background-color 150ms cubic-bezier(.4,0,.2,1),color 150ms cubic-bezier(.4,0,.2,1)}.ds-btn-ghost:hover{background:hsl(240 4.8% 95.9%);color:hsl(240 10% 3.9%)}.ds-btn-ghost:focus-visible{outline:none;box-shadow:0 0 0 1px hsl(209 19% 44%)}.ds-btn-ghost-dot{position:absolute;top:5px;right:5px;height:8px;width:8px;border-radius:9999px;background:#2B6CB0}"
+    },
+    {
+      "name": "Champ de saisie",
+      "kind": "input",
+      "refersTo": "input-default",
+      "description": "Champ 36px, fond transparent, anneau de focus 1px sans halo.",
+      "html": "<label class=\"ds-field\"><span class=\"ds-field-label\">NISU de l'élève</span><input class=\"ds-input\" type=\"text\" placeholder=\"12 chiffres\" /></label>",
+      "css": ".ds-field{display:flex;flex-direction:column;gap:6px;max-width:320px}.ds-field-label{font-family:Inter,system-ui,sans-serif;font-size:.8125rem;font-weight:500;letter-spacing:.02em;color:hsl(240 10% 3.9%)}.ds-input{height:36px;width:100%;padding:4px 12px;border:1px solid hsl(240 5.9% 90%);border-radius:8px;background:transparent;color:hsl(240 10% 3.9%);font-family:Inter,system-ui,sans-serif;font-size:.8125rem;box-shadow:0 1px 3px 0 rgb(0 0 0/.1),0 1px 2px -1px rgb(0 0 0/.1);transition:box-shadow 150ms cubic-bezier(.4,0,.2,1)}.ds-input::placeholder{color:hsl(240 3.8% 46.1%)}.ds-input:focus-visible{outline:none;box-shadow:0 0 0 1px hsl(209 19% 44%)}.ds-input:disabled{opacity:.5;cursor:not-allowed}"
+    },
+    {
+      "name": "Carte d'indicateur",
+      "kind": "card",
+      "refersTo": "stat-card",
+      "description": "Tuile de tableau de bord. Plate au repos, shadow-md au survol.",
+      "html": "<div class=\"ds-stat-card\"><div class=\"ds-stat-icon\"><svg width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2\"/><circle cx=\"9\" cy=\"7\" r=\"4\"/><path d=\"M22 21v-2a4 4 0 0 0-3-3.87\"/><path d=\"M16 3.13a4 4 0 0 1 0 7.75\"/></svg></div><div><p class=\"ds-stat-label\">Élèves inscrits</p><p class=\"ds-stat-value\">248</p></div></div>",
+      "css": ".ds-stat-card{display:flex;align-items:center;gap:16px;max-width:280px;padding:20px;border:1px solid hsl(240 5.9% 90%);border-radius:14px;background:#FFFFFF;box-shadow:0 1px 3px 0 rgb(0 0 0/.1),0 1px 2px -1px rgb(0 0 0/.1);transition:box-shadow 150ms cubic-bezier(.4,0,.2,1)}.ds-stat-card:hover{box-shadow:0 4px 6px -1px rgb(0 0 0/.1),0 2px 4px -2px rgb(0 0 0/.1)}.ds-stat-icon{display:flex;align-items:center;justify-content:center;height:48px;width:48px;flex-shrink:0;border-radius:14px;background:hsl(209 19% 44%/.1);color:hsl(209 19% 44%)}.ds-stat-label{margin:0;font-family:Inter,system-ui,sans-serif;font-size:.8125rem;font-weight:500;color:hsl(240 3.8% 46.1%)}.ds-stat-value{margin:2px 0 0;font-family:Inter,system-ui,sans-serif;font-size:1.75rem;font-weight:700;letter-spacing:-.025em;color:hsl(240 10% 3.9%)}"
+    },
+    {
+      "name": "Badge d'année active",
+      "kind": "chip",
+      "refersTo": "badge-outline",
+      "description": "Badge d'en-tête avec point d'état. Point plein Succès quand une année est active.",
+      "html": "<span class=\"ds-badge-year\"><span class=\"ds-badge-dot\"></span>2025-2026</span>",
+      "css": ".ds-badge-year{display:inline-flex;align-items:center;gap:6px;padding:2px 10px;border:1px solid hsl(240 5.9% 90%);border-radius:8px;background:transparent;color:hsl(240 10% 3.9%);font-family:Inter,system-ui,sans-serif;font-size:.75rem;font-weight:500;letter-spacing:.03em}.ds-badge-dot{height:6px;width:6px;border-radius:9999px;background:#2D7D46}"
+    },
+    {
+      "name": "Entrée de navigation",
+      "kind": "nav",
+      "refersTo": "sidebar-item-active",
+      "description": "Élément de la tranche du registre, état actif et état au repos, sur fond ardoise.",
+      "html": "<nav class=\"ds-sidebar\"><p class=\"ds-sidebar-group\">Navigation</p><a class=\"ds-nav-item ds-nav-item--active\" href=\"#\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect width=\"7\" height=\"9\" x=\"3\" y=\"3\" rx=\"1\"/><rect width=\"7\" height=\"5\" x=\"14\" y=\"3\" rx=\"1\"/><rect width=\"7\" height=\"9\" x=\"14\" y=\"12\" rx=\"1\"/><rect width=\"7\" height=\"5\" x=\"3\" y=\"16\" rx=\"1\"/></svg><span>Dashboard</span></a><a class=\"ds-nav-item\" href=\"#\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M14 22v-4a2 2 0 1 0-4 0v4\"/><path d=\"m18 10 3.447 1.724a1 1 0 0 1 .553.894V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-7.382a1 1 0 0 1 .553-.894L6 10\"/><path d=\"M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18\"/></svg><span>Gestion Scolaire</span><svg class=\"ds-nav-chevron\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m9 18 6-6-6-6\"/></svg></a></nav>",
+      "css": ".ds-sidebar{width:256px;padding:8px;background:hsl(205 17% 21%);border-right:1px solid hsl(205 16% 27%)}.ds-sidebar-group{margin:0 0 4px;padding:8px;font-family:Inter,system-ui,sans-serif;font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:hsl(210 25% 87%/.5)}.ds-nav-item{display:flex;align-items:center;gap:8px;height:32px;padding:8px;border-radius:8px;color:hsl(210 25% 87%);font-family:Inter,system-ui,sans-serif;font-size:.8125rem;font-weight:400;letter-spacing:.02em;text-decoration:none;transition:background-color 150ms cubic-bezier(.4,0,.2,1),color 150ms cubic-bezier(.4,0,.2,1)}.ds-nav-item:hover{background:hsl(205 16% 27%/.6)}.ds-nav-item--active{background:hsl(205 16% 27%);color:#FFFFFF;font-weight:600}.ds-nav-item:focus-visible{outline:none;box-shadow:0 0 0 1px hsl(205 20% 43%)}.ds-nav-chevron{margin-left:auto;color:hsl(210 25% 87%/.4);transition:transform 200ms}"
+    },
+    {
+      "name": "Bannière d'année archivée",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "Bandeau de lecture seule. Modèle des états Avertissement : fond doux, texte foncé, bordure de la même famille.",
+      "html": "<div class=\"ds-banner-warning\" role=\"status\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect width=\"20\" height=\"5\" x=\"2\" y=\"3\" rx=\"1\"/><path d=\"M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8\"/><path d=\"M10 12h4\"/></svg><div><p class=\"ds-banner-title\">Année 2023-2024 — Archivée</p><p class=\"ds-banner-body\">Année archivée — les données sont en lecture seule</p></div></div>",
+      "css": ".ds-banner-warning{display:flex;align-items:flex-start;gap:12px;max-width:520px;padding:16px;border:1px solid #EED49B;border-radius:14px;background:#FEF6E0;color:#7A5610}.ds-banner-warning svg{margin-top:2px;flex-shrink:0;color:#C48B1A}.ds-banner-title{margin:0;font-family:Inter,system-ui,sans-serif;font-size:.9375rem;font-weight:600;line-height:1.4}.ds-banner-body{margin:2px 0 0;font-family:Inter,system-ui,sans-serif;font-size:.8125rem;line-height:1.5;color:#9E7014}"
+    },
+    {
+      "name": "Le Sceau (SchoolLogo)",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "Signature du système. Carré ardoise à coins 14px, glyphe SL en vieil or. Seul endroit où l'or apparaît à pleine intensité.",
+      "html": "<div class=\"ds-seal\"><div class=\"ds-seal-mark\"><span>SL</span></div><div class=\"ds-seal-text\"><span class=\"ds-seal-name\">CPMSL</span><span class=\"ds-seal-sub\">Cours Privé Mixte Saint Léonard</span></div></div>",
+      "css": ".ds-seal{display:flex;align-items:center;gap:12px}.ds-seal-mark{display:flex;align-items:center;justify-content:center;height:56px;width:56px;flex-shrink:0;border-radius:14px;background:#2A3740;box-shadow:0 4px 12px rgba(42,55,64,.15)}.ds-seal-mark span{font-family:'Libre Baskerville',Georgia,serif;font-weight:700;font-size:22px;line-height:1;color:#C3B594}.ds-seal-text{display:flex;flex-direction:column}.ds-seal-name{font-family:'Libre Baskerville',Georgia,serif;font-weight:700;font-size:20px;line-height:1.25;letter-spacing:-.02em;color:#2A3740}.ds-seal-sub{font-family:Inter,system-ui,sans-serif;font-size:12px;font-weight:400;line-height:1.5;letter-spacing:.03em;color:hsl(240 3.8% 46.1%)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Le Registre",
+    "overview": "L'application n'est pas un tableau de bord, c'est le registre de l'école tenu sous forme numérique. La tranche du registre est la barre latérale ardoise (hsl(205 17% 21%)), pleine et sans ombre, qui ne bouge jamais. La page ouverte est le contenu, posé sur un papier crème (hsl(40 14% 98%)) et jamais sur du blanc pur — le blanc pur est réservé aux fiches (cartes) qui reposent dessus. Un seul administrateur passe des heures dans ce registre, et la finalité de tout ce qu'il y consigne est un objet physique : le bulletin 8½×11 imprimé, opposable au MENFP et remis aux familles.\n\nLe système tient sur une tension unique : une interface en Inter, dense, compacte, faite pour saisir trente notes d'affilée sans fatigue ; et une autorité en Libre Baskerville, qui n'apparaît que sur les titres, le sceau et tout ce qui engage l'établissement. Le sceau — le carré ardoise #2A3740 frappé d'un « SL » en vieil or #C3B594, coins arrondis à 14 px — est le seul endroit où la marque hausse le ton. Partout ailleurs elle se lit dans la justesse des détails : un filet de 1 px, un anneau de focus d'exactement 1 px, une ombre qui n'apparaît qu'au survol.\n\nCe qui est explicitement rejeté : les dégradés décoratifs (le seul dégradé du projet est le fond de la page de connexion, #FAFAF8 → rgba(240,235,223,.3), et il reste une exception), les ombres portées colorées, les accents qui ne signalent aucun état, et toute animation qui ne répond pas à une action de l'utilisateur.",
+    "keyCharacteristics": [
+      "Encre ardoise sur papier crème ; le blanc pur ne sert qu'aux fiches posées dessus.",
+      "Serif pour ce qui fait autorité, sans-serif pour ce qui s'opère.",
+      "Densité assumée : hauteur de contrôle de référence 36 px, barre d'en-tête 56 px.",
+      "Plat au repos ; l'ombre est une réponse, jamais un décor.",
+      "L'or est un sceau, pas une couleur d'interface : logo, avatar, marque de tranche.",
+      "L'imprimé est la finalité, pas une exportation."
+    ],
+    "rules": [
+      { "name": "La Règle du Sceau", "body": "L'or n'est jamais une couleur d'interface. Il n'apparaît que sur le sceau SL, et uniquement sur un fond d'ardoise (ardoise-profonde #2A3740 ou plus sombre), où il donne 6,02:1. Un bouton or, un badge or ou un titre or est une faute : l'or perd sa fonction dès qu'il se répète. Les initiales d'avatar sortent de cette exception depuis le 13 septembre 2026 : sur sidebar-primary #587183 l'or ne donnait que 2,88:1, sous le seuil texte de 4,5:1. Elles sont en blanc (5,11:1). Une règle qui autorise un usage illisible est pire qu'une règle absente.", "section": "colors" },
+      { "name": "La Règle du Papier", "body": "Le fond de page est hsl(40 14% 98%) et les fiches sont #FFFFFF. Jamais l'inverse, jamais les deux en blanc. C'est ce delta de 2 % qui donne la profondeur, pas l'ombre.", "section": "colors" },
+      { "name": "La Règle des États Nommés", "body": "Un état se signale avec succes / avertissement / erreur / information, jamais avec une palette Tailwind brute. État constaté au 12 septembre 2026 : le code existant contient environ 139 usages amber-* et 121 usages emerald-* hérités, contre moins de 30 usages des jetons. Ces usages sont une dette à résorber par migration dédiée ; ils ne constituent pas un précédent et ne doivent pas être imités.", "section": "colors" },
+      { "name": "La Règle de l'Autorité", "body": "Le serif est réservé à ce qui engage l'établissement : titres de page et de section, nom de l'école, en-tête du bulletin. Une étiquette de bouton, une cellule de tableau ou un message d'erreur en serif est une faute — ils appartiennent à l'outil, pas à l'institution.", "section": "typography" },
+      { "name": "La Règle de l'Approche Inverse", "body": "L'approche (letter-spacing) se resserre quand la taille monte (−0.03em à 36 px) et s'ouvre quand elle descend (+0.03em à 12 px). Toute nouvelle taille doit respecter cette pente.", "section": "typography" },
+      { "name": "La Règle des Deux Densités", "body": "Le registre est dense là où il consigne, aéré là où il présente. Sur une surface de LECTURE — carte, panneau, formulaire, modale — on compose à 24 px entre sections et 16 px à l'intérieur. Sur une surface de DONNÉES — grille de notes, tableau de classe, liste longue — on descend à 8–12 px horizontaux et 4–6 px verticaux, hauteur de ligne compacte, corps 10–11 px, chiffres en tabular-nums. Choisir la densité avant de choisir la valeur : appliquer le rythme de lecture à une grille est une faute aussi grave que l'inverse.", "section": "layout" },
+      { "name": "La Règle des Deux Espaces", "body": "S'applique aux surfaces de lecture uniquement. Le vertical s'y compose avec 24 px entre sections et 16 px à l'intérieur. Une troisième valeur doit être nommée et justifiée ; sinon elle fabrique un rythme que personne ne peut reproduire. Une seule est nommée aujourd'hui : le retrait de fiche compacte, 20 px (spacing.card), employé par StatCard et CPMSLYearCard. Il est admis parce qu'il est partagé par les deux tuiles du tableau de bord et déclaré comme jeton, pas improvisé au cas par cas. Aucun quatrième pas n'est autorisé sans passer par ce document.", "section": "layout" },
+      { "name": "La Règle du Repos Plat", "body": "Au repos, shadow-sm au maximum. Au survol, shadow-md. En superposition réelle, shadow-lg et au-delà. Une surface qui n'est ni survolée ni superposée n'a aucune raison de porter une ombre.", "section": "elevation" },
+      { "name": "La Règle de l'Ombre Neutre", "body": "Toutes les ombres sont du noir transparent. Une ombre teintée (shadow-emerald-100/50 par exemple) est une exception héritée, à ne pas reproduire.", "section": "elevation" },
+      { "name": "La Règle du Rayon Unique", "body": "Toute valeur de rayon dérive de --radius. Un rayon écrit en dur (rounded-[12px]) casse la cohérence de la coque entière ; la seule exception admise est le sceau, dont les 14 px sont posés en style inline parce qu'il doit rester identique hors contexte Tailwind.", "section": "shapes" }
+    ],
+    "dos": [
+      "Do poser le fond de page en hsl(40 14% 98%) et les fiches en #FFFFFF. Test : si une carte est invisible sur son fond, l'un des deux est faux.",
+      "Do dériver tout rayon de --radius : 8 px pour un contrôle, 14 px pour une fiche.",
+      "Do garder la hauteur de contrôle à 36 px (h-9) et l'en-tête à 56 px. Une nouvelle hauteur doit se justifier par une contrainte de densité réelle.",
+      "Do réserver Libre Baskerville aux titres et à ce qui engage l'établissement, et Inter à tout ce qui s'opère.",
+      "Do utiliser les classes de rôle existantes (.heading-1 … .caption) plutôt que de recomposer une taille et une approche à la main.",
+      "Do signaler les états avec succes / avertissement / erreur / information et leurs fonds doux.",
+      "Do distinguer destructif (l'action qui détruit) de erreur (le constat), en gardant les deux dans la même rampe rouge.",
+      "Do signaler une nouveauté — notification non lue, élément récent — avec information. Une pastille rouge annonce un incident, pas un message.",
+      "Do choisir la densité avant la valeur : surface de lecture → 24/16 px ; surface de données → 8–12 px horizontaux, 4–6 px verticaux, corps 10–11 px.",
+      "Do poser tabular-nums sur toute colonne de chiffres — notes, moyennes, effectifs, coefficients.",
+      "Do donner aux colonnes de grille une largeur plancher (min-w-[…]) et un en-tête collant dès que la table défile.",
+      "Do ajouter .cpmsl-scroll à tout conteneur qui déborde.",
+      "Do garder le focus au clavier visible : anneau de 1 px en --ring, focus-visible et non focus.",
+      "Do composer le vertical avec 24 px entre sections et 16 px à l'intérieur.",
+      "Do appeler le backend via les gestionnaires de route app/api/** : la couche visuelle ne parle jamais au serveur en direct."
+    ],
+    "donts": [
+      "Don't modifier le gabarit du bulletin imprimé, sous aucun prétexte visuel.",
+      "Don't utiliser une palette Tailwind brute pour un état — emerald-*, amber-*, rose-*, sky-*. Les ~260 occurrences existantes sont une dette héritée, pas un précédent.",
+      "Don't employer l'or ailleurs que sur le sceau SL, fond ardoise.",
+      "Don't poser du vieil or sur un fond clair. #C3B594 donne 2,03:1 sur blanc et 1,94:1 sur papier crème : il échoue pour du texte (4,5:1) comme pour une bordure ou un anneau de focus (3:1). L'or ne tient que sur ardoise.",
+      "Don't habiller un état sélectionné ou un anneau de focus avec la famille secondary-*. Le focus est en --ring, 1 px, focus-visible — laisser la primitive Input l'appliquer plutôt que de la surcharger.",
+      "Don't appliquer le rythme de lecture (24/16 px) à une grille de saisie, ni la densité de grille à une carte ou un formulaire.",
+      "Don't introduire un quatrième pas d'espacement sans le nommer dans DESIGN.md. Trois sont admis : 24, 16 et 20 px (fiches compactes).",
+      "Don't poser une ombre sur une surface qui n'est ni survolée ni superposée, et ne jamais la teinter.",
+      "Don't redéclarer --font-sans ou --font-serif dans globals.css : cela annule le préchargement et les métriques de repli de next/font.",
+      "Don't utiliser Cookie ou Lobster à l'écran : elles appartiennent à l'imprimé.",
+      "Don't épaissir une bordure pour marquer le focus, ni ajouter un halo coloré. Le système ne connaît qu'un poids de bordure : 1 px.",
+      "Don't animer la position d'un bouton au survol. Les transitions portent sur la couleur (transition-colors), pas sur la géométrie.",
+      "Don't introduire un dégradé décoratif. Le seul dégradé du projet est le fond de /login, et il reste une exception.",
+      "Don't écrire un rayon en dur (rounded-[12px]) ni une couleur en hexadécimal dans un composant d'interface — le sceau excepté.",
+      "Don't ajouter un troisième pas d'espacement vertical à côté de 24 px et 16 px sans raison explicite."
+    ]
+  }
+}
