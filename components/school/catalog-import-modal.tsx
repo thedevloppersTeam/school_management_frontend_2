@@ -283,9 +283,9 @@ export function CatalogImportModal({ open, onOpenChange, onSuccess }: CatalogImp
           <div className="space-y-3">
             <label
               htmlFor="catalog-csv-input"
-              className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center transition-colors hover:border-[#2C4A6E] hover:bg-slate-100"
+              className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border bg-muted px-6 py-10 text-center transition-colors hover:border-[#2C4A6E] hover:bg-muted"
             >
-              <UploadCloudIcon className="h-8 w-8 text-slate-400" />
+              <UploadCloudIcon className="h-8 w-8 text-muted-foreground" />
               <span className="text-sm font-medium text-foreground">Choisir un fichier .csv</span>
               <span className="text-xs text-muted-foreground">
                 Séparateur « , » ou « ; ». Encodage UTF-8 ou Windows-1252.
@@ -314,7 +314,7 @@ export function CatalogImportModal({ open, onOpenChange, onSuccess }: CatalogImp
           <Card>
             <CardContent className="flex items-center justify-between gap-3 py-3">
               <div className="flex items-center gap-2 min-w-0">
-                <FileSpreadsheetIcon className="h-5 w-5 flex-shrink-0 text-emerald-600" />
+                <FileSpreadsheetIcon className="h-5 w-5 flex-shrink-0 text-success-ink" />
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">{fileName}</p>
                   <p className="text-xs text-muted-foreground">
@@ -333,18 +333,18 @@ export function CatalogImportModal({ open, onOpenChange, onSuccess }: CatalogImp
         {fileName && !result && (
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-success-border bg-success-soft px-2.5 py-1 text-xs font-medium text-success-ink">
                 {valid.length} ligne(s) valide(s)
               </span>
               {invalid.length > 0 && (
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-error-border bg-error-soft px-2.5 py-1 text-xs font-medium text-error-ink">
                   {invalid.length} en erreur
                 </span>
               )}
             </div>
 
             {invalid.length > 0 && (
-              <Card className="border-rose-200">
+              <Card className="border-error-border">
                 <CardContent className="max-h-[200px] overflow-y-auto p-0">
                   <Table>
                     <TableHeader>
@@ -361,7 +361,7 @@ export function CatalogImportModal({ open, onOpenChange, onSuccess }: CatalogImp
                           <TableCell className="text-xs text-muted-foreground">{p.line}</TableCell>
                           <TableCell className="text-sm">{p.subjectName || "—"}</TableCell>
                           <TableCell className="text-sm">{p.sectionName || "—"}</TableCell>
-                          <TableCell className="text-xs text-rose-700">{p.error}</TableCell>
+                          <TableCell className="text-xs text-error-ink">{p.error}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -405,7 +405,7 @@ export function CatalogImportModal({ open, onOpenChange, onSuccess }: CatalogImp
           <Card className="border-2 border-[#2C4A6E]/20">
             <CardContent className="space-y-3 py-4">
               <div className="flex items-center gap-2">
-                <CheckCircle2Icon className="h-5 w-5 text-emerald-600" />
+                <CheckCircle2Icon className="h-5 w-5 text-success-ink" />
                 <p className="text-sm font-medium">Import terminé</p>
               </div>
               <div className="grid grid-cols-3 gap-2 text-xs">
@@ -429,7 +429,7 @@ export function CatalogImportModal({ open, onOpenChange, onSuccess }: CatalogImp
                 </div>
               </div>
               {result.summary.failed > 0 && (
-                <div className="flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 p-2 text-xs text-rose-800">
+                <div className="flex items-start gap-2 rounded-md border border-error-border bg-error-soft p-2 text-xs text-error-ink">
                   <AlertTriangleIcon className="mt-0.5 h-3.5 w-3.5" />
                   <div>
                     {result.summary.failed} erreur(s) :{" "}
@@ -439,7 +439,7 @@ export function CatalogImportModal({ open, onOpenChange, onSuccess }: CatalogImp
                 </div>
               )}
               <Separator />
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-2xs text-muted-foreground">
                 Légende : <strong>c</strong> créées · <strong>u</strong> mises à jour ·{" "}
                 <strong>=</strong> inchangées.
               </p>

@@ -646,9 +646,9 @@ export function CPMSLBulletinsSection({
             <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
               <InboxIcon className="h-7 w-7 text-muted-foreground" />
             </div>
-            <h3 className="mt-4 text-sm font-semibold text-foreground">
+            <h2 className="mt-4 text-base font-semibold text-foreground">
               Aucune sélection
-            </h3>
+            </h2>
             <p className="mt-1 max-w-[320px] text-center text-sm text-muted-foreground">
               Sélectionnez une étape et une classe pour commencer la génération
               des bulletins.
@@ -666,29 +666,29 @@ export function CPMSLBulletinsSection({
               label="Élèves"
               value={enrollments.length}
               icon={AlertCircleIcon}
-              iconClassName="text-blue-600"
-              iconBgClassName="bg-blue-50"
+              iconClassName="text-primary"
+              iconBgClassName="bg-primary/10"
             />
             <StatCard
               label="NISU valides"
               value={withNisu.length}
               icon={CheckCircleIcon}
-              iconClassName="text-emerald-600"
-              iconBgClassName="bg-emerald-50"
+              iconClassName="text-success"
+              iconBgClassName="bg-success-soft"
             />
             <StatCard
               label="NISU absents/invalides"
               value={withoutNisu.length}
               icon={AlertTriangleIcon}
-              iconClassName="text-amber-600"
-              iconBgClassName="bg-amber-50"
+              iconClassName="text-warning-ink"
+              iconBgClassName="bg-warning-soft"
             />
             <StatCard
               label="Étape"
               value={selectedStepObj?.name || "—"}
               icon={FileTextIcon}
-              iconClassName="text-violet-600"
-              iconBgClassName="bg-violet-50"
+              iconClassName="text-primary"
+              iconBgClassName="bg-primary/10"
             />
           </div>
 
@@ -770,10 +770,10 @@ export function CPMSLBulletinsSection({
                   <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
                     <UserIcon className="h-7 w-7 text-muted-foreground" />
                   </div>
-                  <h3 className="mt-4 text-sm font-semibold text-foreground">
+                  <h2 className="mt-4 text-base font-semibold text-foreground">
                     {searchQuery ? "Aucun élève trouvé" : "Aucun élève actif"}
-                  </h3>
-                  <p className="mt-1 text-sm text-muted-foreground">
+                  </h2>
+                  <p className="mt-1 max-w-prose text-sm text-muted-foreground">
                     {searchQuery
                       ? "Modifiez vos critères de recherche."
                       : "Aucun élève actif dans cette classe."}
@@ -829,7 +829,7 @@ export function CPMSLBulletinsSection({
                             </TableCell>
                             <TableCell>
                               {canPrint ? (
-                                <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
+                                <Badge className="border-success-border bg-success-soft text-success-ink hover:bg-success-soft">
                                   {hasNisu ? "Valide" : "Optionnel"}
                                 </Badge>
                               ) : (

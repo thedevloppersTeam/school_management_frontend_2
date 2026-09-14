@@ -93,10 +93,10 @@ export function DeleteLevelModal({
           <div className="space-y-2 text-sm text-muted-foreground">
             <p>
               {level.niveau === 'Nouveau Secondaire' ? 'Filières' : 'Salles'} supprimées :{" "}
-              <span className="font-medium text-foreground">{classroomCount}</span>
+              <span className="font-medium tabular-nums text-foreground">{classroomCount}</span>
             </p>
             <p>
-              Élèves affectés : <span className="font-medium text-foreground">{studentCount}</span>
+              Élèves affectés : <span className="font-medium tabular-nums text-foreground">{studentCount}</span>
             </p>
           </div>
 

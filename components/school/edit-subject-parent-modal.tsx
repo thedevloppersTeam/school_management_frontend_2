@@ -110,7 +110,7 @@ export function EditSubjectParentModal({
           <DialogTitle
             style={{
               color: '#1E1A17',
-              fontSize: '20px',
+              fontSize: 'var(--text-xl)',
               fontWeight: 600,
               fontFamily: 'var(--font-serif)'
             }}
@@ -126,7 +126,7 @@ export function EditSubjectParentModal({
               htmlFor="name"
               style={{
                 color: '#1E1A17',
-                fontSize: '13px',
+                fontSize: 'var(--text-sm)',
                 fontWeight: 500
               }}
             >
@@ -151,7 +151,7 @@ export function EditSubjectParentModal({
               htmlFor="code"
               style={{
                 color: '#1E1A17',
-                fontSize: '13px',
+                fontSize: 'var(--text-sm)',
                 fontWeight: 500
               }}
             >
@@ -175,7 +175,7 @@ export function EditSubjectParentModal({
             <p
               style={{
                 color: '#78756F',
-                fontSize: '12px',
+                fontSize: 'var(--text-xs)',
                 marginTop: '6px'
               }}
             >
@@ -188,7 +188,7 @@ export function EditSubjectParentModal({
             <Label
               style={{
                 color: '#1E1A17',
-                fontSize: '13px',
+                fontSize: 'var(--text-sm)',
                 fontWeight: 500
               }}
             >
@@ -205,7 +205,7 @@ export function EditSubjectParentModal({
                   htmlFor="r1"
                   style={{
                     color: '#1E1A17',
-                    fontSize: '14px',
+                    fontSize: 'var(--text-sm)',
                     fontWeight: 400,
                     cursor: 'pointer'
                   }}
@@ -219,7 +219,7 @@ export function EditSubjectParentModal({
                   htmlFor="r2"
                   style={{
                     color: '#1E1A17',
-                    fontSize: '14px',
+                    fontSize: 'var(--text-sm)',
                     fontWeight: 400,
                     cursor: 'pointer'
                   }}
@@ -233,7 +233,7 @@ export function EditSubjectParentModal({
                   htmlFor="r3"
                   style={{
                     color: '#1E1A17',
-                    fontSize: '14px',
+                    fontSize: 'var(--text-sm)',
                     fontWeight: 400,
                     cursor: 'pointer'
                   }}

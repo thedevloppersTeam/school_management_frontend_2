@@ -243,8 +243,8 @@ export default function SubjectsManagementPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Matières</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <h1 className="heading-1 text-foreground">Matières</h1>
+        <p className="mt-1 max-w-prose text-sm text-muted-foreground">
           Référentiel global des matières — utilisé par toutes les classes et années scolaires.
         </p>
       </div>
@@ -302,9 +302,9 @@ export default function SubjectsManagementPage() {
               <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
                 <BookOpenIcon className="h-7 w-7 text-muted-foreground" />
               </div>
-              <h3 className="mt-4 text-sm font-semibold text-foreground">
+              <h2 className="mt-4 text-base font-semibold text-foreground">
                 {searchQuery || filterRubric !== "all" ? "Aucune matière trouvée" : "Aucune matière"}
-              </h3>
+              </h2>
               <p className="mt-1 max-w-[320px] text-center text-sm text-muted-foreground">
                 {searchQuery || filterRubric !== "all"
                   ? "Modifiez vos critères de recherche."
@@ -343,7 +343,7 @@ export default function SubjectsManagementPage() {
                     <TableCell className="text-right tabular-nums">{row.coefficient}</TableCell>
                     <TableCell>
                       {row.hasSections ? (
-                        <Badge className="border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-50">
+                        <Badge className="border-info-border bg-info-soft text-info-ink hover:bg-info-soft">
                           Avec sections
                         </Badge>
                       ) : (

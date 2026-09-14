@@ -118,7 +118,7 @@ export function CreateSubjectParentModal({
           <DialogTitle
             style={{
               color: '#1E1A17',
-              fontSize: '20px',
+              fontSize: 'var(--text-xl)',
               fontWeight: 600,
               fontFamily: 'var(--font-serif)',
               marginBottom: '8px'
@@ -129,7 +129,7 @@ export function CreateSubjectParentModal({
           <DialogDescription
             style={{
               color: '#5C5955',
-              fontSize: '14px',
+              fontSize: 'var(--text-sm)',
               fontWeight: 400
             }}
           >
@@ -144,7 +144,7 @@ export function CreateSubjectParentModal({
               htmlFor="name"
               style={{
                 color: '#1E1A17',
-                fontSize: '13px',
+                fontSize: 'var(--text-sm)',
                 fontWeight: 500
               }}
             >
@@ -169,7 +169,7 @@ export function CreateSubjectParentModal({
               htmlFor="code"
               style={{
                 color: '#1E1A17',
-                fontSize: '13px',
+                fontSize: 'var(--text-sm)',
                 fontWeight: 500
               }}
             >
@@ -198,7 +198,7 @@ export function CreateSubjectParentModal({
             <Label
               style={{
                 color: '#1E1A17',
-                fontSize: '13px',
+                fontSize: 'var(--text-sm)',
                 fontWeight: 500
               }}
             >
@@ -215,7 +215,7 @@ export function CreateSubjectParentModal({
                   htmlFor="r1"
                   style={{
                     color: '#1E1A17',
-                    fontSize: '14px',
+                    fontSize: 'var(--text-sm)',
                     fontWeight: 400,
                     cursor: 'pointer'
                   }}
@@ -229,7 +229,7 @@ export function CreateSubjectParentModal({
                   htmlFor="r2"
                   style={{
                     color: '#1E1A17',
-                    fontSize: '14px',
+                    fontSize: 'var(--text-sm)',
                     fontWeight: 400,
                     cursor: 'pointer'
                   }}
@@ -243,7 +243,7 @@ export function CreateSubjectParentModal({
                   htmlFor="r3"
                   style={{
                     color: '#1E1A17',
-                    fontSize: '14px',
+                    fontSize: 'var(--text-sm)',
                     fontWeight: 400,
                     cursor: 'pointer'
                   }}

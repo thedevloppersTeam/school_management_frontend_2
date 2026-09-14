@@ -251,7 +251,7 @@ export function PromotionPhotoModal({
             Photo de promotion
           </DialogTitle>
           <DialogDescription>
-            {studentName} <code className="ml-1 rounded bg-muted px-1.5 py-0.5 font-mono text-[11px]">{studentCode}</code>
+            {studentName} <code className="ml-1 rounded bg-muted px-1.5 py-0.5 font-mono text-2xs">{studentCode}</code>
             <span className="ml-2 text-xs">— année {academicYearName}</span>
           </DialogDescription>
         </DialogHeader>
@@ -277,7 +277,7 @@ export function PromotionPhotoModal({
               </div>
             )}
             {previewUrl && (
-              <span className="absolute right-2 top-2 rounded-full bg-amber-500/90 px-2 py-0.5 text-[10px] font-semibold uppercase text-white">
+              <span className="absolute right-2 top-2 rounded-full bg-warning px-2 py-0.5 text-3xs font-semibold uppercase text-warning-foreground">
                 Aperçu
               </span>
             )}
@@ -295,7 +295,7 @@ export function PromotionPhotoModal({
               onChange={handlePick}
               className="block w-full text-sm text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-[#2C4A6E] file:px-3 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-[#1F3856] file:cursor-pointer"
             />
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-2xs text-muted-foreground">
               JPG, PNG ou WEBP &middot; 5 Mo max
             </p>
           </div>

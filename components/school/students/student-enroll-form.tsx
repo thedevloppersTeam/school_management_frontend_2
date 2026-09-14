@@ -103,7 +103,7 @@ const PHOTO_ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/web
 
 // ─── Classes partagées ─────────────────────────────────────────────────────
 const SECTION_TITLE_CLASS =
-  "font-serif text-base font-semibold text-primary-800 border-l-[3px] border-primary-800 pl-2";
+  "font-serif text-base font-bold tracking-tight text-primary-800";
 
 const FIELD_LABEL_CLASS = "font-sans text-sm font-medium text-neutral-900";
 

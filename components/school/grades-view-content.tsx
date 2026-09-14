@@ -280,21 +280,21 @@ export function GradesViewContent({
     switch (code) {
       case 'R1':
         return {
-          header: 'bg-blue-50 text-blue-700',
-          col:    'text-blue-700',
-          border: 'border-l-blue-200',
+          header: 'bg-info-soft text-info-ink',
+          col:    'text-info-ink',
+          border: 'border-l-info-border',
         }
       case 'R2':
         return {
-          header: 'bg-emerald-50 text-emerald-700',
-          col:    'text-emerald-700',
-          border: 'border-l-emerald-200',
+          header: 'bg-success-soft text-success-ink',
+          col:    'text-success-ink',
+          border: 'border-l-success-border',
         }
       case 'R3':
         return {
-          header: 'bg-amber-50 text-amber-700',
-          col:    'text-amber-700',
-          border: 'border-l-amber-200',
+          header: 'bg-warning-soft text-warning-ink',
+          col:    'text-warning-ink',
+          border: 'border-l-warning-border',
         }
       default:
         return {
@@ -316,14 +316,14 @@ export function GradesViewContent({
   const noteColorClass = (note: number | null, max: number) => {
     if (note === null) return 'text-muted-foreground'
     const pct = note / max
-    if (pct >= 0.7) return 'text-emerald-600'
-    return pct >= 0.5 ? 'text-amber-600' : 'text-destructive'
+    if (pct >= 0.7) return 'text-success-ink'
+    return pct >= 0.5 ? 'text-warning-ink' : 'text-destructive'
   }
 
   const averageColorClass = (avg: number | null) => {
     if (avg === null) return 'text-muted-foreground'
-    if (avg >= 7) return 'text-emerald-600'
-    if (avg >= 5) return 'text-amber-600'
+    if (avg >= 7) return 'text-success-ink'
+    if (avg >= 5) return 'text-warning-ink'
     return 'text-destructive'
   }
 
@@ -341,11 +341,19 @@ export function GradesViewContent({
 
   return (
     <div className="space-y-6">
+      {/* ── Titre de page ── */}
+      <div>
+        <h1 className="heading-1 text-foreground">Consultation des notes</h1>
+        <p className="mt-1 max-w-prose text-sm text-muted-foreground">
+          Grille en lecture seule des notes saisies, par classe et par étape
+        </p>
+      </div>
+
       {/* ── Sélecteurs ── */}
       <Card className="border bg-card shadow-sm">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base font-semibold">Consultation des notes</CardTitle>
-          <CardDescription>Sélectionnez une classe et une étape pour afficher la grille</CardDescription>
+          <CardTitle className="text-base font-semibold">Sélection</CardTitle>
+          <CardDescription>Choisissez une classe et une étape pour afficher la grille</CardDescription>
         </CardHeader>
         <Separator />
         <CardContent className="p-4">
@@ -377,8 +385,8 @@ export function GradesViewContent({
 
       {/* ── Bannière étape clôturée ── */}
       {selectedStep && isLocked && (
-        <Alert className="border-amber-200 bg-amber-50 text-amber-900">
-          <LockIcon className="h-4 w-4 !text-amber-600" />
+        <Alert className="border-warning-border bg-warning-soft text-warning-ink">
+          <LockIcon className="h-4 w-4 !text-warning-ink" />
           <AlertTitle>Étape clôturée</AlertTitle>
           <AlertDescription>Consultation en lecture seule</AlertDescription>
         </Alert>
@@ -391,9 +399,9 @@ export function GradesViewContent({
             <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
               <InboxIcon className="h-7 w-7 text-muted-foreground" />
             </div>
-            <h3 className="mt-4 text-sm font-semibold text-foreground">
+            <h2 className="mt-4 text-base font-semibold text-foreground">
               Aucune sélection
-            </h3>
+            </h2>
             <p className="mt-1 max-w-[320px] text-center text-sm text-muted-foreground">
               Sélectionnez une classe et une étape pour voir les notes des élèves.
             </p>
@@ -418,29 +426,29 @@ export function GradesViewContent({
                 label="Élèves inscrits"
                 value={gradeRows.length}
                 icon={UsersIcon}
-                iconClassName="text-blue-600"
-                iconBgClassName="bg-blue-50"
+                iconClassName="text-primary"
+                iconBgClassName="bg-primary/10"
               />
               <StatCard
                 label="Notes complètes"
                 value={completeCount}
                 icon={CheckCircle2Icon}
-                iconClassName="text-emerald-600"
-                iconBgClassName="bg-emerald-50"
+                iconClassName="text-success"
+                iconBgClassName="bg-success-soft"
               />
               <StatCard
                 label="Notes manquantes"
                 value={incompleteCount}
                 icon={AlertCircleIcon}
-                iconClassName="text-amber-600"
-                iconBgClassName="bg-amber-50"
+                iconClassName="text-warning-ink"
+                iconBgClassName="bg-warning-soft"
               />
               <StatCard
                 label="Moyenne classe"
                 value={classAverage !== null ? classAverage.toFixed(2) : '—'}
                 icon={TrendingUpIcon}
-                iconClassName="text-violet-600"
-                iconBgClassName="bg-violet-50"
+                iconClassName="text-primary"
+                iconBgClassName="bg-primary/10"
               />
             </div>
 
@@ -451,10 +459,10 @@ export function GradesViewContent({
                   <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
                     <UsersIcon className="h-7 w-7 text-muted-foreground" />
                   </div>
-                  <h3 className="mt-4 text-sm font-semibold text-foreground">
+                  <h2 className="mt-4 text-base font-semibold text-foreground">
                     Aucun élève inscrit
-                  </h3>
-                  <p className="mt-1 text-sm text-muted-foreground">
+                  </h2>
+                  <p className="mt-1 max-w-prose text-sm text-muted-foreground">
                     Aucun élève n&apos;est inscrit dans cette classe.
                   </p>
                 </CardContent>
@@ -470,7 +478,7 @@ export function GradesViewContent({
                       </CardDescription>
                     </div>
                     {isLocked && (
-                      <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">
+                      <Badge variant="outline" className="border-warning-border bg-warning-soft text-warning-ink">
                         <LockIcon className="mr-1 h-3 w-3" /> Clôturée
                       </Badge>
                     )}
@@ -539,7 +547,7 @@ export function GradesViewContent({
                                 key={cs.id}
                                 title={cs.subject.name}
                                 className={cn(
-                                  "min-w-[104px] text-center text-[11px] font-semibold uppercase tracking-wide",
+                                  "min-w-[104px] text-center text-2xs font-semibold uppercase tracking-wide",
                                   rc.col,
                                   i === 0 ? `border-l-2 ${rc.border}` : `border-l ${rc.border}`
                                 )}
@@ -609,11 +617,11 @@ export function GradesViewContent({
                             {/* Statut */}
                             <TableCell className="border-l border-border text-center">
                               {row.isComplete ? (
-                                <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
+                                <Badge className="border-success-border bg-success-soft text-success-ink hover:bg-success-soft">
                                   Complet
                                 </Badge>
                               ) : (
-                                <Badge className="border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-50">
+                                <Badge className="border-warning-border bg-warning-soft text-warning-ink hover:bg-warning-soft">
                                   Incomplet
                                 </Badge>
                               )}

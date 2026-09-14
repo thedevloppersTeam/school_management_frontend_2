@@ -54,7 +54,7 @@ export function NotificationPanel({
         <h3 
           className="font-sans"
           style={{
-            fontSize: "15px",
+            fontSize: "var(--text-base)",
             fontWeight: 600,
             color: "#2A3740"
           }}
@@ -70,7 +70,7 @@ export function NotificationPanel({
           <span
             className="font-sans"
             style={{
-              fontSize: "13px",
+              fontSize: "var(--text-sm)",
               fontWeight: 400,
               color: "#5A7085"
             }}
@@ -92,7 +92,7 @@ export function NotificationPanel({
               <span
                 className="font-sans"
                 style={{
-                  fontSize: "12px",
+                  fontSize: "var(--text-xs)",
                   fontWeight: 500,
                   color: "#5C5955",
                   letterSpacing: "0.03em"
@@ -126,7 +126,7 @@ export function NotificationPanel({
                       <h4
                         className="font-sans"
                         style={{
-                          fontSize: "15px",
+                          fontSize: "var(--text-base)",
                           fontWeight: 600,
                           color: "#2A3740",
                           lineHeight: 1.4
@@ -137,7 +137,7 @@ export function NotificationPanel({
                       <span
                         className="font-sans flex-shrink-0"
                         style={{
-                          fontSize: "12px",
+                          fontSize: "var(--text-xs)",
                           fontWeight: 400,
                           color: "#5C5955"
                         }}
@@ -148,7 +148,7 @@ export function NotificationPanel({
                     <p
                       className="font-sans mt-0.5"
                       style={{
-                        fontSize: "13px",
+                        fontSize: "var(--text-sm)",
                         fontWeight: 400,
                         color: "#5C5955",
                         lineHeight: 1.4
@@ -173,7 +173,7 @@ export function NotificationPanel({
               <span
                 className="font-sans"
                 style={{
-                  fontSize: "12px",
+                  fontSize: "var(--text-xs)",
                   fontWeight: 500,
                   color: "#5C5955",
                   letterSpacing: "0.03em"
@@ -207,7 +207,7 @@ export function NotificationPanel({
                       <h4
                         className="font-sans"
                         style={{
-                          fontSize: "15px",
+                          fontSize: "var(--text-base)",
                           fontWeight: 600,
                           color: "#2A3740",
                           lineHeight: 1.4
@@ -218,7 +218,7 @@ export function NotificationPanel({
                       <span
                         className="font-sans flex-shrink-0"
                         style={{
-                          fontSize: "12px",
+                          fontSize: "var(--text-xs)",
                           fontWeight: 400,
                           color: "#5C5955"
                         }}
@@ -229,7 +229,7 @@ export function NotificationPanel({
                     <p
                       className="font-sans mt-0.5"
                       style={{
-                        fontSize: "13px",
+                        fontSize: "var(--text-sm)",
                         fontWeight: 400,
                         color: "#5C5955",
                         lineHeight: 1.4
@@ -249,7 +249,7 @@ export function NotificationPanel({
             <p
               className="font-sans"
               style={{
-                fontSize: "14px",
+                fontSize: "var(--text-sm)",
                 fontWeight: 400,
                 color: "#5C5955"
               }}

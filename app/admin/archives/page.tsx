@@ -204,10 +204,10 @@ export default function ArchivesPage() {
 
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">
+        <h1 className="heading-1 text-foreground">
           Archives
         </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="mt-1 max-w-prose text-sm text-muted-foreground">
           Historique de tous les bulletins générés — {activeYear?.name}
         </p>
       </div>
@@ -335,8 +335,8 @@ export default function ArchivesPage() {
                     </TableCell>
                     <TableCell>
                       <Badge variant="secondary" className={
-                        badge.label === 'Généré' ? 'bg-emerald-100 text-emerald-700' :
-                        badge.label === 'Correction' ? 'bg-amber-100 text-amber-700' :
+                        badge.label === 'Généré' ? 'bg-success-soft text-success-ink' :
+                        badge.label === 'Correction' ? 'bg-warning-soft text-warning-ink' :
                         ''
                       }>
                         {badge.label}
@@ -354,7 +354,7 @@ export default function ArchivesPage() {
                           Historique
                         </Button>
                         {archive.bulletinSnapshot && (
-                          <Button variant="link" size="sm" className="h-auto p-0 text-xs text-emerald-600" onClick={() => openPdfFromSnapshot(archive)}>
+                          <Button variant="link" size="sm" className="h-auto p-0 text-xs text-success-ink" onClick={() => openPdfFromSnapshot(archive)}>
                             Voir
                           </Button>
                         )}
@@ -373,7 +373,7 @@ export default function ArchivesPage() {
       <Dialog open={versionsOpen} onOpenChange={setVersionsOpen}>
         <DialogContent style={{ backgroundColor: 'white', borderRadius: '12px', maxWidth: '560px' }}>
           <DialogHeader>
-            <DialogTitle className="font-serif" style={{ fontSize: '20px', fontWeight: 700, color: '#2A3740' }}>
+            <DialogTitle className="font-serif" style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: '#2A3740' }}>
               Historique — {selectedArchive?.studentName}
             </DialogTitle>
             <DialogDescription>
@@ -393,26 +393,26 @@ export default function ArchivesPage() {
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 space-y-1">
                       <div className="flex items-center gap-2">
-                        <span style={{ fontWeight: 700, fontSize: '14px', color: '#2C4A6E' }}>v{v.version}</span>
-                        <Badge style={{ backgroundColor: badge.bg, color: badge.color, border: 'none', fontSize: '11px' }}>
+                        <span style={{ fontWeight: 700, fontSize: 'var(--text-sm)', color: '#2C4A6E' }}>v{v.version}</span>
+                        <Badge style={{ backgroundColor: badge.bg, color: badge.color, border: 'none', fontSize: 'var(--text-2xs)' }}>
                           {badge.label}
                         </Badge>
                         {v.source === 'batch' && (
-                          <Badge style={{ backgroundColor: '#F3F4F6', color: '#6B7280', border: 'none', fontSize: '11px' }}>
+                          <Badge style={{ backgroundColor: '#F3F4F6', color: '#6B7280', border: 'none', fontSize: 'var(--text-2xs)' }}>
                             Lot
                           </Badge>
                         )}
                       </div>
-                      <div className="flex items-center gap-1" style={{ fontSize: '12px', color: '#78756F' }}>
+                      <div className="flex items-center gap-1" style={{ fontSize: 'var(--text-xs)', color: '#78756F' }}>
                         <ClockIcon className="h-3 w-3" />
                         {formatDate(v.generatedAt)}
                       </div>
-                      <div className="flex items-center gap-1" style={{ fontSize: '12px', color: '#78756F' }}>
+                      <div className="flex items-center gap-1" style={{ fontSize: 'var(--text-xs)', color: '#78756F' }}>
                         <UserIcon className="h-3 w-3" />
                         {v.generatedByUser.firstname} {v.generatedByUser.lastname}
                       </div>
                       {v.auditNote && (
-                        <div style={{ fontSize: '12px', color: '#C48B1A', fontStyle: 'italic', marginTop: '4px' }}>
+                        <div style={{ fontSize: 'var(--text-xs)', color: '#C48B1A', fontStyle: 'italic', marginTop: '4px' }}>
                           📝 {v.auditNote}
                         </div>
                       )}
@@ -420,7 +420,7 @@ export default function ArchivesPage() {
                     {v.bulletinSnapshot && (
                       <button
                         onClick={() => { openPdfFromSnapshot(v); setVersionsOpen(false) }}
-                        style={{ fontSize: '12px', fontWeight: 500, color: '#2D7D46', background: 'none', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                        style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: '#2D7D46', background: 'none', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}
                       >
                         Voir / Imprimer
                       </button>

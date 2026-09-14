@@ -151,7 +151,7 @@ export function ProfileDialog({
             <p className="font-semibold text-foreground">
               {user.firstname} {user.lastname}
             </p>
-            <p className="text-sm text-muted-foreground">
+            <p className="max-w-prose text-sm text-muted-foreground">
               {user.username}
             </p>
           </div>

@@ -31,7 +31,7 @@ export default function LoginLayout({ children }: AuthLayoutProps) {
                 La page enfant (/login/page.tsx) garde h1 = "Connexion"
                 pour qu'il y ait exactement UN h1 par route, comme l'exige WCAG.
               */}
-              <h2 className="font-serif text-2xl font-semibold text-primary-800 mb-3 leading-tight tracking-tight">
+              <h2 className="font-serif text-2xl font-bold text-primary-800 mb-3 leading-tight tracking-tight">
                 Plateforme de Gestion Scolaire
               </h2>
               <p className="font-sans text-sm text-muted-foreground leading-relaxed">

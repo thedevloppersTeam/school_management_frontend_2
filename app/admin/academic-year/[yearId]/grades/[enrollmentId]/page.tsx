@@ -58,9 +58,9 @@ function validate(value: string, max: number): Entry {
 }
 
 function rubricBadge(code?: string) {
-  if (code === "R1") return "border-blue-200 bg-blue-50 text-blue-700"
-  if (code === "R2") return "border-emerald-200 bg-emerald-50 text-emerald-700"
-  if (code === "R3") return "border-amber-200 bg-amber-50 text-amber-700"
+  if (code === "R1") return "border-info-border bg-info-soft text-info-ink"
+  if (code === "R2") return "border-success-border bg-success-soft text-success-ink"
+  if (code === "R3") return "border-warning-border bg-warning-soft text-warning-ink"
   return "border-neutral-200 bg-neutral-50 text-neutral-600"
 }
 
@@ -280,11 +280,11 @@ export default function StudentGradesPage() {
           <Button variant="ghost" size="sm" className="mb-1 -ml-2 text-muted-foreground" onClick={() => router.push(`/admin/academic-year/${yearId}/grades`)}>
             <ArrowLeftIcon className="mr-1 h-4 w-4" /> Retour aux notes
           </Button>
-          <h1 className="font-serif text-2xl font-bold text-foreground">{studentName}</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="heading-2 text-foreground">{studentName}</h1>
+          <p className="max-w-prose text-sm text-muted-foreground">
             {className} — saisie des notes par élève
             {enrollment?.track && (
-              <span className="ml-2 rounded border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-xs font-medium text-sky-700">
+              <span className="ml-2 rounded border border-info-border bg-info-soft px-1.5 py-0.5 text-xs font-medium text-info-ink">
                 Filière {enrollment.track.code}
               </span>
             )}
@@ -337,14 +337,14 @@ export default function StudentGradesPage() {
 
           {/* Aide filière : classe terminale mais configuration incomplète */}
           {isTerminal && !enrollment?.trackId && (
-            <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            <div className="mt-2 rounded-lg border border-warning-border bg-warning-soft px-3 py-2 text-xs text-warning-ink">
               Cet élève n&apos;a pas de filière définie pour cette année : ses matières
               d&apos;examen officiel ne peuvent pas s&apos;afficher. Définissez sa filière
               depuis la page <span className="font-medium">Élèves inscrits</span> (menu ⋮ → Définir la filière).
             </div>
           )}
           {isTerminal && enrollment?.trackId && !anyExamSubjectInClass && (
-            <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            <div className="mt-2 rounded-lg border border-warning-border bg-warning-soft px-3 py-2 text-xs text-warning-ink">
               Aucune matière d&apos;examen officiel n&apos;est encore rattachée à une filière
               dans cette classe. Assignez-en depuis <span className="font-medium">Configuration → Matières →
               Assigner des matières</span> (choisir « Examen officiel — filière »).
@@ -385,7 +385,7 @@ export default function StudentGradesPage() {
                           <td className="px-4 py-2.5 font-semibold text-foreground">
                             {subj.name}
                             {cs.track && (
-                              <span className="ml-2 rounded border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-700">
+                              <span className="ml-2 rounded border border-info-border bg-info-soft px-1.5 py-0.5 text-3xs font-medium text-info-ink">
                                 Examen · {cs.track.code}
                               </span>
                             )}
@@ -412,7 +412,7 @@ export default function StudentGradesPage() {
                           <td className="px-4 py-2.5 font-semibold text-foreground">
                             {subj.name}
                             {cs.track && (
-                              <span className="ml-2 rounded border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-700">
+                              <span className="ml-2 rounded border border-info-border bg-info-soft px-1.5 py-0.5 text-3xs font-medium text-info-ink">
                                 Examen · {cs.track.code}
                               </span>
                             )}
@@ -436,7 +436,7 @@ export default function StudentGradesPage() {
                             <td className="px-4 py-2 pl-10 text-muted-foreground">
                               <span className="text-neutral-400 mr-1.5" aria-hidden>└</span>
                               {sec.name}
-                              {excluded && <span className="ml-2 text-xs text-amber-600">(dispensé)</span>}
+                              {excluded && <span className="ml-2 text-xs text-warning-ink">(dispensé)</span>}
                             </td>
                             <td />
                             <td className="px-4 py-1.5 text-center">

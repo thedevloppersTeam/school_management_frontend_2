@@ -399,10 +399,10 @@ export default function InscriptionFormBuilderPage() {
             <ArrowLeftIcon className="h-4 w-4" />
             Élèves
           </Link>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">
+          <h1 className="heading-1 text-foreground">
             Configurer le formulaire d&apos;inscription
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 max-w-prose text-sm text-muted-foreground">
             Ajoutez des groupes de champs personnalisés au formulaire d&apos;inscription. Les champs système ne peuvent pas être modifiés.
           </p>
         </div>
@@ -443,7 +443,7 @@ export default function InscriptionFormBuilderPage() {
       {/* Custom groups */}
       <div className="space-y-1">
         <h2 className="text-lg font-semibold text-foreground">Groupes personnalisés</h2>
-        <p className="text-sm text-muted-foreground">
+        <p className="max-w-prose text-sm text-muted-foreground">
           Les flèches haut / bas réordonnent les groupes et les champs.
         </p>
       </div>
@@ -569,24 +569,24 @@ export default function InscriptionFormBuilderPage() {
                           <div className="flex flex-wrap items-center gap-1.5">
                             <span className="text-sm font-medium text-foreground">{field.label}</span>
                             {field.required && (
-                              <Badge variant="outline" className="border-rose-200 bg-rose-50 text-[10px] text-rose-700">
+                              <Badge variant="outline" className="border-error-border bg-error-soft text-3xs text-error-ink">
                                 Requis
                               </Badge>
                             )}
-                            <Badge variant="outline" className="text-[10px]">
+                            <Badge variant="outline" className="text-3xs">
                               {FIELD_TYPE_LABEL[field.type]}
                             </Badge>
                           </div>
                           {field.helpText && (
-                            <p className="text-[10px] text-muted-foreground">{field.helpText}</p>
+                            <p className="text-3xs text-muted-foreground">{field.helpText}</p>
                           )}
                           {(field.type === "SELECT" || field.type === "RADIO" || field.type === "MULTI_CHECKBOX") && field.config?.options && (
-                            <p className="text-[10px] text-muted-foreground">
+                            <p className="text-3xs text-muted-foreground">
                               Options : {field.config.options.join(" · ")}
                             </p>
                           )}
                           {field.parentFieldId && (
-                            <p className="text-[10px] text-amber-700">
+                            <p className="text-3xs text-warning-ink">
                               Visible si «&nbsp;{fieldLabelById.get(field.parentFieldId) ?? "champ supprimé"}&nbsp;» = {field.showWhenTrue ? "Oui" : "Non"}
                             </p>
                           )}
@@ -756,11 +756,11 @@ export default function InscriptionFormBuilderPage() {
 
             {/* ── Visibilité conditionnelle ── */}
             <div className="space-y-2 rounded-md border bg-muted/30 p-3 sm:col-span-2">
-              <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <div className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Visibilité conditionnelle (optionnel)
               </div>
               {checkboxFields.length === 0 ? (
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-2xs text-muted-foreground">
                   Aucune case à cocher n&apos;est encore définie. Créez d&apos;abord un champ de type «&nbsp;Case à cocher&nbsp;» pour pouvoir y rattacher un champ conditionnel.
                 </p>
               ) : (
@@ -799,7 +799,7 @@ export default function InscriptionFormBuilderPage() {
                           className={cn(
                             "px-3 py-1.5 text-xs font-medium transition-colors",
                             fieldForm.showWhenTrue
-                              ? "bg-emerald-600 text-white"
+                              ? "bg-success text-white"
                               : "text-muted-foreground hover:bg-muted"
                           )}
                         >
@@ -811,14 +811,14 @@ export default function InscriptionFormBuilderPage() {
                           className={cn(
                             "px-3 py-1.5 text-xs font-medium transition-colors",
                             !fieldForm.showWhenTrue
-                              ? "bg-rose-600 text-white"
+                              ? "bg-error text-white"
                               : "text-muted-foreground hover:bg-muted"
                           )}
                         >
                           Non (décoché)
                         </button>
                       </div>
-                      <p className="text-[10px] text-muted-foreground">
+                      <p className="text-3xs text-muted-foreground">
                         Quand la condition n&apos;est pas remplie, ce champ est masqué dans le formulaire d&apos;inscription et sa valeur n&apos;est pas demandée (même s&apos;il est marqué obligatoire).
                       </p>
                     </div>

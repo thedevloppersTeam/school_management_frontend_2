@@ -123,7 +123,7 @@ function LoginForm() {
     <div className="bg-white border border-neutral-200 rounded-xl shadow-md p-8 w-full">
       {/* En-tête du formulaire */}
       <div className="mb-6">
-        <h1 className="font-serif text-3xl font-bold text-primary-800 mb-2 tracking-tight">
+        <h1 className="heading-1 mb-2 text-primary-800">
           Connexion
         </h1>
         <p className="font-sans text-sm text-muted-foreground">
@@ -134,7 +134,7 @@ function LoginForm() {
       {sessionExpired && (
         <div
           role="status"
-          className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+          className="mb-4 rounded-lg border border-warning-border bg-warning-soft px-4 py-3 text-sm text-warning-ink"
         >
           Votre session a expiré. Veuillez vous reconnecter.
         </div>
@@ -257,7 +257,7 @@ function LoginFormSkeleton() {
   return (
     <div className="bg-white border border-neutral-200 rounded-xl shadow-md p-8 w-full">
       <div className="mb-6">
-        <h1 className="font-serif text-3xl font-bold text-primary-800 mb-2 tracking-tight">
+        <h1 className="heading-1 mb-2 text-primary-800">
           Connexion
         </h1>
         <p className="font-sans text-sm text-muted-foreground">

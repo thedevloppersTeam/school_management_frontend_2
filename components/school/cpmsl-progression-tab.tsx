@@ -176,19 +176,19 @@ export function CPMSLProgressionTab({
 
   // ── Semantic progress color class ─────────────────────────────────────────
   const progressTextClass = (pct: number) =>
-    pct === 100 ? 'text-emerald-600' : pct > 0 ? 'text-blue-600' : 'text-muted-foreground'
+    pct === 100 ? 'text-success-ink' : pct > 0 ? 'text-info-ink' : 'text-muted-foreground'
 
   const progressBarClass = (pct: number) =>
     pct === 100
-      ? '[&>div]:bg-emerald-500'
+      ? '[&>div]:bg-success'
       : pct > 0
-        ? '[&>div]:bg-blue-500'
+        ? '[&>div]:bg-info'
         : '[&>div]:bg-muted-foreground/30'
 
   const renderStatusBadge = (status: ClassProgress['status']) => {
     if (status === 'complete') {
       return (
-        <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
+        <Badge className="border-success-border bg-success-soft text-success-ink hover:bg-success-soft">
           <CheckCircleIcon className="mr-1 h-3 w-3" />
           Complet
         </Badge>
@@ -196,7 +196,7 @@ export function CPMSLProgressionTab({
     }
     if (status === 'in-progress') {
       return (
-        <Badge className="border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-50">
+        <Badge className="border-info-border bg-info-soft text-info-ink hover:bg-info-soft">
           <ClockIcon className="mr-1 h-3 w-3" />
           En cours
         </Badge>
@@ -248,9 +248,9 @@ export function CPMSLProgressionTab({
             <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
               <InboxIcon className="h-7 w-7 text-muted-foreground" />
             </div>
-            <h3 className="mt-4 text-sm font-semibold text-foreground">
+            <h2 className="mt-4 text-base font-semibold text-foreground">
               Aucune étape sélectionnée
-            </h3>
+            </h2>
             <p className="mt-1 max-w-[320px] text-center text-sm text-muted-foreground">
               Sélectionnez une étape pour voir l&apos;avancement de la saisie des notes par classe.
             </p>
@@ -277,8 +277,8 @@ export function CPMSLProgressionTab({
             <CardContent className="p-5">
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-50">
-                    <TrendingUpIcon className="h-5 w-5 text-violet-600" />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                    <TrendingUpIcon className="h-5 w-5 text-primary" />
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-foreground">
@@ -306,22 +306,22 @@ export function CPMSLProgressionTab({
               label="Classes complètes"
               value={`${complete} / ${classProgress.length}`}
               icon={CheckCircle2Icon}
-              iconClassName="text-emerald-600"
-              iconBgClassName="bg-emerald-50"
+              iconClassName="text-success"
+              iconBgClassName="bg-success-soft"
             />
             <StatCard
               label="Classes en cours"
               value={`${inProgress} / ${classProgress.length}`}
               icon={ClockIcon}
-              iconClassName="text-blue-600"
-              iconBgClassName="bg-blue-50"
+              iconClassName="text-info"
+              iconBgClassName="bg-info-soft"
             />
             <StatCard
               label="Classes non commencées"
               value={`${notStarted} / ${classProgress.length}`}
               icon={CircleDashedIcon}
-              iconClassName="text-slate-600"
-              iconBgClassName="bg-slate-100"
+              iconClassName="text-primary"
+              iconBgClassName="bg-primary/10"
             />
           </div>
 
@@ -362,10 +362,10 @@ export function CPMSLProgressionTab({
                   <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
                     <InboxIcon className="h-7 w-7 text-muted-foreground" />
                   </div>
-                  <h3 className="mt-4 text-sm font-semibold text-foreground">
+                  <h2 className="mt-4 text-base font-semibold text-foreground">
                     Aucune classe trouvée
-                  </h3>
-                  <p className="mt-1 text-sm text-muted-foreground">
+                  </h2>
+                  <p className="mt-1 max-w-prose text-sm text-muted-foreground">
                     Modifiez vos critères de recherche.
                   </p>
                 </div>

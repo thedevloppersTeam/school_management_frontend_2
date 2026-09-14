@@ -700,11 +700,11 @@ useUnsavedChangesWarning(hasUnsavedChanges)
     const kind = getBadgeKind(enrollmentId)
     switch (kind) {
       case 'modified':
-        return <Badge className="border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-50">Modifié</Badge>
+        return <Badge className="border-warning-border bg-warning-soft text-warning-ink hover:bg-warning-soft">Modifié</Badge>
       case 'saved':
-        return <Badge className="border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-50">Enregistré</Badge>
+        return <Badge className="border-info-border bg-info-soft text-info-ink hover:bg-info-soft">Enregistré</Badge>
       case 'entered':
-        return <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">Saisi</Badge>
+        return <Badge className="border-success-border bg-success-soft text-success-ink hover:bg-success-soft">Saisi</Badge>
       default:
         return <Badge variant="secondary">Non saisi</Badge>
     }
@@ -900,7 +900,7 @@ useUnsavedChangesWarning(hasUnsavedChanges)
                 onChange={e => handleGradeChange(enrollment.id, e.target.value)}
                 className={cn(
                   "h-10 w-28 border-input bg-background text-center text-base font-semibold tabular-nums shadow-sm",
-                  hasValue && !hasError && "border-emerald-300 bg-emerald-50/60 text-emerald-900",
+                  hasValue && !hasError && "border-success-border bg-success-soft/60 text-success-ink",
                   hasError && "border-destructive focus-visible:ring-destructive"
                 )}
                 onKeyDown={e => {
@@ -917,7 +917,7 @@ useUnsavedChangesWarning(hasUnsavedChanges)
               <span className="text-xs font-medium text-muted-foreground">/ {maxScore}</span>
             </div>
             {hasError && entry?.error && (
-              <p className="text-[11px] text-destructive">{entry.error}</p>
+              <p className="text-2xs text-destructive">{entry.error}</p>
             )}
           </div>
         </TableCell>
@@ -948,7 +948,7 @@ useUnsavedChangesWarning(hasUnsavedChanges)
             </button>
             <span>{enrollment.student.user.lastname}</span>
             {excludedHere > 0 && (
-              <Badge variant="outline" className="border-amber-200 bg-amber-50 text-[10px] text-amber-700">
+              <Badge variant="outline" className="border-warning-border bg-warning-soft text-3xs text-warning-ink">
                 {excludedHere} exclue(s)
               </Badge>
             )}
@@ -971,10 +971,10 @@ useUnsavedChangesWarning(hasUnsavedChanges)
             <TableCell key={sec.id} className={cn("min-w-[156px] align-top", isExcluded && "bg-muted/30")}>
               {isExcluded ? (
                 <div className="flex flex-col items-center gap-0.5">
-                  <span className="inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground">
+                  <span className="inline-flex items-center gap-1 text-3xs font-medium text-muted-foreground">
                     <MinusCircleIcon className="h-3 w-3" /> Exclue
                   </span>
-                  <span className="text-[10px] text-muted-foreground">non comptée</span>
+                  <span className="text-3xs text-muted-foreground">non comptée</span>
                 </div>
               ) : (
                 <div className="flex flex-col items-center gap-1">
@@ -985,14 +985,14 @@ useUnsavedChangesWarning(hasUnsavedChanges)
                       onChange={e => handleSectionGradeChange(enrollment.id, sec.id, e.target.value)}
                       className={cn(
                         "h-10 w-24 border-input bg-background text-center text-base font-semibold tabular-nums shadow-sm",
-                        hasValue && !hasError && "border-emerald-300 bg-emerald-50/60 text-emerald-900",
+                        hasValue && !hasError && "border-success-border bg-success-soft/60 text-success-ink",
                         hasError && "border-destructive focus-visible:ring-destructive"
                       )}
                     />
-                    <span className="text-[11px] font-medium text-muted-foreground tabular-nums">/ {sec.maxScore}</span>
+                    <span className="text-2xs font-medium text-muted-foreground tabular-nums">/ {sec.maxScore}</span>
                   </div>
                   {hasError && entry?.error && (
-                    <p className="text-[10px] text-destructive">{entry.error}</p>
+                    <p className="text-3xs text-destructive">{entry.error}</p>
                   )}
                 </div>
               )}
@@ -1004,8 +1004,8 @@ useUnsavedChangesWarning(hasUnsavedChanges)
             <span
               className={cn(
                 "inline-flex min-w-[104px] items-center justify-center rounded-lg border px-2 py-1 tabular-nums text-sm font-bold",
-                total.complete ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50",
-                total.complete ? "text-emerald-700" : "text-amber-700"
+                total.complete ? "border-success-border bg-success-soft" : "border-warning-border bg-warning-soft",
+                total.complete ? "text-success-ink" : "text-warning-ink"
               )}
               title={total.complete ? "Total complet" : "Total partiel (toutes les sections ne sont pas saisies)"}
             >
@@ -1129,7 +1129,7 @@ useUnsavedChangesWarning(hasUnsavedChanges)
                   {hasUnsavedChanges && (
                 <Badge
           variant="outline"
-          className="border-amber-300 bg-amber-50 text-amber-800 text-[11px] font-medium"
+          className="border-warning-border bg-warning-soft text-warning-ink text-2xs font-medium"
         >
           Modifications non enregistrées
         </Badge>
@@ -1211,10 +1211,10 @@ useUnsavedChangesWarning(hasUnsavedChanges)
               <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
                 <InboxIcon className="h-7 w-7 text-muted-foreground" />
               </div>
-              <h3 className="mt-4 text-sm font-semibold text-foreground">
+              <h2 className="mt-4 text-base font-semibold text-foreground">
                 Aucun élève trouvé
-              </h3>
-              <p className="mt-1 text-sm text-muted-foreground">
+              </h2>
+              <p className="mt-1 max-w-prose text-sm text-muted-foreground">
                 {searchQuery ? "Modifiez vos critères de recherche." : "Aucun élève inscrit dans cette classe."}
               </p>
             </div>
@@ -1230,7 +1230,7 @@ useUnsavedChangesWarning(hasUnsavedChanges)
                       <TableHead key={sec.id} className="min-w-[156px] bg-muted/60 text-center font-semibold">
                         <div className="flex flex-col items-center gap-0.5">
                           <span>{sec.name}</span>
-                          <span className="text-[10px] font-normal text-muted-foreground">/ {sec.maxScore}</span>
+                          <span className="text-3xs font-normal text-muted-foreground">/ {sec.maxScore}</span>
                         </div>
                       </TableHead>
                     ))}
@@ -1296,9 +1296,9 @@ useUnsavedChangesWarning(hasUnsavedChanges)
             <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
               <InboxIcon className="h-7 w-7 text-muted-foreground" />
             </div>
-            <h3 className="mt-4 text-sm font-semibold text-foreground">
+            <h2 className="mt-4 text-base font-semibold text-foreground">
               Aucune sélection
-            </h3>
+            </h2>
             <p className="mt-1 max-w-[320px] text-center text-sm text-muted-foreground">
               Choisissez une classe, une étape et une matière pour commencer la saisie des notes.
             </p>
@@ -1362,7 +1362,7 @@ useUnsavedChangesWarning(hasUnsavedChanges)
               <Select value={selectedStepId} onValueChange={onStepChange}>
                 <SelectTrigger>
                   <div className="flex items-center gap-2">
-                    {isLocked && <LockIcon className="h-4 w-4 text-amber-600" />}
+                    {isLocked && <LockIcon className="h-4 w-4 text-warning-ink" />}
                     <SelectValue placeholder="Sélectionner une étape" />
                   </div>
                 </SelectTrigger>
@@ -1424,7 +1424,7 @@ useUnsavedChangesWarning(hasUnsavedChanges)
                 ))}
               </div>
               {selectedClassSubject?.track && (
-                <span className="text-xs text-sky-700">
+                <span className="text-xs text-info-ink">
                   Seuls les élèves de la filière {selectedClassSubject.track.code} sont affichés.
                 </span>
               )}
@@ -1435,8 +1435,8 @@ useUnsavedChangesWarning(hasUnsavedChanges)
 
       {/* Bannière étape clôturée */}
       {showContent && isLocked && (
-        <Alert className="border-amber-200 bg-amber-50 text-amber-900">
-          <LockIcon className="h-4 w-4 !text-amber-600" />
+        <Alert className="border-warning-border bg-warning-soft text-warning-ink">
+          <LockIcon className="h-4 w-4 !text-warning-ink" />
           <AlertTitle>Étape clôturée</AlertTitle>
           <AlertDescription>
             Réouvrez l&apos;étape depuis la Configuration pour saisir des notes.

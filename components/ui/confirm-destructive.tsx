@@ -146,7 +146,7 @@ export function ConfirmDestructive({
 
         {/* Bloc d'impact */}
         {(impactSummary || (impactItems && impactItems.length > 0)) && (
-          <Alert className="border-amber-300 bg-amber-50 text-amber-900">
+          <Alert className="border-warning-border bg-warning-soft text-warning-ink">
             <AlertDescription className="space-y-2">
               {impactSummary && (
                 <p className="font-medium">{impactSummary}</p>

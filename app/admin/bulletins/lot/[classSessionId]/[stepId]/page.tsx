@@ -265,7 +265,7 @@ export default function BulletinLotPrintPage() {
         }
       `}</style>
 
-      <div className="min-h-screen bg-slate-100">
+      <div className="min-h-screen bg-muted">
         {/* Top toolbar (screen only) */}
         <div className="no-print sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b bg-white px-4 py-3 shadow-sm">
           <div className="flex items-center gap-3">
@@ -290,7 +290,7 @@ export default function BulletinLotPrintPage() {
                   <span>·</span>
                   <span>
                     {successCount} bulletin{successCount > 1 ? "s" : ""} prêt{successCount > 1 ? "s" : ""}
-                    {failedCount > 0 && <span className="ml-1 text-rose-600">({failedCount} échec{failedCount > 1 ? "s" : ""})</span>}
+                    {failedCount > 0 && <span className="ml-1 text-error-ink">({failedCount} échec{failedCount > 1 ? "s" : ""})</span>}
                   </span>
                 </>
               )}
@@ -369,7 +369,7 @@ export default function BulletinLotPrintPage() {
               ) : (
                 <div
                   key={slot.enrollmentId}
-                  className="no-print mx-auto max-w-md rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+                  className="no-print mx-auto max-w-md rounded-md border border-warning-border bg-warning-soft px-4 py-3 text-sm text-warning-ink"
                 >
                   <p className="font-semibold">{slot.studentLabel}</p>
                   <p className="mt-0.5 text-xs">{slot.error}</p>

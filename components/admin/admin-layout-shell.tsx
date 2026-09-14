@@ -8,11 +8,6 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -53,7 +48,6 @@ import {
   LayoutDashboardIcon,
   CalendarIcon,
   LogOutIcon,
-  BellIcon,
   ChevronRightIcon,
   ChevronsUpDownIcon,
   UsersIcon,
@@ -66,8 +60,6 @@ import {
   LockIcon,
   ArchiveIcon,
   UserPlusIcon,
-  UploadIcon,
-  BookOpenIcon
 } from "lucide-react";
 
 import { getMe, logout, type AuthUser } from "@/lib/data/auth-data";
@@ -76,7 +68,6 @@ import {
   type AcademicYear,
 } from "@/lib/api/dashboard";
 import { cn } from "@/lib/utils";
-import { NotificationPanel } from "@/components/school/notification-panel";
 import { ProfileDialog } from "@/components/school/profile-dialog";
 
 
@@ -237,51 +228,11 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
       .finally(() => setYearLoading(false));
   }, []);
 
-  // Notifications de démonstration
-  const [notifications, setNotifications] = useState([
-    {
-      id: "1",
-      type: "warning" as const,
-      title: "7ème AF — Aucune note saisie",
-      subtitle: "2ème Étape en cours",
-      timestamp: "il y a 2h",
-      isRead: false,
-    },
-    {
-      id: "2",
-      type: "warning" as const,
-      title: "3 élèves sans photo",
-      subtitle: "Classe 9ème AF",
-      timestamp: "il y a 5h",
-      isRead: false,
-    },
-    {
-      id: "3",
-      type: "success" as const,
-      title: "Étape 1 clôturée — 6ème AF",
-      subtitle: "Bulletins disponibles",
-      timestamp: "hier 14h32",
-      isRead: true,
-    },
-    {
-      id: "4",
-      type: "success" as const,
-      title: "Bulletin généré — Martine Simon",
-      subtitle: "6ème AF · Étape 1",
-      timestamp: "hier 11h15",
-      isRead: true,
-    },
-  ]);
-
-  const handleMarkAllRead = () =>
-    setNotifications((n) => n.map((x) => ({ ...x, isRead: true })));
-
-  const handleNotificationClick = (id: string) =>
-    setNotifications((n) =>
-      n.map((x) => (x.id === id ? { ...x, isRead: true } : x)),
-    );
-
-  const unreadCount = notifications.filter((n) => !n.isRead).length;
+  // Pas de cloche de notifications : il n'existe aucune source de notifications
+  // côté serveur. Les quatre entrées de démonstration qui vivaient ici — dont
+  // un bulletin au nom d'une élève inventée — s'affichaient comme de vrais
+  // événements horodatés, avec une pastille pulsante permanente. Rebrancher la
+  // cloche demande un endpoint réel, pas un tableau littéral.
 
   const handleLogout = async () => {
     try {
@@ -456,7 +407,7 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
                     className="transition-colors data-[state=open]:bg-sidebar-accent"
                   >
                     <Avatar className="h-8 w-8 rounded-lg">
-                      <AvatarFallback className="rounded-lg bg-sidebar-primary text-xs font-semibold text-sidebar-primary-foreground">
+                      <AvatarFallback className="rounded-lg bg-sidebar-primary text-xs font-semibold text-white">
                         {initials}
                       </AvatarFallback>
                     </Avatar>
@@ -568,43 +519,11 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
             <span
               className={cn(
                 "h-1.5 w-1.5 rounded-full",
-                activeYear ? "bg-emerald-500" : "bg-muted-foreground",
+                activeYear ? "bg-success" : "bg-muted-foreground",
               )}
             />
             {yearLoading ? "..." : activeYear?.name ?? "Aucune année"}
           </Badge>
-
-          {/* Notifications */}
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="relative h-8 w-8"
-                aria-label="Notifications"
-              >
-                <BellIcon className="h-4 w-4 text-muted-foreground" />
-                {unreadCount > 0 && (
-                  <span className="absolute right-1 top-1 flex h-2 w-2">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-destructive opacity-75" />
-                    <span className="relative inline-flex h-2 w-2 rounded-full bg-destructive" />
-                  </span>
-                )}
-              </Button>
-            </PopoverTrigger>
-
-            <PopoverContent
-              align="end"
-              className="w-[380px] p-0"
-              sideOffset={8}
-            >
-              <NotificationPanel
-                notifications={notifications}
-                onMarkAllRead={handleMarkAllRead}
-                onNotificationClick={handleNotificationClick}
-              />
-            </PopoverContent>
-          </Popover>
 
           {/* User dropdown header */}
           <DropdownMenu>
@@ -618,7 +537,7 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
                 </span>
 
                 <Avatar className="h-7 w-7">
-                  <AvatarFallback className="text-[10px] font-semibold">
+                  <AvatarFallback className="text-3xs font-semibold">
                     {initials}
                   </AvatarFallback>
                 </Avatar>

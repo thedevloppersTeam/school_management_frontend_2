@@ -1,20 +1,25 @@
 // app/admin/dashboard/page.tsx
-// Client Component : page de pilotage MVP avec donnees dashboard existantes.
+// Client Component : pilotage de l'année scolaire à partir des données dashboard.
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, type ElementType } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ElementType,
+} from "react";
 import {
   AlertTriangleIcon,
-  ArchiveIcon,
   ArrowRightIcon,
-  BarChart3Icon,
   CheckCircle2Icon,
   CircleDashedIcon,
-  ClipboardCheckIcon,
   ClipboardEditIcon,
   FileTextIcon,
   InfoIcon,
+  RefreshCwIcon,
   SchoolIcon,
   SettingsIcon,
   UsersIcon,
@@ -30,6 +35,7 @@ import {
   type ClassSession,
 } from "@/lib/api/dashboard";
 import { clientFetch as apiFetch } from "@/lib/client-fetch";
+import { toMessage } from "@/lib/errors";
 import {
   Card,
   CardContent,
@@ -45,15 +51,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 
-type MvpStatus =
+type ChecklistStatus =
   | "Terminé"
   | "En cours"
   | "À faire"
   | "À vérifier"
-  | "Bloquant"
-  | "Non disponible";
+  | "Bloquant";
 
-type ActionPriority = "Critique" | "Important" | "Normal";
+type LoadState = "loading" | "ready" | "error";
 
 interface SubjectRow {
   id: string;
@@ -84,27 +89,11 @@ interface SummaryCardItem {
   value: string | number;
   description: string;
   icon: ElementType;
-  tone: "blue" | "emerald" | "amber" | "violet" | "slate" | "rose";
 }
 
 interface ChecklistItem {
   label: string;
-  status: MvpStatus;
-  description: string;
-  href: string;
-  actionLabel: string;
-}
-
-interface NextAction {
-  title: string;
-  reason: string;
-  priority: ActionPriority;
-  href: string;
-}
-
-interface MvpAlert {
-  title: string;
-  status: MvpStatus;
+  status: ChecklistStatus;
   description: string;
   href: string;
   actionLabel: string;
@@ -123,6 +112,11 @@ const EMPTY_EXTRA_DATA: DashboardExtraData = {
   archiveCount: null,
 };
 
+const TIME_FORMAT = new Intl.DateTimeFormat("fr-FR", {
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
 function getRouteSet(activeYear: AcademicYear | null) {
   const yearId = activeYear?.id;
   return {
@@ -135,46 +129,35 @@ function getRouteSet(activeYear: AcademicYear | null) {
   };
 }
 
-function getStatusClasses(status: MvpStatus) {
+function getStatusClasses(status: ChecklistStatus) {
   switch (status) {
     case "Terminé":
-      return "border-emerald-200 bg-emerald-50 text-emerald-700";
+      return "border-success-border bg-success-soft text-success-ink";
     case "En cours":
-      return "border-blue-200 bg-blue-50 text-blue-700";
+      return "border-info-border bg-info-soft text-info-ink";
     case "À faire":
-      return "border-amber-200 bg-amber-50 text-amber-700";
+      return "border-warning-border bg-warning-soft text-warning-ink";
     case "Bloquant":
-      return "border-red-200 bg-red-50 text-red-700";
-    case "Non disponible":
-      return "border-slate-200 bg-slate-50 text-slate-600";
+      return "border-error-border bg-error-soft text-error-ink";
     case "À vérifier":
     default:
-      return "border-violet-200 bg-violet-50 text-violet-700";
+      return "border-border bg-muted text-muted-foreground";
   }
 }
 
-function getPriorityClasses(priority: ActionPriority) {
-  switch (priority) {
-    case "Critique":
-      return "border-red-200 bg-red-50 text-red-700";
-    case "Important":
-      return "border-amber-200 bg-amber-50 text-amber-700";
-    case "Normal":
-    default:
-      return "border-slate-200 bg-slate-50 text-slate-700";
-  }
-}
-
-function toneClasses(tone: SummaryCardItem["tone"]) {
-  const map = {
-    blue: "bg-blue-50 text-blue-600",
-    emerald: "bg-emerald-50 text-emerald-600",
-    amber: "bg-amber-50 text-amber-600",
-    violet: "bg-violet-50 text-violet-600",
-    slate: "bg-slate-100 text-slate-600",
-    rose: "bg-rose-50 text-rose-600",
-  };
-  return map[tone];
+/**
+ * Étapes dont la date de fin est passée.
+ *
+ * `isCurrent` ne distingue PAS les étapes passées des étapes futures : filtrer
+ * sur `!isCurrent` affichait « 3 étapes clôturées sur 4 » dès la rentrée. La
+ * clôture réelle n'existe pas encore dans le contrat de données ; en attendant,
+ * on parle d'étapes « écoulées », ce que la date de fin permet d'affirmer.
+ */
+function countElapsedSteps(steps: AcademicYearStep[], now: number): number {
+  return steps.filter((step) => {
+    const end = new Date(step.endDate).getTime();
+    return Number.isFinite(end) && end < now;
+  }).length;
 }
 
 async function fetchDashboardExtraData(
@@ -251,7 +234,6 @@ function buildChecklist(params: {
     routes,
   } = params;
 
-  const closedSteps = steps.filter((step) => !step.isCurrent);
   const hasSubjects =
     extraData.subjectCount === null ? null : extraData.subjectCount > 0;
   const assignmentSummary = extraData.assignmentSummary;
@@ -297,7 +279,7 @@ function buildChecklist(params: {
         hasSubjects === null ? "À vérifier" : hasSubjects ? "Terminé" : "À faire",
       description:
         extraData.subjectCount === null
-          ? "Le compteur des matières n’est pas disponible depuis le Dashboard."
+          ? "Le compteur des matières n’a pas pu être lu. Ouvrez la configuration pour le vérifier."
           : `${extraData.subjectCount} matière(s) configurée(s).`,
       href: routes.config,
       actionLabel: "Voir",
@@ -314,7 +296,7 @@ function buildChecklist(params: {
               : "À faire",
       description:
         assignmentSummary === null
-          ? "À vérifier dans la configuration annuelle."
+          ? "Les affectations n’ont pas pu être lues. Ouvrez la configuration pour les vérifier."
           : `${assignmentSummary.sessionsWithSubjects}/${sessions.length} classe(s) avec matières affectées.`,
       href: routes.config,
       actionLabel: "Affecter",
@@ -337,32 +319,13 @@ function buildChecklist(params: {
           : "À vérifier",
       description:
         activeYear && currentStep
-          ? "Contrôlez l’avancement des notes dans l’écran Notes."
+          ? `Contrôlez l’avancement des notes de ${currentStep.name} dans l’écran Notes.`
           : "Une année, une classe et une étape sont nécessaires.",
       href: routes.grades,
       actionLabel: "Contrôler",
     },
     {
-      label: "Notes validées",
-      status: "À vérifier",
-      description:
-        "Aucun statut consolidé de validation n’est disponible sur le Dashboard.",
-      href: routes.grades,
-      actionLabel: "Vérifier",
-    },
-    {
-      label: "Étape clôturée",
-      status:
-        closedSteps.length > 0 ? "Terminé" : currentStep ? "En cours" : "À vérifier",
-      description:
-        closedSteps.length > 0
-          ? `${closedSteps.length} étape(s) clôturée(s).`
-          : "La clôture se fait depuis la configuration annuelle.",
-      href: routes.config,
-      actionLabel: "Clôturer",
-    },
-    {
-      label: "Bulletins générés",
+      label: "Bulletins archivés",
       status:
         extraData.archiveCount === null
           ? "À vérifier"
@@ -371,158 +334,23 @@ function buildChecklist(params: {
             : "À faire",
       description:
         extraData.archiveCount === null
-          ? "À vérifier dans l’écran Bulletins."
-          : `${extraData.archiveCount} bulletin(s) archivé(s).`,
+          ? "Le compteur des archives n’a pas pu être lu. Ouvrez l’écran Bulletins pour le vérifier."
+          : extraData.archiveCount > 0
+            ? `${extraData.archiveCount} bulletin(s) archivé(s) pour cette année.`
+            : "Aucun bulletin archivé pour cette année.",
       href: routes.reports,
       actionLabel: "Générer",
-    },
-    {
-      label: "Archives disponibles",
-      status:
-        extraData.archiveCount === null
-          ? "À vérifier"
-          : extraData.archiveCount > 0
-            ? "Terminé"
-            : "À faire",
-      description:
-        extraData.archiveCount === null
-          ? "Le compteur des archives n’est pas disponible."
-          : "Les archives se consultent dans l’historique des bulletins.",
-      href: routes.archives,
-      actionLabel: "Consulter",
     },
   ];
 }
 
-function buildNextActions(checklist: ChecklistItem[]): NextAction[] {
-  return checklist
-    .filter((item) => item.status !== "Terminé" && item.status !== "Non disponible")
-    .slice(0, 5)
-    .map((item) => ({
-      title: item.actionLabel + " : " + item.label,
-      reason: item.description,
-      priority:
-        item.status === "Bloquant"
-          ? "Critique"
-          : item.status === "À faire"
-            ? "Important"
-            : "Normal",
-      href: item.href,
-    }));
-}
-
-function buildMvpAlerts(params: {
-  activeYear: AcademicYear | null;
-  currentStep: AcademicYearStep | null;
-  sessions: ClassSession[];
-  totalStudents: number;
-  extraData: DashboardExtraData;
-  routes: ReturnType<typeof getRouteSet>;
-}): MvpAlert[] {
-  const { activeYear, currentStep, sessions, totalStudents, extraData, routes } =
-    params;
-  const alerts: MvpAlert[] = [];
-
-  if (!activeYear) {
-    alerts.push({
-      title: "Aucune année scolaire active",
-      status: "Bloquant",
-      description: "Commencez par créer ou activer une année scolaire.",
-      href: routes.academicYears,
-      actionLabel: "Configurer",
-    });
-  }
-
-  if (activeYear && sessions.length === 0) {
-    alerts.push({
-      title: "Classes / salles à configurer",
-      status: "Bloquant",
-      description: "Aucune classe n’est disponible pour l’année scolaire active.",
-      href: routes.config,
-      actionLabel: "Configurer",
-    });
-  }
-
-  if (extraData.subjectCount === 0) {
-    alerts.push({
-      title: "Matières non configurées",
-      status: "Bloquant",
-      description: "Les matières doivent être configurées avant la saisie.",
-      href: routes.config,
-      actionLabel: "Configurer",
-    });
-  }
-
-  if (
-    extraData.assignmentSummary &&
-    sessions.length > 0 &&
-    extraData.assignmentSummary.sessionsWithSubjects < sessions.length
-  ) {
-    alerts.push({
-      title: "Matières non affectées",
-      status: "À vérifier",
-      description: "Certaines classes n’ont pas encore de matières affectées.",
-      href: routes.config,
-      actionLabel: "Vérifier",
-    });
-  }
-
-  if (activeYear && totalStudents === 0) {
-    alerts.push({
-      title: "Aucun élève inscrit",
-      status: "À faire",
-      description: "Inscrivez les élèves avant de saisir les notes.",
-      href: routes.students,
-      actionLabel: "Inscrire",
-    });
-  }
-
-  if (activeYear && currentStep) {
-    alerts.push({
-      title: "Notes manquantes",
-      status: "À vérifier",
-      description: "Contrôlez l’avancement des notes dans l’écran Notes.",
-      href: routes.grades,
-      actionLabel: "Contrôler",
-    });
-
-    alerts.push({
-      title: "Étape non clôturée",
-      status: currentStep.isCurrent ? "En cours" : "À vérifier",
-      description: `Étape actuelle : ${currentStep.name}.`,
-      href: routes.config,
-      actionLabel: "Gérer",
-    });
-  }
-
-  if (extraData.archiveCount === 0) {
-    alerts.push({
-      title: "Archives absentes",
-      status: "À faire",
-      description: "Aucun bulletin archivé n’a été trouvé pour l’année active.",
-      href: routes.reports,
-      actionLabel: "Générer",
-    });
-  }
-
-  alerts.push({
-    title: "Élèves sans NISU valide",
-    status: "À vérifier",
-    description: "Le Dashboard ne dispose pas d’un compteur fiable. Vérifiez la liste des élèves.",
-    href: routes.students,
-    actionLabel: "Vérifier",
-  });
-
-  return alerts;
-}
-
 function ActiveYearCard({
   activeYear,
-  currentStep,
+  lastUpdatedAt,
   routes,
 }: {
   activeYear: AcademicYear | null;
-  currentStep: AcademicYearStep | null;
+  lastUpdatedAt: Date | null;
   routes: ReturnType<typeof getRouteSet>;
 }) {
   return (
@@ -534,7 +362,7 @@ function ActiveYearCard({
               Année scolaire active
             </CardTitle>
             <CardDescription>
-              État de l’année scolaire utilisée par les opérations MVP
+              L’année à laquelle toutes les données de cet écran se rattachent
             </CardDescription>
           </div>
           <Button asChild size="sm" variant="outline">
@@ -556,16 +384,15 @@ function ActiveYearCard({
           </p>
           <p className="mt-2 text-sm text-muted-foreground">
             {activeYear
-              ? "Les données du Dashboard sont rattachées à cette année scolaire."
+              ? "Les données de cet écran sont rattachées à cette année scolaire."
               : "Commencez par créer ou activer une année scolaire."}
           </p>
         </div>
         <StatusValue label="Statut" value={activeYear ? "Active" : "À faire"} />
         <StatusValue
-          label="Étape active"
-          value={currentStep?.name ?? "Non disponible"}
+          label="Chiffres relevés à"
+          value={lastUpdatedAt ? TIME_FORMAT.format(lastUpdatedAt) : "—"}
         />
-        <StatusValue label="Dernière mise à jour" value="Non disponible" />
       </CardContent>
     </Card>
   );
@@ -575,34 +402,31 @@ function StatusValue({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border bg-muted/30 p-3">
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
-      <p className="mt-1 text-sm font-semibold text-foreground">{value}</p>
+      <p className="mt-1 text-sm font-semibold tabular-nums text-foreground">
+        {value}
+      </p>
     </div>
   );
 }
 
 function SummaryCards({ items }: { items: SummaryCardItem[] }) {
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {items.map((item) => {
         const Icon = item.icon;
         return (
           <Card key={item.label} className="border bg-card shadow-sm">
-            <CardContent className="p-4">
+            <CardContent className="p-5">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-xs font-medium text-muted-foreground">
                     {item.label}
                   </p>
-                  <p className="mt-1 truncate text-2xl font-semibold text-foreground">
+                  <p className="mt-1 truncate text-2xl font-semibold tabular-nums text-foreground">
                     {item.value}
                   </p>
                 </div>
-                <div
-                  className={cn(
-                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
-                    toneClasses(item.tone),
-                  )}
-                >
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                   <Icon className="h-4 w-4" />
                 </div>
               </div>
@@ -618,8 +442,19 @@ function SummaryCards({ items }: { items: SummaryCardItem[] }) {
 }
 
 function ProgressChecklist({ items }: { items: ChecklistItem[] }) {
-  const completed = items.filter((item) => item.status === "Terminé").length;
-  const pct = Math.round((completed / items.length) * 100);
+  // Une ligne « À vérifier » signale une donnée que le serveur n'a pas fournie.
+  // La compter dans le dénominateur rendrait 100 % inatteignable et le
+  // pourcentage cesserait de vouloir dire quelque chose.
+  const determinable = items.filter((item) => item.status !== "À vérifier");
+  const unverified = items.length - determinable.length;
+  const completed = determinable.filter(
+    (item) => item.status === "Terminé",
+  ).length;
+  const pct =
+    determinable.length > 0
+      ? Math.round((completed / determinable.length) * 100)
+      : 0;
+  const allDone = determinable.length > 0 && completed === determinable.length;
 
   return (
     <Card className="border bg-card shadow-sm">
@@ -627,14 +462,21 @@ function ProgressChecklist({ items }: { items: ChecklistItem[] }) {
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <CardTitle className="text-base font-semibold">
-              Progression MVP
+              Préparation de l’année
             </CardTitle>
             <CardDescription>
-              Configuration → élèves → notes → clôture → bulletins → archives
+              {completed} sur {determinable.length} étape(s) vérifiable(s)
+              {unverified > 0
+                ? ` · ${unverified} à contrôler manuellement`
+                : ""}
             </CardDescription>
           </div>
           <div className="flex items-center gap-3">
-            <Progress value={pct} className="h-2 w-32" />
+            <Progress
+              value={pct}
+              aria-label={`Préparation de l’année : ${pct} %`}
+              className="h-2 w-32"
+            />
             <span className="text-sm font-semibold tabular-nums text-foreground">
               {pct}%
             </span>
@@ -643,13 +485,24 @@ function ProgressChecklist({ items }: { items: ChecklistItem[] }) {
       </CardHeader>
       <Separator />
       <CardContent className="p-0">
+        {allDone && (
+          <div className="flex items-start gap-3 border-b bg-success-soft p-4 text-sm text-success-ink">
+            <CheckCircle2Icon className="mt-0.5 h-4 w-4 shrink-0 text-success-ink" />
+            <p>
+              Tout ce que cet écran sait vérifier est en place.
+              {unverified > 0
+                ? " Il reste les points marqués « À vérifier », que le serveur ne sait pas encore compter."
+                : ""}
+            </p>
+          </div>
+        )}
         <div className="divide-y">
           {items.map((item, index) => (
             <div
               key={item.label}
               className="grid gap-3 p-4 md:grid-cols-[32px_1fr_auto]"
             >
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs font-semibold tabular-nums text-muted-foreground">
                 {index + 1}
               </div>
               <div className="min-w-0">
@@ -664,7 +517,7 @@ function ProgressChecklist({ items }: { items: ChecklistItem[] }) {
                     {item.status}
                   </Badge>
                 </div>
-                <p className="mt-1 text-sm text-muted-foreground">
+                <p className="mt-1 max-w-prose text-sm text-muted-foreground">
                   {item.description}
                 </p>
               </div>
@@ -682,120 +535,12 @@ function ProgressChecklist({ items }: { items: ChecklistItem[] }) {
   );
 }
 
-function NextActions({ actions }: { actions: NextAction[] }) {
-  return (
-    <Card className="border bg-card shadow-sm">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base font-semibold">
-          Prochaines actions
-        </CardTitle>
-        <CardDescription>
-          Les étapes recommandées pour continuer le parcours MVP
-        </CardDescription>
-      </CardHeader>
-      <Separator />
-      <CardContent className="space-y-3 p-4">
-        {actions.length === 0 ? (
-          <div className="rounded-lg border bg-emerald-50 p-4 text-sm text-emerald-800">
-            Aucune action critique immédiate. Vérifiez les notes et les archives
-            avant la prochaine clôture.
-          </div>
-        ) : (
-          actions.map((action) => (
-            <div
-              key={`${action.title}-${action.href}`}
-              className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-3 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-sm font-semibold text-foreground">
-                    {action.title}
-                  </p>
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      "border",
-                      getPriorityClasses(action.priority),
-                    )}
-                  >
-                    {action.priority}
-                  </Badge>
-                </div>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {action.reason}
-                </p>
-              </div>
-              <Button asChild size="sm">
-                <Link href={action.href}>
-                  Ouvrir
-                  <ArrowRightIcon className="h-3.5 w-3.5" />
-                </Link>
-              </Button>
-            </div>
-          ))
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function MvpAlerts({ alerts }: { alerts: MvpAlert[] }) {
-  const visibleAlerts = alerts.filter((alert) => alert.status !== "Terminé");
-
-  return (
-    <Card className="border bg-card shadow-sm">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base font-semibold">Alertes MVP</CardTitle>
-        <CardDescription>
-          Points à traiter ou à vérifier avant d’avancer
-        </CardDescription>
-      </CardHeader>
-      <Separator />
-      <CardContent className="space-y-3 p-4">
-        {visibleAlerts.length === 0 ? (
-          <Alert className="border-emerald-200 bg-emerald-50 text-emerald-900">
-            <CheckCircle2Icon className="h-4 w-4 !text-emerald-600" />
-            <AlertTitle>Aucune alerte critique</AlertTitle>
-            <AlertDescription>
-              Les principaux indicateurs disponibles ne signalent pas de blocage.
-            </AlertDescription>
-          </Alert>
-        ) : (
-          visibleAlerts.map((alert) => (
-            <Alert
-              key={`${alert.title}-${alert.status}`}
-              className="border bg-background"
-            >
-              <AlertTriangleIcon className="h-4 w-4" />
-              <AlertTitle className="flex flex-wrap items-center gap-2">
-                {alert.title}
-                <Badge
-                  variant="outline"
-                  className={cn("border", getStatusClasses(alert.status))}
-                >
-                  {alert.status}
-                </Badge>
-              </AlertTitle>
-              <AlertDescription className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <span>{alert.description}</span>
-                <Button asChild size="sm" variant="outline">
-                  <Link href={alert.href}>{alert.actionLabel}</Link>
-                </Button>
-              </AlertDescription>
-            </Alert>
-          ))
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
 function QuickLinks({ links }: { links: QuickLink[] }) {
   return (
     <Card className="border bg-card shadow-sm">
       <CardHeader className="pb-3">
         <CardTitle className="text-base font-semibold">Accès rapide</CardTitle>
-        <CardDescription>Écrans principaux du parcours MVP</CardDescription>
+        <CardDescription>Les quatre écrans du travail courant</CardDescription>
       </CardHeader>
       <Separator />
       <CardContent className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -805,7 +550,7 @@ function QuickLinks({ links }: { links: QuickLink[] }) {
             <Link
               key={link.label}
               href={link.href}
-              className="group rounded-lg border bg-muted/30 p-3 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="group rounded-lg border bg-muted/30 p-3 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
               <div className="flex items-center gap-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-background ring-1 ring-border">
@@ -828,6 +573,27 @@ function QuickLinks({ links }: { links: QuickLink[] }) {
   );
 }
 
+function PageHeading({ activeYear }: { activeYear: AcademicYear | null }) {
+  return (
+    <div>
+      <h1 className="heading-1 text-foreground">
+        Tableau de bord administrateur
+      </h1>
+      <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+        <span>Pilotage de l’année scolaire</span>
+        {activeYear && (
+          <>
+            <span>&middot;</span>
+            <Badge variant="secondary" className="align-middle">
+              {activeYear.name}
+            </Badge>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function AdminDashboardPage() {
   const [activeYear, setActiveYear] = useState<AcademicYear | null>(null);
   const [steps, setSteps] = useState<AcademicYearStep[]>([]);
@@ -835,101 +601,130 @@ export default function AdminDashboardPage() {
   const [totalStudents, setTotalStudents] = useState(0);
   const [extraData, setExtraData] =
     useState<DashboardExtraData>(EMPTY_EXTRA_DATA);
-  const [loading, setLoading] = useState(true);
-  const [hasPartialData, setHasPartialData] = useState(false);
+  const [loadState, setLoadState] = useState<LoadState>("loading");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [partialReasons, setPartialReasons] = useState<string[]>([]);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+
+  // Une requête plus ancienne ne doit jamais écraser une plus récente : le
+  // bouton « Réessayer » peut relancer un chargement pendant qu'un autre court.
+  const requestIdRef = useRef(0);
+
+  // Aucun setState synchrone ici : la fonction est appelée depuis un effet, et
+  // tout état visible n'est écrit qu'après le premier `await`. La remise à zéro
+  // avant chargement appartient à `reload`, que seuls les boutons déclenchent.
+  const loadDashboard = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
+    const isStale = () => requestIdRef.current !== requestId;
+
+    try {
+      const year = await fetchActiveAcademicYear();
+      if (isStale()) return;
+      setActiveYear(year);
+      setErrorMessage(null);
+
+      if (!year) {
+        setSteps([]);
+        setSessions([]);
+        setTotalStudents(0);
+        setExtraData(EMPTY_EXTRA_DATA);
+        setLastUpdatedAt(new Date());
+        setLoadState("ready");
+        return;
+      }
+
+      const [stepsData, sessionsData] = await Promise.all([
+        fetchSteps(year.id),
+        fetchClassSessions(year.id),
+      ]);
+
+      if (isStale()) return;
+      const orderedSteps = [...stepsData].sort(
+        (a, b) => a.stepNumber - b.stepNumber,
+      );
+      setSteps(orderedSteps);
+      setSessions(sessionsData);
+
+      const counts = await Promise.allSettled(
+        sessionsData.map(async (session) => ({
+          sessionId: session.id,
+          studentCount: await fetchEnrollmentCount(session.id),
+        })),
+      );
+
+      if (isStale()) return;
+      const fulfilledCounts = counts
+        .filter(
+          (
+            result,
+          ): result is PromiseFulfilledResult<{
+            sessionId: string;
+            studentCount: number;
+          }> => result.status === "fulfilled",
+        )
+        .map((result) => result.value);
+      setTotalStudents(
+        fulfilledCounts.reduce((sum, stat) => sum + stat.studentCount, 0),
+      );
+
+      const reasons: string[] = [];
+      if (fulfilledCounts.length !== sessionsData.length) {
+        const missing = sessionsData.length - fulfilledCounts.length;
+        reasons.push(`les effectifs de ${missing} classe(s)`);
+      }
+
+      const dashboardExtra = await fetchDashboardExtraData(year, sessionsData);
+      if (isStale()) return;
+      setExtraData(dashboardExtra);
+
+      if (dashboardExtra.subjectCount === null) {
+        reasons.push("le compteur des matières");
+      }
+      if (dashboardExtra.assignmentSummary === null) {
+        reasons.push("les affectations matières / classes");
+      }
+      if (dashboardExtra.archiveCount === null) {
+        reasons.push("le compteur des bulletins archivés");
+      }
+
+      setPartialReasons(reasons);
+      setLastUpdatedAt(new Date());
+      setLoadState("ready");
+    } catch (err) {
+      if (isStale()) return;
+      // Surtout : on ne vide RIEN. Une panne de lecture n'est pas une perte de
+      // données, et l'écran ne doit jamais laisser croire le contraire.
+      setErrorMessage(toMessage(err));
+      setLoadState("error");
+    }
+  }, []);
+
+  const reload = useCallback(() => {
+    setLoadState("loading");
+    setErrorMessage(null);
+    setPartialReasons([]);
+    void loadDashboard();
+  }, [loadDashboard]);
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function loadDashboard() {
-      setLoading(true);
-      setHasPartialData(false);
-
-      try {
-        const year = await fetchActiveAcademicYear();
-        if (cancelled) return;
-        setActiveYear(year);
-
-        if (!year) {
-          setSteps([]);
-          setSessions([]);
-          setTotalStudents(0);
-          setExtraData(EMPTY_EXTRA_DATA);
-          return;
-        }
-
-        const [stepsData, sessionsData] = await Promise.all([
-          fetchSteps(year.id),
-          fetchClassSessions(year.id),
-        ]);
-
-        if (cancelled) return;
-        const orderedSteps = [...stepsData].sort(
-          (a, b) => a.stepNumber - b.stepNumber,
-        );
-        setSteps(orderedSteps);
-        setSessions(sessionsData);
-
-        const counts = await Promise.allSettled(
-          sessionsData.map(async (session) => ({
-            sessionId: session.id,
-            studentCount: await fetchEnrollmentCount(session.id),
-          })),
-        );
-
-        if (cancelled) return;
-        const fulfilledCounts = counts
-          .filter(
-            (
-              result,
-            ): result is PromiseFulfilledResult<{
-              sessionId: string;
-              studentCount: number;
-            }> =>
-              result.status === "fulfilled",
-          )
-          .map((result) => result.value);
-        setTotalStudents(
-          fulfilledCounts.reduce((sum, stat) => sum + stat.studentCount, 0),
-        );
-        if (fulfilledCounts.length !== sessionsData.length) {
-          setHasPartialData(true);
-        }
-
-        const dashboardExtra = await fetchDashboardExtraData(year, sessionsData);
-        if (cancelled) return;
-        setExtraData(dashboardExtra);
-        if (
-          dashboardExtra.subjectCount === null ||
-          dashboardExtra.assignmentSummary === null ||
-          dashboardExtra.archiveCount === null
-        ) {
-          setHasPartialData(true);
-        }
-      } catch {
-        if (!cancelled) {
-          setActiveYear(null);
-          setSteps([]);
-          setSessions([]);
-          setTotalStudents(0);
-          setExtraData(EMPTY_EXTRA_DATA);
-          setHasPartialData(true);
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
     void loadDashboard();
-
     return () => {
-      cancelled = true;
+      requestIdRef.current += 1;
     };
-  }, []);
+  }, [loadDashboard]);
 
   const routes = useMemo(() => getRouteSet(activeYear), [activeYear]);
   const currentStep = useMemo(() => getCurrentStep(steps), [steps]);
-  const closedSteps = steps.filter((step) => !step.isCurrent);
+  const hasDeclaredCurrentStep = steps.some((step) => step.isCurrent);
+
+  // Référence temporelle = l'instant du relevé, pas l'instant du rendu. Rend le
+  // calcul pur (pas de Date.now() pendant le render) et cohérent avec la valeur
+  // « Chiffres relevés à » affichée juste au-dessus.
+  const elapsedSteps = useMemo(
+    () =>
+      lastUpdatedAt ? countElapsedSteps(steps, lastUpdatedAt.getTime()) : 0,
+    [steps, lastUpdatedAt],
+  );
 
   const summaryCards: SummaryCardItem[] = useMemo(
     () => [
@@ -938,52 +733,27 @@ export default function AdminDashboardPage() {
         value: totalStudents,
         description: "Inscrits dans l’année scolaire active",
         icon: UsersIcon,
-        tone: "emerald",
       },
       {
         label: "Classes / salles",
         value: sessions.length,
         description: "Groupes disponibles pour la saisie",
         icon: SchoolIcon,
-        tone: "amber",
       },
       {
         label: "Matières",
         value: extraData.subjectCount ?? "À vérifier",
         description: "Matières configurées",
         icon: ClipboardEditIcon,
-        tone: "blue",
       },
       {
-        label: "Notes",
-        value: currentStep ? "À vérifier" : "À faire",
-        description: currentStep
-          ? `Contrôle requis pour ${currentStep.name}`
-          : "Aucune étape active disponible",
-        icon: BarChart3Icon,
-        tone: "violet",
-      },
-      {
-        label: "Bulletins",
+        label: "Bulletins archivés",
         value: extraData.archiveCount ?? "À vérifier",
-        description: "Bulletins générés ou archivés",
+        description: "Pour l’année scolaire active",
         icon: FileTextIcon,
-        tone: "rose",
-      },
-      {
-        label: "Archives",
-        value:
-          extraData.archiveCount === null
-            ? "À vérifier"
-            : extraData.archiveCount > 0
-              ? "Disponibles"
-              : "À faire",
-        description: "Historique des bulletins",
-        icon: ArchiveIcon,
-        tone: "slate",
       },
     ],
-    [currentStep, extraData.archiveCount, extraData.subjectCount, sessions.length, totalStudents],
+    [extraData.archiveCount, extraData.subjectCount, sessions.length, totalStudents],
   );
 
   const checklist = useMemo(
@@ -1000,28 +770,8 @@ export default function AdminDashboardPage() {
     [activeYear, currentStep, extraData, routes, sessions, steps, totalStudents],
   );
 
-  const nextActions = useMemo(() => buildNextActions(checklist), [checklist]);
-  const mvpAlerts = useMemo(
-    () =>
-      buildMvpAlerts({
-        activeYear,
-        currentStep,
-        sessions,
-        totalStudents,
-        extraData,
-        routes,
-      }),
-    [activeYear, currentStep, extraData, routes, sessions, totalStudents],
-  );
-
   const quickLinks: QuickLink[] = useMemo(
     () => [
-      {
-        label: "Configuration annuelle",
-        description: "Année, étapes, classes, matières",
-        href: routes.config,
-        icon: SettingsIcon,
-      },
       {
         label: "Élèves",
         description: "Inscriptions et classes",
@@ -1035,95 +785,108 @@ export default function AdminDashboardPage() {
         icon: ClipboardEditIcon,
       },
       {
-        label: "Validation / avancement",
-        description: "Contrôle des notes",
-        href: routes.grades,
-        icon: ClipboardCheckIcon,
-      },
-      {
-        label: "Clôture",
-        description: "Depuis la configuration",
-        href: routes.config,
-        icon: CheckCircle2Icon,
-      },
-      {
         label: "Bulletins",
         description: "Individuel et lot",
         href: routes.reports,
         icon: FileTextIcon,
       },
       {
-        label: "Rapport statistique",
-        description: "PDF classe",
-        href: routes.reports,
-        icon: BarChart3Icon,
-      },
-      {
-        label: "Archives",
-        description: "Versions de bulletins",
-        href: routes.archives,
-        icon: ArchiveIcon,
+        label: "Configuration annuelle",
+        description: "Année, étapes, classes, matières",
+        href: routes.config,
+        icon: SettingsIcon,
       },
     ],
     [routes],
   );
 
-  if (loading) {
+  if (loadState === "loading") {
     return (
-      <div className="space-y-8">
+      <div className="space-y-6" role="status" aria-live="polite" aria-busy>
+        <span className="sr-only">Chargement du tableau de bord…</span>
         <div className="space-y-1">
           <Skeleton className="h-9 w-80" />
           <Skeleton className="h-5 w-72" />
         </div>
         <Skeleton className="h-44 rounded-xl" />
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
-          {[1, 2, 3, 4, 5, 6].map((item) => (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {[1, 2, 3, 4].map((item) => (
             <Skeleton key={item} className="h-[132px] rounded-xl" />
           ))}
         </div>
+        <Skeleton className="h-24 rounded-xl" />
         <Skeleton className="h-96 rounded-xl" />
       </div>
     );
   }
 
+  if (loadState === "error") {
+    return (
+      <div className="space-y-6">
+        <PageHeading activeYear={activeYear} />
+        <Alert role="alert" className="border-error-border bg-error-soft text-error-ink">
+          <AlertTriangleIcon className="h-4 w-4 !text-error-ink" />
+          <AlertTitle>Impossible de charger le tableau de bord</AlertTitle>
+          <AlertDescription className="mt-2 space-y-3">
+            <p>
+              Le serveur n’a pas répondu. Vos données ne sont pas perdues :
+              seule cette page n’a pas pu les lire.
+            </p>
+            {errorMessage && (
+              <p className="text-xs opacity-80">Détail : {errorMessage}</p>
+            )}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={reload}
+            >
+              <RefreshCwIcon className="h-3.5 w-3.5" />
+              Réessayer
+            </Button>
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">
-          Tableau de bord administrateur
-        </h1>
-        <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-          <span>Pilotage de l’année scolaire et des opérations MVP</span>
-          {activeYear && (
-            <>
-              <span>&middot;</span>
-              <Badge variant="secondary" className="align-middle">
-                {activeYear.name}
-              </Badge>
-            </>
-          )}
-        </div>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <PageHeading activeYear={activeYear} />
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={reload}
+          className="shrink-0"
+        >
+          <RefreshCwIcon className="h-3.5 w-3.5" />
+          Actualiser
+        </Button>
       </div>
 
-      {hasPartialData && (
-        <Alert className="border-blue-200 bg-blue-50 text-blue-900">
-          <InfoIcon className="h-4 w-4 !text-blue-600" />
+      {partialReasons.length > 0 && (
+        <Alert
+          role="status"
+          aria-live="polite"
+          className="border-info-border bg-info-soft text-info-ink"
+        >
+          <InfoIcon className="h-4 w-4 !text-info-ink" />
           <AlertTitle>Données partielles</AlertTitle>
           <AlertDescription>
-            Certains indicateurs ne sont pas disponibles depuis le Dashboard.
-            Les lignes concernées sont marquées “À vérifier”.
+            Le serveur n’a pas renvoyé {partialReasons.join(", ")}. Les lignes
+            concernées affichent « À vérifier ».
           </AlertDescription>
         </Alert>
       )}
 
       {!activeYear && (
-        <Alert className="border-amber-200 bg-amber-50 text-amber-900">
-          <AlertTriangleIcon className="h-4 w-4 !text-amber-600" />
+        <Alert className="border-warning-border bg-warning-soft text-warning-ink">
+          <AlertTriangleIcon className="h-4 w-4 !text-warning-ink" />
           <AlertTitle>Aucune année scolaire active</AlertTitle>
           <AlertDescription className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <span>
-              Commencez par créer ou activer une année scolaire pour piloter le
-              MVP.
+              Le serveur a répondu qu’aucune année n’est marquée active. Créez-en
+              une ou activez une année existante.
             </span>
             <Button asChild size="sm" variant="outline">
               <Link href={routes.academicYears}>Configurer l’année scolaire</Link>
@@ -1134,7 +897,7 @@ export default function AdminDashboardPage() {
 
       <ActiveYearCard
         activeYear={activeYear}
-        currentStep={currentStep}
+        lastUpdatedAt={lastUpdatedAt}
         routes={routes}
       />
 
@@ -1144,27 +907,33 @@ export default function AdminDashboardPage() {
         <Card className="border bg-card shadow-sm">
           <CardContent className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:gap-6">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-50">
-                <CircleDashedIcon className="h-4 w-4 text-violet-600" />
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+                <CircleDashedIcon className="h-4 w-4 text-primary" />
               </div>
               <div>
                 <p className="text-sm font-semibold text-foreground">
                   {currentStep
-                    ? `Étape active : ${currentStep.name}`
-                    : "Étape active à vérifier"}
+                    ? hasDeclaredCurrentStep
+                      ? `Étape en cours : ${currentStep.name}`
+                      : `Étape supposée : ${currentStep.name}`
+                    : "Aucune étape en cours"}
                 </p>
-                <p className="text-xs text-muted-foreground">
-                  {closedSteps.length} étape(s) clôturée(s) sur {steps.length}
+                <p className="text-xs tabular-nums text-muted-foreground">
+                  {elapsedSteps} étape(s) écoulée(s) sur {steps.length}
+                  {hasDeclaredCurrentStep
+                    ? ""
+                    : " · aucune étape n’est marquée en cours côté serveur"}
                 </p>
               </div>
             </div>
             <div className="flex flex-1 items-center gap-3">
               <Progress
-                value={Math.round((closedSteps.length / steps.length) * 100)}
-                className="flex-1 bg-muted [&>div]:bg-violet-500"
+                value={Math.round((elapsedSteps / steps.length) * 100)}
+                aria-label={`Étapes écoulées : ${elapsedSteps} sur ${steps.length}`}
+                className="flex-1"
               />
               <span className="text-sm font-medium tabular-nums text-muted-foreground">
-                {Math.round((closedSteps.length / steps.length) * 100)}%
+                {Math.round((elapsedSteps / steps.length) * 100)}%
               </span>
             </div>
           </CardContent>
@@ -1172,11 +941,6 @@ export default function AdminDashboardPage() {
       )}
 
       <ProgressChecklist items={checklist} />
-
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <NextActions actions={nextActions} />
-        <MvpAlerts alerts={mvpAlerts} />
-      </div>
 
       <QuickLinks links={quickLinks} />
     </div>

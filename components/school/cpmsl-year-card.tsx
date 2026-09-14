@@ -34,8 +34,8 @@ export function CPMSLYearCard({
 }: CPMSLYearCardProps) {
 
   const statusConfig = {
-    active:      { label: 'Active',          variant: 'default' as const, className: 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100' },
-    preparation: { label: 'En préparation',  variant: 'outline' as const, className: 'border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-50' },
+    active:      { label: 'Active',          variant: 'default' as const, className: 'bg-success-soft text-success-ink hover:bg-success-soft' },
+    preparation: { label: 'En préparation',  variant: 'outline' as const, className: 'border-warning-border text-warning-ink bg-warning-soft hover:bg-warning-soft' },
     archived:    { label: 'Archivée',        variant: 'secondary' as const, className: '' },
   }
 
@@ -52,7 +52,7 @@ export function CPMSLYearCard({
   return (
     <Card className={cn(
       "border bg-card shadow-sm transition-shadow hover:shadow-md",
-      year.status === 'active' && "border-emerald-300 shadow-emerald-100/50"
+      year.status === 'active' && "border-success-border shadow-success/50"
     )}>
       <CardContent className="p-5">
         <div className="flex items-center justify-between">
@@ -72,7 +72,7 @@ export function CPMSLYearCard({
                 disabled={isActivating}
                 variant="outline"
                 size="sm"
-                className="gap-1.5 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                className="gap-1.5 border-success-border text-success-ink hover:bg-success-soft"
               >
                 <ZapIcon className="h-3.5 w-3.5" />
                 {isActivating ? 'Activation...' : 'Activer'}

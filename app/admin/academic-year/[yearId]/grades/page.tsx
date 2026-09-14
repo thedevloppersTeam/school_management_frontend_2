@@ -296,7 +296,7 @@ export default function GradesPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Notes</h1>
+        <h1 className="heading-1 text-foreground">Notes</h1>
 <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
   <span>Saisie, consultation, avancement et comportement</span>
   {yearName && (

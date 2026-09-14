@@ -74,7 +74,7 @@ export function EditLevelModal({
           <DialogTitle
             style={{
               color: '#1E1A17',
-              fontSize: '18px',
+              fontSize: 'var(--text-lg)',
               fontWeight: 600,
               fontFamily: 'var(--font-sans)'
             }}
@@ -90,7 +90,7 @@ export function EditLevelModal({
               <Label
                 style={{
                   color: '#1E1A17',
-                  fontSize: '14px',
+                  fontSize: 'var(--text-sm)',
                   fontWeight: 500,
                   marginBottom: '8px',
                   display: 'block'
@@ -111,7 +111,7 @@ export function EditLevelModal({
                       htmlFor="niveau-fondamentale"
                       style={{
                         color: '#9CA3AF',
-                        fontSize: '14px',
+                        fontSize: 'var(--text-sm)',
                         fontWeight: 400,
                         cursor: 'not-allowed'
                       }}
@@ -130,7 +130,7 @@ export function EditLevelModal({
                       htmlFor="niveau-secondaire"
                       style={{
                         color: '#9CA3AF',
-                        fontSize: '14px',
+                        fontSize: 'var(--text-sm)',
                         fontWeight: 400,
                         cursor: 'not-allowed'
                       }}
@@ -143,7 +143,7 @@ export function EditLevelModal({
               <p
                 style={{
                   color: '#9CA3AF',
-                  fontSize: '13px',
+                  fontSize: 'var(--text-sm)',
                   marginTop: '6px'
                 }}
               >
@@ -157,7 +157,7 @@ export function EditLevelModal({
                 htmlFor="class-name"
                 style={{
                   color: '#1E1A17',
-                  fontSize: '14px',
+                  fontSize: 'var(--text-sm)',
                   fontWeight: 500,
                   marginBottom: '8px',
                   display: 'block'
@@ -173,7 +173,7 @@ export function EditLevelModal({
                   border: '1px solid #E8E6E3',
                   backgroundColor: '#F9FAFB',
                   color: '#9CA3AF',
-                  fontSize: '14px',
+                  fontSize: 'var(--text-sm)',
                   cursor: 'not-allowed'
                 }}
               >
@@ -182,7 +182,7 @@ export function EditLevelModal({
               <p
                 style={{
                   color: '#9CA3AF',
-                  fontSize: '13px',
+                  fontSize: 'var(--text-sm)',
                   marginTop: '6px'
                 }}
               >
@@ -196,7 +196,7 @@ export function EditLevelModal({
                 htmlFor="description"
                 style={{
                   color: '#1E1A17',
-                  fontSize: '14px',
+                  fontSize: 'var(--text-sm)',
                   fontWeight: 500,
                   marginBottom: '8px',
                   display: 'block'
@@ -219,7 +219,7 @@ export function EditLevelModal({
                   resize: 'vertical',
                   borderRadius: '8px',
                   border: '1px solid #D1CECC',
-                  fontSize: '14px'
+                  fontSize: 'var(--text-sm)'
                 }}
               />
               <div
@@ -232,7 +232,7 @@ export function EditLevelModal({
                 <span
                   style={{
                     color: description.length >= maxChars ? '#B91C1C' : '#9CA3AF',
-                    fontSize: '13px'
+                    fontSize: 'var(--text-sm)'
                   }}
                 >
                   {description.length}/{maxChars} caractères

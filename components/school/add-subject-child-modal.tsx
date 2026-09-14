@@ -142,7 +142,7 @@ export function AddSubjectChildModal({
           <div className="space-y-2">
             <Label
               htmlFor="name"
-              className="text-neutral-900 text-[13px] font-medium"
+              className="text-neutral-900 text-sm font-medium"
             >
               Nom <span className="text-error">*</span>
             </Label>
@@ -159,7 +159,7 @@ export function AddSubjectChildModal({
           <div className="space-y-2">
             <Label
               htmlFor="code"
-              className="text-neutral-900 text-[13px] font-medium"
+              className="text-neutral-900 text-sm font-medium"
             >
               Code
             </Label>
@@ -177,7 +177,7 @@ export function AddSubjectChildModal({
 
           {/* Type de sous-matière */}
           <div className="space-y-2">
-            <Label className="text-neutral-900 text-[13px] font-medium">
+            <Label className="text-neutral-900 text-sm font-medium">
               Type de sous-matière <span className="text-error">*</span>
             </Label>
             <RadioGroup
@@ -242,7 +242,7 @@ export function AddSubjectChildModal({
           <div className="space-y-2">
             <Label
               htmlFor="maxScore"
-              className="text-neutral-900 text-[13px] font-medium"
+              className="text-neutral-900 text-sm font-medium"
             >
               Note maximum <span className="text-error">*</span>
             </Label>
@@ -260,7 +260,7 @@ export function AddSubjectChildModal({
               Note maximale utilisée pour cette sous-matière sur les bulletins.
             </p>
             {maxScore && !isMaxScoreValid && (
-              <p className="text-error text-[13px] font-medium mt-1.5">
+              <p className="text-error text-sm font-medium mt-1.5">
                 La note maximum doit être un nombre positif.
               </p>
             )}

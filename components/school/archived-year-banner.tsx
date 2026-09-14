@@ -7,8 +7,8 @@ interface ArchivedYearBannerProps {
 
 export function ArchivedYearBanner({ yearName }: ArchivedYearBannerProps) {
   return (
-    <Alert className="border-amber-200 bg-amber-50 text-amber-900">
-      <ArchiveIcon className="h-4 w-4 !text-amber-600" />
+    <Alert className="border-warning-border bg-warning-soft text-warning-ink">
+      <ArchiveIcon className="h-4 w-4 !text-warning-ink" />
       <AlertTitle>Année {yearName} — Archivée</AlertTitle>
       <AlertDescription>
         Année archivée — les données sont en lecture seule

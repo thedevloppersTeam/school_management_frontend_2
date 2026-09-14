@@ -138,7 +138,7 @@ export function CreateLevelModalV2({
           <DialogTitle
             style={{
               color: '#2A3740',
-              fontSize: '20px',
+              fontSize: 'var(--text-xl)',
               fontWeight: 600,
               fontFamily: 'var(--font-serif)',
               marginBottom: '4px'
@@ -149,7 +149,7 @@ export function CreateLevelModalV2({
           <DialogDescription
             style={{
               color: '#5C5955',
-              fontSize: '14px',
+              fontSize: 'var(--text-sm)',
               fontWeight: 400
             }}
           >
@@ -163,7 +163,7 @@ export function CreateLevelModalV2({
             <Label
               style={{
                 color: '#2A3740',
-                fontSize: '13px',
+                fontSize: 'var(--text-sm)',
                 fontWeight: 500,
                 display: 'block'
               }}
@@ -181,7 +181,7 @@ export function CreateLevelModalV2({
                   htmlFor="fondamentale"
                   style={{
                     color: '#2A3740',
-                    fontSize: '14px',
+                    fontSize: 'var(--text-sm)',
                     fontWeight: 400,
                     cursor: 'pointer'
                   }}
@@ -195,7 +195,7 @@ export function CreateLevelModalV2({
                   htmlFor="secondaire"
                   style={{
                     color: '#2A3740',
-                    fontSize: '14px',
+                    fontSize: 'var(--text-sm)',
                     fontWeight: 400,
                     cursor: 'pointer'
                   }}
@@ -212,7 +212,7 @@ export function CreateLevelModalV2({
               htmlFor="name"
               style={{
                 color: '#2A3740',
-                fontSize: '13px',
+                fontSize: 'var(--text-sm)',
                 fontWeight: 500,
                 display: 'block'
               }}
@@ -237,7 +237,7 @@ export function CreateLevelModalV2({
                     style={{
                       padding: '8px 12px',
                       color: '#78756F',
-                      fontSize: '14px',
+                      fontSize: 'var(--text-sm)',
                       textAlign: 'center'
                     }}
                   >
@@ -260,7 +260,7 @@ export function CreateLevelModalV2({
               <Label
                 style={{
                   color: '#2A3740',
-                  fontSize: '13px',
+                  fontSize: 'var(--text-sm)',
                   fontWeight: 500,
                   display: 'block'
                 }}
@@ -279,7 +279,7 @@ export function CreateLevelModalV2({
                       htmlFor={filiere}
                       style={{
                         color: '#2A3740',
-                        fontSize: '14px',
+                        fontSize: 'var(--text-sm)',
                         fontWeight: 400,
                         cursor: 'pointer'
                       }}
@@ -292,7 +292,7 @@ export function CreateLevelModalV2({
               <p
                 style={{
                   color: '#78756F',
-                  fontSize: '12px',
+                  fontSize: 'var(--text-xs)',
                   fontWeight: 400,
                   marginTop: '8px'
                 }}
@@ -308,7 +308,7 @@ export function CreateLevelModalV2({
               htmlFor="description"
               style={{
                 color: '#2A3740',
-                fontSize: '13px',
+                fontSize: 'var(--text-sm)',
                 fontWeight: 500,
                 display: 'block'
               }}
@@ -335,7 +335,7 @@ export function CreateLevelModalV2({
             <p
               style={{
                 color: '#78756F',
-                fontSize: '12px',
+                fontSize: 'var(--text-xs)',
                 fontWeight: 400,
                 textAlign: 'right'
               }}

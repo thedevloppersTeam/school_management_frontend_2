@@ -620,10 +620,10 @@ export default function AcademicYearConfigPage() {
             Années Scolaires
           </Link>
 
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">
+          <h1 className="heading-1 text-foreground">
             Configuration — {year.name}
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 max-w-prose text-sm text-muted-foreground">
             Configurez les étapes, classes et matières de l&apos;année
           </p>
         </div>

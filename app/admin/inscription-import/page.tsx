@@ -687,16 +687,16 @@ export default function InscriptionImportPage() {
           <ArrowLeftIcon className="h-4 w-4" />
           Élèves
         </Link>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Importer des élèves (CSV)</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <h1 className="heading-1 text-foreground">Importer des élèves (CSV)</h1>
+        <p className="mt-1 max-w-prose text-sm text-muted-foreground">
           Importez un fichier CSV, associez chaque colonne à un champ, puis lancez l&apos;inscription en masse.
           {year ? <> Année active : <span className="font-medium text-foreground">{year.yearString}</span>.</> : null}
         </p>
       </div>
 
       {!year && !loadingMeta && (
-        <Card className="border-amber-300 bg-amber-50">
-          <CardContent className="py-4 text-sm text-amber-800">
+        <Card className="border-warning-border bg-warning-soft">
+          <CardContent className="py-4 text-sm text-warning-ink">
             Aucune année scolaire active. Activez une année avant d&apos;importer des élèves.
           </CardContent>
         </Card>
@@ -714,9 +714,9 @@ export default function InscriptionImportPage() {
           <CardContent className="space-y-4">
             <label
               htmlFor="csv-input"
-              className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center transition-colors hover:border-[#2C4A6E] hover:bg-slate-100"
+              className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border bg-muted px-6 py-10 text-center transition-colors hover:border-[#2C4A6E] hover:bg-muted"
             >
-              <UploadCloudIcon className="h-8 w-8 text-slate-400" />
+              <UploadCloudIcon className="h-8 w-8 text-muted-foreground" />
               <span className="text-sm font-medium text-foreground">Cliquez pour choisir un fichier .csv</span>
               <span className="text-xs text-muted-foreground">ou glissez-le ici</span>
             </label>
@@ -743,7 +743,7 @@ export default function InscriptionImportPage() {
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2 min-w-0">
-                <FileSpreadsheetIcon className="h-5 w-5 flex-shrink-0 text-emerald-600" />
+                <FileSpreadsheetIcon className="h-5 w-5 flex-shrink-0 text-success-ink" />
                 <div className="min-w-0">
                   <CardTitle className="truncate text-base">{fileName}</CardTitle>
                   <CardDescription>
@@ -787,12 +787,12 @@ export default function InscriptionImportPage() {
                   const needsDefault = t.required && unmapped
                   const missing = needsDefault && !(defaults[t.id] ?? "").trim()
                   return (
-                    <TableRow key={t.id} className={cn(missing && "bg-rose-50/60")}>
+                    <TableRow key={t.id} className={cn(missing && "bg-error-soft/60")}>
                       <TableCell className="align-middle">
                         <span className="text-sm font-medium text-foreground">{t.label}</span>
                         {t.required && <span className="ml-1 text-destructive">*</span>}
                         {t.id.startsWith("cf:") && (
-                          <Badge variant="outline" className="ml-2 text-[10px]">perso.</Badge>
+                          <Badge variant="outline" className="ml-2 text-3xs">perso.</Badge>
                         )}
                       </TableCell>
                       <TableCell className="align-middle">
@@ -827,8 +827,8 @@ export default function InscriptionImportPage() {
 
       {/* Required-fields prompt */}
       {fileName && missingRequired.length > 0 && (
-        <Card className="border-amber-300 bg-amber-50">
-          <CardContent className="flex items-start gap-2 py-4 text-sm text-amber-800">
+        <Card className="border-warning-border bg-warning-soft">
+          <CardContent className="flex items-start gap-2 py-4 text-sm text-warning-ink">
             <AlertTriangleIcon className="mt-0.5 h-4 w-4 flex-shrink-0" />
             <div>
               <p className="font-medium">Champs requis à renseigner :</p>
@@ -848,16 +848,16 @@ export default function InscriptionImportPage() {
               <div className="space-y-2">
                 <CardTitle className="text-base">3 · Aperçu</CardTitle>
                 <div className="flex flex-wrap gap-2">
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-success-border bg-success-soft px-2.5 py-1 text-xs font-medium text-success-ink">
                     {newRows.length} nouveau(x) — données complètes
                   </span>
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-700">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-info-border bg-info-soft px-2.5 py-1 text-xs font-medium text-info-ink">
                     {existingRows.length} déjà inscrit(s)
                     {existingRows.some((r) => r.existingChanged) && (
                       <> · {existingRows.filter((r) => r.existingChanged).length} à mettre à jour</>
                     )}
                   </span>
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-error-border bg-error-soft px-2.5 py-1 text-xs font-medium text-error-ink">
                     {invalidRows.length} incomplet(s) — données manquantes
                   </span>
                 </div>
@@ -898,13 +898,13 @@ export default function InscriptionImportPage() {
                     <TableCell className="text-sm">{p.className}</TableCell>
                     <TableCell>
                       {p.error ? (
-                        <span className="text-xs text-rose-700">{p.error}</span>
+                        <span className="text-xs text-error-ink">{p.error}</span>
                       ) : p.match === "existing" ? (
-                        <Badge variant="outline" className="border-sky-200 bg-sky-50 text-[10px] text-sky-700">
+                        <Badge variant="outline" className="border-info-border bg-info-soft text-3xs text-info-ink">
                           {p.existingChanged ? "Déjà inscrit · à mettre à jour" : "Déjà inscrit"}
                         </Badge>
                       ) : (
-                        <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-[10px] text-emerald-700">Nouveau</Badge>
+                        <Badge variant="outline" className="border-success-border bg-success-soft text-3xs text-success-ink">Nouveau</Badge>
                       )}
                     </TableCell>
                   </TableRow>
@@ -922,12 +922,12 @@ export default function InscriptionImportPage() {
 
       {/* ── Incomplets : afficher + télécharger ── */}
       {fileName && invalidRows.length > 0 && (
-        <Card className="border-rose-200">
+        <Card className="border-error-border">
           <CardHeader className="pb-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <AlertTriangleIcon className="h-4 w-4 text-rose-600" />
+                  <AlertTriangleIcon className="h-4 w-4 text-error-ink" />
                   Lignes incomplètes ({invalidRows.length})
                 </CardTitle>
                 <CardDescription>
@@ -960,7 +960,7 @@ export default function InscriptionImportPage() {
                     <TableCell className="font-mono text-xs">{p.nisu || "—"}</TableCell>
                     <TableCell className="text-sm">{p.name}</TableCell>
                     <TableCell className="text-sm">{p.className}</TableCell>
-                    <TableCell className="text-xs text-rose-700">{p.error}</TableCell>
+                    <TableCell className="text-xs text-error-ink">{p.error}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -974,7 +974,7 @@ export default function InscriptionImportPage() {
         <Card className="border-2 border-[#2C4A6E]/20">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
-              <CheckCircle2Icon className="h-5 w-5 text-emerald-600" />
+              <CheckCircle2Icon className="h-5 w-5 text-success-ink" />
               Résultat de l&apos;import
             </CardTitle>
             <CardDescription>
@@ -1000,7 +1000,7 @@ export default function InscriptionImportPage() {
                       <TableRow key={r.csvLine}>
                         <TableCell className="text-xs text-muted-foreground">{r.csvLine}</TableCell>
                         <TableCell className="font-mono text-xs">{r.nisu}</TableCell>
-                        <TableCell className="text-xs text-rose-700">{r.message}</TableCell>
+                        <TableCell className="text-xs text-error-ink">{r.message}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
