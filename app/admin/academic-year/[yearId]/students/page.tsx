@@ -56,6 +56,7 @@ import {
   UserRoundXIcon,
   UserRoundCheckIcon,
   GraduationCapIcon,
+  WrenchIcon,
 } from "lucide-react"
 import { ArchivedYearBanner } from "@/components/school/archived-year-banner"
 import { StudentEnrollForm } from "@/components/school/students/student-enroll-form"
@@ -64,6 +65,7 @@ import { TransferEnrollmentModal } from "@/components/school/transfer-enrollment
 import { BulkTransferModal } from "@/components/school/bulk-transfer-modal"
 import { StepExemptionModal } from "@/components/school/step-exemption-modal"
 import { StudentTrackModal } from "@/components/school/student-track-modal"
+import { CorrectAssignmentModal } from "@/components/school/correct-assignment-modal"
 import { Checkbox } from "@/components/ui/checkbox"
 import { StatCard } from "@/components/school/stat-card"
 import { fetchClassSessions, type AcademicYear, type ClassSession } from "@/lib/api/dashboard"
@@ -171,6 +173,9 @@ export default function StudentsManagementPage() {
 
   // Filière (classes terminales)
   const [trackStudent, setTrackStudent] = useState<StudentRow | null>(null)
+
+  // Correction d affectation (erreur de saisie a l inscription, pas un transfert)
+  const [correctingStudent, setCorrectingStudent] = useState<StudentRow | null>(null)
 
   // Transfert groupé
   const [selectedEnrollmentIds, setSelectedEnrollmentIds] = useState<Set<string>>(new Set())
@@ -844,6 +849,10 @@ export default function StudentsManagementPage() {
                                     <ArrowRightLeftIcon className="mr-2 h-4 w-4" />
                                     Transférer
                                   </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => setCorrectingStudent(student)}>
+                                    <WrenchIcon className="mr-2 h-4 w-4" />
+                                    Corriger l&apos;affectation
+                                  </DropdownMenuItem>
                                   {student.isTerminal && (
                                     <DropdownMenuItem onClick={() => setTrackStudent(student)}>
                                       <GraduationCapIcon className="mr-2 h-4 w-4" />
@@ -1051,6 +1060,29 @@ export default function StudentsManagementPage() {
           className={trackStudent.className}
           currentTrackId={trackStudent.trackId}
           onSaved={loadStudents}
+        />
+      )}
+
+      {/* Modal correction d'affectation */}
+      {correctingStudent && (
+        <CorrectAssignmentModal
+          open={!!correctingStudent}
+          onOpenChange={open => !open && setCorrectingStudent(null)}
+          enrollmentId={correctingStudent.enrollmentId}
+          studentName={`${correctingStudent.firstname} ${correctingStudent.lastname}`}
+          currentClassSessionId={correctingStudent.classSessionId}
+          currentClassName={correctingStudent.className}
+          currentTrackId={correctingStudent.trackId}
+          currentClassTypeId={sessions.find(s => s.id === correctingStudent.classSessionId)?.class.classType.id}
+          sessions={sessions.map(s => {
+            const trackSuffix = s.class.track ? ` — ${s.class.track.code}` : ''
+            return {
+              id: s.id,
+              label: `${s.class.classType.name} ${s.class.letter}${trackSuffix}`,
+              classTypeId: s.class.classType.id,
+            }
+          })}
+          onCorrected={loadStudents}
         />
       )}
 
