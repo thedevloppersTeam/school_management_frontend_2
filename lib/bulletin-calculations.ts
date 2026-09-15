@@ -1,4 +1,14 @@
+import Decimal from "decimal.js"
 import type { RubriqueEntry } from "@/components/BulletinScolaire"
+import {
+  computeRubrique,
+  computeStep,
+  computeStepAverage,
+  computeClassAverage,
+  type RubriqueCode,
+  type RubriqueResult,
+  type SubjectInput,
+} from "@/lib/bulletin/compute"
 
 export type RubriqueTotals = {
   note: number | null
@@ -20,26 +30,64 @@ export type BulletinClassAverages = {
   moyenneClasseEtape: number | null
 }
 
+/**
+ * Σnotes et Σbarèmes d'une rubrique, tels qu'IMPRIMÉS sur la ligne de total du
+ * bulletin (`bulletin-printable.tsx`, ligne de total de chaque rubrique).
+ *
+ * Règle MOA du 2026-09-09 : une note MANQUANTE compte 0 au numérateur et
+ * CONSERVE son barème au dénominateur. Le filtre `note === null` qui excluait
+ * l'entrée des deux sommes a donc sauté — c'est lui qui faisait imprimer
+ * 20 / 50 là où la moyenne valait 20/80.
+ *
+ * Une dispense n'apparaît pas ici : elle n'a pas de ligne du tout, elle est
+ * retirée en amont par `buildSubjectEntries`.
+ *
+ * Signature inchangée : cette fonction est appelée par un gabarit.
+ */
 export function calculateRubriqueTotals(entries: RubriqueEntry[]): RubriqueTotals {
   let note = 0
   let coeff = 0
 
   for (const entry of entries) {
+    // En-tête de matière du gabarit MENFP : ni note, ni barème.
     if (entry.isParent) continue
-    if (entry.note === null || entry.note === undefined) continue
+    // Barème nul ou négatif : erreur de paramétrage, pas une note manquante.
     if (entry.coeff === null || entry.coeff === undefined || entry.coeff <= 0) continue
 
-    note += entry.note
     coeff += entry.coeff
+    // Note manquante : le barème est déjà compté, le numérateur reçoit 0.
+    if (entry.note === null || entry.note === undefined) continue
+    note += entry.note
   }
 
   return coeff > 0 ? { note, coeff } : { note: null, coeff: null }
 }
 
-export function calculateRubriqueAverage(entries: RubriqueEntry[]): number | null {
-  const totals = calculateRubriqueTotals(entries)
-  if (totals.note === null || totals.coeff === null) return null
-  return (totals.note / totals.coeff) * 10
+/**
+ * Moyenne d'une rubrique, déléguée au module de calcul.
+ *
+ * Part des SubjectInput et NON des RubriqueEntry : une note manquante doit
+ * garder son barème au dénominateur, information que RubriqueEntry ne porte
+ * pas (son `coeff` vaut `undefined` dès que la note manque).
+ */
+export function calculateRubriqueAverage(
+  code: RubriqueCode,
+  subjects: SubjectInput[],
+): number | null {
+  const result = computeRubrique(code, subjects)
+  return result.average === null ? null : result.average.toNumber()
+}
+
+/** Enveloppe minimale : computeStepAverage ne lit que `code` et `average`. */
+function asRubriqueResult(code: RubriqueCode, moy: number | null): RubriqueResult {
+  return {
+    code,
+    numerator: new Decimal(0),
+    denominator: new Decimal(0),
+    average: moy === null ? null : new Decimal(moy),
+    subjects: [],
+    warnings: [],
+  }
 }
 
 export function calculateStepAverage(
@@ -47,22 +95,28 @@ export function calculateStepAverage(
   moyR2: number | null,
   moyR3: number | null,
 ): number | null {
-  // Poids R1/R2/R3 = 70/25/5. On RENORMALISE sur les rubriques réellement
-  // présentes : sinon une rubrique vide (fréquent sur un bulletin d'examen
-  // officiel où les matières de filière ne couvrent pas les 3 rubriques)
-  // annulait toute la moyenne. Si les 3 sont présentes, le total des poids
-  // vaut 1 → résultat identique à avant.
-  const parts = [
-    { moy: moyR1, weight: 0.7 },
-    { moy: moyR2, weight: 0.25 },
-    { moy: moyR3, weight: 0.05 },
-  ].filter((p): p is { moy: number; weight: number } => p.moy !== null)
+  // AUCUNE RENORMALISATION. Une rubrique sans moyenne compte ZÉRO.
+  //
+  // L'ancienne version renormalisait les poids sur les rubriques présentes.
+  // Elle le justifiait par un cas « fréquent sur un bulletin d'examen officiel
+  // où les matières de filière ne couvrent pas les 3 rubriques ». CE CAS
+  // N'EXISTE PAS : sur le dump de production, les quatre filières de NS4
+  // (LLA, SES, SMP, SVT) ont TOUTES des matières dans R1 (3), R2 (5) et R3 (2).
+  //
+  // La renormalisation traitait donc un symptôme dont la cause était ailleurs :
+  // une rubrique paramétrée mais NON NOTÉE, qui doit compter zéro selon la
+  // règle arbitrée par la MOA. Elle faisait lire 7,63 à un élève dont la règle
+  // donne 5,34 — au-dessus du seuil de 7,00 imprimé en pied de page.
+  //
+  // Ce commentaire a survécu six mois à un calcul faux : ne pas le réécrire
+  // sans rouvrir l'arbitrage.
+  if (moyR1 === null && moyR2 === null && moyR3 === null) return null
 
-  if (parts.length === 0) return null
-
-  const totalWeight = parts.reduce((sum, p) => sum + p.weight, 0)
-  const weighted = parts.reduce((sum, p) => sum + p.moy * p.weight, 0)
-  return weighted / totalWeight
+  return computeStepAverage(
+    asRubriqueResult('R1', moyR1),
+    asRubriqueResult('R2', moyR2),
+    asRubriqueResult('R3', moyR3),
+  ).toNumber()
 }
 
 export function getBulletinAppreciation(average: number | null): string {
@@ -77,15 +131,24 @@ export function getBulletinAppreciation(average: number | null): string {
   return "E"
 }
 
-export function calculateBulletinAverages(params: {
-  rubrique1: RubriqueEntry[]
-  rubrique2: RubriqueEntry[]
-  rubrique3: RubriqueEntry[]
-}): BulletinAverages {
-  const moyR1 = calculateRubriqueAverage(params.rubrique1)
-  const moyR2 = calculateRubriqueAverage(params.rubrique2)
-  const moyR3 = calculateRubriqueAverage(params.rubrique3)
-  const moyenneEtape = calculateStepAverage(moyR1, moyR2, moyR3)
+/**
+ * Moyennes du bulletin, à partir des SubjectInput — plus des RubriqueEntry.
+ * Les RubriqueEntry restent produits pour le gabarit ; ils ne servent plus au
+ * calcul.
+ */
+export function calculateBulletinAverages(subjects: SubjectInput[]): BulletinAverages {
+  const step = computeStep(subjects)
+
+  const moyR1 = step.r1.average === null ? null : step.r1.average.toNumber()
+  const moyR2 = step.r2.average === null ? null : step.r2.average.toNumber()
+  const moyR3 = step.r3.average === null ? null : step.r3.average.toNumber()
+
+  // Rien d'exploitable dans les trois rubriques : pas de moyenne, un trait.
+  // Distinct d'une moyenne de 0, qui est un vrai résultat.
+  const moyenneEtape =
+    moyR1 === null && moyR2 === null && moyR3 === null
+      ? null
+      : step.average.toNumber()
 
   return {
     moyR1,
@@ -96,18 +159,27 @@ export function calculateBulletinAverages(params: {
   }
 }
 
-function averageNullable(values: Array<number | null | undefined>): number | null {
-  const valid = values.filter((value): value is number => value !== null && value !== undefined)
-  if (valid.length === 0) return null
-  return valid.reduce((sum, value) => sum + value, 0) / valid.length
+/**
+ * Moyenne de classe sur une colonne. Délègue à computeClassAverage : un élève
+ * sans moyenne sur la rubrique (dénominateur nul, donc entièrement dispensé)
+ * est EXCLU du calcul ; un élève dont des notes manquent a une moyenne réelle,
+ * éventuellement 0, et reste compté. Sur 30 élèves dont 3 dispensés, la
+ * moyenne porte sur 27.
+ */
+function classAverageOf(values: Array<number | null | undefined>): number | null {
+  const entries = values.map((value) => ({
+    average: value === null || value === undefined ? null : new Decimal(value),
+  }))
+  const result = computeClassAverage(entries)
+  return result === null ? null : result.toNumber()
 }
 
 export function calculateClassAverages(averages: BulletinAverages[]): BulletinClassAverages {
   return {
-    moyClasseR1: averageNullable(averages.map((avg) => avg.moyR1)),
-    moyClasseR2: averageNullable(averages.map((avg) => avg.moyR2)),
-    moyClasseR3: averageNullable(averages.map((avg) => avg.moyR3)),
-    moyenneClasseEtape: averageNullable(averages.map((avg) => avg.moyenneEtape)),
+    moyClasseR1: classAverageOf(averages.map((avg) => avg.moyR1)),
+    moyClasseR2: classAverageOf(averages.map((avg) => avg.moyR2)),
+    moyClasseR3: classAverageOf(averages.map((avg) => avg.moyR3)),
+    moyenneClasseEtape: classAverageOf(averages.map((avg) => avg.moyenneEtape)),
   }
 }
 

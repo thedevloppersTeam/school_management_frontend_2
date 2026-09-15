@@ -22,7 +22,6 @@
 
 # misc
 .DS_Store
-*.pem
 
 # debug
 npm-debug.log*
@@ -30,51 +29,48 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files
 .env*
+!.env.example
 
 # vercel
 .vercel
 
-*.md
-
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-cookies.txt
-.gitignore
-.gitignore
 
-.claude/
-tests/
-playwright.config.ts
+# Sorties de test
 playwright-report/
 test-results/
+tests/reports/
+
+# Local a la machine
+.claude/settings.local.json
+.impeccable/config.local.json
 postman/
 
-# Security — never commit credentials
-login.json
-*.credentials.json
-*.pem
-*.key
-*yml
-
-*.sh
-README.md
-errors.ts
-audit-report.json
-# --- Sorties locales et cache (ajout du 08/09/2026) ---
-/.pnpm-store/
-/artifacts/
-/outputs/
-/tmp/
-
-_dumps/
-*.sql.gz
-
-# Exports de session / secrets
+# Securite — jamais dans un depot public
 cookies.txt
 *.cookies
 cookiejar*
 *.pem
 *.key
+login.json
+*.credentials.json
+ADMIN_CREDENTIALS.md
+_dumps/
+*.sql.gz
+
+# Sorties locales et cache
+.pnpm-store/
+artifacts/
+outputs/
+tmp/
+payload.json
+audit-report.json
+ui-audit-report.json
+
+# Reliquats d edition
+*.backup
+*.bak

@@ -20,6 +20,8 @@ import {
   normalizeRubriqueLabel,
   type BulletinClassAverages,
 } from "@/lib/bulletin-calculations"
+import { toSubjectInputs, WHOLE_SUBJECT } from "@/lib/bulletin/from-api"
+import type { SubjectInput } from "@/lib/bulletin/compute"
 
 // ── Types internes ────────────────────────────────────────────────────────────
 
@@ -219,41 +221,97 @@ function buildGradeIndex(allGrades: ApiGrade[]): GradeIndex {
 
 // ── Construction des rubriques ────────────────────────────────────────────────
 
-function decimalToNumber(raw: unknown, fallback = 0): number {
-  if (raw == null) return fallback
-  if (typeof raw === 'object' && 'd' in raw) {
-    const digits = (raw as { d?: unknown }).d
-    if (Array.isArray(digits) && digits.length > 0) return Number(digits[0])
+/**
+ * Rubriques déclarées par les matières de la salle : id -> code.
+ * Évite un appel à /api/subject-rubrics, l'information est déjà dans la
+ * réponse de fetchClassSubjects.
+ */
+function rubricCodeIndex(classSubjects: ApiClassSubject[]): Record<string, string> {
+  const map: Record<string, string> = {}
+  for (const cs of classSubjects) {
+    const rubric = cs.subject.rubric
+    if (rubric?.id && rubric.code) map[rubric.id] = rubric.code
   }
-  const n = Number(raw)
-  return Number.isFinite(n) ? n : fallback
+  return map
+}
+
+/**
+ * Passe des clés de dispense LOCALES (`classSubjectId::sectionId`, l'élève
+ * étant porté par la Map) aux clés de lib/bulletin/from-api, qui sont à trois
+ * parties. Les deux schémas partagent la sentinelle WHOLE_SUBJECT, importée
+ * plus haut : le préfixage est donc exact, pas une coïncidence de format.
+ */
+function toComputeExclusions(
+  enrollmentId: string,
+  localKeys: Set<string> | undefined,
+): Set<string> {
+  const set = new Set<string>()
+  if (!localKeys) return set
+  for (const key of localKeys) set.add(`${enrollmentId}::${key}`)
+  return set
+}
+
+/**
+ * Entrées du MODULE DE CALCUL. Les RubriqueEntry construits par
+ * buildSubjectEntries continuent d'alimenter le gabarit à l'identique ; ces
+ * SubjectInput alimentent le calcul, et eux seuls.
+ */
+function buildSubjectInputs(
+  classSubjects: ApiClassSubject[],
+  grades: ApiGrade[],
+  enrollmentId: string,
+  localExclusionKeys: Set<string> | undefined,
+): SubjectInput[] {
+  return toSubjectInputs({
+    classSubjects,
+    grades,
+    rubricCodeById: rubricCodeIndex(classSubjects),
+    enrollmentId,
+    exclusions: toComputeExclusions(enrollmentId, localExclusionKeys),
+  }).subjects
 }
 
 function buildSubjectEntries(
   cs: ApiClassSubject,
   bucket: GradeBucket | undefined,
-  excludedSectionIds?: Set<string>,
+  excludedKeys?: Set<string>,
 ): RubriqueEntry[] {
   const subject = cs.subject
   // Note max effective : l'override de l'affectation (ex: /80 en SVT) prime sur
   // la note max de la matière (ex: /100). Concerne les matières SANS sections
   // (pour les matières à sous-matières, ce sont les notes max des sections qui
   // pilotent le total).
-  const subjectMax =
-    cs.maxScoreOverride != null
-      ? decimalToNumber(cs.maxScoreOverride, 0)
-      : decimalToNumber(subject.maxScore, 0)
+  // fetchClassSubjects a déjà normalisé ces deux valeurs en nombre : aucune
+  // seconde conversion n'est nécessaire ici.
+  const subjectMax = cs.maxScoreOverride != null ? cs.maxScoreOverride : subject.maxScore
 
-  // Sections dispensées pour cette étape : elles sont totalement retirées
+  // Dispense de la matière entière (sectionId null en base) : la matière sort
+  // du numérateur ET du dénominateur.
+  if (excludedKeys?.has(exclusionKey(cs.id, null))) return []
+
+  // Sections dispensées pour cette étape : la clé porte désormais
+  // classSubjectId, de sorte qu'une dispense sur le tronc commun n'affecte pas
+  // l'affectation de filière, et inversement. Elles sont totalement retirées
   // (ni au numérateur, ni au dénominateur) → elles ne contribuent pas à la
   // moyenne de CETTE étape uniquement.
   const activeSections = subject.sections.filter(
-    (sec) => !excludedSectionIds?.has(sec.id),
+    (sec) => !excludedKeys?.has(exclusionKey(cs.id, sec.id)),
   )
 
+  // TOUTES les sous-matières dispensées : la matière est entièrement dispensée.
+  // Elle sort du bulletin comme une dispense de matière — son barème ne doit
+  // apparaître NULLE PART, ni en ligne, ni dans le total imprimé. Sans cette
+  // garde, le `coeff` désormais inconditionnel la ferait réapparaître au
+  // dénominateur.
+  if (subject.sections.length > 0 && activeSections.length === 0) return []
+
+  // Le barème est TOUJOURS renseigné, note ou pas : règle MOA du 2026-09-09,
+  // « note manquante → trait sur la note, BARÈME CONSERVÉ ». C'est ce coeff
+  // qui fait que la ligne de total imprimée correspond à la moyenne imprimée.
+  // Seule une dispense n'a pas de coeff — et elle n'a pas de ligne du tout.
   if (!subject.hasSections || activeSections.length === 0) {
     const note = avg(bucket?.direct ?? [])
-    return [{ name: subject.name, note, coeff: note !== null ? subjectMax : undefined, isParent: false }]
+    return [{ name: subject.name, note, coeff: subjectMax, isParent: false }]
   }
 
   const hasAnySectionGrade = activeSections.some(
@@ -261,18 +319,18 @@ function buildSubjectEntries(
   )
   if (!hasAnySectionGrade) {
     const note = avg(bucket?.direct ?? [])
-    return [{ name: subject.name, note, coeff: note !== null ? subjectMax : undefined, isParent: false }]
+    return [{ name: subject.name, note, coeff: subjectMax, isParent: false }]
   }
 
   const entries: RubriqueEntry[] = [{ name: subject.name, isParent: true }]
   for (const sec of activeSections) {
     const scores   = bucket?.sections.get(sec.id) ?? []
-    const maxScore = decimalToNumber(sec.maxScore, 0)
+    const maxScore = sec.maxScore
     const note     = avg(scores)
     entries.push({
       name:     sec.name,
       note,
-      coeff:    note !== null ? maxScore : undefined,
+      coeff:    maxScore,
       isParent: false,
     })
   }
@@ -288,7 +346,7 @@ function pushToRubrique(set: RubriqueSet, code: string, entries: RubriqueEntry[]
 function buildRubriques(
   classSubjects: ApiClassSubject[],
   gradeIndex: GradeIndex,
-  excludedSectionIds?: Set<string>,
+  excludedKeys?: Set<string>,
 ): RubriqueSet {
   const set: RubriqueSet = {
     r1: [], r1Name: normalizeRubriqueLabel(1),
@@ -298,19 +356,44 @@ function buildRubriques(
   for (const cs of classSubjects) {
     const { rubric } = cs.subject
     const code = rubric?.code ?? ''
-    const entries = buildSubjectEntries(cs, gradeIndex.get(cs.id), excludedSectionIds)
+    const entries = buildSubjectEntries(cs, gradeIndex.get(cs.id), excludedKeys)
     pushToRubrique(set, code, entries)
   }
   return set
 }
 
-// ── Dispenses (exclusions de sections) par étape ────────────────────────────
-// Une dispense est scoped par (élève + matière + section + étape). Pour le
-// calcul du bulletin on charge, en un seul appel, toutes les dispenses d'une
-// session pour UNE étape, puis on retire les sections dispensées de la moyenne
-// de cette étape uniquement — jamais des autres étapes de l'année.
-type SessionStepExclusions = Map<string, Set<string>> // enrollmentId -> Set<sectionId>
+// ── Dispenses (exclusions) par étape ────────────────────────────────────────
+// Une dispense est scopée par (élève + matière + section + étape). L'étape est
+// portée par la requête ; les trois autres parties par la clé ci-dessous.
+//
+// La clé DOIT inclure classSubjectId : une même matière peut être affectée deux
+// fois à une session — tronc commun (trackId null) et examen de filière — via
+// @@unique([classSessionId, subjectId, trackId]). Les deux affectations
+// partagent le même subject, donc les mêmes sectionId. Une clé réduite à
+// (enrollmentId, sectionId) dispensait l'élève sur les DEUX affectations.
+//
+// sectionId null = dispense de la matière entière, symétrique de
+// grades.section_id IS NULL qui signifie « note globale » (classes d'examen
+// 9e et NS4, qui notent directement la matière sans sous-matières).
+// WHOLE_SUBJECT est importé de lib/bulletin/from-api : une seule sentinelle
+// pour les deux schémas de clé, celui d'ici et celui du module de calcul.
+
+function exclusionKey(classSubjectId: string, sectionId: string | null): string {
+  return `${classSubjectId}::${sectionId ?? WHOLE_SUBJECT}`
+}
+
+type SessionStepExclusions = Map<string, Set<string>> // enrollmentId -> Set<clé>
+
 const exclusionsCache = new Map<string, Promise<SessionStepExclusions>>()
+
+/** À appeler après l'enregistrement ou la suppression d'une dispense. */
+export function invalidateExclusionsCache(classSessionId?: string, stepId?: string): void {
+  if (!classSessionId) { exclusionsCache.clear(); return }
+  if (stepId) { exclusionsCache.delete(`${classSessionId}:${stepId}`); return }
+  for (const k of exclusionsCache.keys()) {
+    if (k.startsWith(`${classSessionId}:`)) exclusionsCache.delete(k)
+  }
+}
 
 function fetchSessionStepExclusions(
   classSessionId: string,
@@ -321,14 +404,35 @@ function fetchSessionStepExclusions(
   if (cached) return cached
 
   const promise = (async () => {
-    const rows = await safeFetch<Array<{ enrollmentId: string; sectionId: string }>>(
+    // Le backend renvoie les QUATRE parties de la clé. Le type les déclare
+    // toutes : en n'en déclarant que deux, classSubjectId arrivait et était
+    // silencieusement jeté.
+    const rows = await safeFetch<
+      Array<{
+        enrollmentId: string
+        classSubjectId: string
+        sectionId: string | null
+        stepId?: string
+      }>
+    >(
       `/api/enrollments/excluded-sections?classSessionId=${classSessionId}&stepId=${stepId}`,
       [],
     )
     const map: SessionStepExclusions = new Map()
     for (const row of rows) {
+      // Une dispense sans portee ne peut pas etre appliquee : sans
+      // classSubjectId on ne sait pas SUR QUELLE affectation elle porte.
+      // Signale au lieu d'absorber en silence.
+      if (!row.classSubjectId) {
+        console.warn(
+          `[dispenses] ligne ignoree : classSubjectId absent (eleve ${row.enrollmentId}, ` +
+          `section ${row.sectionId}). Dispense sans portee dans ` +
+          `enrollment_section_exclusions.`,
+        )
+        continue
+      }
       if (!map.has(row.enrollmentId)) map.set(row.enrollmentId, new Set())
-      map.get(row.enrollmentId)!.add(row.sectionId)
+      map.get(row.enrollmentId)!.add(exclusionKey(row.classSubjectId, row.sectionId))
     }
     return map
   })()
@@ -380,13 +484,9 @@ async function getClassAverages(params: {
           const grades = await apiFetch<ApiGrade[]>(
             `/api/grades/enrollment/${enrollment.id}?stepId=${params.stepId}`,
           )
-          const gradeIndex = buildGradeIndex(grades)
-          const rubriques = buildRubriques(subjects, gradeIndex, exclusions.get(enrollment.id))
-          return calculateBulletinAverages({
-            rubrique1: rubriques.r1,
-            rubrique2: rubriques.r2,
-            rubrique3: rubriques.r3,
-          })
+          return calculateBulletinAverages(
+            buildSubjectInputs(subjects, grades, enrollment.id, exclusions.get(enrollment.id)),
+          )
         } catch {
           return null
         }
@@ -439,13 +539,14 @@ async function calculateGeneralAverageForEnrollment(params: {
           ),
           fetchSessionStepExclusions(params.classSessionId, step.id),
         ])
-        const gradeIndex = buildGradeIndex(grades)
-        const rubriques = buildRubriques(params.classSubjects, gradeIndex, exclusions.get(params.enrollmentId))
-        return calculateBulletinAverages({
-          rubrique1: rubriques.r1,
-          rubrique2: rubriques.r2,
-          rubrique3: rubriques.r3,
-        }).moyenneEtape
+        return calculateBulletinAverages(
+          buildSubjectInputs(
+            params.classSubjects,
+            grades,
+            params.enrollmentId,
+            exclusions.get(params.enrollmentId),
+          ),
+        ).moyenneEtape
       } catch {
         return null
       }
@@ -508,8 +609,11 @@ function formatBehaviorValue(value: unknown): string | null {
 
   if (typeof value === 'object') {
     // Prisma Decimal peut parfois arriver sous forme d'objet selon le client.
-    const decimalValue = decimalToNumber(value, Number.NaN)
-    return Number.isFinite(decimalValue) ? String(decimalValue) : null
+    // Hors calcul : compteurs de comportement (absences, retards), entiers.
+    const decimalValue = parseDecimal(value)
+    return decimalValue !== null && Number.isFinite(decimalValue)
+      ? String(decimalValue)
+      : null
   }
 
   return null
@@ -673,11 +777,11 @@ export async function buildBulletinData(params: {
   const { r1, r1Name, r2, r2Name, r3, r3Name } = buildRubriques(scopedClassSubjects, gradeIndex, excludedForStep)
 
   // 5. Resultats calcules CPMSL, centralises hors JSX.
-  const averages = calculateBulletinAverages({
-    rubrique1: r1,
-    rubrique2: r2,
-    rubrique3: r3,
-  })
+  // Le gabarit reçoit r1/r2/r3 (RubriqueEntry) ; le calcul part des
+  // SubjectInput. Deux chemins, une seule règle.
+  const averages = calculateBulletinAverages(
+    buildSubjectInputs(scopedClassSubjects, allGrades, enrollmentId, excludedForStep),
+  )
   const moyenneEtape = formatBulletinNumber(averages.moyenneEtape)
   const appreciation = averages.appreciation
   const classAverages = await getClassAverages({

@@ -25,7 +25,19 @@ import {
   type AcademicYearStep,
   type ClassSession,
 } from "@/lib/api/dashboard"
-import { parseDecimal } from "@/lib/decimal"
+import {
+  fetchClassSubjects,
+  filterSubjectsByScope,
+  type ApiClassSubject,
+} from "@/lib/api/grades"
+import { computeStep, computeSubject, isPassing } from "@/lib/bulletin/compute"
+import {
+  toSubjectInputs,
+  buildExclusionSet,
+  rubricIndex,
+  type ApiExclusionLike,
+  type ApiGradeLike,
+} from "@/lib/bulletin/from-api"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -49,6 +61,12 @@ interface StudentRow {
   lastname:     string
   firstname:    string
   scores:       Record<string, number | null>
+  /**
+   * Etat par matiere. Sert a distinguer une dispense (neutre, exclue des
+   * moyennes de colonne) d'une note manquante (qui compte zero). Pas lu par le
+   * rendu.
+   */
+  subjectStates: Record<string, 'noted' | 'missing' | 'exempted'>
   finalAverage: number | null
   mention:      'Réussi' | 'Échec' | 'Incomplet'
   rang:         number
@@ -71,11 +89,18 @@ interface ReportData {
 type RawGrade = {
   classSubjectId: string
   sectionId: string | null
-  studentScore: number | { s: number; e: number; d: number[] }
+  /**
+   * Le backend serialise les Decimal en CHAINE sur cette route. La forme
+   * {s,e,d} n'apparait qu'apres un etalement d'objet Decimal ; elle est gardee
+   * ici pour etre detectee, pas pour etre lue.
+   */
+  studentScore: number | string | { s: number; e: number; d: number[] }
 }
 
 type RawEnrollment = {
   id: string
+  /** Filiere de l'eleve. Decide des matieres d'examen qui le concernent. */
+  trackId?: string | null
   student?: { nisu?: string; user?: { firstname?: string; lastname?: string } }
 }
 
@@ -96,101 +121,87 @@ function fmt(value: number | null | undefined, decimals = 2): string {
 }
 
 
-function calculateSectionScores(
-  sub: SubjectColumn,
-  grades: RawGrade[]
-): number | null {
-  let total = 0
-  for (const sec of sub.sections) {
-    const g = grades.find(
-      g => g.classSubjectId === sub.classSubjectId && g.sectionId === sec.id
+/**
+ * Les notes arrivent en chaine decimale sur cette route. Une forme {s,e,d} est
+ * un Decimal etale : on la SIGNALE au lieu de la tronquer silencieusement,
+ * comme le faisait l'ancien helper (15,75 -> 15 ; 0,25 -> 2500000).
+ */
+function toApiGrades(grades: RawGrade[]): ApiGradeLike[] {
+  const out: ApiGradeLike[] = []
+  for (const g of grades) {
+    const score = g.studentScore
+    if (typeof score === 'number' || typeof score === 'string') {
+      out.push({ classSubjectId: g.classSubjectId, sectionId: g.sectionId, studentScore: score })
+      continue
+    }
+    console.warn(
+      `[rapports] note ignoree : Decimal etale recu pour la matiere ${g.classSubjectId}. ` +
+      `Contrat de serialisation a corriger cote API.`,
     )
-    if (!g) return null
-    const score = parseDecimal(g.studentScore)
-    if (score === null) return null
-    total += score
   }
-  return total
-}
-
-// Extracts per-subject scores for one enrollment
-function buildScores(
-  subjects: SubjectColumn[],
-  grades: RawGrade[]
-): Record<string, number | null> {
-  const scores: Record<string, number | null> = {}
-
-  for (const sub of subjects) {
-    if (sub.sections.length === 0) {
-      const g = grades.find(
-        g => g.classSubjectId === sub.classSubjectId && g.sectionId === null
-      )
-      scores[sub.classSubjectId] = g ? parseDecimal(g.studentScore) : null
-    } else {
-      scores[sub.classSubjectId] = calculateSectionScores(sub, grades)
-    }
-  }
-
-  return scores
-}
-
-// Groups normalised scores (out of 10) by rubric
-function groupByRubric(
-  subjects: SubjectColumn[],
-  scores: Record<string, number | null>
-): Record<'R1' | 'R2' | 'R3', number[]> {
-  const byRubric: Record<'R1' | 'R2' | 'R3', number[]> = { R1: [], R2: [], R3: [] }
-
-  for (const sub of subjects) {
-    const val = scores[sub.classSubjectId]
-    if (val !== null) {
-      const normalized = sub.maxScore === 0 ? 0 : (val / sub.maxScore) * 10
-      byRubric[sub.rubricCode].push(normalized)
-    }
-  }
-
-  return byRubric
-}
-
-// Computes final weighted average: 70% R1 + 25% R2 + 5% R3
-function computeFinalAverage(
-  byRubric: Record<'R1' | 'R2' | 'R3', number[]>
-): number | null {
-  const avg = (arr: number[]): number | null =>
-    arr.length > 0 ? arr.reduce((s, v) => s + v, 0) / arr.length : null
-
-  const avgR1 = avg(byRubric.R1)
-  const avgR2 = avg(byRubric.R2)
-  const avgR3 = avg(byRubric.R3)
-
-  if (avgR1 === null && avgR2 === null && avgR3 === null) return null
-
-  return (avgR1 ?? 0) * 0.7 + (avgR2 ?? 0) * 0.25 + (avgR3 ?? 0) * 0.05
+  return out
 }
 
 // Module-level async function — nesting starts at 0, never exceeds level 2
 async function processEnrollment(
   enr: RawEnrollment,
-  subjects: SubjectColumn[],
-  selectedStep: string
+  classSubjects: ApiClassSubject[],
+  rubricCodeById: Record<string, string>,
+  exclusions: Set<string>,
+  selectedStep: string,
 ): Promise<StudentRow> {
   const grades = await apiFetch<RawGrade[]>(
     `/api/grades/enrollment/${enr.id}?stepId=${selectedStep}`
   )
 
-  const scores       = buildScores(subjects, grades)
-  const byRubric     = groupByRubric(subjects, scores)
-  const finalAverage = computeFinalAverage(byRubric)
+  // Chaque eleve est evalue sur SES matieres : tronc commun + celles de SA
+  // filiere. Alignement sur le bulletin — un eleve de SES ne doit pas voir les
+  // matieres d'examen de SMP peser dans sa moyenne.
+  const ownSubjects = filterSubjectsByScope(classSubjects, 'all', enr.trackId)
+
+  const { subjects } = toSubjectInputs({
+    classSubjects: ownSubjects,
+    grades:        toApiGrades(grades),
+    rubricCodeById,
+    enrollmentId:  enr.id,
+    exclusions,
+  })
+  const step = computeStep(subjects)
+
+  const scores:        Record<string, number | null> = {}
+  const subjectStates: StudentRow['subjectStates']   = {}
+  let anyDenominator = false
+  let anyMissing     = false
+
+  for (const rubrique of [step.r1, step.r2, step.r3]) {
+    if (!rubrique.denominator.isZero()) anyDenominator = true
+    for (const s of rubrique.subjects) {
+      subjectStates[s.classSubjectId] = s.state
+      // La colonne affiche la note dans SON bareme, pas ramenee sur 10.
+      scores[s.classSubjectId] = s.state === 'noted' ? s.numerator.toNumber() : null
+      if (s.state === 'missing') anyMissing = true
+    }
+  }
+
+  // MASQUAGE VOLONTAIRE, arbitre par la MOA (option A). Un eleve dont une
+  // matiere n'est pas saisie n'a PAS de moyenne sur ce document, meme si le
+  // module en calcule une : `step.average` porte bien une valeur ici. Ce null
+  // n'est donc PAS une limite technique, c'est une decision. Ne pas le
+  // « corriger » sans nouvel arbitrage.
+  // Une matiere DISPENSEE est neutre : elle ne rend pas l'eleve incomplet.
+  const incomplete   = anyMissing || !anyDenominator
+  const finalAverage = incomplete ? null : step.average.toNumber()
 
   const mention: StudentRow['mention'] =
-    finalAverage === null ? 'Incomplet' :
-    finalAverage >= 7     ? 'Réussi'   : 'Échec'
+    incomplete                ? 'Incomplet' :
+    isPassing(step.average)   ? 'Réussi'    : 'Échec'
 
   return {
     enrollmentId: enr.id,
     lastname:  enr.student?.user?.lastname  ?? '—',
     firstname: enr.student?.user?.firstname ?? '—',
     scores,
+    subjectStates,
     finalAverage,
     mention,
     rang: 0,
@@ -239,56 +250,60 @@ export function CPMSLRapportsSection({
     setReport(null)
 
     try {
-      const [enrollments, rawSubjects, rubrics] = await Promise.all([
+      const [enrollments, classSubjects, rubrics, exclusionRows] = await Promise.all([
         apiFetch<RawEnrollment[]>(
           `/api/enrollments?classSessionId=${selectedSession}&status=ACTIVE`
         ),
-        apiFetch<Array<{
-          id: string
-          subjectId: string
-          subject?: {
-            name?: string
-            code?: string
-            maxScore?: number
-            hasSections?: boolean
-            rubricId?: string
-            rubric?: { code?: string }
-            sections?: Array<{ id: string; name: string; maxScore?: number }>
-          }
-        }>>(`/api/class-subjects?classSessionId=${selectedSession}`),
+        // Normalise deja les Decimal, expose maxScoreOverride et les baremes
+        // des sous-matieres. Plus de type appauvri declare sur place.
+        fetchClassSubjects(selectedSession),
         apiFetch<Array<{ id: string; code: string }>>('/api/subject-rubrics'),
+        // MEME source que le bulletin : une seule verite sur les dispenses.
+        apiFetch<ApiExclusionLike[]>(
+          `/api/enrollments/excluded-sections?classSessionId=${selectedSession}&stepId=${selectedStep}`
+        ).catch(() => [] as ApiExclusionLike[]),
       ])
 
-      const rubricMap: Record<string, string> = {}
-      rubrics.forEach(r => { rubricMap[r.id] = r.code })
+      const rubricCodeById = rubricIndex(rubrics)
+      const exclusions     = buildExclusionSet(exclusionRows)
 
-      const subjects: SubjectColumn[] = rawSubjects
-        .map(cs => {
-          const rubricId   = cs.subject?.rubricId
-          const rubricCode = (rubricId ? rubricMap[rubricId] : null) as 'R1' | 'R2' | 'R3' | null
-          if (!rubricCode) return null
+      // Colonnes du tableau : l'UNION des matieres de la salle, sans note ni
+      // dispense. Chaque eleve n'est ensuite evalue que sur les siennes ; les
+      // colonnes qui ne le concernent pas restent vides.
+      const reference = toSubjectInputs({
+        classSubjects,
+        grades: [],
+        rubricCodeById,
+        enrollmentId: '',
+      })
 
-          const sections = (cs.subject?.sections ?? []).map(sec => ({
-            id: sec.id,
-            name: sec.name,
-            maxScore: Number(sec.maxScore) || 10,
-          }))
+      // DR-003 — une matiere sans rubrique ne disparait plus en silence.
+      if (reference.unmapped.length > 0) {
+        console.warn(
+          `[rapports] DR-003 — ${reference.unmapped.length} matiere(s) exclue(s) du calcul : ` +
+          reference.unmapped.map(u => `${u.name} (${u.reason})`).join(' ; '),
+        )
+      }
 
-          const maxScore = sections.length > 0
-            ? sections.reduce((sum, s) => sum + s.maxScore, 0)
-            : Number(cs.subject?.maxScore) || 10
-
-          return {
-            classSubjectId: cs.id,
-            subjectId: cs.subjectId,
-            name: cs.subject?.name ?? '—',
-            code: cs.subject?.code ?? '—',
-            rubricCode,
-            maxScore,
-            sections,
-          } satisfies SubjectColumn
-        })
-        .filter((s): s is SubjectColumn => s !== null)
+      const byId = new Map(classSubjects.map(cs => [cs.id, cs]))
+      const subjects: SubjectColumn[] = reference.subjects.flatMap(si => {
+        const cs = byId.get(si.classSubjectId)
+        if (!cs) return []
+        return [{
+          classSubjectId: si.classSubjectId,
+          subjectId:      cs.subjectId,
+          name:           si.name,
+          code:           cs.subject.code,
+          rubricCode:     si.rubrique,
+          // Bareme de reference de la colonne, calcule par le module :
+          // maxScoreOverride pris en compte, sous-matieres sommees, aucun
+          // bareme magique de repli.
+          maxScore:       computeSubject(si).denominator.toNumber(),
+          sections:       si.sections.map(s => ({
+            id: s.sectionId, name: s.name, maxScore: s.maxScore.toNumber(),
+          })),
+        } satisfies SubjectColumn]
+      })
 
       const rubricOrder: Record<string, number> = { R1: 0, R2: 1, R3: 2 }
       subjects.sort((a, b) =>
@@ -298,7 +313,9 @@ export function CPMSLRapportsSection({
 
       // Clean call site — processEnrollment is now a module-level function
       const rows: StudentRow[] = await Promise.all(
-        enrollments.map(enr => processEnrollment(enr, subjects, selectedStep))
+        enrollments.map(enr =>
+          processEnrollment(enr, classSubjects, rubricCodeById, exclusions, selectedStep)
+        )
       )
 
       rows.sort((a, b) => {
@@ -315,9 +332,15 @@ export function CPMSLRapportsSection({
 
       const subjectAvgs: Record<string, number | null> = {}
       subjects.forEach(sub => {
-        const vals = rows
-          .map(r => r.scores[sub.classSubjectId])
-          .filter((v): v is number => v !== null)
+        // Une dispense sort de la moyenne de colonne ; une note manquante y
+        // compte ZERO. C'est la difference entre 27/30 et 27/27. Un eleve que
+        // cette matiere ne concerne pas (autre filiere) n'a pas d'etat : il est
+        // exclu lui aussi.
+        const vals = rows.flatMap(r => {
+          const state = r.subjectStates[sub.classSubjectId]
+          if (state === undefined || state === 'exempted') return []
+          return [state === 'missing' ? 0 : (r.scores[sub.classSubjectId] ?? 0)]
+        })
         subjectAvgs[sub.classSubjectId] =
           vals.length > 0 ? vals.reduce((s, v) => s + v, 0) / vals.length : null
       })
