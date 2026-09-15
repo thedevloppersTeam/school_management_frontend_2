@@ -60,6 +60,7 @@ import {
   LockIcon,
   ArchiveIcon,
   UserPlusIcon,
+  HistoryIcon,
 } from "lucide-react";
 
 import { getMe, logout, type AuthUser } from "@/lib/data/auth-data";
@@ -140,6 +141,11 @@ const navItems: NavItem[] = [
         href: "/admin/archives",
         icon: ArchiveIcon,
       },
+      {
+        label: "Journal",
+        href: "/admin/journal",
+        icon: HistoryIcon,
+      },
     ],
   },
   {
@@ -175,6 +181,7 @@ const breadcrumbMap: Record<string, string> = {
   "/admin/academic-years": "Années Scolaires",
   "/admin/settings": "Établissement",
   "/admin/archives": "Bulletins archivés",
+  "/admin/journal": "Journal",
 };
 
 function getBreadcrumbLabel(pathname: string): string {
