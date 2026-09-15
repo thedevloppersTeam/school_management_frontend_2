@@ -1,0 +1,100 @@
+name: UI Audit
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'app/**'
+      - 'components/**'
+      - 'pages/**'
+      - 'src/**'
+      - 'tailwind.config.*'
+      - '**/*.css'
+      - '.claude/agents/ui-*.md'
+      - 'docs/ui/**'
+  workflow_dispatch:
+
+jobs:
+  ui-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # needed for git diff against main
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Verify UI audit bundle integrity
+        run: bash scripts/verify-ui-bundle.sh
+
+      - name: Run UI audit
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CI: 'true'
+        run: |
+          claude --print --permission-mode acceptEdits \
+            "Use the ui-orchestrator subagent to run /audit-ui --diff --ci. \
+             Output must include ui-audit-report.md and ui-audit-report.json at the repo root."
+
+      - name: Upload report artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-audit-report
+          path: |
+            ui-audit-report.md
+            ui-audit-report.json
+          retention-days: 30
+
+      - name: Comment on PR with summary
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            if (!fs.existsSync('ui-audit-report.json')) {
+              core.warning('ui-audit-report.json not found; skipping PR comment.');
+              return;
+            }
+            const report = JSON.parse(fs.readFileSync('ui-audit-report.json', 'utf8'));
+            const s = report.summary || {};
+            const body = [
+              '## 🎨 UI Audit Report',
+              '',
+              '| Severity | Count |',
+              '|---|---|',
+              `| 🔴 Blocker | ${s.blocker || 0} |`,
+              `| 🟠 Major | ${s.major || 0} |`,
+              `| 🟡 Minor | ${s.minor || 0} |`,
+              `| 🔵 Info | ${s.info || 0} |`,
+              '',
+              `**Total findings**: ${s.total || 0}`,
+              '',
+              'Full report in the **ui-audit-report** artifact above.'
+            ].join('\n');
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
+
+      - name: Fail if blockers exist
+        run: |
+          if [ -f ui-audit-report.json ]; then
+            BLOCKERS=$(node -e "console.log(JSON.parse(require('fs').readFileSync('ui-audit-report.json','utf8')).summary.blocker || 0)")
+            echo "Blocker count: $BLOCKERS"
+            if [ "$BLOCKERS" -gt 0 ]; then
+              echo "::error::UI audit found $BLOCKERS blocker(s). Fix before merge."
+              exit 1
+            fi
+          fi
