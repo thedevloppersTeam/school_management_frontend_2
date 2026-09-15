@@ -1111,7 +1111,7 @@ export function CPMSLYearConfigTabs({
                   periods.map((period, index) => (
                     <tr
                       key={period.id}
-                      className={`${index > 0 ? "border-t border-neutral-200" : ""} bg-white hover:bg-secondary-50`}
+                      className={`${index > 0 ? "border-t border-neutral-200" : ""} bg-white hover:bg-muted`}
                     >
                       <td className="px-4 py-3 text-neutral-900 text-sm font-semibold">
                         {period.name}
@@ -1157,7 +1157,7 @@ export function CPMSLYearConfigTabs({
                                 <button
                                   type="button"
                                   onClick={() => openMergeDialog(period)}
-                                  className={`${LINK_BTN_CLASS} text-violet-700 focus-visible:outline-violet-700`}
+                                  className={`${LINK_BTN_CLASS} text-primary focus-visible:outline-primary/30`}
                                 >
                                   Fusionner
                                 </button>
@@ -1226,7 +1226,7 @@ export function CPMSLYearConfigTabs({
                   return (
                     <React.Fragment key={`level-${level.id}`}>
                       <tr
-                        className={`${levelIndex > 0 ? "border-t border-neutral-200" : ""} bg-white hover:bg-secondary-50`}
+                        className={`${levelIndex > 0 ? "border-t border-neutral-200" : ""} bg-white hover:bg-muted`}
                       >
                         <td className="px-4 py-3">
                           {hasClassrooms && (
@@ -1514,7 +1514,7 @@ export function CPMSLYearConfigTabs({
                     return (
                       <React.Fragment key={parent.id}>
                         <tr
-                          className={`${parentIndex > 0 ? "border-t border-neutral-200" : ""} bg-white hover:bg-secondary-50`}
+                          className={`${parentIndex > 0 ? "border-t border-neutral-200" : ""} bg-white hover:bg-muted`}
                         >
                           <td className="px-4 py-3">
                             {hasChildren && (
@@ -1809,7 +1809,7 @@ export function CPMSLYearConfigTabs({
                           return (
                             <tr
                               key={cs.id}
-                              className={`${i > 0 ? "border-t border-neutral-200" : ""} bg-white hover:bg-secondary-50`}
+                              className={`${i > 0 ? "border-t border-neutral-200" : ""} bg-white hover:bg-muted`}
                             >
                               <td className="px-4 py-3 font-mono text-xs font-semibold text-neutral-900 uppercase">
                                 {cs.subjectCode}
@@ -1830,7 +1830,7 @@ export function CPMSLYearConfigTabs({
                               </td>
                               <td className="px-4 py-3">
                                 {cs.trackCode ? (
-                                  <span className="px-2 py-0.5 rounded text-xs font-bold bg-sky-50 text-sky-700 border border-sky-200">
+                                  <span className="px-2 py-0.5 rounded text-xs font-bold bg-info-soft text-info-ink border border-info-border">
                                     Examen · {cs.trackCode}
                                   </span>
                                 ) : (
@@ -1839,7 +1839,7 @@ export function CPMSLYearConfigTabs({
                                   </span>
                                 )}
                               </td>
-                              <td className="px-4 py-3 text-sm text-neutral-900">
+                              <td className="px-4 py-3 text-sm tabular-nums text-neutral-900">
                                 <div className="flex flex-col">
                                   <span>{cs.coefficient}</span>
                                   <span className="text-xs text-neutral-500">
@@ -1894,7 +1894,7 @@ export function CPMSLYearConfigTabs({
                 <p className="text-xs text-neutral-500 mb-0.5">
                   Coefficient global
                 </p>
-                <p className="text-base font-bold text-primary-800">
+                <p className="text-base font-bold tabular-nums text-primary-800">
                   {editCoeffClassSubject.coefficient}
                 </p>
               </div>
@@ -1952,7 +1952,7 @@ export function CPMSLYearConfigTabs({
                   <Label htmlFor="max-override-value" className={FIELD_LABEL_CLASS}>
                     Note max de cette affectation
                     {editCoeffClassSubject.trackCode && (
-                      <span className="ml-2 rounded border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-xs font-medium text-sky-700">
+                      <span className="ml-2 rounded border border-info-border bg-info-soft px-1.5 py-0.5 text-xs font-medium text-info-ink">
                         Filière {editCoeffClassSubject.trackCode}
                       </span>
                     )}
@@ -2135,7 +2135,7 @@ export function CPMSLYearConfigTabs({
                         className={`
                         flex items-center gap-3 px-4 py-2.5 cursor-pointer
                         ${i > 0 ? "border-t border-neutral-200" : ""}
-                        ${checked ? "bg-primary-50" : "bg-white hover:bg-secondary-50"}
+                        ${checked ? "bg-primary-50" : "bg-white hover:bg-muted"}
                       `}
                       >
                         <input
@@ -2235,7 +2235,7 @@ export function CPMSLYearConfigTabs({
                     className={`
                     flex items-center gap-3 px-4 py-2.5 cursor-pointer
                     ${i > 0 ? "border-t border-neutral-200" : ""}
-                    ${checked ? "bg-primary-50" : "bg-white hover:bg-secondary-50"}
+                    ${checked ? "bg-primary-50" : "bg-white hover:bg-muted"}
                   `}
                   >
                     <input

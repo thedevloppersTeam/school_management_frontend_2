@@ -177,17 +177,17 @@ export function ClosePeriodModal({
                   </td>
                   <td className="px-4 py-2">
                     {cr.status === 'complete' && (
-                      <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+                      <Badge className="bg-success-soft text-success-ink hover:bg-success-soft">
                         <CheckCircle2Icon className="mr-1 h-3 w-3" /> Complet
                       </Badge>
                     )}
                     {cr.status === 'incomplete' && (
-                      <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">
+                      <Badge className="bg-warning-soft text-warning-ink hover:bg-warning-soft">
                         Incomplet
                       </Badge>
                     )}
                     {cr.status === 'not-started' && (
-                      <Badge className="bg-red-100 text-red-800 hover:bg-red-100">
+                      <Badge className="bg-error-soft text-error-ink hover:bg-error-soft">
                         Non commencé
                       </Badge>
                     )}
@@ -210,7 +210,7 @@ export function ClosePeriodModal({
 
         {/* Warnings détaillés */}
         {!isComplete && (
-          <Alert className="mt-4 border-amber-300 bg-amber-50 text-amber-900">
+          <Alert className="mt-4 border-warning-border bg-warning-soft text-warning-ink">
             <AlertTriangleIcon className="h-4 w-4" />
             <AlertTitle>Données incomplètes</AlertTitle>
             <AlertDescription className="space-y-2 mt-2">
@@ -254,7 +254,7 @@ export function ClosePeriodModal({
         )}
 
         {isComplete && (
-          <Alert className="mt-4 border-emerald-300 bg-emerald-50 text-emerald-900">
+          <Alert className="mt-4 border-success-border bg-success-soft text-success-ink">
             <CheckCircle2Icon className="h-4 w-4" />
             <AlertTitle>Prêt à clôturer</AlertTitle>
             <AlertDescription>
@@ -313,16 +313,16 @@ function KpiCard({
   tone: 'success' | 'warning' | 'error' | 'neutral'
 }) {
   const toneClasses = {
-    success: "bg-emerald-50 border-emerald-200 text-emerald-800",
-    warning: "bg-amber-50 border-amber-200 text-amber-800",
-    error:   "bg-red-50 border-red-200 text-red-800",
-    neutral: "bg-slate-50 border-slate-200 text-slate-800",
+    success: "bg-success-soft border-success-border text-success-ink",
+    warning: "bg-warning-soft border-warning-border text-warning-ink",
+    error:   "bg-error-soft border-error-border text-error-ink",
+    neutral: "bg-muted border-border text-foreground",
   }[tone]
 
   return (
     <div className={`rounded-lg border p-3 text-center ${toneClasses}`}>
       <div className="text-2xl font-bold tabular-nums">{value}</div>
-      <div className="text-[10px] mt-0.5 leading-tight">{label}</div>
+      <div className="text-3xs mt-0.5 leading-tight">{label}</div>
     </div>
   )
 }

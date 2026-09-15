@@ -174,7 +174,7 @@ export default function BulletinPrintPage() {
         }
       `}</style>
 
-      <div className="min-h-screen bg-slate-100">
+      <div className="min-h-screen bg-muted">
         {/* Top toolbar (screen only) */}
         <div className="no-print sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b bg-white px-4 py-3 shadow-sm">
           <div className="flex items-center gap-3">

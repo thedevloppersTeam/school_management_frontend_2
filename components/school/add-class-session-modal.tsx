@@ -78,7 +78,7 @@ export function AddClassSessionModal({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent style={{ maxWidth: '420px' }}>
         <DialogHeader>
-          <DialogTitle style={{ fontFamily: 'var(--font-serif)', fontSize: '20px', color: '#2A3740' }}>
+          <DialogTitle style={{ fontFamily: 'var(--font-serif)', fontSize: 'var(--text-xl)', color: '#2A3740' }}>
             {title}
           </DialogTitle>
         </DialogHeader>
@@ -88,7 +88,7 @@ export function AddClassSessionModal({
           {/* Lettre de salle — fondamental et ns-tronc */}
           {level.category !== 'ns-filiere' && (
             <div className="space-y-2">
-              <Label style={{ fontSize: '13px', fontWeight: 500, color: '#1E1A17' }}>
+              <Label style={{ fontSize: 'var(--text-sm)', fontWeight: 500, color: '#1E1A17' }}>
                 Salle <span style={{ color: '#C43C3C' }}>*</span>
               </Label>
               <Input
@@ -98,7 +98,7 @@ export function AddClassSessionModal({
                 maxLength={2}
                 style={{ border: '1px solid #D1CECC', borderRadius: '8px', textTransform: 'uppercase' }}
               />
-              <p style={{ fontSize: '11px', color: '#78756F' }}>
+              <p style={{ fontSize: 'var(--text-2xs)', color: '#78756F' }}>
                 Lettre identifiant la salle physique
               </p>
             </div>
@@ -107,7 +107,7 @@ export function AddClassSessionModal({
           {/* Filière — ns-tronc et ns-filiere */}
           {level.category !== 'fondamental' && (
             <div className="space-y-2">
-              <Label style={{ fontSize: '13px', fontWeight: 500, color: '#1E1A17' }}>
+              <Label style={{ fontSize: 'var(--text-sm)', fontWeight: 500, color: '#1E1A17' }}>
                 Filière <span style={{ color: '#C43C3C' }}>*</span>
               </Label>
               <Select value={trackId} onValueChange={setTrackId}>
@@ -130,7 +130,7 @@ export function AddClassSessionModal({
             backgroundColor: '#F1F5F9',
             borderRadius: '8px',
             padding: '10px 14px',
-            fontSize: '13px',
+            fontSize: 'var(--text-sm)',
             color: '#5A7085',
             display: 'flex',
             alignItems: 'center',
@@ -144,7 +144,7 @@ export function AddClassSessionModal({
               padding: '2px 10px',
               fontWeight: 600,
               color: '#2C4A6E',
-              fontSize: '13px'
+              fontSize: 'var(--text-sm)'
             }}>
               {preview}
             </span>

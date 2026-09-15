@@ -139,11 +139,11 @@ function deriveYearStatus(year: AcademicYear): 'active' | 'preparation' | 'archi
 
 
 function StatusBadge({ status }: { status?: EnrollmentStatus }) {
-  if (!status) return <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-600">Non inscrit</Badge>
+  if (!status) return <Badge variant="outline" className="border-border bg-muted text-muted-foreground">Non inscrit</Badge>
   switch (status) {
     case 'ACTIVE':
       return (
-        <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
+        <Badge className="border-success-border bg-success-soft text-success-ink hover:bg-success-soft">
           Actif
         </Badge>
       )
@@ -151,13 +151,13 @@ function StatusBadge({ status }: { status?: EnrollmentStatus }) {
       return <Badge variant="secondary">Désactivé</Badge>
     case 'TRANSFERRED':
       return (
-        <Badge className="border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-50">
+        <Badge className="border-info-border bg-info-soft text-info-ink hover:bg-info-soft">
           Transféré
         </Badge>
       )
     case 'GRADUATED':
       return (
-        <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
+        <Badge className="border-success-border bg-success-soft text-success-ink hover:bg-success-soft">
           Diplômé
         </Badge>
       )
@@ -622,7 +622,7 @@ export default function StudentsManagementPage() {
     <div className="space-y-8">
       {/* ── Header ── */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Élèves</h1>
+        <h1 className="heading-1 text-foreground">Élèves</h1>
         <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           <span>Tous les élèves enregistrés dans le système — toutes années confondues</span>
           {year && (
@@ -637,7 +637,7 @@ export default function StudentsManagementPage() {
       </div>
 
       {noCurrentYear && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+        <div className="rounded-md border border-warning-border bg-warning-soft p-4 text-sm text-warning-ink">
           Aucune année scolaire courante n&apos;est définie. Les actions d&apos;inscription, de transfert et de photo de promotion sont désactivées.
           {" "}<a href="/admin/academic-years" className="font-semibold underline">Configurer une année</a>.
         </div>
@@ -651,22 +651,22 @@ export default function StudentsManagementPage() {
           label="Total élèves"
           value={totalStudents}
           icon={UsersIcon}
-          iconClassName="text-[#2C4A6E]"
-          iconBgClassName="bg-blue-50"
+          iconClassName="text-primary"
+          iconBgClassName="bg-primary/10"
         />
         <StatCard
           label={year ? `Avec photo (${year.yearString})` : "Avec photo de promotion"}
           value={withPromotionPhoto.length}
           icon={UserIcon}
-          iconClassName="text-emerald-600"
-          iconBgClassName="bg-emerald-50"
+          iconClassName="text-success"
+          iconBgClassName="bg-success-soft"
         />
         <StatCard
           label="NISU invalide"
           value={withInvalidNisu.length}
           icon={BadgeAlertIcon}
-          iconClassName="text-rose-600"
-          iconBgClassName="bg-rose-50"
+          iconClassName="text-error"
+          iconBgClassName="bg-error-soft"
         />
       </div>
 
@@ -777,8 +777,8 @@ export default function StudentsManagementPage() {
 
         <CardContent className="p-0">
           {selectedIds.size > 0 && (
-            <div className="flex items-center justify-between gap-3 border-b bg-rose-50/60 px-4 py-2.5">
-              <span className="text-sm font-medium text-rose-900">
+            <div className="flex items-center justify-between gap-3 border-b bg-error-soft/60 px-4 py-2.5">
+              <span className="text-sm font-medium text-error-ink">
                 {selectedIds.size} élève(s) sélectionné(s)
               </span>
               <div className="flex items-center gap-2">
@@ -801,9 +801,9 @@ export default function StudentsManagementPage() {
               <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
                 <UserIcon className="h-7 w-7 text-muted-foreground" />
               </div>
-              <h3 className="mt-4 text-sm font-semibold text-foreground">
+              <h2 className="mt-4 text-base font-semibold text-foreground">
                 {searchQuery || selectedClass !== 'all' || selectedSalle !== 'all' ? "Aucun élève trouvé" : "Aucun élève inscrit"}
-              </h3>
+              </h2>
               <p className="mt-1 max-w-[320px] text-center text-sm text-muted-foreground">
                 {searchQuery || selectedClass !== 'all' || selectedSalle !== 'all'
                   ? "Modifiez vos critères de recherche."
@@ -885,7 +885,7 @@ export default function StudentsManagementPage() {
                           className={cn(
                             "h-9 w-9",
                             student.promotionPhotoUrl &&
-                              "ring-2 ring-emerald-200 ring-offset-1 ring-offset-background"
+                              "ring-2 ring-success-border ring-offset-1 ring-offset-background"
                           )}
                           title={student.promotionPhotoUrl ? "Photo de promotion" : undefined}
                         >
@@ -911,7 +911,7 @@ export default function StudentsManagementPage() {
                             {student.nisu || '—'}
                           </span>
                           {nisuInvalid && (
-                            <span className="text-[11px] text-destructive">
+                            <span className="text-2xs text-destructive">
                               {NISU_RULE_LABEL}
                             </span>
                           )}
@@ -929,7 +929,7 @@ export default function StudentsManagementPage() {
                             {student.classTypeName ?? "Aucune classe"}
                           </span>
                           {student.yearString && (
-                            <span className="text-[11px] text-muted-foreground tabular-nums">
+                            <span className="text-2xs text-muted-foreground tabular-nums">
                               {student.yearString}
                             </span>
                           )}
@@ -1001,7 +1001,7 @@ export default function StudentsManagementPage() {
                             {isDropped && isCurrentYear && !isArchived && (
                               <DropdownMenuItem
                                 onClick={() => student.enrollmentId && handleReactivate(student.enrollmentId)}
-                                className="text-emerald-600 focus:text-emerald-600"
+                                className="text-success-ink focus:text-success-ink"
                               >
                                 <UserRoundCheckIcon className="mr-2 h-4 w-4" />
                                 Réactiver
@@ -1155,7 +1155,7 @@ export default function StudentsManagementPage() {
           </DialogHeader>
 
           <div className="space-y-4 py-1">
-            <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">
+            <div className="rounded-md border border-error-border bg-error-soft px-3 py-2 text-sm text-error-ink">
               {selectedIds.size} élève(s) seront supprimé(s) :
               <ul className="mt-1 max-h-32 list-disc space-y-0.5 overflow-y-auto pl-5 text-xs">
                 {students.filter(s => selectedIds.has(s.studentId)).slice(0, 50).map(s => (

@@ -122,7 +122,7 @@ export function EditSubjectChildModal({
           <DialogTitle
             style={{
               color: '#1E1A17',
-              fontSize: '20px',
+              fontSize: 'var(--text-xl)',
               fontWeight: 600,
               fontFamily: 'var(--font-serif)',
               marginBottom: '8px'
@@ -133,7 +133,7 @@ export function EditSubjectChildModal({
           <DialogDescription
             style={{
               color: '#5C5955',
-              fontSize: '14px',
+              fontSize: 'var(--text-sm)',
               fontWeight: 400
             }}
           >
@@ -148,7 +148,7 @@ export function EditSubjectChildModal({
               htmlFor="name"
               style={{
                 color: '#1E1A17',
-                fontSize: '13px',
+                fontSize: 'var(--text-sm)',
                 fontWeight: 500
               }}
             >
@@ -173,7 +173,7 @@ export function EditSubjectChildModal({
               htmlFor="code"
               style={{
                 color: '#1E1A17',
-                fontSize: '13px',
+                fontSize: 'var(--text-sm)',
                 fontWeight: 500
               }}
             >
@@ -197,7 +197,7 @@ export function EditSubjectChildModal({
             <p
               style={{
                 color: '#78756F',
-                fontSize: '12px',
+                fontSize: 'var(--text-xs)',
                 marginTop: '6px'
               }}
             >
@@ -210,7 +210,7 @@ export function EditSubjectChildModal({
             <Label
               style={{
                 color: '#1E1A17',
-                fontSize: '13px',
+                fontSize: 'var(--text-sm)',
                 fontWeight: 500
               }}
             >
@@ -227,7 +227,7 @@ export function EditSubjectChildModal({
                   htmlFor="type-l"
                   style={{
                     color: '#1E1A17',
-                    fontSize: '14px',
+                    fontSize: 'var(--text-sm)',
                     fontWeight: 400,
                     cursor: 'pointer'
                   }}
@@ -241,7 +241,7 @@ export function EditSubjectChildModal({
                   htmlFor="type-c"
                   style={{
                     color: '#1E1A17',
-                    fontSize: '14px',
+                    fontSize: 'var(--text-sm)',
                     fontWeight: 400,
                     cursor: 'pointer'
                   }}
@@ -255,7 +255,7 @@ export function EditSubjectChildModal({
                   htmlFor="type-n"
                   style={{
                     color: '#1E1A17',
-                    fontSize: '14px',
+                    fontSize: 'var(--text-sm)',
                     fontWeight: 400,
                     cursor: 'pointer'
                   }}
@@ -269,7 +269,7 @@ export function EditSubjectChildModal({
                   htmlFor="type-p"
                   style={{
                     color: '#1E1A17',
-                    fontSize: '14px',
+                    fontSize: 'var(--text-sm)',
                     fontWeight: 400,
                     cursor: 'pointer'
                   }}
@@ -283,7 +283,7 @@ export function EditSubjectChildModal({
                   htmlFor="type-t"
                   style={{
                     color: '#1E1A17',
-                    fontSize: '14px',
+                    fontSize: 'var(--text-sm)',
                     fontWeight: 400,
                     cursor: 'pointer'
                   }}

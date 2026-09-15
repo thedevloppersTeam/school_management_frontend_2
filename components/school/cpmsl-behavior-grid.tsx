@@ -572,7 +572,7 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
       <label key={field} className="space-y-1.5">
         <div className="flex items-center justify-between gap-3">
           <span className="text-xs font-medium text-muted-foreground">{label}</span>
-          <span className="text-[11px] text-muted-foreground tabular-nums">{entry[field].length} / {max}</span>
+          <span className="text-2xs text-muted-foreground tabular-nums">{entry[field].length} / {max}</span>
         </div>
         <Textarea
           value={entry[field]}
@@ -718,7 +718,7 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
             <Select value={selectedStepId} onValueChange={setSelectedStepId} disabled={!selectedSessionId}>
               <SelectTrigger>
                 <div className="flex items-center gap-2">
-                  {isLocked && <LockIcon className="h-4 w-4 text-amber-600" />}
+                  {isLocked && <LockIcon className="h-4 w-4 text-warning-ink" />}
                   <SelectValue placeholder="Étape" />
                 </div>
               </SelectTrigger>
@@ -741,9 +741,9 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
             <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
               <InboxIcon className="h-7 w-7 text-muted-foreground" />
             </div>
-            <h3 className="mt-4 text-sm font-semibold text-foreground">
+            <h2 className="mt-4 text-base font-semibold text-foreground">
               Aucune sélection
-            </h3>
+            </h2>
             <p className="mt-1 max-w-[320px] text-center text-sm text-muted-foreground">
               Sélectionnez une classe et une étape pour saisir les comportements.
             </p>
@@ -756,8 +756,8 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
         <>
           {/* Bannière verrouillage */}
           {isLocked && (
-            <Alert className="border-amber-200 bg-amber-50 text-amber-900">
-              <LockIcon className="h-4 w-4 !text-amber-600" />
+            <Alert className="border-warning-border bg-warning-soft text-warning-ink">
+              <LockIcon className="h-4 w-4 !text-warning-ink" />
               <AlertTitle>Étape clôturée</AlertTitle>
               <AlertDescription>
                 Les comportements ne peuvent plus être modifiés.
@@ -771,29 +771,29 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
               label="Total élèves"
               value={kpis.total}
               icon={UsersIcon}
-              iconClassName="text-blue-600"
-              iconBgClassName="bg-blue-50"
+              iconClassName="text-primary"
+              iconBgClassName="bg-primary/10"
             />
             <StatCard
               label="Comportements saisis"
               value={kpis.entered}
               icon={CheckCircle2Icon}
-              iconClassName="text-emerald-600"
-              iconBgClassName="bg-emerald-50"
+              iconClassName="text-success"
+              iconBgClassName="bg-success-soft"
             />
             <StatCard
               label="Comportements manquants"
               value={kpis.missing}
               icon={AlertTriangleIcon}
-              iconClassName="text-amber-600"
-              iconBgClassName="bg-amber-50"
+              iconClassName="text-warning-ink"
+              iconBgClassName="bg-warning-soft"
             />
             <StatCard
               label="% complété"
               value={`${kpis.percent}%`}
               icon={FileTextIcon}
-              iconClassName="text-violet-600"
-              iconBgClassName="bg-violet-50"
+              iconClassName="text-primary"
+              iconBgClassName="bg-primary/10"
             />
           </div>
 
@@ -813,8 +813,8 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
                     <Badge variant="outline">Salle : {selectedSession?.class?.track?.code ?? selectedSession?.class?.letter ?? "-"}</Badge>
                     <Badge variant="outline">Étape : {selectedStep ? `Étape ${selectedStep.stepNumber}` : "-"}</Badge>
                     {isLocked && (
-                      <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">
-                        <LockIcon className="mr-1 h-3 w-3 !text-amber-600" /> Étape clôturée
+                      <Badge variant="outline" className="border-warning-border bg-warning-soft text-warning-ink">
+                        <LockIcon className="mr-1 h-3 w-3 !text-warning-ink" /> Étape clôturée
                       </Badge>
                     )}
                   </div>
@@ -880,8 +880,8 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
                   <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
                     <InboxIcon className="h-7 w-7 text-muted-foreground" />
                   </div>
-                  <h3 className="mt-4 text-sm font-semibold text-foreground">Aucun élève trouvé</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">
+                  <h2 className="mt-4 text-base font-semibold text-foreground">Aucun élève trouvé</h2>
+                  <p className="mt-1 max-w-prose text-sm text-muted-foreground">
                     {searchQuery || behaviorFilter !== "all" ? "Modifiez vos critères de recherche." : "Aucun élève inscrit dans cette classe."}
                   </p>
                 </div>

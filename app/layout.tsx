@@ -15,16 +15,22 @@ const inter = Inter({
   variable: "--font-sans",
 });
 
+// Cookie et Lobster n'appartiennent qu'au gabarit imprime (DESIGN.md) et
+// n'ecrivent aucun glyphe a l'ecran. La declaration reste globale parce que le
+// gabarit est monte depuis cinq emplacements ; `preload: false` evite seulement
+// de les precharger sur des routes qui ne les affichent jamais.
 const cookie = Cookie({
   subsets: ["latin"],
   weight: "400",
   variable: "--font-cookie",
+  preload: false,
 });
 
 const lobster = Lobster({
   subsets: ["latin"],
   weight: "400",
   variable: "--font-lobster",
+  preload: false,
 });
 
 export const metadata: Metadata = {

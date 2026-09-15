@@ -133,7 +133,7 @@ export function CreateAcademicYearModalV2({
               <div className="space-y-2">
                 <Label
                   htmlFor="name"
-                  className="text-[13px] font-medium text-neutral-900"
+                  className="text-sm font-medium text-neutral-900"
                 >
                   Nom de l'année <span className="text-error">*</span>
                 </Label>
@@ -153,7 +153,7 @@ export function CreateAcademicYearModalV2({
                 <div className="space-y-2">
                   <Label
                     htmlFor="startDate"
-                    className="text-[13px] font-medium text-neutral-900"
+                    className="text-sm font-medium text-neutral-900"
                   >
                     Date de début
                   </Label>
@@ -162,13 +162,13 @@ export function CreateAcademicYearModalV2({
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="border-neutral-300 text-neutral-900 focus-visible:border-secondary-400 focus-visible:ring-2 focus-visible:ring-secondary-400/40"
+                    className="border-neutral-300 text-neutral-900"
                   />
                 </div>
                 <div className="space-y-2">
                   <Label
                     htmlFor="endDate"
-                    className="text-[13px] font-medium text-neutral-900"
+                    className="text-sm font-medium text-neutral-900"
                   >
                     Date de fin
                   </Label>
@@ -177,7 +177,7 @@ export function CreateAcademicYearModalV2({
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
-                    className="border-neutral-300 text-neutral-900 focus-visible:border-secondary-400 focus-visible:ring-2 focus-visible:ring-secondary-400/40"
+                    className="border-neutral-300 text-neutral-900"
                   />
                 </div>
               </div>
@@ -188,10 +188,10 @@ export function CreateAcademicYearModalV2({
             {/* SECTION 2 — Nombre d'étapes */}
             <div className="space-y-3">
               <div>
-                <div className="text-[15px] font-semibold text-primary-700 border-l-[3px] border-primary-700 pl-2">
+                <div className="font-serif text-base font-bold tracking-tight text-primary-700">
                   Nombre d'étapes
                 </div>
-                <p className="text-[13px] text-muted-foreground mt-1">
+                <p className="text-sm text-muted-foreground mt-1">
                   L'école peut fonctionner avec 4 ou 5 étapes selon l'année
                 </p>
               </div>
@@ -204,12 +204,12 @@ export function CreateAcademicYearModalV2({
                     onClick={() => setNumberOfPeriods(n)}
                     className={`rounded-lg p-4 cursor-pointer transition-all ${
                       numberOfPeriods === n
-                        ? "border-2 border-secondary-400 bg-secondary-50"
+                        ? "border-2 border-primary bg-primary/5"
                         : "border border-neutral-300 bg-neutral-50"
                     }`}
                   >
                     <div
-                      className={`text-4xl font-bold ${
+                      className={`text-3xl font-bold ${
                         numberOfPeriods === n
                           ? "text-neutral-900"
                           : "text-neutral-600"
@@ -218,7 +218,7 @@ export function CreateAcademicYearModalV2({
                       {n}
                     </div>
                     <div
-                      className={`text-[13px] text-center mt-1 ${
+                      className={`text-sm text-center mt-1 ${
                         numberOfPeriods === n
                           ? "text-neutral-900"
                           : "text-neutral-600"
@@ -250,7 +250,7 @@ export function CreateAcademicYearModalV2({
 
             {/* SECTION 3 — Type de création */}
             <div className="space-y-3">
-              <div className="text-[15px] font-semibold text-primary-700 border-l-[3px] border-primary-700 pl-2">
+              <div className="font-serif text-base font-bold tracking-tight text-primary-700">
                 Type de création
               </div>
 
@@ -275,14 +275,14 @@ export function CreateAcademicYearModalV2({
                     }
                     className={`w-full rounded-lg p-4 text-left transition-all ${
                       creationType === opt.value
-                        ? "border-2 border-secondary-400 bg-secondary-50"
+                        ? "border-2 border-primary bg-primary/5"
                         : "border border-neutral-300 bg-white"
                     }`}
                   >
-                    <div className="text-[15px] font-semibold text-neutral-900">
+                    <div className="text-base font-semibold text-neutral-900">
                       {opt.title}
                     </div>
-                    <p className="text-[13px] text-muted-foreground mt-1">
+                    <p className="text-sm text-muted-foreground mt-1">
                       {opt.desc}
                     </p>
                   </button>
@@ -293,7 +293,7 @@ export function CreateAcademicYearModalV2({
                 <div className="space-y-2">
                   <Label
                     htmlFor="copyYear"
-                    className="text-[13px] font-medium text-neutral-900"
+                    className="text-sm font-medium text-neutral-900"
                   >
                     Copier depuis <span className="text-error">*</span>
                   </Label>

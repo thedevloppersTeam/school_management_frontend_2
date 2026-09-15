@@ -30,7 +30,7 @@ export default function ReportsPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Bulletins</h1>
+        <h1 className="heading-1 text-foreground">Bulletins</h1>
         <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
           <span>Génération des bulletins et rapports statistiques</span>
           {academicYear?.name && (

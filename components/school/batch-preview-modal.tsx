@@ -92,7 +92,7 @@ export function BatchPreviewModal({
             <div className="font-semibold flex items-center gap-2">
               {stepName}
               {stepIsClosed && (
-                <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800">
+                <Badge variant="outline" className="border-warning-border bg-warning-soft text-warning-ink">
                   Clôturée
                 </Badge>
               )}
@@ -102,7 +102,7 @@ export function BatchPreviewModal({
 
         {/* Warning clôturée (WF-005) */}
         {stepIsClosed && (
-          <Alert className="mt-4 border-amber-300 bg-amber-50 text-amber-900">
+          <Alert className="mt-4 border-warning-border bg-warning-soft text-warning-ink">
             <InfoIcon className="h-4 w-4" />
             <AlertDescription>
               Cette période est clôturée. Les bulletins générés seront marqués comme
@@ -114,8 +114,8 @@ export function BatchPreviewModal({
 
         {/* KPI inclusion / exclusion */}
         <div className="grid grid-cols-2 gap-3 mt-4">
-          <div className="rounded-lg border bg-emerald-50 border-emerald-200 p-3">
-            <div className="flex items-center gap-2 text-emerald-800">
+          <div className="rounded-lg border bg-success-soft border-success-border p-3">
+            <div className="flex items-center gap-2 text-success-ink">
               <CheckCircle2Icon className="h-4 w-4" />
               <div>
                 <div className="text-2xl font-bold tabular-nums">{included.length}</div>
@@ -123,7 +123,7 @@ export function BatchPreviewModal({
               </div>
             </div>
           </div>
-          <div className={`rounded-lg border p-3 ${excluded.length > 0 ? 'bg-red-50 border-red-200 text-red-800' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
+          <div className={`rounded-lg border p-3 ${excluded.length > 0 ? 'bg-error-soft border-error-border text-error-ink' : 'bg-muted border-border text-foreground'}`}>
             <div className="flex items-center gap-2">
               <XCircleIcon className="h-4 w-4" />
               <div>
@@ -137,7 +137,7 @@ export function BatchPreviewModal({
         {/* Liste des exclus (si y en a) */}
         {excluded.length > 0 && (
           <div className="mt-4 rounded-lg border overflow-hidden">
-            <div className="bg-red-50 px-4 py-2 text-sm font-semibold text-red-800 border-b border-red-200">
+            <div className="bg-error-soft px-4 py-2 text-sm font-semibold text-error-ink border-b border-error-border">
               Élèves exclus — NISU invalide
             </div>
             <div className="max-h-40 overflow-y-auto">
@@ -190,7 +190,7 @@ export function BatchPreviewModal({
 
         {/* Cas impossible */}
         {included.length === 0 && (
-          <Alert className="mt-4 border-red-300 bg-red-50 text-red-900">
+          <Alert className="mt-4 border-error-border bg-error-soft text-error-ink">
             <XCircleIcon className="h-4 w-4" />
             <AlertDescription>
               Aucun bulletin ne peut être généré. Tous les élèves de cette classe

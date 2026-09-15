@@ -103,23 +103,23 @@ export function StepExemptionModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent style={{ maxWidth: '440px', backgroundColor: 'white', borderRadius: '12px' }}>
         <DialogHeader>
-          <DialogTitle style={{ fontFamily: 'var(--font-serif)', fontSize: '22px', fontWeight: 700, color: C.primary[800] }}>
+          <DialogTitle style={{ fontFamily: 'var(--font-serif)', fontSize: 'var(--text-xl)', fontWeight: 700, color: C.primary[800] }}>
             Dispenser d&apos;une étape
           </DialogTitle>
-          <p style={{ fontSize: '13px', color: C.neutral[500], marginTop: '2px' }}>
+          <p style={{ fontSize: 'var(--text-sm)', color: C.neutral[500], marginTop: '2px' }}>
             {studentName}
           </p>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          <Label style={{ fontSize: '13px', fontWeight: 500 }}>
+          <Label style={{ fontSize: 'var(--text-sm)', fontWeight: 500 }}>
             Étapes dispensées
           </Label>
           <div style={{ border: `1px solid ${C.neutral[200]}`, borderRadius: '8px', overflow: 'hidden' }}>
             {loading ? (
-              <p style={{ padding: '12px 14px', fontSize: '13px', color: C.neutral[500] }}>Chargement…</p>
+              <p style={{ padding: '12px 14px', fontSize: 'var(--text-sm)', color: C.neutral[500] }}>Chargement…</p>
             ) : ordered.length === 0 ? (
-              <p style={{ padding: '12px 14px', fontSize: '13px', color: C.neutral[500] }}>
+              <p style={{ padding: '12px 14px', fontSize: 'var(--text-sm)', color: C.neutral[500] }}>
                 Aucune étape définie pour cette année
               </p>
             ) : (
@@ -132,7 +132,7 @@ export function StepExemptionModal({
                     htmlFor={inputId}
                     style={{
                       display: 'flex', alignItems: 'center', gap: '10px',
-                      padding: '10px 14px', cursor: 'pointer', fontSize: '14px',
+                      padding: '10px 14px', cursor: 'pointer', fontSize: 'var(--text-sm)',
                       borderTop: i > 0 ? `1px solid ${C.neutral[200]}` : 'none',
                       backgroundColor: checked ? '#F0F4F7' : 'white',
                       fontWeight: checked ? 600 : 400,
@@ -155,7 +155,7 @@ export function StepExemptionModal({
 
           {/* Motif */}
           <div className="space-y-2">
-            <Label style={{ fontSize: '13px', fontWeight: 500 }}>Motif (optionnel)</Label>
+            <Label style={{ fontSize: 'var(--text-sm)', fontWeight: 500 }}>Motif (optionnel)</Label>
             <Input value={reason} onChange={e => setReason(e.target.value)}
               placeholder="Ex : Arrivé en cours d'année, raison médicale..."
               style={{ borderColor: C.neutral[300] }} />
@@ -163,7 +163,7 @@ export function StepExemptionModal({
 
           {/* Explication */}
           <div style={{ backgroundColor: '#FEF6E0', border: '1px solid #C48B1A', borderRadius: '8px',
-            padding: '10px 14px', fontSize: '12px', color: '#92400E' }}>
+            padding: '10px 14px', fontSize: 'var(--text-xs)', color: '#92400E' }}>
             La moyenne d&apos;une étape dispensée n&apos;entre pas dans le calcul de la moyenne
             générale de l&apos;élève. Les autres étapes de l&apos;année ne sont pas affectées.
           </div>

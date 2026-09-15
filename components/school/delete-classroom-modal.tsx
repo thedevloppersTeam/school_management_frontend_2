@@ -111,10 +111,10 @@ export function DeleteClassroomModal({
             <div className="mb-6">
               <Label
                 htmlFor={`confirm-classroom-${classroom.id}`}
-                className="text-[13px] text-neutral-900 block mb-1.5"
+                className="text-sm text-neutral-900 block mb-1.5"
               >
                 Pour confirmer, saisissez{" "}
-                <code className="bg-secondary-100 px-1.5 py-0.5 rounded font-mono text-xs text-neutral-900">
+                <code className="bg-muted px-1.5 py-0.5 rounded font-mono text-xs text-neutral-900">
                   {classroom.name}
                 </code>{" "}
                 ci-dessous :

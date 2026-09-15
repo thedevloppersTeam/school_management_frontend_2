@@ -188,7 +188,7 @@ export function CPMSLCalendarManagement({
       <div className="bg-white rounded-lg border border-neutral-200 shadow-sm">
         <div className="p-6 border-b border-neutral-200 flex items-start justify-between">
           <div>
-            <h3 className="font-serif text-lg font-semibold text-primary-800 border-l-[3px] border-primary-800 pl-3 mb-2">
+            <h3 className="font-serif text-lg font-bold tracking-tight text-primary-800 mb-2">
               Jours fériés
             </h3>
             <p className="font-sans text-sm text-muted-foreground pl-[15px]">
@@ -310,7 +310,7 @@ export function CPMSLCalendarManagement({
                   {holidays.map((holiday) => (
                     <TableRow
                       key={holiday.id}
-                      className="hover:bg-secondary-50"
+                      className="hover:bg-muted"
                     >
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
@@ -381,7 +381,7 @@ export function CPMSLCalendarManagement({
       <div className="bg-white rounded-lg border border-neutral-200 shadow-sm">
         <div className="p-6 border-b border-neutral-200 flex items-start justify-between">
           <div>
-            <h3 className="font-serif text-lg font-semibold text-primary-800 border-l-[3px] border-primary-800 pl-3 mb-2">
+            <h3 className="font-serif text-lg font-bold tracking-tight text-primary-800 mb-2">
               Événements scolaires
             </h3>
             <p className="font-sans text-sm text-muted-foreground pl-[15px]">
@@ -530,7 +530,7 @@ export function CPMSLCalendarManagement({
                 </TableHeader>
                 <TableBody>
                   {events.map((event) => (
-                    <TableRow key={event.id} className="hover:bg-secondary-50">
+                    <TableRow key={event.id} className="hover:bg-muted">
                       <TableCell className="font-medium">
                         {formatEventDate(event.date)}
                       </TableCell>
@@ -604,7 +604,7 @@ function EmptyState({ icon, title, description, action }: EmptyStateProps) {
   return (
     <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
       <div className="mb-4 p-3 bg-neutral-100 rounded-full">{icon}</div>
-      <h4 className="font-serif text-lg font-semibold text-neutral-900 mb-2">
+      <h4 className="font-serif text-lg font-bold text-neutral-900 mb-2">
         {title}
       </h4>
       <p className="font-sans text-sm text-muted-foreground mb-6 max-w-md">

@@ -110,7 +110,7 @@ function StatusBadge({ status }: { status: StudentRow['status'] }) {
   switch (status) {
     case 'ACTIVE':
       return (
-        <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
+        <Badge className="border-success-border bg-success-soft text-success-ink hover:bg-success-soft">
           Actif
         </Badge>
       )
@@ -118,13 +118,13 @@ function StatusBadge({ status }: { status: StudentRow['status'] }) {
       return <Badge variant="secondary">Désactivé</Badge>
     case 'TRANSFERRED':
       return (
-        <Badge className="border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-50">
+        <Badge className="border-info-border bg-info-soft text-info-ink hover:bg-info-soft">
           Transféré
         </Badge>
       )
     case 'GRADUATED':
       return (
-        <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
+        <Badge className="border-success-border bg-success-soft text-success-ink hover:bg-success-soft">
           Diplômé
         </Badge>
       )
@@ -548,8 +548,8 @@ export default function StudentsManagementPage() {
     <div className="space-y-8">
       {/* ── Header ── */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Élèves</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <h1 className="heading-1 text-foreground">Élèves</h1>
+        <p className="mt-1 max-w-prose text-sm text-muted-foreground">
           Gérez les inscriptions
           {year && (
             <>
@@ -570,29 +570,29 @@ export default function StudentsManagementPage() {
           label="Total actifs"
           value={activeStudents.length}
           icon={UsersIcon}
-          iconClassName="text-emerald-600"
-          iconBgClassName="bg-emerald-50"
+          iconClassName="text-success"
+          iconBgClassName="bg-success-soft"
         />
         <StatCard
           label="Désactivés"
           value={inactiveStudents.length}
           icon={UserXIcon}
-          iconClassName="text-slate-600"
-          iconBgClassName="bg-slate-100"
+          iconClassName="text-primary"
+          iconBgClassName="bg-primary/10"
         />
         <StatCard
           label="Sans photo"
           value={withoutPhoto.length}
           icon={ImageOffIcon}
-          iconClassName="text-amber-600"
-          iconBgClassName="bg-amber-50"
+          iconClassName="text-warning-ink"
+          iconBgClassName="bg-warning-soft"
         />
         <StatCard
           label="NISU invalide"
           value={withInvalidNisu.length}
           icon={BadgeAlertIcon}
-          iconClassName="text-rose-600"
-          iconBgClassName="bg-rose-50"
+          iconClassName="text-error"
+          iconBgClassName="bg-error-soft"
         />
       </div>
 
@@ -692,9 +692,9 @@ export default function StudentsManagementPage() {
               <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
                 <UserIcon className="h-7 w-7 text-muted-foreground" />
               </div>
-              <h3 className="mt-4 text-sm font-semibold text-foreground">
+              <h2 className="mt-4 text-base font-semibold text-foreground">
                 {searchQuery || selectedClass !== 'all' ? "Aucun élève trouvé" : "Aucun élève inscrit"}
-              </h3>
+              </h2>
               <p className="mt-1 max-w-[320px] text-center text-sm text-muted-foreground">
                 {searchQuery || selectedClass !== 'all'
                   ? "Modifiez vos critères de recherche."
@@ -783,7 +783,7 @@ export default function StudentsManagementPage() {
                             {student.nisu || '—'}
                           </span>
                           {nisuInvalid && (
-                            <span className="text-[11px] text-destructive">
+                            <span className="text-2xs text-destructive">
                               {NISU_RULE_LABEL}
                             </span>
                           )}
@@ -800,11 +800,11 @@ export default function StudentsManagementPage() {
                           <span>{student.className}</span>
                           {student.isTerminal && (
                             student.trackCode ? (
-                              <span className="text-[11px] font-medium text-sky-700">
+                              <span className="text-2xs font-medium text-info-ink">
                                 Filière {student.trackCode}
                               </span>
                             ) : (
-                              <span className="text-[11px] font-medium text-amber-600">
+                              <span className="text-2xs font-medium text-warning-ink">
                                 Filière manquante
                               </span>
                             )
@@ -829,7 +829,7 @@ export default function StudentsManagementPage() {
                               {isInactive ? (
                                 <DropdownMenuItem
                                   onClick={() => handleReactivate(student.enrollmentId)}
-                                  className="text-emerald-600 focus:text-emerald-600"
+                                  className="text-success-ink focus:text-success-ink"
                                 >
                                   <UserRoundCheckIcon className="mr-2 h-4 w-4" />
                                   Réactiver

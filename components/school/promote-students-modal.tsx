@@ -514,7 +514,7 @@ export function PromoteStudentsModal({
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
                                 <span className="font-medium text-foreground">{row.fullName || "—"}</span>
-                                <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+                                <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-2xs text-muted-foreground">
                                   {row.studentCode}
                                 </code>
                               </div>
@@ -524,7 +524,7 @@ export function PromoteStudentsModal({
                                 <span
                                   className={cn(
                                     "tabular-nums text-sm font-semibold",
-                                    isEligible ? "text-emerald-700" : "text-muted-foreground"
+                                    isEligible ? "text-success-ink" : "text-muted-foreground"
                                   )}
                                 >
                                   {row.average.toFixed(2)} / 100
@@ -536,10 +536,10 @@ export function PromoteStudentsModal({
                                 <Badge
                                   variant="outline"
                                   className={cn(
-                                    "ml-2 text-[10px]",
+                                    "ml-2 text-3xs",
                                     isEligible
-                                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                                      : "border-amber-200 bg-amber-50 text-amber-700"
+                                      ? "border-success-border bg-success-soft text-success-ink"
+                                      : "border-warning-border bg-warning-soft text-warning-ink"
                                   )}
                                 >
                                   {isEligible ? "Éligible" : "Non éligible"}

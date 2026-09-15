@@ -79,17 +79,17 @@ export function StudentTrackModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent style={{ maxWidth: '420px', backgroundColor: 'white', borderRadius: '12px' }}>
         <DialogHeader>
-          <DialogTitle style={{ fontFamily: 'var(--font-serif)', fontSize: '22px', fontWeight: 700, color: C.primary[800] }}>
+          <DialogTitle style={{ fontFamily: 'var(--font-serif)', fontSize: 'var(--text-xl)', fontWeight: 700, color: C.primary[800] }}>
             Filière de l&apos;élève
           </DialogTitle>
-          <p style={{ fontSize: '13px', color: C.neutral[500], marginTop: '2px' }}>
+          <p style={{ fontSize: 'var(--text-sm)', color: C.neutral[500], marginTop: '2px' }}>
             {studentName} · {className}
           </p>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
           <div className="space-y-2">
-            <Label style={{ fontSize: '13px', fontWeight: 500 }}>
+            <Label style={{ fontSize: 'var(--text-sm)', fontWeight: 500 }}>
               Filière <span style={{ color: '#C43C3C' }}>*</span>
             </Label>
             <Select value={trackId} onValueChange={setTrackId}>
@@ -103,13 +103,13 @@ export function StudentTrackModal({
               </SelectContent>
             </Select>
             {tracks.length === 0 && (
-              <p style={{ fontSize: '12px', color: '#C43C3C' }}>
+              <p style={{ fontSize: 'var(--text-xs)', color: '#C43C3C' }}>
                 Aucune filière définie. Créez-en une d&apos;abord.
               </p>
             )}
           </div>
 
-          <div style={{ backgroundColor: '#F1F5F9', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', color: '#5A7085' }}>
+          <div style={{ backgroundColor: '#F1F5F9', borderRadius: '8px', padding: '10px 14px', fontSize: 'var(--text-xs)', color: '#5A7085' }}>
             La filière détermine les matières d&apos;examen officiel de l&apos;élève. Les
             matières du tronc commun restent les mêmes pour toute la salle.
           </div>

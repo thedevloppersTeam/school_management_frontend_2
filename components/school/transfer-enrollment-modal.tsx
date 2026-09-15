@@ -63,10 +63,10 @@ export function TransferEnrollmentModal({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent style={{ maxWidth: '440px', backgroundColor: 'white', borderRadius: '12px' }}>
         <DialogHeader>
-          <DialogTitle style={{ fontFamily: 'var(--font-serif)', fontSize: '22px', fontWeight: 700, color: C.primary[800] }}>
+          <DialogTitle style={{ fontFamily: 'var(--font-serif)', fontSize: 'var(--text-xl)', fontWeight: 700, color: C.primary[800] }}>
             Transférer l&apos;élève
           </DialogTitle>
-          <p style={{ fontSize: '13px', color: C.neutral[500], marginTop: '2px' }}>
+          <p style={{ fontSize: 'var(--text-sm)', color: C.neutral[500], marginTop: '2px' }}>
             {studentName}
           </p>
         </DialogHeader>
@@ -75,14 +75,14 @@ export function TransferEnrollmentModal({
 
           {/* Classe actuelle */}
           <div style={{ backgroundColor: '#F1F5F9', borderRadius: '8px', padding: '10px 14px',
-            fontSize: '13px', color: '#5A7085' }}>
+            fontSize: 'var(--text-sm)', color: '#5A7085' }}>
             <span style={{ fontWeight: 500 }}>Classe actuelle : </span>
             <span style={{ fontWeight: 600, color: '#2C4A6E' }}>{currentClassName}</span>
           </div>
 
           {/* Nouvelle classe */}
           <div className="space-y-2">
-            <Label style={{ fontSize: '13px', fontWeight: 500 }}>
+            <Label style={{ fontSize: 'var(--text-sm)', fontWeight: 500 }}>
               Nouvelle classe <span style={{ color: '#C43C3C' }}>*</span>
             </Label>
             <Select value={newClassSessionId} onValueChange={setNewClassSessionId}>
@@ -101,7 +101,7 @@ export function TransferEnrollmentModal({
 
           {/* Notes */}
           <div className="space-y-2">
-            <Label style={{ fontSize: '13px', fontWeight: 500 }}>Motif (optionnel)</Label>
+            <Label style={{ fontSize: 'var(--text-sm)', fontWeight: 500 }}>Motif (optionnel)</Label>
             <Input value={notes} onChange={e => setNotes(e.target.value)}
               placeholder="Ex : Changement de filière, décision direction..."
               style={{ borderColor: C.neutral[300] }} />
@@ -114,7 +114,7 @@ export function TransferEnrollmentModal({
                 htmlFor="transfer-migrate-grades"
                 style={{
                   display: 'flex', alignItems: 'center', gap: '8px',
-                  fontSize: '13px', fontWeight: 500,
+                  fontSize: 'var(--text-sm)', fontWeight: 500,
                   color: migrationCompatible ? '#1F2937' : '#9CA3AF',
                   cursor: migrationCompatible ? 'pointer' : 'not-allowed',
                 }}
@@ -131,7 +131,7 @@ export function TransferEnrollmentModal({
                 Transférer aussi les notes vers la nouvelle classe
               </label>
               {!migrationCompatible && selectedSession && (
-                <p style={{ fontSize: '12px', color: '#C48B1A', marginLeft: '24px' }}>
+                <p style={{ fontSize: 'var(--text-xs)', color: '#C48B1A', marginLeft: '24px' }}>
                   Les notes ne peuvent être migrées que vers une salle du même niveau.
                 </p>
               )}
@@ -140,7 +140,7 @@ export function TransferEnrollmentModal({
 
           {/* Avertissement */}
           <div style={{ backgroundColor: '#FEF6E0', border: '1px solid #C48B1A', borderRadius: '8px',
-            padding: '10px 14px', fontSize: '12px', color: '#92400E' }}>
+            padding: '10px 14px', fontSize: 'var(--text-xs)', color: '#92400E' }}>
             {effectiveMigrate
               ? "Les notes, comportements et dispenses seront transférés vers la nouvelle classe. Le nouvel enrollment sera actif immédiatement."
               : "L'historique des notes reste attaché à l'ancienne classe. Le nouvel enrollment sera actif immédiatement."}

@@ -65,19 +65,19 @@ export function ClassStatistics({
           <table className="w-full min-w-[600px]">
             <thead>
               <tr className="bg-neutral-100">
-                <th className="text-left py-3 px-4 text-[13px] font-semibold uppercase tracking-wider text-primary-600">
+                <th className="text-left py-3 px-4 text-sm font-semibold uppercase tracking-wider text-primary-600">
                   Classe
                 </th>
-                <th className="text-left py-3 px-4 text-[13px] font-semibold uppercase tracking-wider text-primary-600">
+                <th className="text-left py-3 px-4 text-sm font-semibold uppercase tracking-wider text-primary-600">
                   Effectif
                 </th>
-                <th className="text-left py-3 px-4 text-[13px] font-semibold uppercase tracking-wider text-primary-600">
+                <th className="text-left py-3 px-4 text-sm font-semibold uppercase tracking-wider text-primary-600">
                   Notes saisies
                 </th>
-                <th className="text-left py-3 px-4 text-[13px] font-semibold uppercase tracking-wider text-primary-600">
+                <th className="text-left py-3 px-4 text-sm font-semibold uppercase tracking-wider text-primary-600">
                   Moy. générale
                 </th>
-                <th className="text-left py-3 px-4 text-[13px] font-semibold uppercase tracking-wider text-primary-600">
+                <th className="text-left py-3 px-4 text-sm font-semibold uppercase tracking-wider text-primary-600">
                   Statut {periodName}
                 </th>
               </tr>
@@ -86,17 +86,17 @@ export function ClassStatistics({
               {classes.map((classData, index) => (
                 <tr
                   key={index}
-                  className={`border-b border-neutral-200 hover:bg-secondary-50 transition-colors cursor-pointer ${
+                  className={`border-b border-neutral-200 hover:bg-muted transition-colors cursor-pointer ${
                     index % 2 === 0 ? "bg-neutral-50" : "bg-white"
                   }`}
                 >
                   <td className="py-3 px-4 text-sm text-neutral-900">
                     {classData.className}
                   </td>
-                  <td className="py-3 px-4 text-sm text-neutral-600">
+                  <td className="py-3 px-4 text-sm tabular-nums text-neutral-600">
                     {classData.studentCount}
                   </td>
-                  <td className="py-3 px-4 text-sm text-neutral-600">
+                  <td className="py-3 px-4 text-sm tabular-nums text-neutral-600">
                     {classData.gradesEntered}/{classData.totalGrades} (
                     {getProgressPercentage(
                       classData.gradesEntered,
@@ -104,7 +104,7 @@ export function ClassStatistics({
                     )}
                     %)
                   </td>
-                  <td className="py-3 px-4 text-sm font-medium text-neutral-900">
+                  <td className="py-3 px-4 text-sm font-medium tabular-nums text-neutral-900">
                     {classData.averageGrade
                       ? classData.averageGrade.toFixed(2)
                       : "—"}

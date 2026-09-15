@@ -183,7 +183,7 @@ export function CPMSLGradesCsvImport({ sessions, steps }: Props) {
             {csvText ? (
               <div className="flex items-center justify-between rounded-lg border bg-muted/30 p-3">
                 <div className="flex items-center gap-3">
-                  <FileTextIcon className="h-5 w-5 text-emerald-600" />
+                  <FileTextIcon className="h-5 w-5 text-success-ink" />
                   <div>
                     <div className="text-sm font-medium">{csvName}</div>
                     <div className="text-xs text-muted-foreground">{csvText.split("\n").length - 1} ligne(s) détectée(s)</div>
@@ -239,7 +239,7 @@ export function CPMSLGradesCsvImport({ sessions, steps }: Props) {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base font-semibold">
-              <CheckCircle2Icon className="h-5 w-5 text-emerald-600" />
+              <CheckCircle2Icon className="h-5 w-5 text-success-ink" />
               Résultat de l'import
             </CardTitle>
             <CardDescription>
@@ -259,7 +259,7 @@ export function CPMSLGradesCsvImport({ sessions, steps }: Props) {
             {/* Élèves non inscrits */}
             {result.studentsNotFound.length > 0 && (
               <ResultList
-                icon={<UsersIcon className="h-4 w-4 text-amber-600" />}
+                icon={<UsersIcon className="h-4 w-4 text-warning-ink" />}
                 title="Élèves non inscrits dans la classe choisie"
                 description="L'élève doit avoir un enrollment dans cette classe. Vérifie l'inscription puis relance."
                 items={result.studentsNotFound}
@@ -269,7 +269,7 @@ export function CPMSLGradesCsvImport({ sessions, steps }: Props) {
             {/* Matières manquantes */}
             {result.subjectsNotFound.length > 0 && (
               <ResultList
-                icon={<BookOpenIcon className="h-4 w-4 text-amber-600" />}
+                icon={<BookOpenIcon className="h-4 w-4 text-warning-ink" />}
                 title="Matières absentes du catalogue"
                 description="Le nom de la matière n'existe pas dans le classType de cette classe."
                 items={result.subjectsNotFound}
@@ -279,7 +279,7 @@ export function CPMSLGradesCsvImport({ sessions, steps }: Props) {
             {/* Sections manquantes */}
             {result.sectionsNotFound.length > 0 && (
               <ResultList
-                icon={<LayersIcon className="h-4 w-4 text-amber-600" />}
+                icon={<LayersIcon className="h-4 w-4 text-warning-ink" />}
                 title="Sous-matières absentes"
                 description="La section n'est pas définie pour cette matière."
                 items={result.sectionsNotFound}
@@ -289,15 +289,15 @@ export function CPMSLGradesCsvImport({ sessions, steps }: Props) {
             {/* Log détaillé des lignes non importées */}
             {result.notImported.length > 0 && (
               <div className="rounded-lg border bg-card">
-                <div className="flex items-center gap-2 border-b bg-amber-50/40 px-3 py-2">
-                  <AlertCircleIcon className="h-4 w-4 text-amber-600" />
+                <div className="flex items-center gap-2 border-b bg-warning-soft/40 px-3 py-2">
+                  <AlertCircleIcon className="h-4 w-4 text-warning-ink" />
                   <div className="flex-1">
                     <div className="text-sm font-semibold">Lignes non importées</div>
                     <div className="text-xs text-muted-foreground">
                       Détail complet ligne par ligne — télécharge le CSV pour les corriger.
                     </div>
                   </div>
-                  <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">
+                  <Badge variant="outline" className="border-warning-border bg-warning-soft text-warning-ink">
                     {result.notImported.length}
                   </Badge>
                   <Button size="sm" variant="outline" onClick={downloadNotImported}>
@@ -322,7 +322,7 @@ export function CPMSLGradesCsvImport({ sessions, steps }: Props) {
                         <tr key={i} className={i % 2 === 1 ? "bg-muted/20" : undefined}>
                           <td className="px-2 py-1 tabular-nums text-muted-foreground">{r.rowNumber}</td>
                           <td className="px-2 py-1">
-                            <Badge variant="outline" className="border-amber-200 bg-amber-50 text-[10px] text-amber-700">
+                            <Badge variant="outline" className="border-warning-border bg-warning-soft text-3xs text-warning-ink">
                               {r.reason}
                             </Badge>
                           </td>
@@ -346,9 +346,9 @@ export function CPMSLGradesCsvImport({ sessions, steps }: Props) {
 
 function Stat({ label, value, color }: { label: string; value: number; color: "emerald" | "blue" | "amber" | "muted" }) {
   const cls = {
-    emerald: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    blue:    "border-blue-200 bg-blue-50 text-blue-700",
-    amber:   "border-amber-200 bg-amber-50 text-amber-700",
+    emerald: "border-success-border bg-success-soft text-success-ink",
+    blue:    "border-info-border bg-info-soft text-info-ink",
+    amber:   "border-warning-border bg-warning-soft text-warning-ink",
     muted:   "border-border bg-muted/30 text-muted-foreground",
   }[color]
   return (
@@ -367,13 +367,13 @@ function ResultList({
 }) {
   return (
     <div className="rounded-lg border bg-card">
-      <div className="flex items-center gap-2 border-b bg-amber-50/40 px-3 py-2">
+      <div className="flex items-center gap-2 border-b bg-warning-soft/40 px-3 py-2">
         {icon}
         <div className="flex-1">
           <div className="text-sm font-semibold">{title}</div>
           <div className="text-xs text-muted-foreground">{description}</div>
         </div>
-        <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">
+        <Badge variant="outline" className="border-warning-border bg-warning-soft text-warning-ink">
           {items.length}
         </Badge>
       </div>

@@ -30,7 +30,7 @@ export function StatCard({
         </div>
         <div className="min-w-0">
           <p className="text-sm font-medium text-muted-foreground">{label}</p>
-          <p className="truncate text-2xl font-bold tracking-tight text-foreground">
+          <p className="truncate text-2xl font-bold tabular-nums tracking-tight text-foreground">
             {value}
           </p>
         </div>

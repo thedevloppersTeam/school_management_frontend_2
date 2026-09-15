@@ -94,7 +94,7 @@ export function AuditNoteModal({
           </DialogDescription>
         </DialogHeader>
 
-        <Alert className="border-amber-300 bg-amber-50 text-amber-900">
+        <Alert className="border-warning-border bg-warning-soft text-warning-ink">
           <InfoIcon className="h-4 w-4" />
           <AlertDescription>
             Cette note sera visible dans l&apos;historique du bulletin

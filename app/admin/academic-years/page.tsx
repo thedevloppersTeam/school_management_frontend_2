@@ -331,10 +331,10 @@ export default function AcademicYearsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">
+          <h1 className="heading-1 text-foreground">
             Années Scolaires
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 max-w-prose text-sm text-muted-foreground">
             Gérez les années académiques de votre établissement
           </p>
         </div>
@@ -355,8 +355,8 @@ export default function AcademicYearsPage() {
 
       {/* Warning if active year exists */}
       {hasActiveYear && (
-        <Alert className="border-amber-200 bg-amber-50 text-amber-900">
-          <AlertTriangleIcon className="h-4 w-4 !text-amber-600" />
+        <Alert className="border-warning-border bg-warning-soft text-warning-ink">
+          <AlertTriangleIcon className="h-4 w-4 !text-warning-ink" />
           <AlertTitle>Année active : {activeYear!.name}</AlertTitle>
           <AlertDescription>
             Pour changer d&apos;année active, activez une année en préparation — l&apos;année courante sera automatiquement désactivée.
@@ -371,10 +371,10 @@ export default function AcademicYearsPage() {
             <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
               <SchoolIcon className="h-7 w-7 text-muted-foreground" />
             </div>
-            <h3 className="mt-4 text-sm font-semibold text-foreground">
+            <h2 className="mt-4 text-base font-semibold text-foreground">
               Aucune année scolaire
-            </h3>
-            <p className="mt-1 text-sm text-muted-foreground">
+            </h2>
+            <p className="mt-1 max-w-prose text-sm text-muted-foreground">
               Créez votre première année pour commencer
             </p>
           </div>

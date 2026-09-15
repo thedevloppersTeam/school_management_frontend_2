@@ -6,7 +6,7 @@
  */
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-import { clientFetch as apiFetch } from '@/lib/client-fetch'
+import { clientFetch as apiFetch, ApiError } from '@/lib/client-fetch'
 
 export interface AcademicYear {
   id: string
@@ -51,13 +51,22 @@ export interface Enrollment {
 
 /**
  * Récupère l'année scolaire courante via GET /api/academic-years/current.
- * Retourne null si aucune année n'est marquée courante (404).
+ *
+ * Retourne null UNIQUEMENT quand le serveur répond qu'aucune année n'est
+ * marquée courante (404). Toute autre erreur — réseau coupé, 500, timeout —
+ * est propagée.
+ *
+ * Ne pas revenir à un `catch { return null }` global : l'appelant ne pourrait
+ * plus distinguer « il n'y a pas d'année » de « je n'ai pas pu joindre le
+ * serveur », et afficherait à l'utilisateur que son année scolaire a disparu
+ * en l'invitant à en recréer une — sur une base parfaitement saine.
  */
 export async function fetchActiveAcademicYear(): Promise<AcademicYear | null> {
   try {
     return await apiFetch<AcademicYear>('/api/academic-years/current')
-  } catch {
-    return null
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return null
+    throw err
   }
 }
 

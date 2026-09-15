@@ -79,7 +79,7 @@ export function DeleteSubjectChildModal({
           <DialogTitle
             style={{
               color: '#1E1A17',
-              fontSize: '20px',
+              fontSize: 'var(--text-xl)',
               fontWeight: 600,
               fontFamily: 'var(--font-serif)'
             }}
@@ -101,7 +101,7 @@ export function DeleteSubjectChildModal({
             <p
               style={{
                 color: '#991B1B',
-                fontSize: '14px',
+                fontSize: 'var(--text-sm)',
                 lineHeight: '1.5'
               }}
             >
@@ -114,7 +114,7 @@ export function DeleteSubjectChildModal({
             <p
               style={{
                 color: '#5C5955',
-                fontSize: '14px',
+                fontSize: 'var(--text-sm)',
                 fontWeight: 500
               }}
             >
@@ -127,7 +127,7 @@ export function DeleteSubjectChildModal({
             <div className="space-y-2 pt-2">
               <Label
                 htmlFor={`confirm-child-${child.id}`}
-                style={{ fontSize: '13px', color: '#1E1A17' }}
+                style={{ fontSize: 'var(--text-sm)', color: '#1E1A17' }}
               >
                 Pour confirmer, saisissez{" "}
                 <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
@@ -147,7 +147,7 @@ export function DeleteSubjectChildModal({
                 style={{
                   borderRadius: '8px',
                   border: '1px solid #D1CECC',
-                  fontSize: '14px'
+                  fontSize: 'var(--text-sm)'
                 }}
               />
             </div>

@@ -157,10 +157,10 @@ function saveSectionCycles(sectionId: string, cycles: string[]): void {
 }
 
 function rubricBadgeClasses(code?: string): string {
-  if (code === "R1") return "border-blue-200 bg-blue-50 text-blue-700"
-  if (code === "R2") return "border-emerald-200 bg-emerald-50 text-emerald-700"
-  if (code === "R3") return "border-amber-200 bg-amber-50 text-amber-700"
-  return "border-slate-200 bg-slate-50 text-slate-700"
+  if (code === "R1") return "border-info-border bg-info-soft text-info-ink"
+  if (code === "R2") return "border-success-border bg-success-soft text-success-ink"
+  if (code === "R3") return "border-warning-border bg-warning-soft text-warning-ink"
+  return "border-border bg-muted text-foreground"
 }
 
 function rubricWeight(code: string): string {
@@ -1005,7 +1005,7 @@ function ReferentielTab({
                       <TableCell className="font-medium text-foreground">{subject.name}</TableCell>
                       <TableCell>
                         {subject.classTypeName ? (
-                          <Badge variant="outline" className="border-sky-200 bg-sky-50 text-sky-700 font-medium">
+                          <Badge variant="outline" className="border-info-border bg-info-soft text-info-ink font-medium">
                             {subject.classTypeName}
                           </Badge>
                         ) : (
@@ -1043,7 +1043,7 @@ function ReferentielTab({
                           <TableRow key={section.id} className="bg-muted/30">
                             <TableCell></TableCell>
                             <TableCell className="pl-6">
-                              <code className="font-mono text-[11px] text-muted-foreground">
+                              <code className="font-mono text-2xs text-muted-foreground">
                                 <span className="text-muted-foreground/60">└ </span>
                                 {section.code}
                               </code>
@@ -1057,7 +1057,7 @@ function ReferentielTab({
                                     <Badge
                                       key={cyc}
                                       variant="outline"
-                                      className="border-blue-200 bg-blue-50 text-[10px] text-blue-700"
+                                      className="border-info-border bg-info-soft text-3xs text-info-ink"
                                     >
                                       {cyc}
                                     </Badge>
@@ -1139,7 +1139,7 @@ function ClassesTab({
             {initializing ? "Initialisation..." : "Initialiser niveaux & classes"}
           </Button>
         ) : (
-          <div className="flex items-center gap-1.5 text-sm font-medium text-emerald-700">
+          <div className="flex items-center gap-1.5 text-sm font-medium text-success-ink">
             <CheckCircle2Icon className="h-4 w-4" />
             Classes initialisées
           </div>
@@ -1180,11 +1180,11 @@ function ClassesTab({
                   <TableCell className="pl-6 font-medium text-foreground">{ct.name}</TableCell>
                   <TableCell>
                     {ct.isTerminal ? (
-                      <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">
+                      <Badge variant="outline" className="border-warning-border bg-warning-soft text-warning-ink">
                         Examen
                       </Badge>
                     ) : (
-                      <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-700">
+                      <Badge variant="outline" className="border-border bg-muted text-foreground">
                         Standard
                       </Badge>
                     )}
@@ -1194,11 +1194,11 @@ function ClassesTab({
                   </TableCell>
                   <TableCell className="text-center">
                     {cls ? (
-                      <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
+                      <Badge className="border-success-border bg-success-soft text-success-ink hover:bg-success-soft">
                         Créée
                       </Badge>
                     ) : (
-                      <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">
+                      <Badge variant="outline" className="border-warning-border bg-warning-soft text-warning-ink">
                         En attente
                       </Badge>
                     )}
@@ -1255,7 +1255,7 @@ function AttitudesTab({
       }
     >
       {!currentYearId ? (
-        <div className="px-6 py-10 text-center text-sm text-amber-700">
+        <div className="px-6 py-10 text-center text-sm text-warning-ink">
           Aucune année scolaire active. Activez une année dans la configuration.
         </div>
       ) : attitudes.length === 0 ? (
@@ -1344,7 +1344,7 @@ function RubricModal({ open, onOpenChange, form, onChange, editing, submitting, 
               placeholder="R1"
               maxLength={10}
             />
-            {editing && <p className="text-[11px] text-muted-foreground">Le code ne peut pas être modifié</p>}
+            {editing && <p className="text-2xs text-muted-foreground">Le code ne peut pas être modifié</p>}
           </div>
           <div className="space-y-2">
             <Label htmlFor="rubric-name">
@@ -1423,7 +1423,7 @@ function SubjectModal({ open, onOpenChange, form, onChange, onNameChange, rubric
               disabled={!editing}
               onChange={(e) => editing && onChange({ ...form, code: e.target.value.toUpperCase() })}
             />
-            {!editing && <p className="text-[11px] text-muted-foreground">Généré automatiquement</p>}
+            {!editing && <p className="text-2xs text-muted-foreground">Généré automatiquement</p>}
           </div>
           <div className="space-y-2">
             <Label htmlFor="subj-rubric">
@@ -1459,7 +1459,7 @@ function SubjectModal({ open, onOpenChange, form, onChange, onNameChange, rubric
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-2xs text-muted-foreground">
               La matière n&apos;apparaîtra que pour les classes de ce niveau dans la configuration de l&apos;année.
             </p>
           </div>
@@ -1538,7 +1538,7 @@ function SectionModal({ open, onOpenChange, form, onChange, onNameChange, onTogg
             <div className="space-y-2">
               <Label htmlFor="sec-code">Code</Label>
               <Input id="sec-code" value={form.code} readOnly disabled />
-              <p className="text-[11px] text-muted-foreground">{editing ? "Immuable" : "Généré automatiquement"}</p>
+              <p className="text-2xs text-muted-foreground">{editing ? "Immuable" : "Généré automatiquement"}</p>
             </div>
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="sec-max">Note max</Label>
@@ -1585,7 +1585,7 @@ function SectionModal({ open, onOpenChange, form, onChange, onNameChange, onTogg
               })}
             </div>
             {form.cycles.length === 0 && (
-              <p className="text-[11px] text-amber-700">
+              <p className="text-2xs text-warning-ink">
                 Aucun cycle sélectionné — la sous-matière s&apos;appliquera à toutes les classes.
               </p>
             )}
@@ -1672,7 +1672,7 @@ function ClassModal({ open, onOpenChange, form, onChange, editing, submitting, o
         </DialogHeader>
         <div className="space-y-4">
           <div className="rounded-md border bg-muted/30 px-3 py-2">
-            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Classe</p>
+            <p className="text-2xs uppercase tracking-wide text-muted-foreground">Classe</p>
             <p className="text-base font-semibold text-foreground">{editing?.classType?.name} — Salle A</p>
           </div>
           <div className="space-y-2">
@@ -1714,8 +1714,8 @@ export default function SchoolSettingsPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Établissement</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <h1 className="heading-1 text-foreground">Établissement</h1>
+        <p className="mt-1 max-w-prose text-sm text-muted-foreground">
           Paramètres et référentiel de votre établissement
         </p>
       </div>

@@ -415,20 +415,20 @@ export function CPMSLRapportsSection({
   const renderMentionBadge = (mention: StudentRow['mention']) => {
     if (mention === 'Réussi') {
       return (
-        <span style={{ backgroundColor: '#E8F5EC', color: '#2D7D46', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 600 }}>
+        <span style={{ backgroundColor: '#E8F5EC', color: '#2D7D46', padding: '2px 6px', borderRadius: '4px', fontSize: 'var(--text-3xs)', fontWeight: 600 }}>
           Réussi
         </span>
       )
     }
     if (mention === 'Échec') {
       return (
-        <span style={{ backgroundColor: '#FDE8E8', color: '#C43C3C', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 600 }}>
+        <span style={{ backgroundColor: '#FDE8E8', color: '#C43C3C', padding: '2px 6px', borderRadius: '4px', fontSize: 'var(--text-3xs)', fontWeight: 600 }}>
           Échec
         </span>
       )
     }
     return (
-      <span style={{ backgroundColor: '#FEF6E0', color: '#C48B1A', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 600 }}>
+      <span style={{ backgroundColor: '#FEF6E0', color: '#C48B1A', padding: '2px 6px', borderRadius: '4px', fontSize: 'var(--text-3xs)', fontWeight: 600 }}>
         Incomplet
       </span>
     )
@@ -437,7 +437,7 @@ export function CPMSLRapportsSection({
   // ── Styles ────────────────────────────────────────────────────────────────
   const thStyle: React.CSSProperties = {
     padding: '8px 10px',
-    fontSize: '11px',
+    fontSize: 'var(--text-2xs)',
     fontWeight: 700,
     textTransform: 'uppercase',
     letterSpacing: '0.04em',
@@ -448,7 +448,7 @@ export function CPMSLRapportsSection({
   }
   const tdStyle: React.CSSProperties = {
     padding: '7px 10px',
-    fontSize: '12px',
+    fontSize: 'var(--text-xs)',
     textAlign: 'center',
     borderBottom: '1px solid #E8E6E3',
     color: '#1E1A17',
@@ -510,29 +510,29 @@ export function CPMSLRapportsSection({
               label="Inscrits"
               value={report.enrolled}
               icon={UsersIcon}
-              iconClassName="text-blue-600"
-              iconBgClassName="bg-blue-50"
+              iconClassName="text-primary"
+              iconBgClassName="bg-primary/10"
             />
             <StatCard
               label="Réussites"
               value={`${report.passed} / ${report.evaluated}`}
               icon={CheckCircle2Icon}
-              iconClassName="text-emerald-600"
-              iconBgClassName="bg-emerald-50"
+              iconClassName="text-success"
+              iconBgClassName="bg-success-soft"
             />
             <StatCard
               label="Échecs"
               value={report.failed}
               icon={XCircleIcon}
-              iconClassName="text-rose-600"
-              iconBgClassName="bg-rose-50"
+              iconClassName="text-error"
+              iconBgClassName="bg-error-soft"
             />
             <StatCard
               label="Taux de réussite"
               value={`${report.evaluated ? Math.round((report.passed / report.evaluated) * 100) : 0}%`}
               icon={PercentIcon}
-              iconClassName="text-violet-600"
-              iconBgClassName="bg-violet-50"
+              iconClassName="text-primary"
+              iconBgClassName="bg-primary/10"
             />
           </div>
 
@@ -541,22 +541,22 @@ export function CPMSLRapportsSection({
               label="Moyenne classe"
               value={`${report.classAverage.toFixed(2)} / 10`}
               icon={TrendingUpIcon}
-              iconClassName="text-amber-600"
-              iconBgClassName="bg-amber-50"
+              iconClassName="text-primary"
+              iconBgClassName="bg-primary/10"
             />
             <StatCard
               label="Médiane"
               value={`${report.median.toFixed(2)} / 10`}
               icon={GaugeIcon}
-              iconClassName="text-slate-600"
-              iconBgClassName="bg-slate-100"
+              iconClassName="text-primary"
+              iconBgClassName="bg-primary/10"
             />
             <StatCard
               label="Min / Max"
               value={`${fmt(report.min)} / ${fmt(report.max)}`}
               icon={GaugeIcon}
-              iconClassName="text-teal-600"
-              iconBgClassName="bg-teal-50"
+              iconClassName="text-primary"
+              iconBgClassName="bg-primary/10"
             />
           </div>
 
@@ -569,14 +569,14 @@ export function CPMSLRapportsSection({
             {/* En-tête */}
             <div style={{ marginBottom: '20px', borderBottom: '2px solid #2C4A6E', paddingBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
-                <p style={{ fontSize: '18px', fontWeight: 700, color: '#2A3740', fontFamily: 'var(--font-serif)' }}>
+                <p style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: '#2A3740', fontFamily: 'var(--font-serif)' }}>
                   Cours Privé Mixte Saint Léonard
                 </p>
-                <p style={{ fontSize: '13px', color: '#5C5955', marginTop: '2px' }}>
+                <p style={{ fontSize: 'var(--text-sm)', color: '#5C5955', marginTop: '2px' }}>
                   Rapport statistique · {className} · {stepName}
                 </p>
               </div>
-              <div style={{ textAlign: 'right', fontSize: '12px', color: '#78756F' }}>
+              <div style={{ textAlign: 'right', fontSize: 'var(--text-xs)', color: '#78756F' }}>
                 <p>Généré le {new Date().toLocaleDateString('fr-FR')}</p>
                 <p style={{ marginTop: '2px', fontWeight: 600, color: '#2C4A6E' }}>
                   {report.passed}/{report.evaluated} réussis ({report.evaluated ? Math.round((report.passed / report.evaluated) * 100) : 0}%)
@@ -595,10 +595,10 @@ export function CPMSLRapportsSection({
                 { label: 'Min / Max', value: `${fmt(report.min)} / ${fmt(report.max)}` },
               ].map(k => (
                 <div key={k.label} style={{ backgroundColor: '#F1F5F9', borderRadius: '6px', padding: '10px 12px', textAlign: 'center' }}>
-                  <p style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#5A7085', marginBottom: '4px' }}>
+                  <p style={{ fontSize: 'var(--text-3xs)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#5A7085', marginBottom: '4px' }}>
                     {k.label}
                   </p>
-                  <p style={{ fontSize: '18px', fontWeight: 700, color: '#2A3740' }}>
+                  <p style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: '#2A3740' }}>
                     {k.value}
                   </p>
                 </div>
@@ -607,7 +607,7 @@ export function CPMSLRapportsSection({
 
             {/* Grille */}
             <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-2xs)' }}>
                 <thead>
                   {/* Ligne 1 : groupes rubriques */}
                   <tr style={{ backgroundColor: '#2C4A6E' }}>
@@ -648,7 +648,7 @@ export function CPMSLRapportsSection({
                       <th key={sub.classSubjectId} style={{ ...thStyle, minWidth: '55px' }}>
                         {sub.code}
                         <br />
-                        <span style={{ fontSize: '9px', fontWeight: 400, color: '#78756F' }}>
+                        <span style={{ fontSize: 'var(--text-3xs)', fontWeight: 400, color: '#78756F' }}>
                           /{sub.maxScore}
                         </span>
                       </th>
@@ -690,7 +690,7 @@ export function CPMSLRapportsSection({
                     <td style={{ ...tdStyle, fontWeight: 700, color: '#2C4A6E' }}>
                       {report.classAverage.toFixed(2)}
                     </td>
-                    <td style={{ ...tdStyle, fontSize: '10px', color: '#5A7085' }}>
+                    <td style={{ ...tdStyle, fontSize: 'var(--text-3xs)', color: '#5A7085' }}>
                       {Math.round((report.passed / (report.evaluated || 1)) * 100)}%
                     </td>
                   </tr>
@@ -699,7 +699,7 @@ export function CPMSLRapportsSection({
             </div>
 
             {/* Légende */}
-            <div style={{ marginTop: '12px', fontSize: '10px', color: '#78756F', borderTop: '1px solid #E8E6E3', paddingTop: '10px', display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+            <div style={{ marginTop: '12px', fontSize: 'var(--text-3xs)', color: '#78756F', borderTop: '1px solid #E8E6E3', paddingTop: '10px', display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
               <span>Seuil de réussite : ≥ 7,00/10</span>
               <span>Formule BR-001 : 70% R1 + 25% R2 + 5% R3</span>
               <span>Score par matière = somme des sous-matières</span>
@@ -728,7 +728,7 @@ export function CPMSLRapportsSection({
             <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
               <InboxIcon className="h-7 w-7 text-muted-foreground" />
             </div>
-            <h3 className="mt-4 text-sm font-semibold text-foreground">Aucune sélection</h3>
+            <h2 className="mt-4 text-base font-semibold text-foreground">Aucune sélection</h2>
             <p className="mt-1 max-w-[320px] text-center text-sm text-muted-foreground">
               Sélectionnez une classe et une étape pour générer le rapport statistique.
             </p>

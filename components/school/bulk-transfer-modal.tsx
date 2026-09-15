@@ -76,10 +76,10 @@ export function BulkTransferModal({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent style={{ maxWidth: '480px', backgroundColor: 'white', borderRadius: '12px' }}>
         <DialogHeader>
-          <DialogTitle style={{ fontFamily: 'var(--font-serif)', fontSize: '22px', fontWeight: 700, color: C.primary[800] }}>
+          <DialogTitle style={{ fontFamily: 'var(--font-serif)', fontSize: 'var(--text-xl)', fontWeight: 700, color: C.primary[800] }}>
             Transférer {students.length} élève{students.length > 1 ? 's' : ''}
           </DialogTitle>
-          <p style={{ fontSize: '13px', color: C.neutral[500], marginTop: '2px' }}>
+          <p style={{ fontSize: 'var(--text-sm)', color: C.neutral[500], marginTop: '2px' }}>
             Transfert groupé vers une autre salle
           </p>
         </DialogHeader>
@@ -95,7 +95,7 @@ export function BulkTransferModal({
                 <div key={s.enrollmentId}
                   style={{
                     display: 'flex', justifyContent: 'space-between', gap: '12px',
-                    padding: '7px 12px', fontSize: '13px',
+                    padding: '7px 12px', fontSize: 'var(--text-sm)',
                     borderTop: i > 0 ? `1px solid ${C.neutral[200]}` : 'none',
                     opacity: skipped ? 0.5 : 1,
                   }}>
@@ -110,7 +110,7 @@ export function BulkTransferModal({
 
           {/* Nouvelle salle */}
           <div className="space-y-2">
-            <Label style={{ fontSize: '13px', fontWeight: 500 }}>
+            <Label style={{ fontSize: 'var(--text-sm)', fontWeight: 500 }}>
               Salle de destination <span style={{ color: '#C43C3C' }}>*</span>
             </Label>
             <Select value={newClassSessionId} onValueChange={setNewClassSessionId}>
@@ -126,7 +126,7 @@ export function BulkTransferModal({
               </SelectContent>
             </Select>
             {selectedSession && alreadyThere.length > 0 && (
-              <p style={{ fontSize: '12px', color: '#C48B1A' }}>
+              <p style={{ fontSize: 'var(--text-xs)', color: '#C48B1A' }}>
                 {alreadyThere.length} élève{alreadyThere.length > 1 ? 's' : ''} déjà dans cette salle — ignoré{alreadyThere.length > 1 ? 's' : ''}.
               </p>
             )}
@@ -134,7 +134,7 @@ export function BulkTransferModal({
 
           {/* Motif */}
           <div className="space-y-2">
-            <Label style={{ fontSize: '13px', fontWeight: 500 }}>Motif (optionnel)</Label>
+            <Label style={{ fontSize: 'var(--text-sm)', fontWeight: 500 }}>Motif (optionnel)</Label>
             <Input value={notes} onChange={e => setNotes(e.target.value)}
               placeholder="Ex : Rééquilibrage des salles..."
               style={{ borderColor: C.neutral[300] }} />
@@ -146,7 +146,7 @@ export function BulkTransferModal({
               htmlFor="bulk-transfer-migrate-grades"
               style={{
                 display: 'flex', alignItems: 'center', gap: '8px',
-                fontSize: '13px', fontWeight: 500,
+                fontSize: 'var(--text-sm)', fontWeight: 500,
                 color: migrationCompatible ? '#1F2937' : '#9CA3AF',
                 cursor: migrationCompatible ? 'pointer' : 'not-allowed',
               }}
@@ -163,7 +163,7 @@ export function BulkTransferModal({
               Transférer aussi les notes vers la nouvelle salle
             </label>
             {!migrationCompatible && selectedSession && (
-              <p style={{ fontSize: '12px', color: '#C48B1A', marginLeft: '24px' }}>
+              <p style={{ fontSize: 'var(--text-xs)', color: '#C48B1A', marginLeft: '24px' }}>
                 Les notes ne peuvent être migrées que si tous les élèves sélectionnés sont du même niveau que la salle cible.
               </p>
             )}
@@ -171,7 +171,7 @@ export function BulkTransferModal({
 
           {/* Avertissement */}
           <div style={{ backgroundColor: '#FEF6E0', border: '1px solid #C48B1A', borderRadius: '8px',
-            padding: '10px 14px', fontSize: '12px', color: '#92400E' }}>
+            padding: '10px 14px', fontSize: 'var(--text-xs)', color: '#92400E' }}>
             {effectiveMigrate
               ? `Les notes, comportements et dispenses de ${toTransfer.length} élève${toTransfer.length > 1 ? 's' : ''} seront transférés vers la nouvelle salle.`
               : "L'historique des notes restera attaché aux anciennes classes."}

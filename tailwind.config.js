@@ -115,29 +115,67 @@ export default {
           900: "#1E1A17",
         },
 
+        // Jeu d'etats normatif (DESIGN.md). Quatre roles, quatre pas chacun :
+        //   DEFAULT = le plein et l'icone · soft = la surface
+        //   border  = le filet 1 px       · ink  = le texte
+        // `ink` est un pas de rampe, pas une couleur de marque nouvelle : meme
+        // mecanisme que `destructif`, qui est `erreur` un pas plus profond.
         success: {
-          DEFAULT: "#2D7D46",
+          DEFAULT: "#2D7D46", // 4,87:1 sur papier creme
           soft: "#E8F5EC",
+          border: "#8DB099",
+          ink: "#1E5C33", // 7,65:1 sur papier, 7,10:1 sur soft
+          foreground: "#FAFAFA", // 4,87:1 sur le plein
         },
 
         warning: {
-          DEFAULT: "#C48B1A",
+          DEFAULT: "#C48B1A", // 2,86:1 : plein uniquement, jamais du texte
           soft: "#FEF6E0",
+          border: "#CAB383",
+          ink: "#8A6212", // 5,25:1 sur papier, 5,08:1 sur soft
+          foreground: "#2A1B02", // 5,62:1 sur le plein — le blanc y echoue a 2,85:1
         },
 
         error: {
-          DEFAULT: "#C43C3C",
+          DEFAULT: "#C43C3C", // 4,96:1 sur papier
           soft: "#FDE8E8",
+          border: "#CC9393",
+          ink: "#8F2B2B", // 7,90:1 sur papier, 7,02:1 sur soft
+          foreground: "#FAFAFA", // 4,96:1 sur le plein
         },
 
         info: {
-          DEFAULT: "#2B6CB0",
+          DEFAULT: "#2B6CB0", // 5,20:1 sur papier
           soft: "#E3EFF9",
+          border: "#8AA7C3",
+          ink: "#1E4E80", // 8,20:1 sur papier, 7,32:1 sur soft
+          foreground: "#FAFAFA", // 5,19:1 sur le plein
         },
       },
 
       borderColor: {
         DEFAULT: "hsl(var(--border))",
+      },
+
+      // L'echelle de Tailwind par defaut (12/14/16/18/20/24/30/36) n'etait pas
+      // celle de DESIGN.md (12/13/15/18/22/28/36) : deux echelles tournaient en
+      // parallele, et `text-base` (16 px) etait plus gros que le corps de page
+      // (15 px). Les utilitaires pointent desormais sur les jetons --text-*,
+      // seule echelle du systeme. Chaque pas porte son interlignage de role.
+      // Chaque pas porte l'interlignage ET l'approche de son role. Sans quoi
+      // `text-xs` et `text-sm` ne se distinguaient que par 1 px : l'approche
+      // qui les separe (+0.03em contre +0.02em) ne vivait que dans les sept
+      // classes de role, employees 67 fois contre 851 utilitaires bruts.
+      fontSize: {
+        "3xs": ["var(--text-3xs)", { lineHeight: "1.3",  letterSpacing: "0" }],       // 10 px — grille dense
+        "2xs": ["var(--text-2xs)", { lineHeight: "1.3",  letterSpacing: "0" }],       // 11 px — grille dense
+        xs:    ["var(--text-xs)",   { lineHeight: "var(--leading-normal)",  letterSpacing: "0.03em" }],  // 12 px — legende
+        sm:    ["var(--text-sm)",   { lineHeight: "1.4",  letterSpacing: "0.02em" }], // 13 px — libelle, controle
+        base:  ["var(--text-base)", { lineHeight: "var(--leading-body)", letterSpacing: "0" }],      // 15 px — corps
+        lg:    ["var(--text-lg)",   { lineHeight: "1.4",  letterSpacing: "-0.01em" }],// 18 px — sous-titre
+        xl:    ["var(--text-xl)",   { lineHeight: "1.25", letterSpacing: "-0.02em" }],// 22 px — titre
+        "2xl": ["var(--text-2xl)",  { lineHeight: "var(--leading-snug)",  letterSpacing: "-0.025em" }], // 28 px — chapeau
+        "3xl": ["var(--text-3xl)",  { lineHeight: "var(--leading-tight)", letterSpacing: "-0.03em" }],  // 36 px — display
       },
 
       fontFamily: {

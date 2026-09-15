@@ -141,13 +141,13 @@ interface EnrollmentSummary {
 function statusBadge(status: ApiEnrollment["status"]) {
   switch (status) {
     case "ACTIVE":
-      return <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">Actif</Badge>
+      return <Badge className="border-success-border bg-success-soft text-success-ink hover:bg-success-soft">Actif</Badge>
     case "DROPPED":
       return <Badge variant="secondary">Désactivé</Badge>
     case "TRANSFERRED":
-      return <Badge className="border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-50">Transféré</Badge>
+      return <Badge className="border-info-border bg-info-soft text-info-ink hover:bg-info-soft">Transféré</Badge>
     case "GRADUATED":
-      return <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">Diplômé</Badge>
+      return <Badge className="border-success-border bg-success-soft text-success-ink hover:bg-success-soft">Diplômé</Badge>
   }
 }
 
@@ -226,8 +226,8 @@ function buildEnrollmentSummary(enrollment: ApiEnrollment, grades: ApiGrade[]): 
 
 function averageColor(avg: number | null): string {
   if (avg == null) return "text-muted-foreground"
-  if (avg >= 70) return "text-emerald-700"
-  if (avg >= 50) return "text-amber-700"
+  if (avg >= 70) return "text-success-ink"
+  if (avg >= 50) return "text-warning-ink"
   return "text-destructive"
 }
 
@@ -377,7 +377,7 @@ export default function StudentTranscriptPage() {
 
           <div className="flex-1 space-y-3">
             <div>
-              <h1 className="text-2xl font-bold tracking-tight text-foreground">{fullName}</h1>
+              <h1 className="heading-2 text-foreground">{fullName}</h1>
               <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                 <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{student.studentCode}</code>
                 {student.nisu && (
@@ -441,8 +441,8 @@ export default function StudentTranscriptPage() {
             <p className={cn("text-3xl font-bold tabular-nums", averageColor(overall))}>
               {overall !== null ? overall.toFixed(2) : "—"}
             </p>
-            <p className="text-[11px] text-muted-foreground">/ 100</p>
-            <p className="mt-2 text-[11px] text-muted-foreground">
+            <p className="text-2xs text-muted-foreground">/ 100</p>
+            <p className="mt-2 text-2xs text-muted-foreground">
               {summaries.length} année{summaries.length > 1 ? "s" : ""} d&apos;inscription
             </p>
           </div>
@@ -507,31 +507,31 @@ export default function StudentTranscriptPage() {
                         <div className="flex items-center gap-3 text-left">
                           <Avatar className="h-10 w-10 shrink-0 ring-1 ring-border">
                             <AvatarImage src={normalizeUploadUrl(yearPhoto)} />
-                            <AvatarFallback className="bg-muted text-muted-foreground text-[10px]">
+                            <AvatarFallback className="bg-muted text-muted-foreground text-3xs">
                               {e.classSession.academicYear.yearString.slice(2, 4)}
                             </AvatarFallback>
                           </Avatar>
                           <div className="flex flex-wrap items-center gap-2">
-                            <Badge variant="outline" className="font-mono text-[11px]">
+                            <Badge variant="outline" className="font-mono text-2xs">
                               {e.classSession.academicYear.yearString}
                             </Badge>
                             <span className="font-medium text-foreground">{className}</span>
                             {statusBadge(e.status)}
                             {e.classSession.academicYear.isCurrent && (
-                              <Badge className="border-emerald-200 bg-emerald-50 text-[10px] text-emerald-700 hover:bg-emerald-50">
+                              <Badge className="border-success-border bg-success-soft text-3xs text-success-ink hover:bg-success-soft">
                                 Année courante
                               </Badge>
                             )}
                           </div>
                         </div>
                         <div className="flex shrink-0 items-baseline gap-2">
-                          <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                          <span className="text-2xs uppercase tracking-wide text-muted-foreground">
                             Moy. générale
                           </span>
                           <span className={cn("text-lg font-bold tabular-nums", averageColor(summary.generalAverage))}>
                             {summary.generalAverage !== null ? summary.generalAverage.toFixed(2) : "—"}
                           </span>
-                          <span className="text-[11px] text-muted-foreground">/ 100</span>
+                          <span className="text-2xs text-muted-foreground">/ 100</span>
                         </div>
                       </div>
                     </AccordionTrigger>
@@ -547,12 +547,12 @@ export default function StudentTranscriptPage() {
                               className="h-28 w-28 rounded-md object-cover ring-1 ring-border"
                             />
                           ) : (
-                            <div className="flex h-28 w-28 flex-col items-center justify-center rounded-md border border-dashed bg-muted/30 text-[10px] text-muted-foreground">
+                            <div className="flex h-28 w-28 flex-col items-center justify-center rounded-md border border-dashed bg-muted/30 text-3xs text-muted-foreground">
                               <UserIcon className="mb-1 h-6 w-6 opacity-60" />
                               <span>Aucune photo</span>
                             </div>
                           )}
-                          <p className="mt-1 text-center text-[10px] uppercase tracking-wide text-muted-foreground">
+                          <p className="mt-1 text-center text-3xs uppercase tracking-wide text-muted-foreground">
                             Promotion {e.classSession.academicYear.yearString}
                           </p>
                         </div>
@@ -565,7 +565,7 @@ export default function StudentTranscriptPage() {
                                   key={s.stepId}
                                   className="rounded-md border bg-muted/20 px-3 py-2"
                                 >
-                                  <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                  <p className="text-3xs font-medium uppercase tracking-wide text-muted-foreground">
                                     {s.stepName}
                                   </p>
                                   <p className={cn("mt-0.5 text-lg font-semibold tabular-nums", averageColor(s.average))}>
@@ -617,7 +617,7 @@ export default function StudentTranscriptPage() {
                                     <TableCell className="pl-3">
                                       <div className="flex flex-col">
                                         <span className="font-medium text-foreground">{subj.subjectName}</span>
-                                        <code className="font-mono text-[10px] text-muted-foreground">
+                                        <code className="font-mono text-3xs text-muted-foreground">
                                           {subj.subjectCode}
                                         </code>
                                       </div>
