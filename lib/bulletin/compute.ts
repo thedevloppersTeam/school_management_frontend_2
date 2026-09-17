@@ -444,6 +444,45 @@ export function computeGeneralAverage(stepAverages: Decimal[]): Decimal | null {
 }
 
 /**
+ * Moyenne d'une etape, ou `null` quand l'etape n'a rien d'exploitable.
+ *
+ * `computeStepAverage` ne renvoie jamais null : trois rubriques sans
+ * denominateur donnent trois contributions nulles, donc 0 — un chiffre, pas
+ * une absence. La distinction compte des qu'on agrege PLUSIEURS etapes : une
+ * etape jamais notee doit sortir du calcul, pas y entrer comme un zero, sinon
+ * une annee saisie a moitie ecrase la moyenne de l'eleve.
+ *
+ * La regle vivait chez l'appelant (`calculateBulletinAverages`) et s'arretait
+ * donc au bulletin. Elle appartient ici : c'est elle qui decide ce qui entre
+ * dans la moyenne annuelle.
+ */
+export function stepAverageOrNull(step: StepResult): Decimal | null {
+  const vide =
+    step.r1.average === null && step.r2.average === null && step.r3.average === null
+  return vide ? null : step.average
+}
+
+/**
+ * BR-002 — moyenne ANNUELLE : moyenne arithmetique des moyennes d'etapes, les
+ * etapes sans rien d'exploitable etant ecartees.
+ *
+ * Seul point de calcul de la moyenne annuelle. Les dispenses d'etape se
+ * retirent AVANT l'appel : une etape dont l'eleve est dispense ne figure pas
+ * dans `steps`, elle n'est pas ecartee ici par accident de denominateur nul.
+ *
+ * Tout reste en Decimal jusqu'au formatage. Le chemin precedent convertissait
+ * chaque moyenne d'etape en flottant avant de les moyenner, ce qui deplacait
+ * l'arrondi d'affichage des que la moyenne exacte tombait sur un demi-centieme
+ * (7,005 imprime « 7,00 » au lieu de « 7,01 »).
+ */
+export function computeAnnualAverage(steps: StepResult[]): Decimal | null {
+  const retenues = steps
+    .map(stepAverageOrNull)
+    .filter((a): a is Decimal => a !== null)
+  return computeGeneralAverage(retenues)
+}
+
+/**
  * Moyenne de classe sur une matiere.
  *
  * Regle arbitree par Edy le 2026-09-12 : les eleves DISPENSES sont exclus du

@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:unit": "tsx lib/bulletin/compute.test.ts && tsx lib/bulletin/compute.extra.test.ts && tsx lib/bulletin/from-api.test.ts && tsx lib/bulletin/grade-color.test.ts && tsx lib/grades/score-input.test.ts",
+    "test:unit": "tsx lib/bulletin/compute.test.ts && tsx lib/bulletin/compute.extra.test.ts && tsx lib/bulletin/from-api.test.ts && tsx lib/bulletin/annual.test.ts && tsx lib/bulletin/grade-color.test.ts && tsx lib/grades/score-input.test.ts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:list": "playwright test --list"
