@@ -52,7 +52,6 @@ import {
   ArrowDownIcon,
   MoreHorizontalIcon,
   PencilIcon,
-  ArrowRightLeftIcon,
   UserRoundXIcon,
   UserRoundCheckIcon,
   GraduationCapIcon,
@@ -61,8 +60,6 @@ import {
 import { ArchivedYearBanner } from "@/components/school/archived-year-banner"
 import { StudentEnrollForm } from "@/components/school/students/student-enroll-form"
 import { EditStudentModal, type EditStudentData } from "@/components/school/edit-student-modal"
-import { TransferEnrollmentModal } from "@/components/school/transfer-enrollment-modal"
-import { BulkTransferModal } from "@/components/school/bulk-transfer-modal"
 import { StepExemptionModal } from "@/components/school/step-exemption-modal"
 import { StudentTrackModal } from "@/components/school/student-track-modal"
 import { CorrectAssignmentModal } from "@/components/school/correct-assignment-modal"
@@ -166,8 +163,6 @@ export default function StudentsManagementPage() {
   const [editSubmitting, setEditSubmitting]     = useState(false)
 
   // Transfert
-  const [transferringStudent, setTransferringStudent] = useState<StudentRow | null>(null)
-  const [transferSubmitting, setTransferSubmitting]   = useState(false)
 
   // Dispense d'étape
   const [exemptingStudent, setExemptingStudent] = useState<StudentRow | null>(null)
@@ -178,11 +173,9 @@ export default function StudentsManagementPage() {
   // Correction d affectation (erreur de saisie a l inscription, pas un transfert)
   const [correctingStudent, setCorrectingStudent] = useState<StudentRow | null>(null)
 
-  // Transfert groupé
+  // Sélection multiple
   const [selectedEnrollmentIds, setSelectedEnrollmentIds] = useState<Set<string>>(new Set())
-  const [bulkTransferOpen, setBulkTransferOpen] = useState(false)
   const [bulkCorrectOpen, setBulkCorrectOpen] = useState(false)
-  const [bulkSubmitting, setBulkSubmitting] = useState(false)
 
   // Tri
   type SortCol = 'nisu' | 'name' | 'class'
@@ -412,45 +405,7 @@ export default function StudentsManagementPage() {
     }
   }
 
-  // ── Transfert ──────────────────────────────────────────────────────────────
-  const handleTransfer = async (data: { newClassSessionId: string; notes?: string; migrateGrades?: boolean }) => {
-    if (!transferringStudent) return
-    setTransferSubmitting(true)
-    try {
-      const res = await fetch('/api/enrollments/transfer', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          enrollmentId: transferringStudent.enrollmentId,
-          newClassSessionId: data.newClassSessionId,
-          notes: data.notes,
-          migrateGrades: data.migrateGrades ?? false,
-        }),
-      })
-      const payload = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(payload.message)
-      const m = payload.migration
-      toast({
-        title: "Élève transféré avec succès",
-        description: m
-          ? `${m.grades} note${m.grades > 1 ? 's' : ''}, ${m.behaviors} comportement${m.behaviors > 1 ? 's' : ''} et ${m.exclusions} dispense${m.exclusions > 1 ? 's' : ''} migrés vers la nouvelle classe`
-          : undefined,
-      })
-      setTransferringStudent(null)
-      loadStudents()
-    } catch (err) {
-      toast({
-        title: "Erreur",
-        description: err instanceof Error && err.message ? err.message : "Impossible de transférer l'élève",
-        variant: "destructive",
-      })
-    } finally {
-      setTransferSubmitting(false)
-    }
-  }
-
-  // ── Transfert groupé ─────────────────────────────────────────────────────────
+  // ── Sélection multiple ───────────────────────────────────────────────────────
   const toggleSelected = (enrollmentId: string) => {
     setSelectedEnrollmentIds(prev => {
       const next = new Set(prev)
@@ -474,58 +429,6 @@ export default function StudentsManagementPage() {
   }
 
   const selectedStudents = students.filter(s => selectedEnrollmentIds.has(s.enrollmentId))
-
-  const handleBulkTransfer = async (data: { newClassSessionId: string; notes?: string; migrateGrades: boolean }) => {
-    setBulkSubmitting(true)
-    // Les élèves déjà dans la salle cible sont ignorés (le modal les signale)
-    const toTransfer = selectedStudents.filter(s => s.classSessionId !== data.newClassSessionId)
-    let ok = 0
-    let grades = 0, behaviors = 0, exclusions = 0
-    const errors: string[] = []
-    // Séquentiel : le contrôle de capacité de la salle cible reste fiable
-    for (const s of toTransfer) {
-      try {
-        const res = await fetch('/api/enrollments/transfer', {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            enrollmentId: s.enrollmentId,
-            newClassSessionId: data.newClassSessionId,
-            notes: data.notes,
-            migrateGrades: data.migrateGrades,
-          }),
-        })
-        const payload = await res.json().catch(() => ({}))
-        if (!res.ok) throw new Error(payload.message)
-        ok++
-        if (payload.migration) {
-          grades += payload.migration.grades ?? 0
-          behaviors += payload.migration.behaviors ?? 0
-          exclusions += payload.migration.exclusions ?? 0
-        }
-      } catch (err) {
-        errors.push(`${s.firstname} ${s.lastname}${err instanceof Error && err.message ? ` (${err.message})` : ''}`)
-      }
-    }
-    const failed = errors.length
-    toast({
-      title: failed === 0
-        ? `${ok} élève${ok > 1 ? 's' : ''} transféré${ok > 1 ? 's' : ''} avec succès`
-        : `${ok} transféré${ok > 1 ? 's' : ''}, ${failed} échec${failed > 1 ? 's' : ''}`,
-      description: [
-        data.migrateGrades && ok > 0
-          ? `${grades} note${grades > 1 ? 's' : ''}, ${behaviors} comportement${behaviors > 1 ? 's' : ''} et ${exclusions} dispense${exclusions > 1 ? 's' : ''} migrés`
-          : null,
-        failed > 0 ? `Échecs : ${errors.slice(0, 3).join(', ')}${errors.length > 3 ? '…' : ''}` : null,
-      ].filter(Boolean).join(' — ') || undefined,
-      variant: failed > 0 ? "destructive" : undefined,
-    })
-    setBulkSubmitting(false)
-    setBulkTransferOpen(false)
-    setSelectedEnrollmentIds(new Set())
-    loadStudents()
-  }
 
   // ── Rendu ─────────────────────────────────────────────────────────────────────
   if (loading) {
@@ -675,7 +578,7 @@ export default function StudentsManagementPage() {
           </div>
         </div>
 
-        {/* Barre d'action — transfert groupé */}
+        {/* Barre d'action — correction d'affectation en lot */}
         {!isArchived && selectedEnrollmentIds.size > 0 && (
           <div className="flex flex-col gap-2 border-t bg-primary/5 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
             <span className="text-sm font-medium text-foreground">
@@ -689,17 +592,9 @@ export default function StudentsManagementPage() {
               >
                 Tout désélectionner
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setBulkCorrectOpen(true)}
-              >
+              <Button size="sm" onClick={() => setBulkCorrectOpen(true)}>
                 <PencilIcon className="mr-2 h-4 w-4" />
                 Corriger l&apos;affectation
-              </Button>
-              <Button size="sm" onClick={() => setBulkTransferOpen(true)}>
-                <ArrowRightLeftIcon className="mr-2 h-4 w-4" />
-                Transférer la sélection
               </Button>
             </div>
           </div>
@@ -860,10 +755,6 @@ export default function StudentsManagementPage() {
                                   <DropdownMenuItem onClick={() => setEditingStudent(student)}>
                                     <PencilIcon className="mr-2 h-4 w-4" />
                                     Modifier
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => setTransferringStudent(student)}>
-                                    <ArrowRightLeftIcon className="mr-2 h-4 w-4" />
-                                    Transférer
                                   </DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => setCorrectingStudent(student)}>
                                     <WrenchIcon className="mr-2 h-4 w-4" />
@@ -1043,29 +934,6 @@ export default function StudentsManagementPage() {
         />
       )}
 
-      {/* Modal transfert */}
-      {transferringStudent && (
-        <TransferEnrollmentModal
-          open={!!transferringStudent}
-          onOpenChange={open => !open && setTransferringStudent(null)}
-          studentName={`${transferringStudent.firstname} ${transferringStudent.lastname}`}
-          currentClassName={transferringStudent.className}
-          currentClassTypeId={sessions.find(s => s.id === transferringStudent.classSessionId)?.class.classType.id}
-          sessions={sessions
-            .filter(s => s.id !== transferringStudent.classSessionId)
-            .map(s => {
-              const trackSuffix = s.class.track ? ` — ${s.class.track.code}` : '';
-              return {
-                id: s.id,
-                label: `${s.class.classType.name} ${s.class.letter}${trackSuffix}`,
-                classTypeId: s.class.classType.id,
-              };
-            })}
-          submitting={transferSubmitting}
-          onSubmit={handleTransfer}
-        />
-      )}
-
       {/* Modal filière (classes terminales) */}
       {trackStudent && (
         <StudentTrackModal
@@ -1140,30 +1008,6 @@ export default function StudentsManagementPage() {
         />
       )}
 
-      {/* Modal transfert groupé */}
-      {bulkTransferOpen && (
-        <BulkTransferModal
-          open={bulkTransferOpen}
-          onOpenChange={open => !open && setBulkTransferOpen(false)}
-          students={selectedStudents.map(s => ({
-            enrollmentId: s.enrollmentId,
-            name: `${s.firstname} ${s.lastname}`,
-            className: s.className,
-            classSessionId: s.classSessionId,
-            classTypeId: sessions.find(sess => sess.id === s.classSessionId)?.class.classType.id,
-          }))}
-          sessions={sessions.map(s => {
-            const trackSuffix = s.class.track ? ` — ${s.class.track.code}` : '';
-            return {
-              id: s.id,
-              label: `${s.class.classType.name} ${s.class.letter}${trackSuffix}`,
-              classTypeId: s.class.classType.id,
-            };
-          })}
-          submitting={bulkSubmitting}
-          onSubmit={handleBulkTransfer}
-        />
-      )}
     </div>
   )
 }

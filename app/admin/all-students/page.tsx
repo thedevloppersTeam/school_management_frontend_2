@@ -50,7 +50,6 @@ import {
   ArrowDownIcon,
   MoreHorizontalIcon,
   PencilIcon,
-  ArrowRightLeftIcon,
   UserRoundXIcon,
   UserRoundCheckIcon,
   FileTextIcon,
@@ -64,11 +63,10 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { ArchivedYearBanner } from "@/components/school/archived-year-banner"
 import { StudentEnrollForm } from "@/components/school/students/student-enroll-form"
 import { EditStudentModal } from "@/components/school/edit-student-modal"
-import { TransferEnrollmentModal } from "@/components/school/transfer-enrollment-modal"
 import { PromotionPhotoModal } from "@/components/school/promotion-photo-modal"
 import { normalizeUploadUrl } from "@/lib/upload-url"
 import { StatCard } from "@/components/school/stat-card"
-import { fetchActiveAcademicYear, fetchClassSessions, type AcademicYear, type ClassSession } from "@/lib/api/dashboard"
+import { fetchActiveAcademicYear, type AcademicYear } from "@/lib/api/dashboard"
 import { cn } from "@/lib/utils"
 import { isNisuValid, NISU_RULE_LABEL } from "@/lib/nisu"
 
@@ -178,7 +176,6 @@ export default function StudentsManagementPage() {
   // ── État ────────────────────────────────────────────────────────────────────
   const [year, setYear]               = useState<AcademicYear | null>(null)
   const [noCurrentYear, setNoCurrentYear] = useState(false)
-  const [sessions, setSessions]       = useState<ClassSession[]>([])
   const [students, setStudents]       = useState<StudentRow[]>([])
   const [loading, setLoading]         = useState(true)
   const [enrollOpen, setEnrollOpen]   = useState(false)
@@ -205,8 +202,6 @@ export default function StudentsManagementPage() {
   const [editSubmitting, setEditSubmitting]     = useState(false)
 
   // Transfert
-  const [transferringStudent, setTransferringStudent] = useState<StudentRow | null>(null)
-  const [transferSubmitting, setTransferSubmitting]   = useState(false)
 
   // Suppression (sélection multiple + confirmation par mot de passe)
   const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set())
@@ -225,21 +220,15 @@ export default function StudentsManagementPage() {
     setLoading(true)
     setNoCurrentYear(false)
     try {
-      // 1. Année courante (utilisée pour l'inscription, le transfert, la photo de promotion)
+      // 1. Année courante (utilisée pour l'inscription et la photo de promotion)
       const yearData = await fetchActiveAcademicYear()
       setYear(yearData)
       setNoCurrentYear(!yearData)
 
-      // 2. Sessions de classe de l'année courante (pour les modaux Transférer / Inscrire)
-      let sessionsData: ClassSession[] = []
-      if (yearData) {
-        sessionsData = await fetchClassSessions(yearData.id)
-        setSessions(sessionsData)
-      } else {
-        setSessions([])
-      }
+      // La liste des salles n'est plus chargée ici : elle n'alimentait que le
+      // modale de transfert, qui n'existe plus.
 
-      // 3. Liste de tous les élèves du système (un seul appel)
+      // 2. Liste de tous les élèves du système (un seul appel)
       const studentsData = await apiFetch<Array<{
         id: string
         studentCode?: string
@@ -583,44 +572,6 @@ export default function StudentsManagementPage() {
       setDeleteError("Impossible de contacter le serveur.")
     } finally {
       setDeleting(false)
-    }
-  }
-
-  // ── Transfert ──────────────────────────────────────────────────────────────
-  const handleTransfer = async (data: { newClassSessionId: string; notes?: string; migrateGrades?: boolean }) => {
-    if (!transferringStudent) return
-    setTransferSubmitting(true)
-    try {
-      const res = await fetch('/api/enrollments/transfer', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          enrollmentId: transferringStudent.enrollmentId,
-          newClassSessionId: data.newClassSessionId,
-          notes: data.notes,
-          migrateGrades: data.migrateGrades ?? false,
-        }),
-      })
-      const payload = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(payload.message)
-      const m = payload.migration
-      toast({
-        title: "Élève transféré avec succès",
-        description: m
-          ? `${m.grades} note${m.grades > 1 ? 's' : ''}, ${m.behaviors} comportement${m.behaviors > 1 ? 's' : ''} et ${m.exclusions} dispense${m.exclusions > 1 ? 's' : ''} migrés vers la nouvelle classe`
-          : undefined,
-      })
-      setTransferringStudent(null)
-      loadStudents()
-    } catch (err) {
-      toast({
-        title: "Erreur",
-        description: err instanceof Error && err.message ? err.message : "Impossible de transférer l'élève",
-        variant: "destructive",
-      })
-    } finally {
-      setTransferSubmitting(false)
     }
   }
 
@@ -1031,11 +982,6 @@ export default function StudentsManagementPage() {
                             </DropdownMenuItem>
                             {isActive && isCurrentYear && !isArchived && (
                               <>
-                                <DropdownMenuItem onClick={() => setTransferringStudent(student)}>
-                                  <ArrowRightLeftIcon className="mr-2 h-4 w-4" />
-                                  Transférer de classe
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
                                 <DropdownMenuItem
                                   onClick={() => { if (student.enrollmentId) { setDeactivatingId(student.enrollmentId); setDeactivationReason('') } }}
                                   className="text-destructive focus:text-destructive"
@@ -1261,29 +1207,6 @@ export default function StudentsManagementPage() {
           }}
           submitting={editSubmitting}
           onSubmit={handleEditStudent}
-        />
-      )}
-
-      {/* Modal transfert */}
-      {transferringStudent && (
-        <TransferEnrollmentModal
-          open={!!transferringStudent}
-          onOpenChange={open => !open && setTransferringStudent(null)}
-          studentName={`${transferringStudent.firstname} ${transferringStudent.lastname}`}
-          currentClassName={transferringStudent.className ?? ""}
-          currentClassTypeId={sessions.find(s => s.id === transferringStudent.classSessionId)?.class.classType.id}
-          sessions={sessions
-            .filter(s => s.id !== transferringStudent.classSessionId)
-            .map(s => {
-              const trackSuffix = s.class.track ? ` — ${s.class.track.code}` : '';
-              return {
-                id: s.id,
-                label: `${s.class.classType.name} ${s.class.letter}${trackSuffix}`,
-                classTypeId: s.class.classType.id,
-              };
-            })}
-          submitting={transferSubmitting}
-          onSubmit={handleTransfer}
         />
       )}
 

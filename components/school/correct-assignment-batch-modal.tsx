@@ -300,8 +300,8 @@ export function CorrectAssignmentBatchModal({
             <span>
               À utiliser quand ces élèves n&apos;ont <strong>jamais</strong> appartenu
               à la salle enregistrée : une erreur de saisie à l&apos;inscription.
-              S&apos;ils y étaient réellement et la quittent, ce n&apos;est pas ce
-              geste.
+              S&apos;ils y étaient réellement et quittent l&apos;établissement,
+              enregistrez leur départ.
             </span>
           </div>
 

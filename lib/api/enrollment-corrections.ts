@@ -4,9 +4,13 @@
  * Correction d'affectation + journal d'audit élève.
  *
  * Corriger une affectation, c'est réparer une erreur de saisie à l'inscription :
- * l'élève n'a jamais appartenu à la salle ou à la filière enregistrée. C'est un
- * geste distinct du transfert (l'élève y était, il n'y est plus), qui passe par
- * `/api/enrollments/transfer`.
+ * l'élève n'a jamais appartenu à la salle ou à la filière enregistrée.
+ *
+ * C'est le seul geste qui déplace un élève à l'intérieur d'une année. L'ancien
+ * transfert interne, `/api/enrollments/transfer`, a été retiré : il passait
+ * l'inscription à TRANSFERRED et en créait une seconde, donc un doublon qui
+ * pesait deux fois dans les moyennes. L'élève qui quitte réellement
+ * l'établissement relève du départ, pas d'un déplacement.
  *
  * L'id de l'inscription ne change jamais. Deux modes, déterminés par la
  * filière :
