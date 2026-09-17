@@ -746,7 +746,7 @@ export default function StudentsManagementPage() {
                                   className="text-success-ink focus:text-success-ink"
                                 >
                                   <UserRoundCheckIcon className="mr-2 h-4 w-4" />
-                                  Réactiver
+                                  Annuler le départ
                                 </DropdownMenuItem>
                               ) : (
                                 <>
@@ -774,7 +774,7 @@ export default function StudentsManagementPage() {
                                     className="text-destructive focus:text-destructive"
                                   >
                                     <UserRoundXIcon className="mr-2 h-4 w-4" />
-                                    Désactiver
+                                    Enregistrer un départ
                                   </DropdownMenuItem>
                                 </>
                               )}
@@ -875,14 +875,15 @@ export default function StudentsManagementPage() {
         )}
       </Card>
 
-      {/* ── Modal désactivation ── */}
+      {/* ── Modal départ ── */}
       <Dialog open={!!deactivatingId} onOpenChange={open => !open && setDeactivatingId(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Désactiver cet élève</DialogTitle>
+            <DialogTitle>Enregistrer le départ de cet élève</DialogTitle>
             <DialogDescription>
-              L'élève ne sera plus visible dans les listes actives. Cette action est réversible —
-              vous pouvez réactiver l'élève à tout moment.
+              L'élève ne sera plus visible dans les listes actives, et ne comptera plus dans
+              les effectifs. Son inscription et ses notes sont conservées. L'action se défait
+              par &laquo;&nbsp;Annuler le départ&nbsp;&raquo;.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 py-2">
@@ -901,7 +902,7 @@ export default function StudentsManagementPage() {
               Annuler
             </Button>
             <Button variant="destructive" onClick={handleDeactivate} disabled={deactivating}>
-              {deactivating ? 'En cours...' : 'Confirmer la désactivation'}
+              {deactivating ? 'Enregistrement…' : 'Enregistrer le départ'}
             </Button>
           </DialogFooter>
         </DialogContent>

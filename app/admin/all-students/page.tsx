@@ -50,8 +50,6 @@ import {
   ArrowDownIcon,
   MoreHorizontalIcon,
   PencilIcon,
-  UserRoundXIcon,
-  UserRoundCheckIcon,
   FileTextIcon,
   CameraIcon,
   SettingsIcon,
@@ -190,9 +188,6 @@ export default function StudentsManagementPage() {
   const PAGE_SIZE_OPTIONS = [15, 25, 50, 100]
 
   // Désactivation
-  const [deactivatingId, setDeactivatingId] = useState<string | null>(null)
-  const [deactivationReason, setDeactivationReason] = useState("")
-  const [deactivating, setDeactivating] = useState(false)
 
   // Photo de promotion
   const [photoTarget, setPhotoTarget] = useState<StudentRow | null>(null)
@@ -457,42 +452,6 @@ export default function StudentsManagementPage() {
   }
 
   // ── Désactivation ─────────────────────────────────────────────────────────────
-  const handleDeactivate = async () => {
-    if (!deactivatingId) return
-    setDeactivating(true)
-    try {
-      const res = await fetch(`/api/enrollments/status-update/${deactivatingId}`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'DROPPED', notes: deactivationReason || undefined })
-      })
-      if (!res.ok) throw new Error()
-      toast({ title: "Élève désactivé" })
-      setDeactivatingId(null)
-      loadStudents()
-    } catch {
-      toast({ title: "Erreur", description: "Impossible de désactiver l'élève", variant: "destructive" })
-    } finally {
-      setDeactivating(false)
-    }
-  }
-
-  const handleReactivate = async (enrollmentId: string) => {
-    try {
-      const res = await fetch(`/api/enrollments/status-update/${enrollmentId}`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'ACTIVE' })
-      })
-      if (!res.ok) throw new Error()
-      toast({ title: "Élève réactivé" })
-      loadStudents()
-    } catch {
-      toast({ title: "Erreur", variant: "destructive" })
-    }
-  }
 
   // ── Modification profil ────────────────────────────────────────────────────
   const handleEditStudent = async (data: {
@@ -850,8 +809,6 @@ export default function StudentsManagementPage() {
                 {paginated.map(student => {
                   const nisuInvalid = !!student.nisu && !isNisuValid(student.nisu)
                   const isActive = student.status === 'ACTIVE'
-                  const isDropped = student.status === 'DROPPED'
-                  const isCurrentYear = !!year && student.yearId === year.id
                   const avatarSrc = normalizeUploadUrl(student.promotionPhotoUrl ?? student.profilePhoto)
 
                   return (
@@ -980,26 +937,6 @@ export default function StudentsManagementPage() {
                               <PencilIcon className="mr-2 h-4 w-4" />
                               Modifier le profil
                             </DropdownMenuItem>
-                            {isActive && isCurrentYear && !isArchived && (
-                              <>
-                                <DropdownMenuItem
-                                  onClick={() => { if (student.enrollmentId) { setDeactivatingId(student.enrollmentId); setDeactivationReason('') } }}
-                                  className="text-destructive focus:text-destructive"
-                                >
-                                  <UserRoundXIcon className="mr-2 h-4 w-4" />
-                                  Désactiver
-                                </DropdownMenuItem>
-                              </>
-                            )}
-                            {isDropped && isCurrentYear && !isArchived && (
-                              <DropdownMenuItem
-                                onClick={() => student.enrollmentId && handleReactivate(student.enrollmentId)}
-                                className="text-success-ink focus:text-success-ink"
-                              >
-                                <UserRoundCheckIcon className="mr-2 h-4 w-4" />
-                                Réactiver
-                              </DropdownMenuItem>
-                            )}
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
                               onClick={() => { setSelectedIds(new Set([student.studentId])); openDeleteDialog() }}
@@ -1103,38 +1040,6 @@ export default function StudentsManagementPage() {
           </>
         )}
       </Card>
-
-      {/* ── Modal désactivation ── */}
-      <Dialog open={!!deactivatingId} onOpenChange={open => !open && setDeactivatingId(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Désactiver cet élève</DialogTitle>
-            <DialogDescription>
-              L'élève ne sera plus visible dans les listes actives. Cette action est réversible —
-              vous pouvez réactiver l'élève à tout moment.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2 py-2">
-            <Label htmlFor="deactivation-reason" className="text-sm font-medium">
-              Raison (optionnelle)
-            </Label>
-            <Input
-              id="deactivation-reason"
-              placeholder="Ex: Déménagement, transfert..."
-              value={deactivationReason}
-              onChange={e => setDeactivationReason(e.target.value)}
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeactivatingId(null)}>
-              Annuler
-            </Button>
-            <Button variant="destructive" onClick={handleDeactivate} disabled={deactivating}>
-              {deactivating ? 'En cours...' : 'Confirmer la désactivation'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Modal suppression définitive (confirmation par mot de passe admin) */}
       <Dialog open={deleteOpen} onOpenChange={(o) => { if (!o) { setDeleteOpen(false); setDeletePassword(""); setDeleteError(null) } }}>
