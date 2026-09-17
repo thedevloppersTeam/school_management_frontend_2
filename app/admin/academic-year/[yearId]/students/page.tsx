@@ -223,7 +223,13 @@ export default function StudentsManagementPage() {
               parentsEmail?: string
               user?: { firstname?: string; lastname?: string; profilePhoto?: string; birthDate?: string; email?: string }
             }
-          }>>(`/api/enrollments?classSessionId=${session.id}`)
+            // includeTransferred : cet ecran est un affichage d'historique, pas
+            // un calcul. Il compte les eleves « inactifs » d'une annee et les
+            // liste quand on ouvre la bascule, donc il veut toutes les
+            // situations. /api/enrollments retire desormais les inscriptions
+            // TRANSFERRED par defaut ; on les redemande ici explicitement pour
+            // que ce compteur ne change pas de valeur.
+          }>>(`/api/enrollments?classSessionId=${session.id}&includeTransferred=true`)
 
                     const trackSuffix = session.class.track ? ` — ${session.class.track.code}` : ''
           const className = `${session.class.classType.name} ${session.class.letter}${trackSuffix}`
