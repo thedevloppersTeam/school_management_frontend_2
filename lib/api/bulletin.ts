@@ -731,7 +731,8 @@ export async function buildBulletinData(params: {
   const averages = calculateBulletinAverages(
     buildSubjectInputs(scopedClassSubjects, allGrades, enrollmentId, excludedForStep),
   )
-  const moyenneEtape = formatBulletinNumber(averages.moyenneEtape)
+  // Le texte imprime se formate depuis le Decimal, jamais depuis le flottant.
+  const moyenneEtape = formatAverage(averages.exact.moyenneEtape)
   const appreciation = averages.appreciation
   const classAverages = await getClassAverages({
     classSessionId,
@@ -744,7 +745,7 @@ export async function buildBulletinData(params: {
   const backendMoyenneClasse = firstString(student, ['moyenneClasse', 'classAverage', 'bulletin.moyenneClasse', 'bulletin.classAverage'])
   const moyenneClasse = backendMoyenneClasse !== '—'
     ? backendMoyenneClasse
-    : formatBulletinNumber(classAverages.moyenneClasseEtape)
+    : formatAverage(classAverages.exact.moyenneClasseEtape)
   // Moyenne générale : elle « mélange » toutes les étapes. Sur le bulletin
   // d'EXAMEN, on ne se limite PAS aux seules matières d'examen (qui ne sont
   // notées qu'à l'étape d'examen → une seule étape à moyenner) : la générale
@@ -798,19 +799,25 @@ export async function buildBulletinData(params: {
     rubrique1Poids: '70%',
     rubrique1:      r1,
     moyR1: averages.moyR1,
+    moyR1Texte: formatAverage(averages.exact.moyR1),
     moyClasseR1: classAverages.moyClasseR1,
+    moyClasseR1Texte: formatAverage(classAverages.exact.moyClasseR1),
 
     rubrique2Name:  r2Name,
     rubrique2Poids: '25%',
     rubrique2:      r2,
     moyR2: averages.moyR2,
+    moyR2Texte: formatAverage(averages.exact.moyR2),
     moyClasseR2: classAverages.moyClasseR2,
+    moyClasseR2Texte: formatAverage(classAverages.exact.moyClasseR2),
 
     rubrique3Name:  r3Name,
     rubrique3Poids: '5%',
     rubrique3:      r3,
     moyR3: averages.moyR3,
+    moyR3Texte: formatAverage(averages.exact.moyR3),
     moyClasseR3: classAverages.moyClasseR3,
+    moyClasseR3Texte: formatAverage(classAverages.exact.moyClasseR3),
 
     moyenneEtape,
     appreciation,

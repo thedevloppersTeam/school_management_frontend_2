@@ -61,18 +61,30 @@ export interface BulletinData {
   rubrique1:      RubriqueEntry[];
   moyR1:          number | null;
   moyClasseR1?:   number | null;
+  // Textes deja formates. La valeur imprimee vient de la couche de donnees ;
+  // les `number` ci-dessus ne servent plus qu'a la teinte (`colorClass`).
+  moyR1Texte?:       string;
+  moyClasseR1Texte?: string;
 
   rubrique2Name:  string;
   rubrique2Poids: string;
   rubrique2:      RubriqueEntry[];
   moyR2:          number | null;
   moyClasseR2?:   number | null;
+  // Textes deja formates. La valeur imprimee vient de la couche de donnees ;
+  // les `number` ci-dessus ne servent plus qu'a la teinte (`colorClass`).
+  moyR2Texte?:       string;
+  moyClasseR2Texte?: string;
 
   rubrique3Name:  string;
   rubrique3Poids: string;
   rubrique3:      RubriqueEntry[];
   moyR3:          number | null;
   moyClasseR3?:   number | null;
+  // Textes deja formates. La valeur imprimee vient de la couche de donnees ;
+  // les `number` ci-dessus ne servent plus qu'a la teinte (`colorClass`).
+  moyR3Texte?:       string;
+  moyClasseR3Texte?: string;
 
   // Résultats
   moyenneEtape:    string;
