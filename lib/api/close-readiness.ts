@@ -151,12 +151,30 @@ async function computeClassroomStatus(
   )
 
   const totalGrades = subjects.length * activeEnrollments.length
-  const gradesEntered = gradesPerSubject
-    .flatMap(g => g ?? [])
-    // Ne compter qu'une note par (enrollment, classSubject, step), pas
-    // les notes de section. sectionId === null = note principale.
-    .filter(g => g.sectionId === null)
-    .length
+
+  // Le numérateur se compte sur les mêmes inscriptions que le dénominateur.
+  // /api/grades/class-subject/:id/step/:id ne filtre pas le statut : une note
+  // portée par une inscription TRANSFERRED gonflait gradesEntered sans peser sur
+  // totalGrades, et une salle incomplète pouvait franchir le test
+  // `gradesEntered >= totalGrades` plus bas et être déclarée « complete ».
+  // Clôturer verrouille les notes : le coût d'une clôture prématurée est élevé.
+  // On réutilise activeEnrollments, donc le filtre négatif posé plus haut, sans
+  // en écrire un second qui pourrait diverger.
+  //
+  // On compte des paires (inscription, matière) distinctes plutôt que des lignes.
+  // Le seul filtre `sectionId === null` ne bornait pas gradesEntered : rien en
+  // base n'interdit deux notes principales sur la même paire — la table `grades`
+  // n'a que des index sur (enrollment_id, class_subject_id, section_id, step_id),
+  // aucune contrainte d'unicité, et createGrade fait un `create` simple sans
+  // vérifier l'existant. Compter des paires borne le numérateur par construction
+  // au lieu de dépendre de cette discipline d'écriture.
+  const activeEnrollmentIds = new Set(activeEnrollments.map(e => e.id))
+  const gradesEntered = new Set(
+    gradesPerSubject
+      .flatMap(g => g ?? [])
+      .filter(g => g.sectionId === null && activeEnrollmentIds.has(g.enrollmentId))
+      .map(g => `${g.enrollmentId}|${g.classSubjectId}`)
+  ).size
 
   // Statut dérivé
   let status: ClassroomStatus['status']

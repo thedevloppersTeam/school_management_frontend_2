@@ -102,13 +102,34 @@ export function CPMSLProgressionTab({
             }
 
             // 2. Compter les notes saisies pour chaque matière
+            //
+            // Le numérateur se compte sur les MÊMES paires que le dénominateur.
+            // /api/grades/class-subject/:id/step/:id ne filtre pas le statut de
+            // l'inscription et renvoie aussi les notes de section. Compter les
+            // lignes brutes faisait donc entrer deux populations étrangères au
+            // dénominateur : les notes portées par une inscription TRANSFERRED,
+            // et les notes de section d'une matière découpée, comptées autant de
+            // fois qu'elle a de sections. Le pourcentage pouvait dépasser 100 %
+            // et marquer une salle « complète » alors qu'il manquait des notes.
+            //
+            // On compte des paires (inscription, matière) distinctes, restreintes
+            // aux inscriptions du dénominateur. Le numérateur est alors borné par
+            // construction : au plus une paire par matière et par élève retenu,
+            // soit exactement totalExpected.
+            const enrollmentIds = new Set(enrollments.map(e => e.id))
+
             const gradesCounts = await Promise.all(
               classSubjects.map(async (cs) => {
                 try {
-                  const grades = await apiFetch<Array<{ id: string }>>(
+                  const grades = await apiFetch<Array<{ id: string; enrollmentId: string }>>(
                     `/api/grades/class-subject/${cs.id}/step/${stepId}`
                   )
-                  return grades.length
+                  const notes = new Set(
+                    grades
+                      .filter(g => enrollmentIds.has(g.enrollmentId))
+                      .map(g => g.enrollmentId)
+                  )
+                  return notes.size
                 } catch {
                   return 0
                 }
