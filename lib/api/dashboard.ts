@@ -34,7 +34,15 @@ export interface ClassSession {
     id: string
     letter: string
     classType: { id: string; name: string; isTerminal: boolean }
-    track?: { id: string; name: string; code: string }
+    // Pas de `track` ici : une SALLE n'a pas de filiere. Le modele ne la porte
+    // ni sur `Class` ni sur `ClassSession` — elle vit sur l'inscription de
+    // chaque eleve (`Enrollment.trackId`) et sur la matiere
+    // (`ClassSubject.trackId`). Une meme salle heberge donc plusieurs filieres.
+    //
+    // Le champ a existe ici, declare optionnel, et une dizaine d'endroits
+    // construisaient un libelle de classe en le lisant. Le backend ne l'a
+    // jamais envoye : toutes ces branches etaient mortes et le suffixe de
+    // filiere toujours vide. Le retirer du type empeche de les reecrire.
   }
   academicYear: { id: string; name: string; yearString?: string | null }
   displayName?: string
@@ -93,11 +101,10 @@ export async function fetchEnrollmentCount(classSessionId: string): Promise<numb
   return enrollments.length
 }
 
-/** Retourne le nom affiché d'une session de classe */
+/** Retourne le nom affiché d'une session de classe. Ex. « NS3 A ». */
 export function getClassSessionName(session: ClassSession): string {
-  const { classType, letter, track } = session.class
-  const trackCode = track ? ` ${track.code}` : ''
-  return `${classType.name} ${letter}${trackCode}`
+  const { classType, letter } = session.class
+  return `${classType.name} ${letter}`
 }
 
 /**

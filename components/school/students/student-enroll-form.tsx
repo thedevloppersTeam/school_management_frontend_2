@@ -178,7 +178,7 @@ export function StudentEnrollForm({
             data
               .map((s) => ({
                 id: s.id,
-                name: `${s.class.classType.name} ${s.class.letter}${s.class.track ? ` ${s.class.track.code}` : ""}`,
+                name: `${s.class.classType.name} ${s.class.letter}`,
                 isTerminal: s.class.classType.isTerminal === true,
               }))
               .sort((a, b) => a.name.localeCompare(b.name)),

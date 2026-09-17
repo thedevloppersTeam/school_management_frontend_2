@@ -226,8 +226,7 @@ export default function StudentsManagementPage() {
             // que ce compteur ne change pas de valeur.
           }>>(`/api/enrollments?classSessionId=${session.id}&includeTransferred=true`)
 
-                    const trackSuffix = session.class.track ? ` — ${session.class.track.code}` : ''
-          const className = `${session.class.classType.name} ${session.class.letter}${trackSuffix}`
+                  const className = `${session.class.classType.name} ${session.class.letter}`
 
           enrollments.forEach(enr => {
             allEnrollments.push({
@@ -310,10 +309,9 @@ export default function StudentsManagementPage() {
   const paginated         = displayed.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
   // Liste des classes dérivée des sessions (pas des élèves) : une salle
   // nouvellement créée et encore vide doit apparaître dans le filtre.
-  const uniqueClasses     = [...new Set(sessions.map(s => {
-    const trackSuffix = s.class.track ? ` — ${s.class.track.code}` : ''
-    return `${s.class.classType.name} ${s.class.letter}${trackSuffix}`
-  }))].sort((a, b) => a.localeCompare(b))
+  const uniqueClasses     = [...new Set(
+    sessions.map(s => `${s.class.classType.name} ${s.class.letter}`)
+  )].sort((a, b) => a.localeCompare(b))
 
   // ── Tri ──────────────────────────────────────────────────────────────────────
   const handleSort = (col: SortCol) => {
@@ -754,7 +752,7 @@ export default function StudentsManagementPage() {
                                 <>
                                   <DropdownMenuItem onClick={() => setEditingStudent(student)}>
                                     <PencilIcon className="mr-2 h-4 w-4" />
-                                    Modifier
+                                    Modifier le profil
                                   </DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => setCorrectingStudent(student)}>
                                     <WrenchIcon className="mr-2 h-4 w-4" />
@@ -958,14 +956,11 @@ export default function StudentsManagementPage() {
           currentClassName={correctingStudent.className}
           currentTrackId={correctingStudent.trackId}
           currentClassTypeId={sessions.find(s => s.id === correctingStudent.classSessionId)?.class.classType.id}
-          sessions={sessions.map(s => {
-            const trackSuffix = s.class.track ? ` — ${s.class.track.code}` : ''
-            return {
-              id: s.id,
-              label: `${s.class.classType.name} ${s.class.letter}${trackSuffix}`,
-              classTypeId: s.class.classType.id,
-            }
-          })}
+          sessions={sessions.map(s => ({
+            id: s.id,
+            label: `${s.class.classType.name} ${s.class.letter}`,
+            classTypeId: s.class.classType.id,
+          }))}
           onCorrected={loadStudents}
         />
       )}
@@ -982,14 +977,11 @@ export default function StudentsManagementPage() {
             className:      s.className,
             classTypeId:    sessions.find(cs => cs.id === s.classSessionId)?.class.classType.id,
           }))}
-          sessions={sessions.map(s => {
-            const trackSuffix = s.class.track ? ` — ${s.class.track.code}` : ''
-            return {
-              id: s.id,
-              label: `${s.class.classType.name} ${s.class.letter}${trackSuffix}`,
-              classTypeId: s.class.classType.id,
-            }
-          })}
+          sessions={sessions.map(s => ({
+            id: s.id,
+            label: `${s.class.classType.name} ${s.class.letter}`,
+            classTypeId: s.class.classType.id,
+          }))}
           onCorrected={() => {
             setSelectedEnrollmentIds(new Set())
             void loadStudents()

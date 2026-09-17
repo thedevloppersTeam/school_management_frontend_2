@@ -187,8 +187,7 @@ export function CPMSLGradesGrid({
       .map(s => ({
         sessionId: s.id,
         letter: s.class.letter,
-        track: s.class.track,
-        label: s.class.track ? `${s.class.letter} — ${s.class.track.code}` : s.class.letter,
+        label: s.class.letter,
       }))
       .sort((a, b) => a.label.localeCompare(b.label))
   }, [sessions, selectedClassTypeId])

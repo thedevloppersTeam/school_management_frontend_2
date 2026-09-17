@@ -76,9 +76,8 @@ function getAppreciation(m: number | null): string {
 }
 
 function sessionLabel(s: ClassSession): string {
-  const { classType, letter, track } = s.class
-  const base = `${classType.name} ${letter}`
-  return track ? `${base} — ${track.code}` : base
+  const { classType, letter } = s.class
+  return `${classType.name} ${letter}`
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────

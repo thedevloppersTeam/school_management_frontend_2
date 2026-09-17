@@ -139,13 +139,20 @@ export default function AcademicYearConfigPage() {
       }
 
       // 3. Sessions de classe → classrooms, puis les inscrits de chaque salle
-      // FIX W1-06 : NS3/NS4 utilisent la filiere comme label (pas la lettre)
+      //
+      // W1-06 — « NS3/NS4 utilisent la filiere comme label, pas la lettre » —
+      // N'EST PAS SATISFAITE, et ne l'a jamais ete. Le code testait
+      // `s.class.track`, un champ que ni `Class` ni `ClassSession` ne portent
+      // et que le backend n'envoie pas : la branche etait morte, le libelle
+      // valait deja « NS3 A ». La branche est retiree pour que l'exigence
+      // cesse d'avoir l'air remplie.
+      //
+      // La satisfaire demande une decision de modele : une salle n'a pas de
+      // filiere aujourd'hui, ses eleves en ont une chacun.
       const loadClassroomsAndStudents = async () => {
         const sessionsData = await fetchClassSessions(yearId)
         const classroomRows = sessionsData.map(s => {
-          const name = s.class.track
-            ? `${s.class.classType.name} ${s.class.track.code}`   // NS3 LLA ✅
-            : `${s.class.classType.name} ${s.class.letter}`       // 7e A   ✅
+          const name = `${s.class.classType.name} ${s.class.letter}`
           return {
             id:       s.id,
             name,
