@@ -66,6 +66,7 @@ import { BulkTransferModal } from "@/components/school/bulk-transfer-modal"
 import { StepExemptionModal } from "@/components/school/step-exemption-modal"
 import { StudentTrackModal } from "@/components/school/student-track-modal"
 import { CorrectAssignmentModal } from "@/components/school/correct-assignment-modal"
+import { CorrectAssignmentBatchModal } from "@/components/school/correct-assignment-batch-modal"
 import { Checkbox } from "@/components/ui/checkbox"
 import { StatCard } from "@/components/school/stat-card"
 import { fetchClassSessions, type AcademicYear, type ClassSession } from "@/lib/api/dashboard"
@@ -180,6 +181,7 @@ export default function StudentsManagementPage() {
   // Transfert groupé
   const [selectedEnrollmentIds, setSelectedEnrollmentIds] = useState<Set<string>>(new Set())
   const [bulkTransferOpen, setBulkTransferOpen] = useState(false)
+  const [bulkCorrectOpen, setBulkCorrectOpen] = useState(false)
   const [bulkSubmitting, setBulkSubmitting] = useState(false)
 
   // Tri
@@ -687,6 +689,14 @@ export default function StudentsManagementPage() {
               >
                 Tout désélectionner
               </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setBulkCorrectOpen(true)}
+              >
+                <PencilIcon className="mr-2 h-4 w-4" />
+                Corriger l&apos;affectation
+              </Button>
               <Button size="sm" onClick={() => setBulkTransferOpen(true)}>
                 <ArrowRightLeftIcon className="mr-2 h-4 w-4" />
                 Transférer la sélection
@@ -1089,6 +1099,33 @@ export default function StudentsManagementPage() {
             }
           })}
           onCorrected={loadStudents}
+        />
+      )}
+
+      {/* Modal correction d'affectation en lot */}
+      {bulkCorrectOpen && (
+        <CorrectAssignmentBatchModal
+          open={bulkCorrectOpen}
+          onOpenChange={setBulkCorrectOpen}
+          students={selectedStudents.map(s => ({
+            enrollmentId:   s.enrollmentId,
+            studentName:    `${s.firstname} ${s.lastname}`,
+            classSessionId: s.classSessionId,
+            className:      s.className,
+            classTypeId:    sessions.find(cs => cs.id === s.classSessionId)?.class.classType.id,
+          }))}
+          sessions={sessions.map(s => {
+            const trackSuffix = s.class.track ? ` — ${s.class.track.code}` : ''
+            return {
+              id: s.id,
+              label: `${s.class.classType.name} ${s.class.letter}${trackSuffix}`,
+              classTypeId: s.class.classType.id,
+            }
+          })}
+          onCorrected={() => {
+            setSelectedEnrollmentIds(new Set())
+            void loadStudents()
+          }}
         />
       )}
 
