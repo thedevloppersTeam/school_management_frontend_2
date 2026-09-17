@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/components/ui/use-toast"
 import {
   UploadIcon, FileTextIcon, CheckCircle2Icon, AlertCircleIcon, UsersIcon,
-  BookOpenIcon, LayersIcon, XIcon, DownloadIcon,
+  BookOpenIcon, LayersIcon, XIcon, DownloadIcon, UserRoundXIcon, UsersRoundIcon,
 } from "lucide-react"
 import type { ApiClassSession } from "@/lib/api/students"
 import type { AcademicYearStep } from "@/lib/api/dashboard"
@@ -38,6 +38,11 @@ interface NotImportedRow {
 interface ImportResult {
   totals: { rowsInCsv: number; created: number; updated: number; unchanged: number; skipped: number }
   studentsNotFound: Array<{ name: string; count: number }>
+  // Refus nominatifs renvoyés par le backend. Ils étaient déjà dans la réponse
+  // sans être lus ici : les lignes concernées n'apparaissaient que noyées dans
+  // le log détaillé, sans dire quel geste les répare.
+  studentsAmbiguous?: Array<{ name: string; count: number }>
+  studentsInactive?: Array<{ name: string; count: number }>
   subjectsNotFound: Array<{ name: string; count: number }>
   sectionsNotFound: Array<{ name: string; count: number }>
   notImported: NotImportedRow[]
@@ -366,6 +371,26 @@ export function CPMSLGradesCsvImport({ sessions, steps }: Props) {
                 title="Élèves non inscrits dans la classe choisie"
                 description="L'élève doit avoir un enrollment dans cette classe. Vérifie l'inscription puis relance."
                 items={result.studentsNotFound}
+              />
+            )}
+
+            {/* Élèves partis — même règle que la saisie unitaire */}
+            {(result.studentsInactive?.length ?? 0) > 0 && (
+              <ResultList
+                icon={<UserRoundXIcon className="h-4 w-4 text-warning-ink" />}
+                title="Élèves dont l'inscription n'est plus active"
+                description="Une note ne s'écrit pas sur l'inscription d'un élève parti, ici comme à la saisie. Si le départ a été saisi par erreur, annule-le sur l'écran Élèves puis relance l'import."
+                items={result.studentsInactive ?? []}
+              />
+            )}
+
+            {/* Homonymes */}
+            {(result.studentsAmbiguous?.length ?? 0) > 0 && (
+              <ResultList
+                icon={<UsersRoundIcon className="h-4 w-4 text-warning-ink" />}
+                title="Plusieurs élèves portent ce nom dans la classe"
+                description="Le fichier ne porte que le nom et le prénom : rien n'y permet de choisir entre les deux élèves. Ces notes sont à saisir à la main."
+                items={result.studentsAmbiguous ?? []}
               />
             )}
 
