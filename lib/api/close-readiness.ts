@@ -111,13 +111,26 @@ async function computeClassroomStatus(
   // Pas de données → classe vide ou erreur → statut "not-started"
   if (!subjects || !enrollments) return base
 
-  // Filtrer les enrollments actifs (exclure ceux désactivés si applicable)
+  // Inscriptions qui doivent porter une note à cette étape — le dénominateur.
+  //
+  // Le commentaire précédent annonçait d'exclure « ceux désactivés », puis
+  // gardait tout sauf CANCELLED et TRANSFERRED : un élève parti restait au
+  // dénominateur. Sa colonne de notes ne se remplira jamais, la salle restait
+  // donc éternellement `incomplete`, et l'alarme permanente apprend à passer
+  // outre — c'est-à-dire à ne plus lire la checklist du tout.
+  //
+  // CE QUE L'EXCLUSION COÛTE, et c'est assumé : aucune date de départ n'existe
+  // en base, seulement un statut courant. L'exclusion vaut donc pour TOUTES les
+  // étapes, y compris celles déjà écoulées. Un élève présent en T1 et parti en
+  // décembre sort aussi du dénominateur de T1, où il aurait dû compter : T1
+  // devient légèrement optimiste. Une imprécision bornée sur une étape passée
+  // vaut mieux qu'une alarme permanente qui entraîne au contournement.
+  //
+  // GRADUATED reste compté : il se pose en fin d'année, l'élève a bien suivi
+  // les étapes, et ses notes sont attendues.
   const activeEnrollments = enrollments.filter(e => {
-    // Le statut exact varie selon le backend. On garde tout sauf si
-    // explicitement "CANCELLED" / "TRANSFERRED" etc. Règle prudente :
-    // on considère tout enrollment présent comme "actif" par défaut.
     const status = (e.status ?? '').toUpperCase()
-    return status !== 'CANCELLED' && status !== 'TRANSFERRED'
+    return status !== 'CANCELLED' && status !== 'TRANSFERRED' && status !== 'DROPPED'
   })
 
   // NISU optionnel : seuls les NISU présents mais mal formés bloquent.
