@@ -37,8 +37,14 @@ export interface CorrectionAssignment {
  *   R1 année ou niveau différent · R2 cible identique à la source ·
  *   R3 inscription déjà existante sur la salle cible ·
  *   R4 filière absente de la salle cible ·
- *   R5 matière notée sans équivalent (MODE A) ·
- *   R6 barème ou coefficient divergent (MODE A).
+ *   R5 matière sans équivalent dans la salle cible (MODE A) — qu'elle porte
+ *      des notes, une dispense de section, ou les deux ; `detail` nomme le cas ·
+ *   R6 barème ou coefficient divergent (MODE A), sur les matières notées
+ *      seulement : une matière seulement dispensée ne porte aucune note ·
+ *   R7 capacité de la salle cible dépassée.
+ *
+ * Deux codes ne visent aucun élève en particulier et n'arrivent que sur un
+ * lot : `MIXED_MODE` et `R7`. Ils sont rendus dans `lot.blockers`.
  */
 export interface CorrectionBlocker {
   rule:         string
