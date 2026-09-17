@@ -14,6 +14,16 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import {
+  BTN_DIALOG_PRIMARY_CLASS,
+  BTN_OUTLINE_CLASS,
+  DIALOG_CONTENT_CLASS,
+  DIALOG_FOOTER_CLASS,
+  DIALOG_HEADER_CLASS,
+  FIELD_HINT_CLASS,
+  FIELD_LABEL_CLASS,
+  REQUIRED_MARK_CLASS,
+} from "@/lib/cpmsl-classes"
 
 interface SubjectParent {
   id: string
@@ -109,185 +119,103 @@ export function EditSubjectChildModal({
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
-      <DialogContent
-        style={{
-          maxWidth: '560px',
-          backgroundColor: '#FFFFFF',
-          border: '1px solid #E8E6E3',
-          borderRadius: '12px',
-          padding: 0
-        }}
-      >
-        <DialogHeader style={{ padding: '24px 24px 16px 24px', borderBottom: '1px solid #E8E6E3' }}>
-          <DialogTitle
-            style={{
-              color: '#1E1A17',
-              fontSize: 'var(--text-xl)',
-              fontWeight: 600,
-              fontFamily: 'var(--font-serif)',
-              marginBottom: '8px'
-            }}
-          >
+      <DialogContent className={`${DIALOG_CONTENT_CLASS} max-w-[560px] border border-neutral-200 p-0`}
+     >
+        <DialogHeader className={DIALOG_HEADER_CLASS}>
+          <DialogTitle className="mb-2 font-serif text-xl font-bold text-neutral-900"
+         >
             Modifier la sous-matière — {child.name}
           </DialogTitle>
-          <DialogDescription
-            style={{
-              color: '#5C5955',
-              fontSize: 'var(--text-sm)',
-              fontWeight: 400
-            }}
-          >
+          <DialogDescription className="text-sm font-normal text-neutral-600"
+         >
             {child.code} · Matière parent: {parent.code}
           </DialogDescription>
         </DialogHeader>
 
-        <div style={{ padding: '24px' }} className="space-y-5">
+        <div  className="space-y-5 p-6">
           {/* Nom */}
           <div className="space-y-2">
             <Label
-              htmlFor="name"
-              style={{
-                color: '#1E1A17',
-                fontSize: 'var(--text-sm)',
-                fontWeight: 500
-              }}
-            >
-              Nom <span style={{ color: '#C84A3D' }}>*</span>
+              htmlFor="name" className={FIELD_LABEL_CLASS}
+           >
+              Nom <span className={REQUIRED_MARK_CLASS}>*</span>
             </Label>
             <Input
               id="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Ex: Communication Française"
-              style={{
-                border: '1px solid #D1CECC',
-                borderRadius: '8px'
-              }}
-              className="focus:border-[#5A7085] focus:ring-[#5A7085]"
+              className="focus:border-primary-500 focus:ring-primary-500 rounded-md border border-neutral-300"
             />
           </div>
 
           {/* Code (read-only) */}
           <div className="space-y-2">
             <Label
-              htmlFor="code"
-              style={{
-                color: '#1E1A17',
-                fontSize: 'var(--text-sm)',
-                fontWeight: 500
-              }}
-            >
+              htmlFor="code" className={FIELD_LABEL_CLASS}
+           >
               Code
             </Label>
             <Input
               id="code"
               value={child.code}
               readOnly
-              disabled
-              style={{
-                border: '1px solid #D1CECC',
-                borderRadius: '8px',
-                backgroundColor: '#F7F7F6',
-                color: '#78756F',
-                fontFamily: 'monospace',
-                textTransform: 'uppercase',
-                cursor: 'not-allowed'
-              }}
+              disabled className="cursor-not-allowed rounded-md border border-neutral-300 bg-neutral-100 font-mono uppercase text-neutral-500"
             />
-            <p
-              style={{
-                color: '#78756F',
-                fontSize: 'var(--text-xs)',
-                marginTop: '6px'
-              }}
-            >
+            <p className={`${FIELD_HINT_CLASS} mt-1.5`}
+           >
               Non modifiable
             </p>
           </div>
 
           {/* Type de sous-matière */}
           <div className="space-y-2">
-            <Label
-              style={{
-                color: '#1E1A17',
-                fontSize: 'var(--text-sm)',
-                fontWeight: 500
-              }}
-            >
-              Type de sous-matière <span style={{ color: '#C84A3D' }}>*</span>
+            <Label className={FIELD_LABEL_CLASS}
+           >
+              Type de sous-matière <span className={REQUIRED_MARK_CLASS}>*</span>
             </Label>
             <RadioGroup
               value={type}
               onValueChange={(value) => setType(value as 'L' | 'C' | 'N' | 'P' | 'T')}
               className="flex flex-wrap gap-3"
-            >
+           >
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="L" id="type-l" />
                 <Label
-                  htmlFor="type-l"
-                  style={{
-                    color: '#1E1A17',
-                    fontSize: 'var(--text-sm)',
-                    fontWeight: 400,
-                    cursor: 'pointer'
-                  }}
-                >
+                  htmlFor="type-l" className="cursor-pointer text-sm font-normal text-neutral-900"
+               >
                   L — Langue / Communication
                 </Label>
               </div>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="C" id="type-c" />
                 <Label
-                  htmlFor="type-c"
-                  style={{
-                    color: '#1E1A17',
-                    fontSize: 'var(--text-sm)',
-                    fontWeight: 400,
-                    cursor: 'pointer'
-                  }}
-                >
+                  htmlFor="type-c" className="cursor-pointer text-sm font-normal text-neutral-900"
+               >
                   C — Calcul / Logique
                 </Label>
               </div>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="N" id="type-n" />
                 <Label
-                  htmlFor="type-n"
-                  style={{
-                    color: '#1E1A17',
-                    fontSize: 'var(--text-sm)',
-                    fontWeight: 400,
-                    cursor: 'pointer'
-                  }}
-                >
+                  htmlFor="type-n" className="cursor-pointer text-sm font-normal text-neutral-900"
+               >
                   N — Naturelle / Science
                 </Label>
               </div>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="P" id="type-p" />
                 <Label
-                  htmlFor="type-p"
-                  style={{
-                    color: '#1E1A17',
-                    fontSize: 'var(--text-sm)',
-                    fontWeight: 400,
-                    cursor: 'pointer'
-                  }}
-                >
+                  htmlFor="type-p" className="cursor-pointer text-sm font-normal text-neutral-900"
+               >
                   P — Pratique / Application
                 </Label>
               </div>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="T" id="type-t" />
                 <Label
-                  htmlFor="type-t"
-                  style={{
-                    color: '#1E1A17',
-                    fontSize: 'var(--text-sm)',
-                    fontWeight: 400,
-                    cursor: 'pointer'
-                  }}
-                >
+                  htmlFor="type-t" className="cursor-pointer text-sm font-normal text-neutral-900"
+               >
                   T — Théorie
                 </Label>
               </div>
@@ -298,36 +226,18 @@ export function EditSubjectChildModal({
               maximum compte sur les bulletins. La valeur existante est conservée. */}
         </div>
 
-        <DialogFooter
-          style={{
-            padding: '16px 24px',
-            borderTop: '1px solid #E8E6E3',
-            display: 'flex',
-            gap: '12px',
-            justifyContent: 'flex-end'
-          }}
-        >
+        <DialogFooter className={DIALOG_FOOTER_CLASS}
+       >
           <Button
             variant="outline"
-            onClick={handleCancel}
-            style={{
-              border: '1px solid #D1CECC',
-              color: '#5C5955',
-              borderRadius: '8px'
-            }}
-          >
+            onClick={handleCancel} className={BTN_OUTLINE_CLASS}
+         >
             Annuler
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={!isSubmitEnabled}
-            style={{
-              backgroundColor: isSubmitEnabled ? '#2C4A6E' : '#9CA3AF',
-              color: '#FFFFFF',
-              borderRadius: '8px',
-              cursor: isSubmitEnabled ? 'pointer' : 'not-allowed'
-            }}
-          >
+            disabled={!isSubmitEnabled} className={BTN_DIALOG_PRIMARY_CLASS}
+         >
             Enregistrer
           </Button>
         </DialogFooter>

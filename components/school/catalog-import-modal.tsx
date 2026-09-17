@@ -283,7 +283,7 @@ export function CatalogImportModal({ open, onOpenChange, onSuccess }: CatalogImp
           <div className="space-y-3">
             <label
               htmlFor="catalog-csv-input"
-              className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border bg-muted px-6 py-10 text-center transition-colors hover:border-[#2C4A6E] hover:bg-muted"
+              className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border bg-muted px-6 py-10 text-center transition-colors hover:border-primary hover:bg-muted"
             >
               <UploadCloudIcon className="h-8 w-8 text-muted-foreground" />
               <span className="text-sm font-medium text-foreground">Choisir un fichier .csv</span>
@@ -402,7 +402,7 @@ export function CatalogImportModal({ open, onOpenChange, onSuccess }: CatalogImp
 
         {/* ── Results ── */}
         {result && (
-          <Card className="border-2 border-[#2C4A6E]/20">
+          <Card className="border-2 border-primary/20">
             <CardContent className="space-y-3 py-4">
               <div className="flex items-center gap-2">
                 <CheckCircle2Icon className="h-5 w-5 text-success-ink" />
@@ -455,7 +455,7 @@ export function CatalogImportModal({ open, onOpenChange, onSuccess }: CatalogImp
             <Button
               onClick={runImport}
               disabled={importing || valid.length === 0}
-              className="bg-[#2C4A6E] text-white hover:bg-[#1F3856]"
+              className=""
             >
               {importing
                 ? <><LoaderIcon className="mr-2 h-4 w-4 animate-spin" /> Import en cours…</>

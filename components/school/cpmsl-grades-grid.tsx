@@ -17,15 +17,6 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination"
-import {
   ArrowDownIcon,
   ArrowUpDownIcon,
   ArrowUpIcon,
@@ -38,6 +29,16 @@ import {
 } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { useToast } from "@/components/ui/use-toast"
 import type { ApiClassSession } from "@/lib/api/students"
 import type { AcademicYearStep } from "@/lib/api/dashboard"
@@ -45,6 +46,7 @@ import type { ApiClassSubject, ApiEnrollment, ApiGrade, CreateGradePayload } fro
 import { effectiveMaxScore } from "@/lib/api/grades"
 import { cn } from "@/lib/utils"
 import { parseDecimal } from "@/lib/decimal"
+import { parseScore, validateScoreInput } from "@/lib/grades/score-input"
 import { invalidateExclusionsCache } from "@/lib/api/bulletin"
 import { useUnsavedChangesWarning } from "@/hooks/use-unsaved-changes-warning"
 
@@ -64,7 +66,7 @@ interface GradeEntry {
 }
 
 type SortDirection = 'asc' | 'desc' | null
-type SortKey = 'lastName' | 'firstName' | 'studentCode' | 'status' | 'globalNote' | 'sectionTotal'
+type SortKey = 'lastName' | 'firstName' | 'studentCode' | 'globalNote' | 'sectionTotal'
 
 interface SortConfig {
   key: SortKey | null
@@ -87,6 +89,13 @@ interface CPMSLGradesGridProps {
   onClassSubjectChange:   (classSubjectId: string) => void
   onStepChange:           (stepId: string) => void
   onSaveGrades:           (toCreate: CreateGradePayload[], toUpdate: UpdateGradePayload[], toDelete: string[]) => void
+  /**
+   * Remonte le nombre de saisies en attente. La page parente en a besoin :
+   * Radix demonte le contenu d'un onglet inactif, donc quitter « Saisie »
+   * detruit cet etat — et desenregistre `beforeunload` avec lui. Le garde-fou
+   * interne ne peut pas voir ce qui se passe au-dessus de lui.
+   */
+  onDirtyChange?:         (count: number) => void
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -119,6 +128,7 @@ function compareNullableNumbers(
   return direction === 'asc' ? a - b : b - a
 }
 
+
 // ── Composant ─────────────────────────────────────────────────────────────────
 
 export function CPMSLGradesGrid({
@@ -137,6 +147,7 @@ export function CPMSLGradesGrid({
   onClassSubjectChange,
   onStepChange,
   onSaveGrades,
+  onDirtyChange,
 }: CPMSLGradesGridProps) {
   const { toast } = useToast()
   const [gradeEntries, setGradeEntries] = useState<Map<string, GradeEntry>>(new Map())
@@ -153,11 +164,8 @@ export function CPMSLGradesGrid({
   const [exclusionTarget, setExclusionTarget] = useState<ApiEnrollment | null>(null)
   const [exclusionDraft, setExclusionDraft] = useState<Set<string>>(new Set())
   const [savingExclusions, setSavingExclusions] = useState(false)
-  const [currentPage,  setCurrentPage]  = useState(1)
   const [searchQuery,  setSearchQuery]  = useState("")
-  const [itemsPerPage, setItemsPerPage] = useState(15)
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: null, direction: null })
-  const PAGE_SIZE_OPTIONS = [15, 25, 50, 100]
 
   // ── Classe / Salle split ────────────────────────────────────────────────
   const [selectedClassTypeId, setSelectedClassTypeId] = useState("")
@@ -202,8 +210,10 @@ export function CPMSLGradesGrid({
   }
 
   function handleLetterChange(sessionId: string) {
-    setSelectedLetter(sessionId)
-    onSessionChange(sessionId)
+    guardContextChange("de salle", () => {
+      setSelectedLetter(sessionId)
+      onSessionChange(sessionId)
+    })
   }
 
   const selectedClassSubject = useMemo(
@@ -237,6 +247,15 @@ export function CPMSLGradesGrid({
     [selectedClassSubject]
   )
   const subjectHasSections = (selectedClassSubject?.subject.hasSections ?? false) && subjectSections.length > 0
+
+  // Filière : une matière d'examen officiel ne concerne QUE les élèves de sa
+  // filière. Une matière du tronc commun concerne toute la salle.
+  const enrollmentsForSubject = useMemo(() => {
+    const trackId = selectedClassSubject?.trackId ?? null
+    if (!trackId) return enrollments
+    return enrollments.filter(e => e.trackId === trackId)
+  }, [enrollments, selectedClassSubject])
+
 
 
   const selectedStep = useMemo(
@@ -295,10 +314,8 @@ export function CPMSLGradesGrid({
       setEntryMode('sections')
     }
 
-    setCurrentPage(1)
   }, [existingGrades, selectedClassSubjectId, selectedStepId, subjectHasSections])
 
-  useEffect(() => { setCurrentPage(1) }, [selectedSessionId, selectedClassSubjectId, selectedStepId])
 
   // Charge les exclusions uniquement pour la classe + matière + étape active.
   // Avant, le fetch ne passait que classSessionId : la même dispense suivait
@@ -391,16 +408,20 @@ export function CPMSLGradesGrid({
     }
   }
 
-  // ── Validation BR-002 : multiples de 0.25 ────────────────────────────────
+  // ── Validation DR-004 : notes au pas de 0,25 ─────────────────────────────
+  //
+  // Cette grille est aujourd'hui le SEUL endroit du système où DR-004 est
+  // opposé : ni les gestionnaires de route `app/api/**`, ni le backend ne le
+  // vérifient (backlog E8). Un appel API direct passe donc n'importe quelle
+  // valeur — raison de plus pour que la barrière d'ici ne fuie pas.
 
-  function validateScore(value: string): { isValid: boolean; error?: string } {
-    if (!value || value.trim() === '') return { isValid: true }
-    const num = parseFloat(value)
-    if (isNaN(num))                return { isValid: false, error: 'Valeur invalide' }
-    if (num < 0 || num > maxScore) return { isValid: false, error: `Entre 0 et ${maxScore}` }
-    if (Math.round(num * 4 * 1e10) / 1e10 !== Math.round(num * 4))
-      return { isValid: false, error: 'Multiples de 0.25 uniquement' }
-    return { isValid: true }
+  // DR-004 vit dans lib/grades/score-input.ts, qui delegue lui-meme le verdict
+  // a isValidGrade() de lib/bulletin/compute.ts — la meme regle, en Decimal,
+  // que celle qui calcule le bulletin.
+  const validateScoreAgainst = validateScoreInput
+
+  function validateScore(value: string) {
+    return validateScoreAgainst(value, maxScore)
   }
 
   function handleGradeChange(enrollmentId: string, value: string) {
@@ -412,14 +433,8 @@ export function CPMSLGradesGrid({
     })
   }
 
-  function validateSectionScore(value: string, max: number): { isValid: boolean; error?: string } {
-    if (!value || value.trim() === '') return { isValid: true }
-    const num = parseFloat(value)
-    if (isNaN(num)) return { isValid: false, error: 'Valeur invalide' }
-    if (num < 0 || num > max) return { isValid: false, error: `Entre 0 et ${max}` }
-    if (Math.round(num * 4 * 1e10) / 1e10 !== Math.round(num * 4))
-      return { isValid: false, error: 'Multiples de 0.25 uniquement' }
-    return { isValid: true }
+  function validateSectionScore(value: string, max: number) {
+    return validateScoreAgainst(value, max)
   }
 
   function handleSectionGradeChange(enrollmentId: string, sectionId: string, value: string) {
@@ -447,7 +462,7 @@ export function CPMSLGradesGrid({
       totalMax += sec.maxScore
       const entry = studentMap?.get(sec.id)
       if (entry && entry.value.trim() && entry.isValid) {
-        raw += parseFloat(entry.value)
+        raw += parseScore(entry.value) ?? 0
         filledMax += sec.maxScore
       } else {
         complete = false
@@ -468,34 +483,68 @@ export function CPMSLGradesGrid({
     return false
   }, [entryMode, gradeEntries, sectionEntries])
 
+  // Le compteur affiche « X / Y notes saisies ». Les deux nombres mentaient.
+  //
+  // Y valait `enrollments.length`, soit TOUTE la salle, alors que les lignes
+  // affichées sont filtrées par filière : sur une matière d'examen officiel,
+  // l'écran annonçait « 12 / 45 » là où seuls 12 élèves sont à noter, et
+  // laissait croire à 33 notes en retard qui n'existaient pas.
+  //
+  // X, en mode sections, comptait les élèves ayant AU MOINS UNE sous-matière
+  // remplie : « 30 / 30 » pouvait s'afficher avec la moitié des cellules vides.
+  // Un élève n'est saisi que si toutes ses sous-matières applicables le sont.
   const enteredCount = useMemo(() => {
     if (entryMode === 'global') {
-      return Array.from(gradeEntries.values()).filter(e => e.value && e.isValid).length
+      let count = 0
+      for (const enrollment of enrollmentsForSubject) {
+        const entry = gradeEntries.get(enrollment.id)
+        if (entry?.value.trim() && entry.isValid) count++
+      }
+      return count
     }
-    // In sections mode, count students who have at least one valid section entry
+
     let count = 0
-    for (const studentMap of sectionEntries.values()) {
-      const hasAny = Array.from(studentMap.values()).some(e => e.value.trim() && e.isValid)
-      if (hasAny) count++
+    for (const enrollment of enrollmentsForSubject) {
+      const studentMap = sectionEntries.get(enrollment.id)
+      const excluded = exclusionsByEnrollment.get(enrollment.id) ?? new Set<string>()
+      const applicable = subjectSections.filter(sec => !excluded.has(sec.id))
+      if (applicable.length === 0) continue
+      const allFilled = applicable.every(sec => {
+        const entry = studentMap?.get(sec.id)
+        return !!entry?.value.trim() && entry.isValid
+      })
+      if (allFilled) count++
     }
     return count
-  }, [entryMode, gradeEntries, sectionEntries])
+  }, [
+    entryMode,
+    gradeEntries,
+    sectionEntries,
+    enrollmentsForSubject,
+    exclusionsByEnrollment,
+    subjectSections,
+  ])
   // ── EP-006 : détection des modifications non enregistrées ─────────────────
-//
-// On compare gradeEntries (ce que l'utilisateur a tapé) avec
-// existingGrades (ce qui est déjà en base) pour détecter :
-//   - Nouvelles notes saisies mais pas encore enregistrées
-//   - Notes modifiées dont la valeur diffère de l'existante
-//
-// Quand hasUnsavedChanges = true, le browser demande confirmation
-// avant de quitter la page (fermeture onglet, F5, navigation URL…).
-// Protège contre la perte de 10-40 saisies en 1 clic accidentel.
-const hasUnsavedChanges = useMemo(() => {
-  if (isLocked) return false
-  if (!selectedClassSubjectId || !selectedStepId) return false
+  //
+  // On compare ce qui a été tapé (gradeEntries / sectionEntries) avec
+  // existingGrades (ce qui est déjà en base) pour détecter :
+  //   - Nouvelles notes saisies mais pas encore enregistrées
+  //   - Notes modifiées dont la valeur diffère de l'existante
+  //   - Notes existantes effacées, donc en attente de suppression
+  //
+  // On compte les DEUX modes, pas seulement celui qui est affiché : basculer
+  // Global ↔ Sections ne sauve rien et n'efface rien, or ne regarder que le
+  // mode actif éteignait l'alerte alors que le travail restait en attente.
+  //
+  // Le compte, et non un booléen, sert à nommer l'enjeu dans le garde-fou :
+  // « 23 notes non enregistrées » se décide mieux que « des modifications ».
+  const pendingChangeCount = useMemo(() => {
+    if (isLocked) return 0
+    if (!selectedClassSubjectId || !selectedStepId) return 0
 
-  if (entryMode === 'global') {
-    const existingMap = new Map(
+    let count = 0
+
+    const globalExisting = new Map(
       existingGrades
         .filter(g =>
           g.classSubjectId === selectedClassSubjectId &&
@@ -506,61 +555,84 @@ const hasUnsavedChanges = useMemo(() => {
     )
 
     for (const [enrollmentId, entry] of gradeEntries) {
-      const existing = existingMap.get(enrollmentId)
+      const existing = globalExisting.get(enrollmentId)
       // Note existante effacée = suppression en attente
       if (!entry.value?.trim()) {
-        if (existing) return true
+        if (existing) count++
         continue
       }
       if (!entry.isValid) continue
-      const scoreTyped = parseFloat(entry.value)
-      if (!existing) return true
-      if (scoreTyped !== Number(existing.studentScore)) return true
+      if (!existing) { count++; continue }
+      if (parseScore(entry.value) !== Number(existing.studentScore)) count++
     }
-    return false
-  }
 
-  // sections mode
-  const existingSectionMap = new Map<string, Map<string, ApiGrade>>()
-  existingGrades
-    .filter(g =>
-      g.classSubjectId === selectedClassSubjectId &&
-      g.stepId === selectedStepId &&
-      g.sectionId !== null
-    )
-    .forEach(g => {
-      const m = existingSectionMap.get(g.enrollmentId) ?? new Map<string, ApiGrade>()
-      m.set(g.sectionId!, g)
-      existingSectionMap.set(g.enrollmentId, m)
-    })
+    const sectionExisting = new Map<string, Map<string, ApiGrade>>()
+    existingGrades
+      .filter(g =>
+        g.classSubjectId === selectedClassSubjectId &&
+        g.stepId === selectedStepId &&
+        g.sectionId !== null
+      )
+      .forEach(g => {
+        const m = sectionExisting.get(g.enrollmentId) ?? new Map<string, ApiGrade>()
+        m.set(g.sectionId!, g)
+        sectionExisting.set(g.enrollmentId, m)
+      })
 
-  for (const [enrollmentId, studentMap] of sectionEntries) {
-    for (const [sectionId, entry] of studentMap) {
-      const existing = existingSectionMap.get(enrollmentId)?.get(sectionId)
-      // Note existante effacée = suppression en attente
-      if (!entry.value?.trim()) {
-        if (existing) return true
-        continue
+    for (const [enrollmentId, studentMap] of sectionEntries) {
+      for (const [sectionId, entry] of studentMap) {
+        const existing = sectionExisting.get(enrollmentId)?.get(sectionId)
+        // Note de section existante effacée = suppression en attente
+        if (!entry.value?.trim()) {
+          if (existing) count++
+          continue
+        }
+        if (!entry.isValid) continue
+        if (!existing) { count++; continue }
+        if (parseScore(entry.value) !== Number(existing.studentScore)) count++
       }
-      if (!entry.isValid) continue
-      const scoreTyped = parseFloat(entry.value)
-      if (!existing) return true
-      if (scoreTyped !== Number(existing.studentScore)) return true
     }
-  }
-  return false
-}, [
-  entryMode,
-  gradeEntries,
-  sectionEntries,
-  existingGrades,
-  selectedClassSubjectId,
-  selectedStepId,
-  isLocked,
-])
 
-// Active le warning beforeunload du browser quand dirty
-useUnsavedChangesWarning(hasUnsavedChanges)
+    return count
+  }, [
+    gradeEntries,
+    sectionEntries,
+    existingGrades,
+    selectedClassSubjectId,
+    selectedStepId,
+    isLocked,
+  ])
+
+  const missingCount = Math.max(0, enrollmentsForSubject.length - enteredCount)
+
+  const hasUnsavedChanges = pendingChangeCount > 0
+
+  useEffect(() => { onDirtyChange?.(pendingChangeCount) }, [pendingChangeCount, onDirtyChange])
+  // Au demontage, la page ne doit pas rester bloquee sur un compte perime.
+  useEffect(() => () => { onDirtyChange?.(0) }, [onDirtyChange])
+
+  // Alerte native du navigateur : fermeture d'onglet, F5, saisie d'une URL.
+  // Elle ne couvre PAS les sélecteurs de contexte de cet écran, puisqu'on ne
+  // quitte pas la page — c'est le rôle de `guardContextChange` ci-dessous.
+  useUnsavedChangesWarning(hasUnsavedChanges)
+
+  // ── Garde-fou sur les changements de contexte ─────────────────────────────
+  //
+  // Changer de salle, d'étape ou de matière fait recharger les notes, ce qui
+  // réécrit gradeEntries/sectionEntries dans le useEffect de pré-remplissage.
+  // Sans ce garde-fou, une saisie en attente disparaissait sans un mot : les
+  // quatre sélecteurs sont à quelques pixels au-dessus du tableau, et le clic
+  // de travers est le geste le plus facile de l'écran.
+  const [pendingContextChange, setPendingContextChange] =
+    useState<{ label: string; apply: () => void } | null>(null)
+
+  function guardContextChange(label: string, apply: () => void) {
+    if (!hasUnsavedChanges) {
+      apply()
+      return
+    }
+    setPendingContextChange({ label, apply })
+  }
   // ── Save ─────────────────────────────────────────────────────────────────
 
   function handleSaveGrades() {
@@ -586,7 +658,8 @@ useUnsavedChangesWarning(hasUnsavedChanges)
           return
         }
         if (!entry.isValid) return
-        const score = parseFloat(entry.value)
+        const score = parseScore(entry.value)
+        if (score === null) return
         if (!existing) {
           toCreate.push({ enrollmentId, classSubjectId: selectedClassSubjectId, stepId: selectedStepId, studentScore: score, gradeType: 'EXAM' })
         } else if (score !== Number(existing.studentScore)) {
@@ -615,7 +688,8 @@ useUnsavedChangesWarning(hasUnsavedChanges)
             return
           }
           if (!entry.isValid) return
-          const score = parseFloat(entry.value)
+          const score = parseScore(entry.value)
+          if (score === null) return
           if (!existing) {
             toCreate.push({ enrollmentId, classSubjectId: selectedClassSubjectId, sectionId, stepId: selectedStepId, studentScore: score, gradeType: 'EXAM' })
           } else if (score !== Number(existing.studentScore)) {
@@ -627,6 +701,135 @@ useUnsavedChangesWarning(hasUnsavedChanges)
 
     if (toCreate.length === 0 && toUpdate.length === 0 && toDelete.length === 0) return
     onSaveGrades(toCreate, toUpdate, toDelete)
+  }
+
+  // ── Navigation clavier de la grille ───────────────────────────────────────
+  //
+  // C'est ici que se passe le vrai travail : trente notes d'affilée, au
+  // clavier. L'ancien handler interceptait Tab sans jamais tester `shiftKey`
+  // et sans relâcher le focus en fin de page — Shift+Tab ne remontait pas, et
+  // la dernière cellule piégeait le focus : ni la pagination ni le bouton
+  // Enregistrer n'étaient atteignables (échec WCAG 2.1.2).
+  //
+  // Chaque cellule de note porte data-grid-row / data-grid-col. Une
+  // sous-matière dispensée n'a pas de champ : la recherche saute les trous
+  // plutôt que de s'y arrêter.
+
+  function findCell(row: number, col: number): HTMLInputElement | null {
+    return document.querySelector<HTMLInputElement>(
+      `input[data-grid-row="${row}"][data-grid-col="${col}"]`
+    )
+  }
+
+  function focusCell(cell: HTMLInputElement | null): boolean {
+    if (!cell) return false
+    cell.focus()
+    cell.select()
+    return true
+  }
+
+  // Première cellule existante dans la colonne, à partir de `from` inclus.
+  function findInColumn(from: number, col: number, rowCount: number, step: 1 | -1) {
+    for (let r = from; r >= 0 && r < rowCount; r += step) {
+      const cell = findCell(r, col)
+      if (cell) return cell
+    }
+    return null
+  }
+
+  // Ordre de tabulation : on descend la colonne, puis on repart en haut de la
+  // colonne suivante. C'est l'ordre de la correction — « toutes les dictées,
+  // puis toutes les grammaires » — et non l'ordre du DOM, qui ferait traverser
+  // le nom, le code et le bouton de dispense à chaque élève.
+  function findNextCell(
+    row: number,
+    col: number,
+    colCount: number,
+    rowCount: number,
+    step: 1 | -1
+  ): HTMLInputElement | null {
+    const inColumn = findInColumn(row + step, col, rowCount, step)
+    if (inColumn) return inColumn
+
+    for (let c = col + step; c >= 0 && c < colCount; c += step) {
+      const entry = findInColumn(step === 1 ? 0 : rowCount - 1, c, rowCount, step)
+      if (entry) return entry
+    }
+    return null
+  }
+
+  // Collage d'une colonne entière — depuis Excel, LibreOffice ou un relevé
+  // manuscrit recopié. Une seule valeur garde le comportement natif ; à partir
+  // de deux, on distribue vers le bas dans la colonne. Chaque valeur passe par
+  // handleGradeChange/handleSectionGradeChange, donc par DR-004 : le collage ne
+  // contourne pas la validation.
+  function handleGridPaste(
+    e: React.ClipboardEvent<HTMLInputElement>,
+    row: number,
+    col: number,
+    rowCount: number,
+    applyAt: (row: number, value: string) => void
+  ) {
+    const tokens = e.clipboardData
+      .getData('text')
+      .split(/[\r\n\t;]+/)
+      .map(t => t.trim())
+      .filter(Boolean)
+    if (tokens.length <= 1) return
+
+    e.preventDefault()
+    let r = row
+    for (const token of tokens) {
+      // Sauter les sous-matières dispensées, qui n'ont pas de champ.
+      while (r < rowCount && !findCell(r, col)) r++
+      if (r >= rowCount) break
+      applyAt(r, token)
+      r++
+    }
+  }
+
+  function handleGridKeyDown(
+    e: React.KeyboardEvent<HTMLInputElement>,
+    row: number,
+    col: number,
+    colCount: number,
+    rowCount: number
+  ) {
+    // Ctrl/Cmd + S : enregistrer sans lâcher le clavier. Le bouton est en bas
+    // de la carte, hors écran pendant la saisie.
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      e.preventDefault()
+      handleSaveGrades()
+      return
+    }
+
+    // Haut / Bas : changer de ligne. Les champs sont en `type="text"` depuis
+    // le passage à `inputMode="decimal"`, donc plus d'incrément natif à
+    // neutraliser — mais le preventDefault reste nécessaire pour empêcher le
+    // navigateur de déplacer le curseur dans le champ au lieu de changer de
+    // ligne.
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault()
+      const step = e.key === 'ArrowDown' ? 1 : -1
+      focusCell(findInColumn(row + step, col, rowCount, step))
+      return
+    }
+
+    // Entrée : cellule suivante dans la colonne, comme dans un tableur.
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      focusCell(findInColumn(row + 1, col, rowCount, 1))
+      return
+    }
+
+    if (e.key !== 'Tab') return
+
+    const next = findNextCell(row, col, colCount, rowCount, e.shiftKey ? -1 : 1)
+    // Plus rien au-delà : on ne bloque pas. Le focus doit pouvoir sortir de la
+    // grille vers la pagination et le bouton Enregistrer.
+    if (!next) return
+    e.preventDefault()
+    focusCell(next)
   }
 
   const headerLabel = useMemo(() => {
@@ -651,7 +854,7 @@ useUnsavedChangesWarning(hasUnsavedChanges)
       )
       const hasValue   = !!entry?.value?.trim()
       const hasError   = hasValue && entry && !entry.isValid
-      const isModified = existing && hasValue && !hasError && parseFloat(entry!.value) !== Number(existing.studentScore)
+      const isModified = existing && hasValue && !hasError && parseScore(entry!.value) !== Number(existing.studentScore)
       // Note existante effacée → suppression en attente d'enregistrement
       const isCleared  = existing && !hasValue
 
@@ -684,7 +887,7 @@ useUnsavedChangesWarning(hasUnsavedChanges)
       const value = entry?.value?.trim() ?? ''
       if (value) anyValue = true
 
-      if (existing && value && entry?.isValid && parseFloat(value) !== Number(existing.studentScore)) {
+      if (existing && value && entry?.isValid && parseScore(value) !== Number(existing.studentScore)) {
         anyModified = true
         allSavedAndUnchanged = false
       }
@@ -702,29 +905,32 @@ useUnsavedChangesWarning(hasUnsavedChanges)
     return 'empty'
   }
 
-  function renderBadge(enrollmentId: string) {
-    const kind = getBadgeKind(enrollmentId)
-    switch (kind) {
-      case 'modified':
-        return <Badge className="border-warning-border bg-warning-soft text-warning-ink hover:bg-warning-soft">Modifié</Badge>
-      case 'saved':
-        return <Badge className="border-info-border bg-info-soft text-info-ink hover:bg-info-soft">Enregistré</Badge>
-      case 'entered':
-        return <Badge className="border-success-border bg-success-soft text-success-ink hover:bg-success-soft">Saisi</Badge>
-      default:
-        return <Badge variant="secondary">Non saisi</Badge>
+  // La colonne « Statut » a été retirée : elle coûtait une colonne entière pour
+  // un signal qui appartient à la cellule. Mais elle portait une information que
+  // la couleur de cellule ne portait PAS — enregistré / en attente — et la
+  // perdre reviendrait à cacher à l'utilisatrice ce qui est déjà en base.
+  // Ce signal descend donc dans le champ lui-même, en mots ET en couleur :
+  // jamais par la couleur seule, sans quoi il disparaîtrait pour un lecteur
+  // d'écran comme pour un daltonien.
+  const BADGE_WORDING: Record<BadgeKind, string> = {
+    modified: 'modifié, non enregistré',
+    entered:  'saisi, non enregistré',
+    saved:    'enregistré',
+    empty:    'non saisi',
+  }
+
+  // Le vert ne dit plus « syntaxiquement valide » — il le disait sur toute note,
+  // y compris un 2/20, si bien que trente cellules vertes ne distinguaient plus
+  // rien. Il ne reste qu'un seul axe de couleur : en attente ou en base.
+  function cellStateClass(kind: BadgeKind): string {
+    if (kind === 'modified' || kind === 'entered') {
+      return 'border-warning-border bg-warning-soft/50 text-warning-ink'
     }
+    if (kind === 'saved') return 'border-input text-foreground'
+    return ''
   }
 
   // ── Recherche + tri stable ────────────────────────────────────────────────
-
-  // Filière : une matière d'examen officiel ne concerne QUE les élèves de sa
-  // filière. Une matière du tronc commun concerne toute la salle.
-  const enrollmentsForSubject = useMemo(() => {
-    const trackId = selectedClassSubject?.trackId ?? null
-    if (!trackId) return enrollments
-    return enrollments.filter(e => e.trackId === trackId)
-  }, [enrollments, selectedClassSubject])
 
   const initialSortedEnrollments = useMemo(() => {
     return enrollmentsForSubject
@@ -756,12 +962,13 @@ useUnsavedChangesWarning(hasUnsavedChanges)
       return filteredEnrollmentsBeforeSort.map(({ enrollment }) => enrollment)
     }
 
-    const statusOrder: Record<BadgeKind, number> = {
-      empty: 0,
-      entered: 2,
-      modified: 3,
-      saved: 4,
-    }
+    // Le comparateur est appelé O(n log n) fois et `sectionRowTotal` reparcourt
+    // les sous-matières à chaque appel : on calcule une fois, avant le tri.
+    const sectionTotals = sortConfig.key === 'sectionTotal'
+      ? new Map(filteredEnrollmentsBeforeSort.map(
+          ({ enrollment }) => [enrollment.id, sectionRowTotal(enrollment.id)] as const
+        ))
+      : null
 
     return [...filteredEnrollmentsBeforeSort]
       .sort((a, b) => {
@@ -779,22 +986,19 @@ useUnsavedChangesWarning(hasUnsavedChanges)
           case 'studentCode':
             comparison = compareTextValues(enrollmentA.student.studentCode, enrollmentB.student.studentCode)
             break
-          case 'status':
-            comparison = statusOrder[getBadgeKind(enrollmentA.id)] - statusOrder[getBadgeKind(enrollmentB.id)]
-            break
           case 'globalNote': {
             const scoreA = gradeEntries.get(enrollmentA.id)?.value
             const scoreB = gradeEntries.get(enrollmentB.id)?.value
             comparison = compareNullableNumbers(
-              scoreA?.trim() ? parseFloat(scoreA) : null,
-              scoreB?.trim() ? parseFloat(scoreB) : null,
+              scoreA?.trim() ? parseScore(scoreA) : null,
+              scoreB?.trim() ? parseScore(scoreB) : null,
               direction
             )
             break
           }
           case 'sectionTotal': {
-            const totalA = sectionRowTotal(enrollmentA.id)
-            const totalB = sectionRowTotal(enrollmentB.id)
+            const totalA = sectionTotals!.get(enrollmentA.id)!
+            const totalB = sectionTotals!.get(enrollmentB.id)!
             comparison = compareNullableNumbers(
               totalA.complete || totalA.raw > 0 ? totalA.raw : null,
               totalB.complete || totalB.raw > 0 ? totalB.raw : null,
@@ -813,23 +1017,7 @@ useUnsavedChangesWarning(hasUnsavedChanges)
   })()
 
   const filteredEnrollments = sortedEnrollments
-  const totalPages = Math.max(1, Math.ceil(filteredEnrollments.length / itemsPerPage))
-  const paginatedEnrollments = filteredEnrollments.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  )
-
-  const paginationWindow = useMemo(() => {
-    if (totalPages <= 5) return Array.from({ length: totalPages }, (_, i) => i + 1)
-    if (currentPage <= 3) return [1, 2, 3, 4, 'ellipsis-right', totalPages]
-    if (currentPage >= totalPages - 2) {
-      return [1, 'ellipsis-left', totalPages - 3, totalPages - 2, totalPages - 1, totalPages]
-    }
-    return [1, 'ellipsis-left', currentPage - 1, currentPage, currentPage + 1, 'ellipsis-right', totalPages]
-  }, [currentPage, totalPages])
-
   function handleSort(key: SortKey) {
-    setCurrentPage(1)
     setSortConfig(prev => {
       if (prev.key !== key) return { key, direction: 'asc' }
       if (prev.direction === 'asc') return { key, direction: 'desc' }
@@ -853,12 +1041,12 @@ useUnsavedChangesWarning(hasUnsavedChanges)
         : ArrowUpDownIcon
 
     return (
-      <TableHead aria-sort={ariaSort} className={cn("h-12 bg-muted/60 font-semibold", className)}>
+      <TableHead aria-sort={ariaSort} className={cn("sticky top-0 z-10 h-9 bg-muted px-3 py-1.5 font-semibold", className)}>
         <button
           type="button"
           onClick={() => handleSort(key)}
           className={cn(
-            "inline-flex w-full items-center gap-1.5 rounded-sm py-1 text-left transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+            "inline-flex w-full items-center gap-1.5 rounded-sm py-1 text-left transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
             align === 'center' && "justify-center text-center",
             activeDirection ? "text-foreground" : "text-muted-foreground"
           )}
@@ -879,69 +1067,71 @@ useUnsavedChangesWarning(hasUnsavedChanges)
 
   // ── Table row ─────────────────────────────────────────────────────────────
 
-  function renderTableRow(enrollment: ApiEnrollment) {
+  function renderTableRow(enrollment: ApiEnrollment, rowIndex: number) {
     const entry    = gradeEntries.get(enrollment.id)
     const hasValue = !!entry?.value?.trim()
     const hasError = hasValue && entry && !entry.isValid
+    const errorId  = `note-error-${enrollment.id}`
+    const studentName = `${enrollment.student.user.firstname} ${enrollment.student.user.lastname}`
+    const kind     = getBadgeKind(enrollment.id)
 
     return (
       <TableRow key={enrollment.id} className="group">
-        <TableCell className="min-w-[160px] pl-6 font-semibold text-foreground">
+        <TableCell className="min-w-[132px] px-2 py-1 pl-6 text-xs font-semibold text-foreground">
           {enrollment.student.user.lastname}
         </TableCell>
-        <TableCell className="min-w-[150px] text-foreground">
+        <TableCell className="min-w-[116px] px-2 py-1 text-xs text-foreground">
           {enrollment.student.user.firstname}
         </TableCell>
-        <TableCell className="min-w-[116px]">
+        <TableCell className="min-w-[104px] px-2 py-1">
           <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
             {enrollment.student.studentCode}
           </code>
         </TableCell>
-        <TableCell className="min-w-[156px]">
-          <div className="flex flex-col items-center gap-1">
-            <div className="flex items-center gap-2 rounded-lg bg-muted/40 px-2 py-1">
+        <TableCell className="min-w-[104px] px-2 py-1 pr-6">
+          <div className="flex flex-col items-center gap-0.5">
+            <div className="flex items-center justify-center gap-1.5">
               <Input
-                type="number" min="0" max={String(maxScore)} step="0.25"
+                type="text" inputMode="decimal" autoComplete="off"
                 value={entry?.value || ''} placeholder="—" disabled={isLocked}
                 onChange={e => handleGradeChange(enrollment.id, e.target.value)}
+                onPaste={e => handleGridPaste(
+                  e, rowIndex, 0, filteredEnrollments.length,
+                  (r, v) => handleGradeChange(filteredEnrollments[r].id, v)
+                )}
                 className={cn(
-                  "h-10 w-28 border-input bg-background text-center text-base font-semibold tabular-nums shadow-sm",
-                  hasValue && !hasError && "border-success-border bg-success-soft/60 text-success-ink",
+                  "h-7 w-16 border-input bg-background px-1 text-center text-sm font-semibold tabular-nums",
+                  !hasError && cellStateClass(kind),
                   hasError && "border-destructive focus-visible:ring-destructive"
                 )}
-                onKeyDown={e => {
-                  if (e.key !== 'Tab') return
-                  e.preventDefault()
-                  const idx = paginatedEnrollments.findIndex(en => en.id === enrollment.id)
-                  if (idx >= paginatedEnrollments.length - 1) return
-                  const nextId = paginatedEnrollments[idx + 1].id
-                  const next = document.querySelector(`input[data-enrollment-id="${nextId}"]`) as HTMLInputElement
-                  next?.focus()
-                }}
-                data-enrollment-id={enrollment.id}
+                onKeyDown={e => handleGridKeyDown(e, rowIndex, 0, 1, filteredEnrollments.length)}
+                aria-label={`Note de ${studentName} sur ${maxScore} — ${BADGE_WORDING[kind]}`}
+                title={BADGE_WORDING[kind]}
+                aria-invalid={!!hasError}
+                aria-describedby={hasError ? errorId : undefined}
+                data-grid-row={rowIndex}
+                data-grid-col={0}
               />
               <span className="text-xs font-medium text-muted-foreground">/ {maxScore}</span>
             </div>
             {hasError && entry?.error && (
-              <p className="text-2xs text-destructive">{entry.error}</p>
+              <p id={errorId} role="alert" className="text-2xs text-destructive">{entry.error}</p>
             )}
           </div>
-        </TableCell>
-        <TableCell className="pr-6 text-center">
-          {renderBadge(enrollment.id)}
         </TableCell>
       </TableRow>
     )
   }
 
-  function renderSectionsTableRow(enrollment: ApiEnrollment) {
+  function renderSectionsTableRow(enrollment: ApiEnrollment, rowIndex: number) {
     const studentMap = sectionEntries.get(enrollment.id)
     const total = sectionRowTotal(enrollment.id)
     const excluded = exclusionsByEnrollment.get(enrollment.id) ?? new Set<string>()
     const excludedHere = subjectSections.filter((sec) => excluded.has(sec.id)).length
+    const studentName = `${enrollment.student.user.firstname} ${enrollment.student.user.lastname}`
     return (
       <TableRow key={enrollment.id} className="group">
-        <TableCell className="min-w-[170px] pl-6 font-semibold text-foreground">
+        <TableCell className="min-w-[142px] px-2 py-1 pl-6 text-xs font-semibold text-foreground">
           <div className="flex items-center gap-1.5">
             <button
               type="button"
@@ -960,21 +1150,23 @@ useUnsavedChangesWarning(hasUnsavedChanges)
             )}
           </div>
         </TableCell>
-        <TableCell className="min-w-[150px] text-foreground">
+        <TableCell className="min-w-[116px] px-2 py-1 text-xs text-foreground">
           {enrollment.student.user.firstname}
         </TableCell>
-        <TableCell className="min-w-[118px]">
+        <TableCell className="min-w-[104px] px-2 py-1">
           <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
             {enrollment.student.studentCode}
           </code>
         </TableCell>
-        {subjectSections.map(sec => {
+        {subjectSections.map((sec, colIndex) => {
           const isExcluded = excluded.has(sec.id)
           const entry = studentMap?.get(sec.id)
           const hasValue = !!entry?.value?.trim()
           const hasError = hasValue && entry && !entry.isValid
+          const errorId = `note-error-${enrollment.id}-${sec.id}`
+          const kind = getBadgeKind(enrollment.id)
           return (
-            <TableCell key={sec.id} className={cn("min-w-[156px] align-top", isExcluded && "bg-muted/30")}>
+            <TableCell key={sec.id} className={cn("min-w-[104px] px-2 py-1 align-top", isExcluded && "bg-muted/30")}>
               {isExcluded ? (
                 <div className="flex flex-col items-center gap-0.5">
                   <span className="inline-flex items-center gap-1 text-3xs font-medium text-muted-foreground">
@@ -983,35 +1175,47 @@ useUnsavedChangesWarning(hasUnsavedChanges)
                   <span className="text-3xs text-muted-foreground">non comptée</span>
                 </div>
               ) : (
-                <div className="flex flex-col items-center gap-1">
-                  <div className="flex items-center gap-2 rounded-lg bg-muted/40 px-2 py-1">
+                <div className="flex flex-col items-center gap-0.5">
+                  <div className="flex items-center justify-center gap-1.5">
                     <Input
-                      type="number" min="0" max={String(sec.maxScore)} step="0.25"
+                      type="text" inputMode="decimal" autoComplete="off"
                       value={entry?.value || ''} placeholder="—" disabled={isLocked}
                       onChange={e => handleSectionGradeChange(enrollment.id, sec.id, e.target.value)}
+                      onPaste={e => handleGridPaste(
+                        e, rowIndex, colIndex, filteredEnrollments.length,
+                        (r, v) => handleSectionGradeChange(filteredEnrollments[r].id, sec.id, v)
+                      )}
                       className={cn(
-                        "h-10 w-24 border-input bg-background text-center text-base font-semibold tabular-nums shadow-sm",
-                        hasValue && !hasError && "border-success-border bg-success-soft/60 text-success-ink",
+                        "h-7 w-16 border-input bg-background px-1 text-center text-sm font-semibold tabular-nums",
+                        !hasError && cellStateClass(kind),
                         hasError && "border-destructive focus-visible:ring-destructive"
                       )}
+                      onKeyDown={e => handleGridKeyDown(
+                        e, rowIndex, colIndex, subjectSections.length, filteredEnrollments.length
+                      )}
+                      aria-label={`${sec.name} — ${studentName}, sur ${sec.maxScore} — ${BADGE_WORDING[kind]}`}
+                      title={BADGE_WORDING[kind]}
+                      aria-invalid={!!hasError}
+                      aria-describedby={hasError ? errorId : undefined}
+                      data-grid-row={rowIndex}
+                      data-grid-col={colIndex}
                     />
                     <span className="text-2xs font-medium text-muted-foreground tabular-nums">/ {sec.maxScore}</span>
                   </div>
                   {hasError && entry?.error && (
-                    <p className="text-3xs text-destructive">{entry.error}</p>
+                    <p id={errorId} role="alert" className="text-3xs text-destructive">{entry.error}</p>
                   )}
                 </div>
               )}
             </TableCell>
           )
         })}
-        <TableCell className="min-w-[124px] text-center">
+        <TableCell className="min-w-[104px] px-2 py-1 pr-6 text-center">
           {total.raw > 0 || total.complete ? (
             <span
               className={cn(
-                "inline-flex min-w-[104px] items-center justify-center rounded-lg border px-2 py-1 tabular-nums text-sm font-bold",
-                total.complete ? "border-success-border bg-success-soft" : "border-warning-border bg-warning-soft",
-                total.complete ? "text-success-ink" : "text-warning-ink"
+                "inline-flex min-w-[88px] items-center justify-center rounded-md border px-2 py-0.5 tabular-nums text-sm font-bold text-foreground",
+                total.complete ? "border-border bg-muted" : "border-warning-border bg-warning-soft text-warning-ink"
               )}
               title={total.complete ? "Total complet" : "Total partiel (toutes les sections ne sont pas saisies)"}
             >
@@ -1021,89 +1225,7 @@ useUnsavedChangesWarning(hasUnsavedChanges)
             <span className="text-xs text-muted-foreground">—</span>
           )}
         </TableCell>
-        <TableCell className="min-w-[126px] pr-6 text-center">
-          {renderBadge(enrollment.id)}
-        </TableCell>
       </TableRow>
-    )
-  }
-
-  // ── Pagination footer ─────────────────────────────────────────────────────
-
-  function renderPaginationFooter() {
-    if (filteredEnrollments.length <= 15) return null
-    return (
-      <>
-        <Separator />
-        <div className="flex flex-col items-center justify-between gap-3 px-4 py-3 sm:flex-row">
-          <div className="flex items-center gap-3">
-            <p className="text-xs text-muted-foreground">
-              Page <span className="font-medium text-foreground tabular-nums">{currentPage}</span>{" "}
-              sur <span className="font-medium text-foreground tabular-nums">{totalPages}</span>
-              {" "}&middot; {filteredEnrollments.length} élève(s)
-            </p>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">Afficher</span>
-              <Select
-                value={String(itemsPerPage)}
-                onValueChange={v => { setItemsPerPage(Number(v)); setCurrentPage(1) }}
-              >
-                <SelectTrigger className="h-8 w-[72px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PAGE_SIZE_OPTIONS.map(size => (
-                    <SelectItem key={size} value={String(size)}>
-                      {size}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {totalPages > 1 && (
-            <Pagination className="mx-0 w-auto justify-end">
-              <PaginationContent>
-                <PaginationItem>
-                  <PaginationPrevious
-                    href="#"
-                    onClick={e => { e.preventDefault(); if (currentPage > 1) setCurrentPage(p => p - 1) }}
-                    className={cn(currentPage === 1 && "pointer-events-none opacity-50")}
-                  />
-                </PaginationItem>
-                {paginationWindow.map((p, idx) => {
-                  if (typeof p === 'string') {
-                    return (
-                      <PaginationItem key={`${p}-${idx}`}>
-                        <PaginationEllipsis />
-                      </PaginationItem>
-                    )
-                  }
-                  return (
-                    <PaginationItem key={p}>
-                      <PaginationLink
-                        href="#"
-                        isActive={currentPage === p}
-                        onClick={e => { e.preventDefault(); setCurrentPage(p) }}
-                      >
-                        {p}
-                      </PaginationLink>
-                    </PaginationItem>
-                  )
-                })}
-                <PaginationItem>
-                  <PaginationNext
-                    href="#"
-                    onClick={e => { e.preventDefault(); if (currentPage < totalPages) setCurrentPage(p => p + 1) }}
-                    className={cn(currentPage === totalPages && "pointer-events-none opacity-50")}
-                  />
-                </PaginationItem>
-              </PaginationContent>
-            </Pagination>
-          )}
-        </div>
-      </>
     )
   }
 
@@ -1112,7 +1234,7 @@ useUnsavedChangesWarning(hasUnsavedChanges)
     return (
       <Card className="border bg-card shadow-sm">
         <CardContent className="flex items-center justify-center py-16">
-          <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-muted border-t-primary" />
+          <div className="h-8 w-8 animate-spin rounded-full border border-muted border-t-primary" />
         </CardContent>
       </Card>
     )
@@ -1130,7 +1252,7 @@ useUnsavedChangesWarning(hasUnsavedChanges)
                 <CardTitle className="text-base font-semibold">Saisie des notes</CardTitle>
                 <CardDescription className="flex flex-wrap items-center gap-2">
                   <span>
-                  {headerLabel} &middot; {enteredCount} / {enrollments.length} notes saisies
+                  {headerLabel} &middot; {enteredCount} / {enrollmentsForSubject.length} notes saisies
                   </span>
                   {hasUnsavedChanges && (
                 <Badge
@@ -1149,17 +1271,21 @@ useUnsavedChangesWarning(hasUnsavedChanges)
 
         {/* Search toolbar + mode toggle */}
         <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative max-w-md flex-1">
-            <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Rechercher par nom ou code..."
-              value={searchQuery}
-              onChange={e => {
-                setSearchQuery(e.target.value)
-                setCurrentPage(1)
-              }}
-              className="pl-9"
-            />
+          <div className="flex max-w-md flex-1 items-center gap-2">
+            <div className="relative flex-1">
+              <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Rechercher par nom ou code..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            {searchQuery.trim() && (
+              <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                {filteredEnrollments.length} / {enrollmentsForSubject.length}
+              </span>
+            )}
           </div>
           {sortConfig.direction && (
             <Button
@@ -1168,7 +1294,6 @@ useUnsavedChangesWarning(hasUnsavedChanges)
               size="sm"
               onClick={() => {
                 setSortConfig({ key: null, direction: null })
-                setCurrentPage(1)
               }}
               className="shrink-0"
             >
@@ -1186,7 +1311,7 @@ useUnsavedChangesWarning(hasUnsavedChanges)
                   className={cn(
                     "px-3 py-1.5 text-xs font-medium transition-colors",
                     entryMode === 'global'
-                      ? "bg-[#2C4A6E] text-white"
+                      ? "bg-primary text-primary-foreground"
                       : "text-muted-foreground hover:bg-muted"
                   )}
                 >
@@ -1198,7 +1323,7 @@ useUnsavedChangesWarning(hasUnsavedChanges)
                   className={cn(
                     "px-3 py-1.5 text-xs font-medium transition-colors",
                     entryMode === 'sections'
-                      ? "bg-[#2C4A6E] text-white"
+                      ? "bg-primary text-primary-foreground"
                       : "text-muted-foreground hover:bg-muted"
                   )}
                 >
@@ -1225,61 +1350,81 @@ useUnsavedChangesWarning(hasUnsavedChanges)
               </p>
             </div>
           ) : entryMode === 'sections' ? (
-            <div className="overflow-x-auto">
-              <Table style={{ minWidth: `${580 + subjectSections.length * 168}px` }}>
+            <Table
+              containerClassName="cpmsl-scroll max-h-[min(60vh,640px)] overflow-y-auto"
+              style={{ minWidth: `${466 + subjectSections.length * 104}px` }}
+            >
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
                     {renderSortableHead('lastName', 'Nom', 'pl-6', 'left', 'Trier par nom')}
                     {renderSortableHead('firstName', 'Prénom', undefined, 'left', 'Trier par prénom')}
                     {renderSortableHead('studentCode', 'Code', undefined, 'left', 'Trier par code élève')}
                     {subjectSections.map(sec => (
-                      <TableHead key={sec.id} className="min-w-[156px] bg-muted/60 text-center font-semibold">
+                      <TableHead key={sec.id} className="sticky top-0 z-10 min-w-[104px] bg-muted px-3 py-1.5 text-center font-semibold">
                         <div className="flex flex-col items-center gap-0.5">
                           <span>{sec.name}</span>
                           <span className="text-3xs font-normal text-muted-foreground">/ {sec.maxScore}</span>
                         </div>
                       </TableHead>
                     ))}
-                    {renderSortableHead('sectionTotal', `Total / ${maxScore}`, 'min-w-[124px]', 'center', 'Trier par total')}
-                    {renderSortableHead('status', 'Statut', 'min-w-[126px] pr-6', 'center', 'Trier par statut de saisie')}
+                    {renderSortableHead('sectionTotal', `Total / ${maxScore}`, 'min-w-[104px] pr-6', 'center', 'Trier par total')}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginatedEnrollments.map(enrollment => renderSectionsTableRow(enrollment))}
+                  {filteredEnrollments.map((enrollment, i) => renderSectionsTableRow(enrollment, i))}
                 </TableBody>
-              </Table>
-            </div>
+            </Table>
           ) : (
-            <Table style={{ minWidth: "720px" }}>
+            <Table
+              containerClassName="cpmsl-scroll max-h-[min(60vh,640px)] overflow-y-auto"
+              style={{ minWidth: "456px" }}
+            >
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   {renderSortableHead('lastName', 'Nom', 'pl-6', 'left', 'Trier par nom')}
                   {renderSortableHead('firstName', 'Prénom', undefined, 'left', 'Trier par prénom')}
                   {renderSortableHead('studentCode', 'Code', undefined, 'left', 'Trier par code élève')}
-                  {renderSortableHead('globalNote', `Note / ${maxScore}`, 'min-w-[156px]', 'center', 'Trier par note')}
-                  {renderSortableHead('status', 'Statut', 'min-w-[126px] pr-6', 'center', 'Trier par statut de saisie')}
+                  {renderSortableHead('globalNote', `Note / ${maxScore}`, 'min-w-[104px] pr-6', 'center', 'Trier par note')}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {paginatedEnrollments.map(enrollment => renderTableRow(enrollment))}
+                {filteredEnrollments.map((enrollment, i) => renderTableRow(enrollment, i))}
               </TableBody>
             </Table>
           )}
         </CardContent>
 
-        {renderPaginationFooter()}
 
         {/* Save button */}
         {!isLocked && filteredEnrollments.length > 0 && (
           <>
             <Separator />
-            <div className="flex justify-end p-4">
+            <div className="flex flex-col items-start justify-between gap-2 p-4 sm:flex-row sm:items-center">
+              {/* Ce que produit une cellule vide n'était dit nulle part. Elle
+                  saisissait vers un bulletin qu'elle ne voit pas, sans savoir
+                  qu'un oubli s'imprime comme une absence pénalisante.
+                  Règle arbitrée par la MOA le 2026-09-09, cf. E5 et
+                  docs/CALCUL-BULLETIN.md. */}
+              {missingCount > 0 ? (
+                <p className="max-w-prose text-xs text-muted-foreground">
+                  <span className="font-medium text-warning-ink tabular-nums">
+                    {missingCount} élève{missingCount > 1 ? "s" : ""}
+                  </span>{" "}
+                  sans note. À l&apos;impression, une note manquante compte{" "}
+                  <strong className="font-medium text-foreground">0</strong> et
+                  <strong className="font-medium text-foreground"> conserve son barème</strong>{" "}
+                  au dénominateur — ce n&apos;est pas la même chose qu&apos;une dispense.
+                </p>
+              ) : (
+                <span />
+              )}
               <Button
+                className="shrink-0"
                 onClick={handleSaveGrades}
                 disabled={!selectedClassSubjectId || !selectedStepId || hasErrors || saving}
               >
                 {saving ? (
-                  <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  <div className="mr-2 h-4 w-4 animate-spin rounded-full border border-primary-foreground border-t-transparent" />
                 ) : (
                   <SaveIcon className="mr-2 h-4 w-4" />
                 )}
@@ -1365,7 +1510,10 @@ useUnsavedChangesWarning(hasUnsavedChanges)
             {/* Étape */}
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">Étape</label>
-              <Select value={selectedStepId} onValueChange={onStepChange}>
+              <Select
+                value={selectedStepId}
+                onValueChange={v => guardContextChange("d'étape", () => onStepChange(v))}
+              >
                 <SelectTrigger>
                   <div className="flex items-center gap-2">
                     {isLocked && <LockIcon className="h-4 w-4 text-warning-ink" />}
@@ -1387,7 +1535,7 @@ useUnsavedChangesWarning(hasUnsavedChanges)
               <label className="text-xs font-medium text-muted-foreground">Matière</label>
               <Select
                 value={selectedClassSubjectId}
-                onValueChange={onClassSubjectChange}
+                onValueChange={v => guardContextChange("de matière", () => onClassSubjectChange(v))}
                 disabled={!selectedSessionId || loadingSession}
               >
                 <SelectTrigger>
@@ -1452,6 +1600,38 @@ useUnsavedChangesWarning(hasUnsavedChanges)
 
       {renderMainContent()}
 
+      {/* Garde-fou : changement de contexte avec des notes en attente */}
+      <AlertDialog
+        open={!!pendingContextChange}
+        onOpenChange={(o) => { if (!o) setPendingContextChange(null) }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingChangeCount} note{pendingChangeCount > 1 ? "s" : ""} non
+              enregistrée{pendingChangeCount > 1 ? "s" : ""}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Changer {pendingContextChange?.label} recharge la grille et efface{" "}
+              {pendingChangeCount > 1 ? "ces saisies" : "cette saisie"}.
+              Enregistrez d&apos;abord pour {pendingChangeCount > 1 ? "les" : "la"} conserver.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Revenir à la saisie</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                pendingContextChange?.apply()
+                setPendingContextChange(null)
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Abandonner {pendingChangeCount > 1 ? "les modifications" : "la modification"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Exclusions editor — dispense scoped par élève + matière + étape */}
       <Dialog open={!!exclusionTarget} onOpenChange={(o) => { if (!o) setExclusionTarget(null) }}>
         <DialogContent className="sm:max-w-[480px]">
@@ -1501,7 +1681,7 @@ useUnsavedChangesWarning(hasUnsavedChanges)
             <Button variant="outline" onClick={() => setExclusionTarget(null)} disabled={savingExclusions}>
               Annuler
             </Button>
-            <Button onClick={saveExclusions} disabled={savingExclusions} className="bg-[#2C4A6E] text-white hover:bg-[#1F3856]">
+            <Button onClick={saveExclusions} disabled={savingExclusions}>
               {savingExclusions ? "Enregistrement…" : "Enregistrer"}
             </Button>
           </DialogFooter>

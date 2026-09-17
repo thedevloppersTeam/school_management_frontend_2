@@ -27,6 +27,7 @@ import {
   TrendingUpIcon,
   InboxIcon,
 } from "lucide-react"
+import { gradeBand, gradeBandToneClass, gradeMention } from "@/lib/bulletin/grade-color"
 import { fetchClassSessions, fetchSteps, type AcademicYearStep, type ClassSession } from "@/lib/api/dashboard"
 import { fetchClassSubjects, fetchEnrollments, type ApiClassSubject, type ApiEnrollment } from "@/lib/api/grades"
 import { computeStep } from "@/lib/bulletin/compute"
@@ -65,16 +66,13 @@ interface GradeRow {
   maxScores:    Record<string, number>
 }
 
+/**
+ * Mention MENFP. Était une copie locale du barème, la cinquième du dépôt ;
+ * délègue maintenant à `lib/bulletin/grade-color.ts`, qui porte la table unique
+ * alignée sur la légende imprimée du bulletin. `m` est sur /10.
+ */
 function getAppreciation(m: number | null): string {
-  if (m === null) return '—'
-  if (m >= 9) return 'A+'
-  if (m >= 8.5) return 'A'
-  if (m >= 7.8) return 'B+'
-  if (m >= 7.5) return 'B'
-  if (m >= 6.9) return 'C+'
-  if (m >= 6) return 'C'
-  if (m >= 5.1) return 'D'
-  return 'E'
+  return gradeMention(m === null ? null : m * 10)
 }
 
 function sessionLabel(s: ClassSession): string {
@@ -336,18 +334,19 @@ export function GradesViewContent({
   }
   const fmt = (v: number | null) => v !== null ? v.toFixed(2) : '—'
 
+  // Seuils 70/50 remplacés par les bandes du bulletin imprimé (E ≤ 50,
+  // D 51-59, C 60-68, puis aucune couleur). C'était la divergence d'origine :
+  // entre 60 et 69, cet écran peignait en orange ce que la feuille remise à la
+  // famille peignait en vert. Une seule table, dans `lib/bulletin/grade-color.ts`.
   const noteColorClass = (note: number | null, max: number) => {
     if (note === null) return 'text-muted-foreground'
-    const pct = note / max
-    if (pct >= 0.7) return 'text-success-ink'
-    return pct >= 0.5 ? 'text-warning-ink' : 'text-destructive'
+    return gradeBandToneClass(gradeBand((note / max) * 100))
   }
 
+  // `avg` est sur /10 ; les bandes raisonnent en pourcentage.
   const averageColorClass = (avg: number | null) => {
     if (avg === null) return 'text-muted-foreground'
-    if (avg >= 7) return 'text-success-ink'
-    if (avg >= 5) return 'text-warning-ink'
-    return 'text-destructive'
+    return gradeBandToneClass(gradeBand(avg * 10))
   }
 
   if (loadingCtx) {

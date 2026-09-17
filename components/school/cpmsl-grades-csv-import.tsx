@@ -14,6 +14,16 @@ import {
 import type { ApiClassSession } from "@/lib/api/students"
 import type { AcademicYearStep } from "@/lib/api/dashboard"
 import { toMessage } from "@/lib/errors"
+import Decimal from "decimal.js"
+import { parseScoreToDecimal, validateScoreInput } from "@/lib/grades/score-input"
+
+interface CsvScoreIssue {
+  rowNumber: number
+  eleve: string
+  matiere: string
+  note: string
+  reason: string
+}
 
 interface NotImportedRow {
   rowNumber: number
@@ -45,6 +55,7 @@ export function CPMSLGradesCsvImport({ sessions, steps }: Props) {
   const [csvText,   setCsvText]   = useState<string | null>(null)
   const [csvName,   setCsvName]   = useState<string | null>(null)
   const [previewRows, setPreviewRows] = useState<string[][]>([])
+  const [scoreIssues, setScoreIssues] = useState<CsvScoreIssue[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [result,     setResult]     = useState<ImportResult | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -57,8 +68,45 @@ export function CPMSLGradesCsvImport({ sessions, steps }: Props) {
   const stepOptions = useMemo(() => [...steps].sort((a, b) => a.stepNumber - b.stepNumber), [steps])
 
   function clearFile() {
-    setCsvText(null); setCsvName(null); setPreviewRows([])
+    setCsvText(null); setCsvName(null); setPreviewRows([]); setScoreIssues([])
     if (fileInputRef.current) fileInputRef.current.value = ""
+  }
+
+  // Le CSV partait brut vers un gestionnaire de route qui ne valide rien, et un
+  // backend qui n'oppose pas DR-004 (backlog E8). C'est le chemin d'ecriture le
+  // plus volumineux du produit — une classe entiere d'un coup — et le seul
+  // qui n'avait aucun controle. On refuse avant d'envoyer, et on dit quelles
+  // lignes posent probleme plutot que de laisser passer en silence.
+  //
+  // Format documente : lastname, firstname, matiere, sousMatiere, note, max.
+  function checkCsvScores(text: string): CsvScoreIssue[] {
+    const issues: CsvScoreIssue[] = []
+    const lines = text.split(/\r?\n/)
+
+    lines.forEach((line, i) => {
+      if (!line.trim()) return
+      const cols = line.split(",").map((c) => c.trim().replace(/^"|"$/g, ""))
+      if (cols.length < 5) return // ligne hors format : c'est au serveur de trancher
+      const rawNote = cols[4]
+      if (!rawNote) return
+
+      // En-tete : la colonne « note » ne contient pas de nombre.
+      if (i === 0 && parseScoreToDecimal(rawNote) === null && !/^-?[\d.,]+$/.test(rawNote)) return
+
+      const rawMax = cols[5]
+      const max = rawMax ? parseScoreToDecimal(rawMax) : null
+      const verdict = validateScoreInput(rawNote, max ?? new Decimal(Infinity))
+      if (!verdict.isValid) {
+        issues.push({
+          rowNumber: i + 1,
+          eleve: `${cols[1] ?? ""} ${cols[0] ?? ""}`.trim(),
+          matiere: cols[2] ?? "",
+          note: rawNote,
+          reason: verdict.error ?? "Valeur refusée",
+        })
+      }
+    })
+    return issues
   }
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -69,6 +117,8 @@ export function CPMSLGradesCsvImport({ sessions, steps }: Props) {
       return
     }
     const text = await f.text()
+    const issues = checkCsvScores(text)
+    setScoreIssues(issues)
     setCsvText(text)
     setCsvName(f.name)
     // Preview : 5 premières lignes
@@ -103,6 +153,14 @@ export function CPMSLGradesCsvImport({ sessions, steps }: Props) {
   async function handleSubmit() {
     if (!sessionId || !stepId || !csvText) {
       toast({ title: "Champ manquant", description: "Sélectionne une classe, une étape, et un fichier CSV.", variant: "destructive" })
+      return
+    }
+    if (scoreIssues.length > 0) {
+      toast({
+        title: "Import bloqué",
+        description: `${scoreIssues.length} note(s) ne respectent pas la règle de saisie. Corrigez le fichier avant d'importer.`,
+        variant: "destructive",
+      })
       return
     }
     setSubmitting(true)
@@ -202,6 +260,51 @@ export function CPMSLGradesCsvImport({ sessions, steps }: Props) {
           </div>
 
           {/* Preview */}
+          {scoreIssues.length > 0 && (
+            <div
+              role="alert"
+              className="rounded-lg border border-destructive bg-destructive/5 p-3"
+            >
+              <p className="text-sm font-semibold text-destructive">
+                {scoreIssues.length} note{scoreIssues.length > 1 ? "s" : ""} hors règle de saisie
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Les notes se saisissent au pas de 0,25 et doivent tenir dans leur barème.
+                L&apos;import est bloqué tant que le fichier n&apos;est pas corrigé — une
+                note fausse importée finit sur un bulletin.
+              </p>
+              <div className="cpmsl-scroll mt-2 max-h-40 overflow-y-auto">
+                <table className="w-full text-xs">
+                  <thead className="bg-muted/40">
+                    <tr>
+                      <th scope="col" className="px-2 py-1 text-left font-semibold">Ligne</th>
+                      <th scope="col" className="px-2 py-1 text-left font-semibold">Élève</th>
+                      <th scope="col" className="px-2 py-1 text-left font-semibold">Matière</th>
+                      <th scope="col" className="px-2 py-1 text-right font-semibold">Note</th>
+                      <th scope="col" className="px-2 py-1 text-left font-semibold">Motif</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {scoreIssues.slice(0, 50).map((iss) => (
+                      <tr key={iss.rowNumber} className="border-t">
+                        <td className="px-2 py-1 tabular-nums">{iss.rowNumber}</td>
+                        <td className="px-2 py-1 whitespace-nowrap">{iss.eleve}</td>
+                        <td className="px-2 py-1">{iss.matiere}</td>
+                        <td className="px-2 py-1 text-right tabular-nums">{iss.note}</td>
+                        <td className="px-2 py-1 text-destructive">{iss.reason}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {scoreIssues.length > 50 && (
+                <p className="mt-1 text-2xs text-muted-foreground tabular-nums">
+                  … et {scoreIssues.length - 50} autre{scoreIssues.length - 50 > 1 ? "s" : ""}.
+                </p>
+              )}
+            </div>
+          )}
+
           {previewRows.length > 0 && (
             <div className="rounded-lg border bg-card">
               <div className="border-b bg-muted/30 px-3 py-2 text-xs font-semibold uppercase tracking-wider">

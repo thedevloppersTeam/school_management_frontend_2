@@ -93,74 +93,101 @@ export default function AcademicYearConfigPage() {
   const [subjectChildren, setSubjectChildren] = useState<SubjectChild[]>([])
   const [tracks,          setTracks]          = useState<Array<{ id: string; code: string; name: string }>>([])
   const [loading,         setLoading]         = useState(true)
+  const [refreshing,      setRefreshing]      = useState(false)
+  // Chargements partiels en echec. Sans cela, un /api/class-types en 500
+  // laissait `levels` a [] sans un mot : « l'ecole n'a aucun niveau » et « le
+  // serveur n'a pas repondu » produisaient exactement le meme ecran.
+  const [loadErrors,      setLoadErrors]      = useState<string[]>([])
   const [notFound,        setNotFound]        = useState(false)
 
   // ── Chargement ─────────────────────────────────────────────────────────────
 
+  /**
+   * Recharge toute la configuration de l'annee.
+   *
+   * Deux choses s'y jouent, et elles etaient confondues :
+   *
+   *  - `loading` ne vaut plus que « le premier chargement n'est pas fini ».
+   *    Il ne repasse jamais a true. Avant, chaque enregistrement le relevait,
+   *    le garde de rendu demontait CPMSLYearConfigTabs, et l'onglet actif, le
+   *    tri, la recherche, les accordeons et la classe selectionnee partaient
+   *    avec. `refreshing` porte desormais les rechargements, sans demontage.
+   *
+   *  - Les six chargements sont independants entre eux. Ils s'attendaient en
+   *    file : 8 allers-retours en serie. Seule l'annee est bloquante — c'est
+   *    elle qui decide du 404 — donc elle passe d'abord, puis les cinq autres
+   *    partent ensemble. Meme nombre de requetes, 3 allers-retours en serie.
+   */
   const loadData = useCallback(async () => {
-    setLoading(true)
+    setRefreshing(true)
+    const failures: string[] = []
     try {
-      // 1. Année scolaire
+      // 1. Annee scolaire — bloquante : elle decide du 404.
       const yearRes = await fetch(`/api/academic-years/${yearId}`, { credentials: 'include' })
       if (!yearRes.ok) { setNotFound(true); return }
       const yearData: AcademicYear = await yearRes.json()
       setYear(yearData)
 
-      // 2. Étapes → periods
-      const stepsData = await fetchSteps(yearId)
+      // 2. Etapes → periods
+      const loadPeriods = async () => {
+        const stepsData = await fetchSteps(yearId)
         setPeriods(stepsData.map(s => ({
-        id:     s.id,
-        name:   s.name,
-        status: deriveStepStatus(s)
-      })))
+          id:     s.id,
+          name:   s.name,
+          status: deriveStepStatus(s)
+        })))
+      }
 
-      // 3. Sessions de classe → classrooms
-      // FIX W1-06 : NS3/NS4 utilisent la filière comme label (pas la lettre)
-      const sessionsData = await fetchClassSessions(yearId)
-      const classroomRows = sessionsData.map(s => {
-        const name = s.class.track
-          ? `${s.class.classType.name} ${s.class.track.code}`   // NS3 LLA ✅
-          : `${s.class.classType.name} ${s.class.letter}`       // 7e A   ✅
-        return {
-          id:       s.id,
-          name,
-          levelId:  s.class.classType.id,
-          capacity: 30
-        }
-      })
-      setClassrooms(classroomRows)
-
-      const levelBySessionId = new Map(
-        classroomRows.map((classroom) => [classroom.id, classroom.levelId])
-      )
-      const enrollmentGroups = await Promise.all(
-        classroomRows.map(async (classroom) => {
-          try {
-            const res = await fetch(
-              `/api/enrollments?classSessionId=${classroom.id}&status=ACTIVE`,
-              { credentials: 'include' }
-            )
-            if (!res.ok) return []
-            const enrollments = await res.json() as Array<{
-              id: string
-              studentId?: string
-              classSessionId?: string
-            }>
-            return enrollments.map((enrollment) => ({
-              id: enrollment.studentId || enrollment.id,
-              classroomId: enrollment.classSessionId || classroom.id,
-              levelId: levelBySessionId.get(enrollment.classSessionId || classroom.id) || classroom.levelId,
-            }))
-          } catch {
-            return []
+      // 3. Sessions de classe → classrooms, puis les inscrits de chaque salle
+      // FIX W1-06 : NS3/NS4 utilisent la filiere comme label (pas la lettre)
+      const loadClassroomsAndStudents = async () => {
+        const sessionsData = await fetchClassSessions(yearId)
+        const classroomRows = sessionsData.map(s => {
+          const name = s.class.track
+            ? `${s.class.classType.name} ${s.class.track.code}`   // NS3 LLA ✅
+            : `${s.class.classType.name} ${s.class.letter}`       // 7e A   ✅
+          return {
+            id:       s.id,
+            name,
+            levelId:  s.class.classType.id,
+            capacity: 30
           }
         })
-      )
-      setStudents(enrollmentGroups.flat())
+        setClassrooms(classroomRows)
+
+        const levelBySessionId = new Map(
+          classroomRows.map((classroom) => [classroom.id, classroom.levelId])
+        )
+        const enrollmentGroups = await Promise.all(
+          classroomRows.map(async (classroom) => {
+            try {
+              const res = await fetch(
+                `/api/enrollments?classSessionId=${classroom.id}&status=ACTIVE`,
+                { credentials: 'include' }
+              )
+              if (!res.ok) return []
+              const enrollments = await res.json() as Array<{
+                id: string
+                studentId?: string
+                classSessionId?: string
+              }>
+              return enrollments.map((enrollment) => ({
+                id: enrollment.studentId || enrollment.id,
+                classroomId: enrollment.classSessionId || classroom.id,
+                levelId: levelBySessionId.get(enrollment.classSessionId || classroom.id) || classroom.levelId,
+              }))
+            } catch {
+              return []
+            }
+          })
+        )
+        setStudents(enrollmentGroups.flat())
+      }
 
       // 4. Types de classe → levels
-      const typesRes = await fetch('/api/class-types', { credentials: 'include' })
-      if (typesRes.ok) {
+      const loadLevels = async () => {
+        const typesRes = await fetch('/api/class-types', { credentials: 'include' })
+        if (!typesRes.ok) { failures.push('les niveaux'); return }
         const types = await typesRes.json()
         setLevels(types.map((t: { id: string; name: string; isTerminal: boolean }) => {
           let category: Level['category'] = 'fondamental'
@@ -176,9 +203,10 @@ export default function AcademicYearConfigPage() {
         }))
       }
 
-      // 4b. Tracks (filières)
-      const tracksRes = await fetch('/api/class-tracks', { credentials: 'include' })
-      if (tracksRes.ok) {
+      // 4b. Tracks (filieres)
+      const loadTracks = async () => {
+        const tracksRes = await fetch('/api/class-tracks', { credentials: 'include' })
+        if (!tracksRes.ok) { failures.push('les filieres'); return }
         const tracksData = await tracksRes.json()
         setTracks(tracksData.map((t: { id: string; code: string; name: string }) => ({
           id:   t.id,
@@ -187,11 +215,14 @@ export default function AcademicYearConfigPage() {
         })))
       }
 
-      // 5. Matières + rubriques → subjectParents
-      const subjectsRes = await fetch('/api/subjects',        { credentials: 'include' })
-      const rubricsRes  = await fetch('/api/subject-rubrics', { credentials: 'include' })
+      // 5. Matieres + rubriques → subjectParents, puis les sections de chacune
+      const loadSubjects = async () => {
+        const [subjectsRes, rubricsRes] = await Promise.all([
+          fetch('/api/subjects',        { credentials: 'include' }),
+          fetch('/api/subject-rubrics', { credentials: 'include' }),
+        ])
+        if (!subjectsRes.ok || !rubricsRes.ok) { failures.push('les matieres'); return }
 
-      if (subjectsRes.ok && rubricsRes.ok) {
         const subjects = await subjectsRes.json()
         const rubrics  = await rubricsRes.json()
 
@@ -248,10 +279,21 @@ export default function AcademicYearConfigPage() {
         setSubjectChildren(children)
       }
 
+      await Promise.all([
+        loadPeriods(),
+        loadClassroomsAndStudents(),
+        loadLevels(),
+        loadTracks(),
+        loadSubjects(),
+      ])
+
+      setLoadErrors(failures)
+
     } catch (err) {
       console.error('[config] Erreur chargement:', err)
       toast({ title: "Erreur", description: "Impossible de charger la configuration", variant: "destructive" })
     } finally {
+      setRefreshing(false)
       setLoading(false)
     }
   }, [yearId, toast])
@@ -489,14 +531,6 @@ export default function AcademicYearConfigPage() {
     }
   }
 
-  const handleDeleteSubjectParent = async (_parentId: string) => {
-    toast({ title: "Suppression non disponible", description: "Cette action sera disponible prochainement.", variant: "destructive" })
-  }
-
-  const handleDeleteSubjectChild = async (_childId: string) => {
-    toast({ title: "Suppression non disponible", description: "Cette action sera disponible prochainement.", variant: "destructive" })
-  }
-
   // ── Handlers — Classes ─────────────────────────────────────────────────────
 
   const handleAddClassroom = async (levelId: string, data: { letter?: string; trackId?: string }) => {
@@ -544,10 +578,6 @@ export default function AcademicYearConfigPage() {
     }
   }
 
-  const handleEditClassroom = async (_classroomId: string) => {
-    toast({ title: "Modification en cours..." })
-  }
-
   const handleDeleteClassroom = async (classroomId: string) => {
     try {
       const res = await fetch(`/api/class-sessions/delete/${classroomId}`, {
@@ -570,23 +600,12 @@ export default function AcademicYearConfigPage() {
     }
   }
 
-  // ── Handlers — Niveaux ─────────────────────────────────────────────────────
-
-  const handleAddLevel = async (_data: { niveau: string; name: string; filieres?: string[] }) => {
-    toast({ title: "Niveaux préconfigurés", description: "Les niveaux MENFP sont fixes pour CPMSL." })
-  }
-
-  const handleEditLevel = async (_levelId: string, _data: { description?: string }) => {
-    toast({ title: "Niveau modifié" })
-  }
-
-  const handleDeleteLevel = async (_levelId: string) => {
-    toast({ title: "Suppression non disponible", variant: "destructive" })
-  }
-
   // ── Rendu ──────────────────────────────────────────────────────────────────
 
-  if (loading) {
+  // Squelette au premier chargement seulement. La condition porte aussi sur
+  // `year` pour que ce garde reste sur : si quelqu'un remet un jour un
+  // setLoading(true) dans un handler, l'ecran ne se demontera pas pour autant.
+  if (loading && !year) {
     return (
       <div className="space-y-8">
         <div className="space-y-1">
@@ -623,11 +642,69 @@ export default function AcademicYearConfigPage() {
           <h1 className="heading-1 text-foreground">
             Configuration — {year.name}
           </h1>
-          <p className="mt-1 max-w-prose text-sm text-muted-foreground">
-            Configurez les étapes, classes et matières de l&apos;année
-          </p>
+          <div className="mt-1 flex items-baseline gap-3">
+            <p className="max-w-prose text-sm text-muted-foreground">
+              Configurez les étapes, classes et matières de l&apos;année
+            </p>
+            {/* Rechargement en cours : un mot, a sa place, plutot qu'un
+                squelette plein ecran qui ferait disparaitre le travail en
+                cours. */}
+            <span
+              role="status"
+              aria-live="polite"
+              className={`text-xs text-muted-foreground transition-opacity ${
+                refreshing ? "opacity-100" : "opacity-0"
+              }`}
+            >
+              {refreshing ? "Mise à jour…" : ""}
+            </span>
+          </div>
         </div>
 
+        {/* Un echec partiel n'est pas un ecran vide : il se nomme, et il se
+            reessaie. Bandeau persistant plutot que toast ephemere — au moment
+            ou l'administratrice comprend que quelque chose manque, le toast a
+            disparu depuis longtemps. */}
+        {loadErrors.length > 0 && (
+          <div
+            role="alert"
+            className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-error-border bg-error-soft px-4 py-3 text-sm text-error-ink"
+          >
+            <span>
+              <span className="font-semibold">Chargement incomplet.</span>{" "}
+              Impossible de charger {loadErrors.join(", ")}. Ce qui s&apos;affiche
+              ci-dessous est donc partiel.
+            </span>
+            <button
+              type="button"
+              onClick={() => loadData()}
+              disabled={refreshing}
+              className="font-medium underline underline-offset-2 disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-error-ink"
+            >
+              {refreshing ? "Nouvel essai…" : "Réessayer"}
+            </button>
+          </div>
+        )}
+
+        {/*
+          Handlers volontairement non passés. Un handler absent retire l'action
+          de l'interface (voir RowActions) au lieu de la proposer pour rien :
+          c'est ce qui évite un « Supprimer » qui répond « disponible
+          prochainement » après une confirmation par saisie du nom.
+
+            onAddLevel · onEditLevel · onDeleteLevel
+              Les niveaux MENFP sont fixes. Aucune route (/api/class-types
+              n'expose que create), et la règle est maintenant dite dans
+              l'écran, pas dans un toast après le clic.
+            onDeleteSubjectParent
+              Aucune route : /api/subjects n'expose pas de suppression.
+            onDeleteSubjectChild
+              La route existe — POST /api/subjects/sections/delete/[id], qui
+              refuse en 409 si des notes sont rattachées — mais le handler
+              n'est pas écrit. Chantier ouvert, voir docs/BACKLOG.md.
+            onEditClassroom
+              Aucune route : /api/class-sessions n'expose que create et delete.
+        */}
         <CPMSLYearConfigTabs
           yearName={year.name}
           yearId={yearId}
@@ -643,18 +720,12 @@ export default function AcademicYearConfigPage() {
           onClosePeriod={handleClosePeriod}
           onReopenPeriod={handleReopenPeriod}
           onMergePeriods={handleMergePeriods}
-          onAddLevel={handleAddLevel}
           onAddSubjectParent={handleAddSubjectParent}
           onAddSubjectChild={handleAddSubjectChild}
           onEditSubjectParent={handleEditSubjectParent}
-          onDeleteSubjectParent={handleDeleteSubjectParent}
           onEditSubjectChild={handleEditSubjectChild}
-          onDeleteSubjectChild={handleDeleteSubjectChild}
           onAddClassroom={handleAddClassroom}
-          onEditClassroom={handleEditClassroom}
           onDeleteClassroom={handleDeleteClassroom}
-          onEditLevel={handleEditLevel}
-          onDeleteLevel={handleDeleteLevel}
         />
     </div>
   )

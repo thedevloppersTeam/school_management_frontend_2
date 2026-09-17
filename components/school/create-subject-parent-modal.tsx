@@ -14,6 +14,15 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import {
+  BTN_DIALOG_PRIMARY_CLASS,
+  BTN_OUTLINE_CLASS,
+  DIALOG_CONTENT_CLASS,
+  DIALOG_FOOTER_CLASS,
+  DIALOG_HEADER_CLASS,
+  FIELD_LABEL_CLASS,
+  REQUIRED_MARK_CLASS,
+} from "@/lib/cpmsl-classes"
 
 interface CreateSubjectParentModalProps {
   yearName: string
@@ -55,22 +64,22 @@ export function CreateSubjectParentModal({
   // Generate code from name
   const generateCode = (subjectName: string): string => {
     if (!subjectName.trim()) return ""
-    
+
     // Extract first 3 letters (uppercase)
     const letters = subjectName
       .replace(/[^a-zA-Z]/g, '')
       .substring(0, 3)
       .toUpperCase()
       .padEnd(3, 'X')
-    
+
     // Find next available number starting from 101
     let number = 101
     const existingCodes = existingSubjects.map(s => s.code)
-    
+
     while (existingCodes.includes(`${letters}${number}`)) {
       number++
     }
-    
+
     return `${letters}${number}`
   }
 
@@ -105,74 +114,41 @@ export function CreateSubjectParentModal({
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
-      <DialogContent
-        style={{
-          maxWidth: '520px',
-          backgroundColor: '#FFFFFF',
-          border: '1px solid #E8E6E3',
-          borderRadius: '12px',
-          padding: 0
-        }}
-      >
-        <DialogHeader style={{ padding: '24px 24px 16px 24px', borderBottom: '1px solid #E8E6E3' }}>
-          <DialogTitle
-            style={{
-              color: '#1E1A17',
-              fontSize: 'var(--text-xl)',
-              fontWeight: 600,
-              fontFamily: 'var(--font-serif)',
-              marginBottom: '8px'
-            }}
-          >
+      <DialogContent className={`${DIALOG_CONTENT_CLASS} max-w-[520px] border border-neutral-200 p-0`}
+     >
+        <DialogHeader className={DIALOG_HEADER_CLASS}>
+          <DialogTitle className="mb-2 font-serif text-xl font-bold text-neutral-900"
+         >
             Nouvelle matière
           </DialogTitle>
-          <DialogDescription
-            style={{
-              color: '#5C5955',
-              fontSize: 'var(--text-sm)',
-              fontWeight: 400
-            }}
-          >
+          <DialogDescription className="text-sm font-normal text-neutral-600"
+         >
             Ajoutez une matière pour l'année {yearName}
           </DialogDescription>
         </DialogHeader>
 
-        <div style={{ padding: '24px' }} className="space-y-5">
+        <div  className="space-y-5 p-6">
           {/* Nom */}
           <div className="space-y-2">
             <Label
-              htmlFor="name"
-              style={{
-                color: '#1E1A17',
-                fontSize: 'var(--text-sm)',
-                fontWeight: 500
-              }}
-            >
-              Nom <span style={{ color: '#C84A3D' }}>*</span>
+              htmlFor="name" className={FIELD_LABEL_CLASS}
+           >
+              Nom <span className={REQUIRED_MARK_CLASS}>*</span>
             </Label>
             <Input
               id="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Ex: Mathématiques"
-              style={{
-                border: '1px solid #D1CECC',
-                borderRadius: '8px'
-              }}
-              className="focus:border-[#5A7085] focus:ring-[#5A7085]"
+              className="focus:border-primary-500 focus:ring-primary-500 rounded-md border border-neutral-300"
             />
           </div>
 
           {/* Code (read-only with real-time preview) */}
           <div className="space-y-2">
             <Label
-              htmlFor="code"
-              style={{
-                color: '#1E1A17',
-                fontSize: 'var(--text-sm)',
-                fontWeight: 500
-              }}
-            >
+              htmlFor="code" className={FIELD_LABEL_CLASS}
+           >
               Code
             </Label>
             <Input
@@ -180,74 +156,42 @@ export function CreateSubjectParentModal({
               value={generatedCode}
               placeholder={!name.trim() ? "Généré automatiquement" : ""}
               readOnly
-              disabled
-              style={{
-                border: '1px solid #D1CECC',
-                borderRadius: '8px',
-                backgroundColor: '#F7F7F6',
-                color: generatedCode ? '#78756F' : '#A8A29E',
-                fontFamily: 'monospace',
-                textTransform: 'uppercase',
-                cursor: 'not-allowed'
-              }}
+              disabled className="cursor-not-allowed rounded-md border border-neutral-300 bg-neutral-100 font-mono uppercase text-neutral-500"
             />
           </div>
 
           {/* Rubrique */}
           <div className="space-y-2">
-            <Label
-              style={{
-                color: '#1E1A17',
-                fontSize: 'var(--text-sm)',
-                fontWeight: 500
-              }}
-            >
-              Rubrique <span style={{ color: '#C84A3D' }}>*</span>
+            <Label className={FIELD_LABEL_CLASS}
+           >
+              Rubrique <span className={REQUIRED_MARK_CLASS}>*</span>
             </Label>
             <RadioGroup
               value={rubrique}
               onValueChange={(value) => setRubrique(value as 'R1' | 'R2' | 'R3')}
               className="flex gap-4"
-            >
+           >
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="R1" id="r1" />
                 <Label
-                  htmlFor="r1"
-                  style={{
-                    color: '#1E1A17',
-                    fontSize: 'var(--text-sm)',
-                    fontWeight: 400,
-                    cursor: 'pointer'
-                  }}
-                >
+                  htmlFor="r1" className="cursor-pointer text-sm font-normal text-neutral-900"
+               >
                   R1
                 </Label>
               </div>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="R2" id="r2" />
                 <Label
-                  htmlFor="r2"
-                  style={{
-                    color: '#1E1A17',
-                    fontSize: 'var(--text-sm)',
-                    fontWeight: 400,
-                    cursor: 'pointer'
-                  }}
-                >
+                  htmlFor="r2" className="cursor-pointer text-sm font-normal text-neutral-900"
+               >
                   R2
                 </Label>
               </div>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="R3" id="r3" />
                 <Label
-                  htmlFor="r3"
-                  style={{
-                    color: '#1E1A17',
-                    fontSize: 'var(--text-sm)',
-                    fontWeight: 400,
-                    cursor: 'pointer'
-                  }}
-                >
+                  htmlFor="r3" className="cursor-pointer text-sm font-normal text-neutral-900"
+               >
                   R3
                 </Label>
               </div>
@@ -257,36 +201,18 @@ export function CreateSubjectParentModal({
           {/* Coefficient masqué : non utilisé pour le moment (valeur par défaut : 1). */}
         </div>
 
-        <DialogFooter
-          style={{
-            padding: '16px 24px',
-            borderTop: '1px solid #E8E6E3',
-            display: 'flex',
-            gap: '12px',
-            justifyContent: 'flex-end'
-          }}
-        >
+        <DialogFooter className={DIALOG_FOOTER_CLASS}
+       >
           <Button
             variant="outline"
-            onClick={handleCancel}
-            style={{
-              border: '1px solid #D1CECC',
-              color: '#5C5955',
-              borderRadius: '8px'
-            }}
-          >
+            onClick={handleCancel} className={BTN_OUTLINE_CLASS}
+         >
             Annuler
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={!isFormValid}
-            style={{
-              backgroundColor: isFormValid ? '#2C4A6E' : '#9CA3AF',
-              color: '#FFFFFF',
-              borderRadius: '8px',
-              cursor: isFormValid ? 'pointer' : 'not-allowed'
-            }}
-          >
+            disabled={!isFormValid} className={BTN_DIALOG_PRIMARY_CLASS}
+         >
             Créer la matière
           </Button>
         </DialogFooter>

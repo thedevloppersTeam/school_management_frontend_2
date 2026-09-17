@@ -13,9 +13,13 @@ interface CPMSLYearCardProps {
     endDate?: string
   }
   stats?: {
-    periods:     { current: number; total: number; complete: boolean }
+    // `total` optionnel et `current` nullable : un compteur qu'on ne sait pas
+    // mesurer doit pouvoir le dire. Un zero affirme qu'il n'y en a pas ; un
+    // tiret dit qu'on ne sait pas. Sur un indicateur de completude, la
+    // difference decide si l'administratrice refait un travail deja fait.
+    periods:     { current: number; total?: number; complete: boolean }
     classes:     { current: number; complete: boolean }
-    subjects:    { current: number; complete: boolean }
+    subjects:    { current: number | null; complete: boolean }
     enrollments?: number
     archivedDate?: string
   }
@@ -83,7 +87,7 @@ export function CPMSLYearCard({
               <Button
                 onClick={() => onConfigure(year.id)}
                 size="sm"
-                variant={year.status === 'active' ? 'default' : 'outline'}
+                variant="outline"
                 className="gap-1.5"
               >
                 Configurer
@@ -106,11 +110,33 @@ export function CPMSLYearCard({
         {/* Stats for preparation/active year */}
         {stats && (year.status === 'preparation' || year.status === 'active') && (
           <div className="mt-3 flex items-center gap-3 text-sm text-muted-foreground">
-            <span>Étapes <span className="font-medium text-foreground">{stats.periods.current}/{stats.periods.total}</span></span>
+            <span>
+              Étapes{" "}
+              <span className="font-medium text-foreground tabular-nums">
+                {stats.periods.current}
+                {stats.periods.total != null ? `/${stats.periods.total}` : ""}
+              </span>
+            </span>
             <Separator orientation="vertical" className="h-4" />
-            <span>Classes <span className="font-medium text-foreground">{stats.classes.current}</span></span>
+            <span>
+              Classes{" "}
+              <span className="font-medium text-foreground tabular-nums">
+                {stats.classes.current}
+              </span>
+            </span>
             <Separator orientation="vertical" className="h-4" />
-            <span>Matières <span className="font-medium text-foreground">{stats.subjects.current}</span></span>
+            <span
+              title={
+                stats.subjects.current == null
+                  ? "Le nombre de matières n'est pas mesuré ici. Ouvrez la configuration de l'année pour le voir."
+                  : undefined
+              }
+            >
+              Matières{" "}
+              <span className="font-medium text-foreground tabular-nums">
+                {stats.subjects.current ?? "—"}
+              </span>
+            </span>
           </div>
         )}
 

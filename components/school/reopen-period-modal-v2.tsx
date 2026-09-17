@@ -20,6 +20,12 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
+import {
+  ALERT_WARNING_CLASS,
+  BTN_DIALOG_PRIMARY_CLASS,
+  BTN_OUTLINE_CLASS,
+  REQUIRED_MARK_CLASS,
+} from "@/lib/cpmsl-classes"
 
 interface ReopenPeriodModalV2Props {
   periodName: string
@@ -71,71 +77,45 @@ export function ReopenPeriodModalV2({
     <Dialog open={currentOpen} onOpenChange={handleOpenChange}>
       {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent
-        className="max-w-xl"
-        style={{
-          backgroundColor: '#FFFFFF',
-          border: '1px solid #E8E6E3',
-          borderRadius: '10px',
-          padding: '32px'
-        }}
-      >
+        className="max-w-xl rounded-lg border border-neutral-200 bg-white p-8"
+     >
         <DialogHeader>
           <DialogTitle
-            className="heading-3"
-            style={{ color: '#1E1A17', marginBottom: '8px' }}
-          >
+            className="heading-3 mb-2 text-neutral-900"
+         >
             Réouvrir la {periodName}
           </DialogTitle>
           <DialogDescription
-            className="body-base"
-            style={{ color: '#5C5955' }}
-          >
+            className="body-base text-neutral-600"
+         >
             Cette action permettra de modifier les notes déjà saisies
           </DialogDescription>
         </DialogHeader>
 
         <div className="mt-6">
           {/* Warning Alert */}
-          <Alert
-            style={{
-              backgroundColor: '#FEF6E0',
-              border: '1px solid #F0D98E',
-              borderRadius: '8px'
-            }}
-          >
+          <Alert className={ALERT_WARNING_CLASS}
+         >
             <AlertDescription
-              className="body-base"
-              style={{
-                color: '#8B6914',
-                fontWeight: 500
-              }}
-            >
+              className="body-base font-medium text-warning-ink"
+           >
               Réouvrir une étape clôturée peut affecter les bulletins déjà générés.
             </AlertDescription>
           </Alert>
 
           {/* Reason Selection */}
-          <div className="space-y-2" style={{ marginTop: '20px' }}>
+          <div className="space-y-2 mt-5">
             <Label
               htmlFor="reason"
-              className="label-ui"
-              style={{
-                color: '#1E1A17',
-                fontWeight: 600
-              }}
-            >
-              Raison de la réouverture <span style={{ color: '#C84A3D' }}>*</span>
+              className="label-ui font-semibold text-neutral-900"
+           >
+              Raison de la réouverture <span className={REQUIRED_MARK_CLASS}>*</span>
             </Label>
             <Select value={selectedReason} onValueChange={setSelectedReason}>
               <SelectTrigger
                 id="reason"
-                style={{
-                  border: '1px solid #D1CECC',
-                  borderRadius: '8px',
-                  backgroundColor: '#FFFFFF'
-                }}
-                className="focus:border-[#2C4A6E] focus:ring-[#2C4A6E]"
-              >
+                className="focus:border-primary-500 focus:ring-primary-500 rounded-md border border-neutral-300 bg-white"
+             >
                 <SelectValue placeholder="Sélectionnez une raison" />
               </SelectTrigger>
               <SelectContent>
@@ -152,26 +132,14 @@ export function ReopenPeriodModalV2({
         <DialogFooter className="mt-6">
           <Button
             variant="outline"
-            onClick={() => handleOpenChange(false)}
-            style={{
-              borderRadius: '8px',
-              border: '1px solid #D1CECC',
-              color: '#5C5955'
-            }}
-          >
+            onClick={() => handleOpenChange(false)} className={BTN_OUTLINE_CLASS}
+         >
             Annuler
           </Button>
           <Button
             onClick={handleConfirm}
-            disabled={!selectedReason}
-            style={{
-              backgroundColor: selectedReason ? '#2C4A6E' : '#E8E6E3',
-              color: selectedReason ? '#FFFFFF' : '#A8A5A2',
-              borderRadius: '8px',
-              cursor: selectedReason ? 'pointer' : 'not-allowed'
-            }}
-            className={selectedReason ? 'hover:bg-[#243B56]' : ''}
-          >
+            disabled={!selectedReason} className={BTN_DIALOG_PRIMARY_CLASS}
+         >
             Réouvrir
           </Button>
         </DialogFooter>
