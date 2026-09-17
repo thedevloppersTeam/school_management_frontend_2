@@ -95,6 +95,12 @@ interface StudentRow {
   yearId?:         string
   status?:         EnrollmentStatus
   enrollmentDate?: string
+  /**
+   * Plusieurs inscriptions non transferees sur la meme annee scolaire. Le
+   * departage ci-dessous n'est alors pas fiable : on affiche le conflit au lieu
+   * de choisir en silence.
+   */
+  conflitInscriptions?: string
   registrationDate?: string       // student creation date (Student.registrationDate)
   address?:      string
   motherName?:   string
@@ -287,9 +293,38 @@ export default function StudentsManagementPage() {
         }
       }
 
-      // 6. Pour chaque élève, on retient l'inscription la plus récente
+      // 6. Pour chaque élève, on retient l'inscription la plus récente.
+      //
+      //    Les inscriptions TRANSFERRED sont d'abord ecartees : elles sont
+      //    rendues caduques par un ancien transfert et n'ont pas a departager
+      //    la ligne affichee. Le filtre est negatif, pas `=== 'ACTIVE'` : une
+      //    inscription DROPPED ou GRADUATED reste la bonne ligne pour un eleve
+      //    parti ou diplome.
+      const enrollmentsRetenues = allEnrollments.filter(
+        (e) => e.status !== "TRANSFERRED"
+      )
+
+      //    Le departage s'appuie sur `enrollmentDate`, une date SANS heure
+      //    comparee comme du texte : deux inscriptions creees le meme jour se
+      //    departagent par l'ordre d'arrivee du tableau, donc pas du tout. On
+      //    releve donc les eleves qui gardent plusieurs inscriptions sur une
+      //    meme annee, pour l'afficher plutot que de trancher au hasard.
+      const anneesParEleve = new Map<string, Map<string, number>>()
+      for (const enr of enrollmentsRetenues) {
+        const annee = enr.classSession?.academicYear?.yearString
+        if (!annee) continue
+        if (!anneesParEleve.has(enr.studentId)) anneesParEleve.set(enr.studentId, new Map())
+        const m = anneesParEleve.get(enr.studentId)!
+        m.set(annee, (m.get(annee) ?? 0) + 1)
+      }
+      const conflitsParEleve = new Map<string, string>()
+      for (const [studentId, parAnnee] of anneesParEleve) {
+        const enDouble = [...parAnnee.entries()].filter(([, n]) => n > 1).map(([a]) => a).sort()
+        if (enDouble.length > 0) conflitsParEleve.set(studentId, enDouble.join(", "))
+      }
+
       const latestByStudent = new Map<string, typeof allEnrollments[number]>()
-      for (const enr of allEnrollments) {
+      for (const enr of enrollmentsRetenues) {
         const prev = latestByStudent.get(enr.studentId)
         const enrDate = enr.enrollmentDate ?? ""
         const prevDate = prev?.enrollmentDate ?? ""
@@ -326,6 +361,7 @@ export default function StudentsManagementPage() {
           yearId: latest?.classSession?.academicYear?.id,
           status: latest?.status,
           enrollmentDate: latest?.enrollmentDate,
+          conflitInscriptions: conflitsParEleve.get(s.id),
           registrationDate: s.registrationDate,
           address: s.address || "",
           motherName: s.motherName || "",
@@ -931,6 +967,17 @@ export default function StudentsManagementPage() {
                           {student.yearString && (
                             <span className="text-2xs text-muted-foreground tabular-nums">
                               {student.yearString}
+                            </span>
+                          )}
+                          {/* Le departage par `enrollmentDate` n'est pas fiable
+                              a l'interieur d'une meme journee : on dit le
+                              conflit au lieu de choisir en silence. */}
+                          {student.conflitInscriptions && (
+                            <span
+                              className="text-2xs font-medium text-error-ink"
+                              title={`Plusieurs inscriptions non transferees sur ${student.conflitInscriptions}. La classe affichee peut ne pas etre la bonne.`}
+                            >
+                              ⚠ Inscriptions multiples : {student.conflitInscriptions}
                             </span>
                           )}
                         </div>

@@ -448,7 +448,7 @@ export default function StudentTranscriptPage() {
       const studentData = await apiFetch<StudentDetail>(`/api/students/${studentId}`)
       setStudent(studentData)
 
-      const [enrollments, photos] = await Promise.all([
+      const [allEnrollments, photos] = await Promise.all([
         apiFetch<ApiEnrollment[]>(`/api/enrollments?studentId=${studentId}`),
         apiFetch<Array<{ academicYearId: string; photoUrl: string }>>(
           `/api/promotion-photos?studentId=${studentId}`
@@ -456,6 +456,21 @@ export default function StudentTranscriptPage() {
       ])
 
       setPhotosByYear(new Map(photos.map((p) => [p.academicYearId, p.photoUrl])))
+
+      /*
+       * Les inscriptions TRANSFERRED sortent du releve.
+       *
+       * Le filtre est volontairement negatif, et surtout PAS `status=ACTIVE` :
+       * le releve est un document historique, DROPPED et GRADUATED doivent
+       * continuer d'y figurer. Seules les inscriptions rendues caduques par un
+       * ancien transfert sont ecartees.
+       *
+       * Il s'applique ICI, avant la construction des resumes, donc avant le
+       * calcul de la moyenne globale de scolarite : une annee scindee en deux
+       * inscriptions y pesait double, et le chiffre est imprime sur un document
+       * montre aux familles.
+       */
+      const enrollments = allEnrollments.filter((e) => e.status !== "TRANSFERRED")
 
       const gradesPerEnrollment = await Promise.all(
         enrollments.map(async (e) => {
@@ -508,6 +523,25 @@ export default function StudentTranscriptPage() {
     const valid = summaries.filter((s) => s.generalAverage !== null) as Array<
       EnrollmentSummary & { generalAverage: number }
     >
+
+    /*
+     * Une fois les TRANSFERRED ecartees, il ne devrait rester qu'une
+     * inscription par annee scolaire. S'il en reste plusieurs, la moyenne
+     * ci-dessous compte cette annee deux fois — et `counted` annonce un nombre
+     * d'inscriptions que le lecteur comprend comme un nombre d'annees.
+     *
+     * On ne departage pas : on le dit. Meme principe que `degraded`, que la
+     * version precedente a introduit pour les notes non chargees.
+     */
+    const parAnnee = new Map<string, number>()
+    for (const s of summaries) {
+      const y = s.enrollment.classSession.academicYear.yearString
+      parAnnee.set(y, (parAnnee.get(y) ?? 0) + 1)
+    }
+    const anneesEnDouble = [...parAnnee.entries()]
+      .filter(([, n]) => n > 1)
+      .map(([y]) => y)
+      .sort()
     // Le compte des inscriptions **retenues** sort avec la valeur : la phrase
     // sous le chiffre annonçait `summaries.length`, donc « Moyenne des 6
     // inscriptions » pour la moyenne de 2. Le dénominateur suit le numérateur.
@@ -518,6 +552,8 @@ export default function StudentTranscriptPage() {
       counted: valid.length,
       /** Une année en panne sort du calcul en silence : il faut le dire. */
       degraded: summaries.some((s) => s.gradesFailed),
+      /** Années portant plus d'une inscription après filtrage : le chiffre est faux. */
+      anneesEnDouble,
     }
   }, [summaries])
 
@@ -702,10 +738,17 @@ export default function StudentTranscriptPage() {
             <p className="text-xs text-muted-foreground">/ 10</p>
             <p className="mt-2 max-w-[190px] text-right text-xs text-muted-foreground">
               {overall.counted === summaries.length
-                ? `Moyenne des ${summaries.length} inscription${summaries.length > 1 ? "s" : ""}`
-                : `Moyenne de ${overall.counted} inscription${overall.counted > 1 ? "s" : ""} notée${overall.counted > 1 ? "s" : ""} sur ${summaries.length}`}{" "}
+                ? `Moyenne des ${summaries.length} année${summaries.length > 1 ? "s" : ""}`
+                : `Moyenne de ${overall.counted} année${overall.counted > 1 ? "s" : ""} notée${overall.counted > 1 ? "s" : ""} sur ${summaries.length}`}{" "}
               — hors barème MENFP
             </p>
+            {overall.anneesEnDouble.length > 0 && (
+              <p className="max-w-[190px] text-right text-xs text-error-ink">
+                Moyenne non fiable : {overall.anneesEnDouble.join(", ")} compte
+                plus d&apos;une inscription. Cette année pèse double dans le
+                calcul.
+              </p>
+            )}
             {overall.degraded && (
               <p className="max-w-[190px] text-right text-xs text-warning-ink">
                 Incomplet : des notes n&apos;ont pas pu être chargées.
