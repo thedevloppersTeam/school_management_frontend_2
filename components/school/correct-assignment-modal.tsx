@@ -268,7 +268,7 @@ export function CorrectAssignmentModal({
             <span>
               À utiliser quand l&apos;élève n&apos;a <strong>jamais</strong> appartenu à
               cette salle : une erreur de saisie à l&apos;inscription. S&apos;il y était
-              réellement et la quitte, utilisez <strong>Transférer</strong>.
+              réellement et quitte l&apos;établissement, enregistrez son départ.
             </span>
           </div>
 

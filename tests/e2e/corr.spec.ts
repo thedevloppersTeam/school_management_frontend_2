@@ -1,6 +1,14 @@
 import { test, expect } from '@playwright/test';
 import { setupJeuEssai, loginAsAdmin } from '../fixtures/jeu-essai';
 
+// Les cellules de note de la grille. Elles etaient ciblees par
+// getByRole('spinbutton'), un role reserve a <input type="number"> ; la grille
+// est passee en type="text" inputMode="decimal" pour que la virgule du pave
+// numerique cesse d'etre mangee par la sanitisation du navigateur.
+// getByRole('textbox') ne conviendrait PAS : il attraperait aussi le champ de
+// recherche, qui precede le tableau dans le DOM.
+const NOTE_CELL = 'input[data-grid-row]';
+
 test.describe('Module CORR — Corrections post-clôture', () => {
   test.beforeEach(async () => {
     await setupJeuEssai();
@@ -33,7 +41,7 @@ test.describe('Module CORR — Corrections post-clôture', () => {
         await correctionBtn.click();
 
         // Étape 3: Modifier la note de l'élève X pour la matière Y
-        const noteInput = page.getByRole('spinbutton').first();
+        const noteInput = page.locator(NOTE_CELL).first();
         if (await noteInput.isVisible().catch(() => false)) {
           await noteInput.clear();
           await noteInput.fill('9.25');
@@ -174,7 +182,7 @@ test.describe('Module CORR — Corrections post-clôture', () => {
 
       // Étape 2: Avec la réouverture ciblée active pour l'élève X,
       // tenter de modifier la note d'un autre élève (élève Y)
-      const noteInputs = page.getByRole('spinbutton');
+      const noteInputs = page.locator(NOTE_CELL);
       const inputCount = await noteInputs.count();
 
       // Vérifier que pour les élèves non ciblés, les inputs sont désactivés

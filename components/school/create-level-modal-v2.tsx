@@ -22,6 +22,14 @@ import {
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
+import {
+  BTN_DIALOG_PRIMARY_CLASS,
+  DIALOG_CONTENT_CLASS,
+  DIALOG_FOOTER_CLASS,
+  DIALOG_HEADER_CLASS,
+  FIELD_HINT_CLASS,
+  REQUIRED_MARK_CLASS,
+} from "@/lib/cpmsl-classes"
 
 interface Level {
   id: string
@@ -126,80 +134,44 @@ export function CreateLevelModalV2({
     <Dialog open={open} onOpenChange={setOpen}>
       {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent
-        className="sm:max-w-[520px]"
-        style={{
-          backgroundColor: '#FFFFFF',
-          border: '1px solid #E8E6E3',
-          borderRadius: '12px',
-          padding: 0
-        }}
-      >
-        <DialogHeader style={{ padding: '24px 24px 16px 24px', borderBottom: '1px solid #E8E6E3' }}>
-          <DialogTitle
-            style={{
-              color: '#2A3740',
-              fontSize: 'var(--text-xl)',
-              fontWeight: 600,
-              fontFamily: 'var(--font-serif)',
-              marginBottom: '4px'
-            }}
-          >
+        className={`${DIALOG_CONTENT_CLASS} sm:max-w-[520px] border border-neutral-200 p-0`}
+     >
+        <DialogHeader className={DIALOG_HEADER_CLASS}>
+          <DialogTitle className="mb-1 font-serif text-xl font-bold text-primary-800"
+         >
             Nouvelle classe
           </DialogTitle>
-          <DialogDescription
-            style={{
-              color: '#5C5955',
-              fontSize: 'var(--text-sm)',
-              fontWeight: 400
-            }}
-          >
+          <DialogDescription className="text-sm font-normal text-neutral-600"
+         >
             Ajoutez une classe pour l'année {yearName}
           </DialogDescription>
         </DialogHeader>
 
-        <div style={{ padding: '24px' }} className="space-y-6">
+        <div  className="space-y-6 p-6">
           {/* Niveau Selection */}
           <div className="space-y-3">
-            <Label
-              style={{
-                color: '#2A3740',
-                fontSize: 'var(--text-sm)',
-                fontWeight: 500,
-                display: 'block'
-              }}
-            >
-              Niveau <span style={{ color: '#C84A3D' }}>*</span>
+            <Label className="block text-sm font-medium text-primary-800"
+           >
+              Niveau <span className={REQUIRED_MARK_CLASS}>*</span>
             </Label>
             <RadioGroup
               value={niveau}
               onValueChange={(value) => setNiveau(value as 'Fondamentale' | 'Nouveau Secondaire')}
               className="flex items-center gap-6"
-            >
+           >
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="Fondamentale" id="fondamentale" />
                 <Label
-                  htmlFor="fondamentale"
-                  style={{
-                    color: '#2A3740',
-                    fontSize: 'var(--text-sm)',
-                    fontWeight: 400,
-                    cursor: 'pointer'
-                  }}
-                >
+                  htmlFor="fondamentale" className="cursor-pointer text-sm font-normal text-primary-800"
+               >
                   Fondamentale
                 </Label>
               </div>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="Nouveau Secondaire" id="secondaire" />
                 <Label
-                  htmlFor="secondaire"
-                  style={{
-                    color: '#2A3740',
-                    fontSize: 'var(--text-sm)',
-                    fontWeight: 400,
-                    cursor: 'pointer'
-                  }}
-                >
+                  htmlFor="secondaire" className="cursor-pointer text-sm font-normal text-primary-800"
+               >
                   Nouveau Secondaire
                 </Label>
               </div>
@@ -209,38 +181,21 @@ export function CreateLevelModalV2({
           {/* Class Name Selection */}
           <div className="space-y-3">
             <Label
-              htmlFor="name"
-              style={{
-                color: '#2A3740',
-                fontSize: 'var(--text-sm)',
-                fontWeight: 500,
-                display: 'block'
-              }}
-            >
-              Nom de la classe <span style={{ color: '#C84A3D' }}>*</span>
+              htmlFor="name" className="block text-sm font-medium text-primary-800"
+           >
+              Nom de la classe <span className={REQUIRED_MARK_CLASS}>*</span>
             </Label>
             <Select value={name} onValueChange={setName}>
               <SelectTrigger
                 id="name"
-                style={{
-                  border: '1px solid #D1CECC',
-                  borderRadius: '8px',
-                  backgroundColor: '#FFFFFF'
-                }}
-                className="focus:border-[#5A7085] focus:ring-[#5A7085]"
-              >
+                className="focus:border-primary-500 focus:ring-primary-500 rounded-md border border-neutral-300 bg-white"
+             >
                 <SelectValue placeholder="Sélectionnez une classe" />
               </SelectTrigger>
               <SelectContent>
                 {availableClassNames.length === 0 ? (
-                  <div
-                    style={{
-                      padding: '8px 12px',
-                      color: '#78756F',
-                      fontSize: 'var(--text-sm)',
-                      textAlign: 'center'
-                    }}
-                  >
+                  <div className="px-3 py-2 text-center text-sm text-neutral-500"
+                 >
                     Toutes les classes sont déjà créées
                   </div>
                 ) : (
@@ -257,15 +212,9 @@ export function CreateLevelModalV2({
           {/* Filières Selection (only for Nouveau Secondaire) */}
           {niveau === 'Nouveau Secondaire' && (
             <div className="space-y-3">
-              <Label
-                style={{
-                  color: '#2A3740',
-                  fontSize: 'var(--text-sm)',
-                  fontWeight: 500,
-                  display: 'block'
-                }}
-              >
-                Filières disponibles <span style={{ color: '#C84A3D' }}>*</span>
+              <Label className="block text-sm font-medium text-primary-800"
+             >
+                Filières disponibles <span className={REQUIRED_MARK_CLASS}>*</span>
               </Label>
               <div className="flex items-center gap-4">
                 {['LLA', 'SES', 'SMP', 'SVT'].map((filiere) => (
@@ -276,27 +225,15 @@ export function CreateLevelModalV2({
                       onCheckedChange={() => handleFiliereToggle(filiere)}
                     />
                     <Label
-                      htmlFor={filiere}
-                      style={{
-                        color: '#2A3740',
-                        fontSize: 'var(--text-sm)',
-                        fontWeight: 400,
-                        cursor: 'pointer'
-                      }}
-                    >
+                      htmlFor={filiere} className="cursor-pointer text-sm font-normal text-primary-800"
+                   >
                       {filiere}
                     </Label>
                   </div>
                 ))}
               </div>
-              <p
-                style={{
-                  color: '#78756F',
-                  fontSize: 'var(--text-xs)',
-                  fontWeight: 400,
-                  marginTop: '8px'
-                }}
-              >
+              <p className={`${FIELD_HINT_CLASS} mt-2`}
+             >
                 Chaque filière sélectionnée créera une salle automatiquement
               </p>
             </div>
@@ -305,14 +242,8 @@ export function CreateLevelModalV2({
           {/* Description */}
           <div className="space-y-3">
             <Label
-              htmlFor="description"
-              style={{
-                color: '#2A3740',
-                fontSize: 'var(--text-sm)',
-                fontWeight: 500,
-                display: 'block'
-              }}
-            >
+              htmlFor="description" className="block text-sm font-medium text-primary-800"
+           >
               Description
             </Label>
             <Textarea
@@ -324,58 +255,27 @@ export function CreateLevelModalV2({
                   setDescription(e.target.value)
                 }
               }}
-              style={{
-                border: '1px solid #D1CECC',
-                borderRadius: '8px',
-                minHeight: '80px',
-                resize: 'none'
-              }}
-              className="focus:border-[#5A7085] focus:ring-[#5A7085]"
+              className="focus:border-primary-500 focus:ring-primary-500 min-h-20 resize-none rounded-md border border-neutral-300"
             />
-            <p
-              style={{
-                color: '#78756F',
-                fontSize: 'var(--text-xs)',
-                fontWeight: 400,
-                textAlign: 'right'
-              }}
-            >
+            <p className="text-right text-xs font-normal text-neutral-500"
+           >
               {charCount}/{maxChars} caractères
             </p>
           </div>
         </div>
 
-        <DialogFooter
-          style={{
-            padding: '16px 24px',
-            borderTop: '1px solid #E8E6E3',
-            display: 'flex',
-            justifyContent: 'flex-end',
-            gap: '12px'
-          }}
-        >
+        <DialogFooter className={DIALOG_FOOTER_CLASS}
+       >
           <Button
             variant="outline"
-            onClick={() => setOpen(false)}
-            style={{
-              border: '1px solid #D1CECC',
-              borderRadius: '8px',
-              color: '#2A3740',
-              backgroundColor: '#FFFFFF'
-            }}
-          >
+            onClick={() => setOpen(false)} className="rounded-md border border-neutral-300 bg-white text-primary-800"
+         >
             Annuler
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={!isFormValid()}
-            style={{
-              backgroundColor: isFormValid() ? '#2C4A6E' : '#9CA3AF',
-              color: '#FFFFFF',
-              borderRadius: '8px',
-              cursor: isFormValid() ? 'pointer' : 'not-allowed'
-            }}
-          >
+            disabled={!isFormValid()} className={BTN_DIALOG_PRIMARY_CLASS}
+         >
             Créer la classe
           </Button>
         </DialogFooter>

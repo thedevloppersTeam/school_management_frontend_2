@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useState } from "react";
+import Link from "next/link";
 import { useToast } from "@/components/ui/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -66,8 +67,11 @@ import {
   LINK_BTN_CLASS,
   SECTION_HEADER_TITLE_CLASS,
   SECTION_HEADER_SUBTITLE_CLASS,
-  rubricClasses,
+  RUBRIQUE_BADGE_CLASS,
+  rubriqueShare,
 } from "@/lib/cpmsl-classes";
+import { Pagination } from "@/components/ui/table-pagination";
+import { parseScore } from "@/lib/grades/score-input";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -185,7 +189,7 @@ interface CPMSLYearConfigTabsProps {
   onAddClassroom?: (
     levelId: string,
     data: { letter?: string; trackId?: string },
-  ) => void;
+  ) => Promise<void> | void;
   onEditClassroom?: (classroomId: string) => void;
   onDeleteClassroom?: (classroomId: string) => void;
   onEditLevel?: (levelId: string, data: { description?: string }) => void;
@@ -241,6 +245,56 @@ function SortableTH({
   );
 }
 
+/**
+ * Cellule « Actions » d'une ligne de tableau.
+ *
+ * Elle prend une liste d'actions et n'affiche que celles qui existent
+ * réellement : une entrée dont le handler est absent est filtrée, séparateurs
+ * compris. C'est ce qui garantit qu'on ne propose jamais un bouton que le
+ * produit ne sait pas honorer — le cas du « Supprimer » qui répondait
+ * « disponible prochainement » après une confirmation par saisie du nom.
+ *
+ * Le jour où le handler existe, l'action revient seule. Rien à réactiver.
+ */
+type RowAction = {
+  key: string;
+  label: string;
+  onClick?: () => void;
+  tone?: "default" | "destructive";
+  icon?: React.ReactNode;
+};
+
+function RowActions({ actions }: { actions: RowAction[] }) {
+  const available = actions.filter((a) => typeof a.onClick === "function");
+  if (available.length === 0) return null;
+  return (
+    <div className="flex items-center justify-center gap-2">
+      {available.map((action, i) => (
+        <React.Fragment key={action.key}>
+          {i > 0 && (
+            <span className="text-neutral-300" aria-hidden="true">
+              |
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={action.onClick}
+            className={`${LINK_BTN_CLASS} inline-flex items-center gap-1 ${
+              action.tone === "destructive"
+                ? "text-destructive focus-visible:outline-destructive"
+                : "text-primary-500 focus-visible:outline-primary-500"
+            }`}
+          >
+            {action.icon}
+            {action.label}
+          </button>
+        </React.Fragment>
+      ))}
+    </div>
+  );
+}
+
+
 // ═══════════════════════════════════════════════════════════════════════════
 // COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════
@@ -277,6 +331,7 @@ export function CPMSLYearConfigTabs({
 
   const [searchClass, setSearchClass] = useState("");
   const [searchSubject, setSearchSubject] = useState("");
+  const [subjectPage, setSubjectPage] = useState(1);
   const [expandedLevels, setExpandedLevels] = useState<Set<string>>(new Set());
 
   // ── Tri des tableaux ─────────────────────────────────────────────────────
@@ -284,7 +339,7 @@ export function CPMSLYearConfigTabs({
   const [classSort, setClassSort] = useState<TableSort | null>(null);
   const [subjectSort, setSubjectSort] = useState<TableSort | null>(null);
   const [expandedSubjects, setExpandedSubjects] = useState<Set<string>>(
-    new Set(["1"]),
+    new Set(),
   );
 
   // ── Modaux périodes ──────────────────────────────────────────────────────
@@ -374,6 +429,7 @@ export function CPMSLYearConfigTabs({
   const [editCoeffValue, setEditCoeffValue] = useState("");
   const [editMaxScoreGlobalValue, setEditMaxScoreGlobalValue] = useState("");
   const [editMaxScoreOverrideValue, setEditMaxScoreOverrideValue] = useState("");
+  const [globalMaxAcknowledged, setGlobalMaxAcknowledged] = useState(false);
   const [editCoeffSubmitting, setEditCoeffSubmitting] = useState(false);
 
   // ── Modal copie de matières ──────────────────────────────────────────────
@@ -660,6 +716,7 @@ export function CPMSLYearConfigTabs({
     setEditMaxScoreOverrideValue(
       cs.maxScoreOverride != null ? String(cs.maxScoreOverride) : "",
     );
+    setGlobalMaxAcknowledged(false);
     setEditCoeffModalOpen(true);
   };
 
@@ -669,7 +726,7 @@ export function CPMSLYearConfigTabs({
     try {
       const rawMaxScore = editMaxScoreGlobalValue.trim();
       const newGlobalMaxScore =
-        rawMaxScore !== "" ? Number.parseFloat(rawMaxScore) : Number.NaN;
+        rawMaxScore !== "" ? (parseScore(rawMaxScore) ?? Number.NaN) : Number.NaN;
       const globalMaxScoreChanged =
         Number.isFinite(newGlobalMaxScore) &&
         newGlobalMaxScore >= 0 &&
@@ -677,6 +734,14 @@ export function CPMSLYearConfigTabs({
 
       if (rawMaxScore !== "" && !Number.isFinite(newGlobalMaxScore)) {
         throw new Error("La note globale doit être un nombre valide.");
+      }
+
+      // Garde-fou : le bouton est déjà désactivé sans acquittement, mais
+      // l'écriture globale ne doit dépendre d'aucun état d'affichage.
+      if (globalMaxScoreChanged && !globalMaxAcknowledged) {
+        throw new Error(
+          "Acquittez la portée avant de modifier la note maximale de la matière.",
+        );
       }
 
       if (globalMaxScoreChanged) {
@@ -698,10 +763,10 @@ export function CPMSLYearConfigTabs({
 
       const rawOverride = editCoeffValue.trim();
       const newOverride =
-        rawOverride !== "" ? Number.parseFloat(rawOverride) : null;
+        rawOverride !== "" ? parseScore(rawOverride) : null;
 
       if (rawOverride !== "" && !Number.isFinite(newOverride)) {
-        throw new Error("Le coefficient override doit être un nombre valide.");
+        throw new Error("Le coefficient doit être un nombre valide.");
       }
 
       const overrideChanged =
@@ -710,7 +775,7 @@ export function CPMSLYearConfigTabs({
       // Note max propre à cette affectation (par filière)
       const rawMaxOverride = editMaxScoreOverrideValue.trim();
       const newMaxOverride =
-        rawMaxOverride !== "" ? Number.parseFloat(rawMaxOverride) : null;
+        rawMaxOverride !== "" ? parseScore(rawMaxOverride) : null;
       if (rawMaxOverride !== "" && (!Number.isFinite(newMaxOverride) || (newMaxOverride as number) <= 0)) {
         throw new Error("La note max de la filière doit être un nombre positif.");
       }
@@ -741,9 +806,9 @@ export function CPMSLYearConfigTabs({
         toast({
           title: "Modifications enregistrées",
           description: globalMaxScoreChanged
-            ? "La note globale s'applique à toutes les classes qui utilisent cette matière."
+            ? `La note maximale de ${editCoeffClassSubject.subjectName} est passée à ${newGlobalMaxScore} pour toutes les classes.`
             : maxOverrideChanged
-              ? "La note max de la filière ne s'applique qu'à cette affectation."
+              ? "La nouvelle note maximale ne s'applique qu'à cette classe."
               : undefined,
         });
       }
@@ -820,7 +885,12 @@ export function CPMSLYearConfigTabs({
     if (!assignClassSessionId || assignSelectedSubjects.size === 0) return;
     setAssignSubmitting(true);
     try {
-      await Promise.all(
+      // Chaque matière est comptée sur ce que le serveur a réellement répondu.
+      // Un 409 signifie « déjà assignée » : l'opération est idempotente, ce
+      // n'est pas une erreur. Un 500, lui, est une panne — il était auparavant
+      // avalé avec le 409, et l'écran annonçait « N matières assignées » alors
+      // que le serveur n'en avait écrit aucune.
+      const outcomes = await Promise.all(
         Array.from(assignSelectedSubjects).map(async (subjectId) => {
           const payload = {
             classSessionId: assignClassSessionId,
@@ -836,25 +906,50 @@ export function CPMSLYearConfigTabs({
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
           });
-          if (!res.ok) {
-            // 409/500 = déjà assignée : on tolère (idempotent).
-            if (res.status === 500 || res.status === 409) return;
-            const err = await res.json().catch(() => ({}));
-            throw new Error(
-              err.message || `Échec assignation (HTTP ${res.status})`,
-            );
-          }
+          if (res.ok) return { status: "assigned" as const };
+          if (res.status === 409) return { status: "already" as const };
+          const err = await res.json().catch(() => ({}));
+          return {
+            status: "failed" as const,
+            reason: err.message || `HTTP ${res.status}`,
+          };
         }),
       );
-      const count = assignSelectedSubjects.size;
+
+      const assigned = outcomes.filter((o) => o.status === "assigned").length;
+      const already = outcomes.filter((o) => o.status === "already").length;
+      const failures = outcomes.filter((o) => o.status === "failed");
+
+      if (failures.length === outcomes.length) {
+        throw new Error(failures[0].reason ?? "le serveur a refusé l'écriture");
+      }
+
       const trackLabel = assignTrackId
         ? tracks.find((t) => t.id === assignTrackId)?.code
         : null;
+      const scope = trackLabel
+        ? ` — filière ${trackLabel} (examen officiel)`
+        : " — tronc commun";
+
       toast({
-        title: "Matières assignées",
+        title: failures.length
+          ? "Assignation partielle"
+          : "Matières assignées",
         description:
-          `${count} matière${count > 1 ? "s" : ""} assignée${count > 1 ? "s" : ""} à la classe` +
-          (trackLabel ? ` — filière ${trackLabel} (examen officiel)` : " — tronc commun"),
+          [
+            assigned > 0
+              ? `${assigned} matière${assigned > 1 ? "s" : ""} assignée${assigned > 1 ? "s" : ""}${scope}`
+              : null,
+            already > 0
+              ? `${already} déjà présente${already > 1 ? "s" : ""}`
+              : null,
+            failures.length > 0
+              ? `${failures.length} en échec (${failures[0].reason}) — à réessayer`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" · ") || undefined,
+        variant: failures.length ? "destructive" : undefined,
       });
       setAssignModalOpen(false);
       // Affiche la classe qu'on vient de configurer et rafraîchit sa liste.
@@ -980,6 +1075,29 @@ export function CPMSLYearConfigTabs({
       };
       return cmp(val(a), val(b), subjectSort.dir);
     });
+
+  // Pagination du catalogue. La page effective est bornee a la derivation
+  // plutot que corrigee apres coup : si la recherche reduit la liste sous la
+  // page courante, l'affichage retombe sur la derniere page existante sans
+  // qu'un effet ait a rattraper l'etat.
+  // Changer le tri reordonne la liste entiere : rester page 4 ferait reprendre
+  // la lecture au milieu d'un classement qu'on vient tout juste de demander.
+  const handleSubjectSort = (next: TableSort | null) => {
+    setSubjectSort(next);
+    setSubjectPage(1);
+  };
+
+  const SUBJECTS_PER_PAGE = 25;
+  const subjectPageCount = Math.max(
+    1,
+    Math.ceil(filteredSubjectParents.length / SUBJECTS_PER_PAGE),
+  );
+  const subjectCurrentPage = Math.min(subjectPage, subjectPageCount);
+  const subjectRangeStart = (subjectCurrentPage - 1) * SUBJECTS_PER_PAGE;
+  const pagedSubjectParents = filteredSubjectParents.slice(
+    subjectRangeStart,
+    subjectRangeStart + SUBJECTS_PER_PAGE,
+  );
   // Classe (salle) choisie dans le modal + matières compatibles avec son niveau
   const assignSelectedClassroom = classrooms.find(
     (c) => c.id === assignClassSessionId,
@@ -1007,30 +1125,61 @@ export function CPMSLYearConfigTabs({
     assignableSubjects.length > 0 &&
     assignableSubjects.every((s) => assignSelectedSubjects.has(s.id));
 
+  // La note maximale saisie diffère-t-elle de celle de la matière ? Si oui,
+  // l'enregistrement écrira sur toutes les classes, pas seulement sur celle-ci.
+  // C'est le seul champ de cet écran dont la portée dépasse la ligne éditée :
+  // il demande donc un acquittement, comme la clôture d'étape.
+  const globalMaxScorePending = (() => {
+    if (!editCoeffClassSubject) return false;
+    const raw = editMaxScoreGlobalValue.trim();
+    if (raw === "") return false;
+    const parsed = parseScore(raw);
+    if (parsed == null || !Number.isFinite(parsed)) return false;
+    return parsed !== editCoeffClassSubject.subjectMaxScore;
+  })();
+
   // ─────────────────────────────────────────────────────────────────────────
   // RENDER
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
     <div className="bg-white border border-neutral-200 rounded-lg overflow-hidden">
+      {/* Une année archivée n'a plus aucune action : sans ce bandeau, les
+          colonnes « Actions » vides se lisent comme une panne et non comme une
+          règle. */}
+      {isArchived && (
+        <div
+          role="status"
+          className="flex items-start gap-3 border-b border-warning-border bg-warning-soft px-6 py-3 text-sm text-warning-ink"
+        >
+          <LockIcon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <p>
+            <span className="font-semibold">
+              {yearName} est archivée — configuration en lecture seule.
+            </span>{" "}
+            Les étapes, classes et matières restent consultables, mais plus
+            modifiables. Réactivez l&apos;année pour la modifier.
+          </p>
+        </div>
+      )}
       <Tabs defaultValue="periods" className="w-full">
         <div className="px-6 pt-4">
           <TabsList className="bg-primary-50 rounded-lg p-1">
             <TabsTrigger
               value="periods"
-              className="label-ui rounded-md text-neutral-500 data-[state=active]:bg-white data-[state=active]:text-primary-800 data-[state=active]:shadow-sm"
+              className="label-ui rounded-md text-neutral-600 data-[state=active]:bg-white data-[state=active]:text-primary-800 data-[state=active]:shadow-sm"
             >
               Étapes ({periods.length}/5)
             </TabsTrigger>
             <TabsTrigger
               value="classes"
-              className="label-ui rounded-md text-neutral-500 data-[state=active]:bg-white data-[state=active]:text-primary-800 data-[state=active]:shadow-sm"
+              className="label-ui rounded-md text-neutral-600 data-[state=active]:bg-white data-[state=active]:text-primary-800 data-[state=active]:shadow-sm"
             >
               Classes ({levels.length})
             </TabsTrigger>
             <TabsTrigger
               value="subjects"
-              className="label-ui rounded-md text-neutral-500 data-[state=active]:bg-white data-[state=active]:text-primary-800 data-[state=active]:shadow-sm"
+              className="label-ui rounded-md text-neutral-600 data-[state=active]:bg-white data-[state=active]:text-primary-800 data-[state=active]:shadow-sm"
             >
               Matières ({subjectParents.length})
             </TabsTrigger>
@@ -1074,6 +1223,7 @@ export function CPMSLYearConfigTabs({
 
           <div className={TABLE_WRAPPER_CLASS}>
             <table className="w-full">
+              <caption className="sr-only">Étapes de l&apos;année scolaire : nom, statut et actions</caption>
               <thead>
                 <tr className={TABLE_HEAD_ROW_CLASS}>
                   <th
@@ -1118,7 +1268,7 @@ export function CPMSLYearConfigTabs({
                       </td>
                       <td className="px-4 py-3">
                         {period.status === "open" ? (
-                          <div className="inline-flex items-center gap-1.5 bg-success-soft text-success px-2.5 py-1 rounded-md text-xs font-medium">
+                          <div className="inline-flex items-center gap-1.5 bg-success-soft text-success-ink px-2.5 py-1 rounded-md text-xs font-medium">
                             <UnlockIcon
                               className="h-3 w-3"
                               aria-hidden="true"
@@ -1126,7 +1276,7 @@ export function CPMSLYearConfigTabs({
                             Ouverte
                           </div>
                         ) : (
-                          <div className="inline-flex items-center gap-1.5 bg-warning-soft text-warning px-2.5 py-1 rounded-md text-xs font-medium">
+                          <div className="inline-flex items-center gap-1.5 bg-warning-soft text-warning-ink px-2.5 py-1 rounded-md text-xs font-medium">
                             <LockIcon className="h-3 w-3" aria-hidden="true" />
                             Clôturée
                           </div>
@@ -1176,10 +1326,19 @@ export function CPMSLYearConfigTabs({
 
         {/* ═══════════════════ Onglet Classes ══════════════════════════════ */}
         <TabsContent value="classes" className="p-6 space-y-4">
-          <div className="flex items-center justify-between gap-4">
-            <span className="text-sm font-medium text-neutral-600">
-              {levels.length} classes · {totalClassrooms} salles / filières
-            </span>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <span className="text-sm font-medium text-neutral-600">
+                {levels.length} niveaux · {totalClassrooms} salles / filières
+              </span>
+              {!isArchived && (
+                <p className="mt-0.5 text-xs text-neutral-500">
+                  Les niveaux sont ceux du MENFP : ils ne se créent ni ne se
+                  suppriment. Ce qui se configure ici, ce sont leurs salles et
+                  leurs filières.
+                </p>
+              )}
+            </div>
             <div className="relative">
               <SearchIcon
                 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400"
@@ -1198,6 +1357,7 @@ export function CPMSLYearConfigTabs({
 
           <div className={TABLE_WRAPPER_CLASS}>
             <table className="w-full">
+              <caption className="sr-only">Niveaux, salles et filières de l&apos;année, avec leurs effectifs</caption>
               <thead>
                 <tr className={TABLE_HEAD_ROW_CLASS}>
                   <th
@@ -1217,6 +1377,35 @@ export function CPMSLYearConfigTabs({
                 </tr>
               </thead>
               <tbody>
+                {/* Deux états vides distincts : « l'école n'a aucun niveau »
+                    et « la recherche ne donne rien » ne sont pas le même fait,
+                    et un tableau qui n'affiche rien du tout se lit comme une
+                    panne. C'est le seul des trois tableaux qui n'avait pas de
+                    garde de longueur nulle. */}
+                {filteredLevels.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="px-4 py-6 text-center text-neutral-500 text-sm"
+                    >
+                      {searchClass.trim() !== "" ? (
+                        <>
+                          Aucun niveau ne correspond à «&nbsp;{searchClass}
+                          &nbsp;».{" "}
+                          <button
+                            type="button"
+                            onClick={() => setSearchClass("")}
+                            className={`${LINK_BTN_CLASS} text-primary-500 focus-visible:outline-primary-500`}
+                          >
+                            Effacer la recherche
+                          </button>
+                        </>
+                      ) : (
+                        "Aucun niveau configuré pour cette année."
+                      )}
+                    </td>
+                  </tr>
+                )}
                 {filteredLevels.map((level, levelIndex) => {
                   const levelClassrooms = getClassroomsForLevel(level.id);
                   const isExpanded = expandedLevels.has(level.id);
@@ -1278,47 +1467,40 @@ export function CPMSLYearConfigTabs({
                         </td>
                         <td className="px-4 py-3 text-center">
                           {!isArchived && (
-                            <div className="flex items-center justify-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => handleAddClassroom(level)}
-                                className={`${LINK_BTN_CLASS} text-primary-500 focus-visible:outline-primary-500 inline-flex items-center gap-1`}
-                              >
-                                <PlusIcon
-                                  className="h-3 w-3"
-                                  aria-hidden="true"
-                                />
-                                {isFiliere
-                                  ? "Ajouter filière"
-                                  : "Ajouter salle"}
-                              </button>
-                              <span
-                                className="text-neutral-300"
-                                aria-hidden="true"
-                              >
-                                |
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => handleEditLevel(level)}
-                                className={`${LINK_BTN_CLASS} text-primary-500 focus-visible:outline-primary-500`}
-                              >
-                                Modifier
-                              </button>
-                              <span
-                                className="text-neutral-300"
-                                aria-hidden="true"
-                              >
-                                |
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteLevel(level)}
-                                className={`${LINK_BTN_CLASS} text-error focus-visible:outline-error`}
-                              >
-                                Supprimer
-                              </button>
-                            </div>
+                            <RowActions
+                              actions={[
+                                {
+                                  key: "add-classroom",
+                                  label: isFiliere
+                                    ? "Ajouter filière"
+                                    : "Ajouter salle",
+                                  icon: (
+                                    <PlusIcon
+                                      className="h-3 w-3"
+                                      aria-hidden="true"
+                                    />
+                                  ),
+                                  onClick: onAddClassroom
+                                    ? () => handleAddClassroom(level)
+                                    : undefined,
+                                },
+                                {
+                                  key: "edit-level",
+                                  label: "Modifier",
+                                  onClick: onEditLevel
+                                    ? () => handleEditLevel(level)
+                                    : undefined,
+                                },
+                                {
+                                  key: "delete-level",
+                                  label: "Supprimer",
+                                  tone: "destructive",
+                                  onClick: onDeleteLevel
+                                    ? () => handleDeleteLevel(level)
+                                    : undefined,
+                                },
+                              ]}
+                            />
                           )}
                         </td>
                       </tr>
@@ -1358,44 +1540,45 @@ export function CPMSLYearConfigTabs({
                                   )}
                                 </div>
                               </td>
-                              <td className="px-4 py-3 text-neutral-500 text-sm">
-                                —
-                              </td>
-                              <td className="px-4 py-3 text-neutral-500 text-sm">
-                                —
-                              </td>
+                              {/* Niveau et catégorie appartiennent a la ligne
+                                  parente : une salle n'en porte pas. Deux
+                                  cellules vides valent mieux que deux tirets
+                                  dans la colonne la plus balayee du tableau. */}
+                              <td className="px-4 py-3"></td>
+                              <td className="px-4 py-3"></td>
                               <td className="px-4 py-3 text-neutral-600 text-sm">
                                 {studentCount}{" "}
                                 {studentCount === 1 ? "élève" : "élèves"}
                               </td>
                               <td className="px-4 py-3 text-center">
                                 {!isArchived && (
-                                  <div className="flex items-center justify-center gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        handleEditClassroom(classroom, level)
-                                      }
-                                      className={`${LINK_BTN_CLASS} text-primary-500 focus-visible:outline-primary-500`}
-                                    >
-                                      Modifier
-                                    </button>
-                                    <span
-                                      className="text-neutral-300"
-                                      aria-hidden="true"
-                                    >
-                                      |
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        handleDeleteClassroom(classroom, level)
-                                      }
-                                      className={`${LINK_BTN_CLASS} text-error focus-visible:outline-error`}
-                                    >
-                                      Supprimer
-                                    </button>
-                                  </div>
+                                  <RowActions
+                                    actions={[
+                                      {
+                                        key: "edit-classroom",
+                                        label: "Modifier",
+                                        onClick: onEditClassroom
+                                          ? () =>
+                                              handleEditClassroom(
+                                                classroom,
+                                                level,
+                                              )
+                                          : undefined,
+                                      },
+                                      {
+                                        key: "delete-classroom",
+                                        label: "Supprimer",
+                                        tone: "destructive",
+                                        onClick: onDeleteClassroom
+                                          ? () =>
+                                              handleDeleteClassroom(
+                                                classroom,
+                                                level,
+                                              )
+                                          : undefined,
+                                      },
+                                    ]}
+                                  />
                                 )}
                               </td>
                             </tr>
@@ -1425,24 +1608,6 @@ export function CPMSLYearConfigTabs({
               >
                 {subjectChildren.length} sous-matières
               </Badge>
-              <Badge
-                variant="secondary"
-                className={`text-xs font-medium px-2.5 py-1 border-0 ${rubricClasses("R1").badge}`}
-              >
-                R1: {r1Count}
-              </Badge>
-              <Badge
-                variant="secondary"
-                className={`text-xs font-medium px-2.5 py-1 border-0 ${rubricClasses("R2").badge}`}
-              >
-                R2: {r2Count}
-              </Badge>
-              <Badge
-                variant="secondary"
-                className={`text-xs font-medium px-2.5 py-1 border-0 ${rubricClasses("R3").badge}`}
-              >
-                R3: {r3Count}
-              </Badge>
             </div>
 
             <div className="flex items-center gap-3">
@@ -1455,35 +1620,87 @@ export function CPMSLYearConfigTabs({
                   id="year-search-subject"
                   placeholder="Rechercher une matière..."
                   value={searchSubject}
-                  onChange={(e) => setSearchSubject(e.target.value)}
+                  onChange={(e) => {
+                    setSearchSubject(e.target.value);
+                    setSubjectPage(1);
+                  }}
                   className={`${INPUT_CLASS} pl-9 focus-visible:border-primary-500 focus-visible:ring-2 focus-visible:ring-primary-500/20`}
                   aria-label="Rechercher une matière"
                 />
               </div>
               {!isArchived && (
-                <a
-                  href="/admin/settings"
-                  className="bg-primary-500 hover:bg-primary-600 text-white rounded-lg px-4 py-2 text-sm font-medium inline-flex items-center gap-2 no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
-                >
-                  <PlusIcon className="h-4 w-4" aria-hidden="true" />
-                  Gérer les matières
-                </a>
+                <div className="flex items-center gap-2">
+                  {/* L'action primaire cree en place : CreateSubjectParentModal
+                      etait montee et son handler cable, mais aucun declencheur
+                      ne l'ouvrait. Le seul chemin offert etait un bouton a
+                      icone « + » qui quittait l'ecran — promesse rompue, et
+                      perte de l'onglet, du tri, de la recherche et des
+                      accordeons au passage. */}
+                  {onAddSubjectParent && (
+                    <Button
+                      onClick={() => setCreateSubjectParentModalOpen(true)}
+                      className={BTN_PRIMARY_CLASS}
+                    >
+                      <PlusIcon className="mr-2 h-4 w-4" aria-hidden="true" />
+                      Nouvelle matière
+                    </Button>
+                  )}
+                  {/* La gestion avancee du catalogue vit ailleurs : lien
+                      secondaire, sans icone « + », et le libelle annonce le
+                      depart. Navigation cliente : un <a> rechargeait la page
+                      entiere. */}
+                  <Link
+                    href="/admin/settings"
+                    className={`${LINK_BTN_CLASS} text-primary-500 focus-visible:outline-primary-500 px-2`}
+                  >
+                    Gérer le catalogue
+                  </Link>
+                </div>
               )}
             </div>
           </div>
 
+          {/* Légende des rubriques. Elle est ici parce que c'est le seul
+              endroit de l'application où l'on décide de la rubrique d'une
+              matière — et donc du poids de ses notes sur le bulletin.
+              Pondération : BR-001, docs/CALCUL-BULLETIN.md. */}
+          <dl className="flex flex-wrap items-baseline gap-x-6 gap-y-1.5 rounded-lg bg-primary-50 px-4 py-3 text-sm">
+            <dt className="text-xs font-medium uppercase tracking-wide text-neutral-600">
+              Poids sur le bulletin
+            </dt>
+            {(
+              [
+                ["R1", r1Count],
+                ["R2", r2Count],
+                ["R3", r3Count],
+              ] as const
+            ).map(([code, count]) => (
+              <dd key={code} className="flex items-baseline gap-1.5">
+                <span className="font-semibold text-primary-800">{code}</span>
+                <span className="tabular-nums font-semibold text-primary-800">
+                  {rubriqueShare(code)}
+                </span>
+                <span className="text-neutral-600">
+                  de la moyenne · {count}{" "}
+                  {count > 1 ? "matières" : "matière"}
+                </span>
+              </dd>
+            ))}
+          </dl>
+
           <div className={TABLE_WRAPPER_CLASS}>
             <table className="w-full">
+              <caption className="sr-only">Catalogue des matières et sous-matières, avec leur rubrique et leur poids sur le bulletin</caption>
               <thead>
                 <tr className={TABLE_HEAD_ROW_CLASS}>
                   <th
                     scope="col"
                     className={`${TH_CLASS} px-4 py-3 text-left w-[4%]`}
                   ></th>
-                  <SortableTH label="Code" col="code" sort={subjectSort} setter={setSubjectSort} className="w-[12%]" />
-                  <SortableTH label="Nom" col="nom" sort={subjectSort} setter={setSubjectSort} className="w-[30%]" />
-                  <SortableTH label="Rubrique" col="rubrique" sort={subjectSort} setter={setSubjectSort} className="w-[15%]" />
-                  <SortableTH label="Classe" col="classe" sort={subjectSort} setter={setSubjectSort} className="w-[15%]" />
+                  <SortableTH label="Code" col="code" sort={subjectSort} setter={handleSubjectSort} className="w-[12%]" />
+                  <SortableTH label="Nom" col="nom" sort={subjectSort} setter={handleSubjectSort} className="w-[30%]" />
+                  <SortableTH label="Rubrique" col="rubrique" sort={subjectSort} setter={handleSubjectSort} className="w-[15%]" />
+                  <SortableTH label="Classe" col="classe" sort={subjectSort} setter={handleSubjectSort} className="w-[15%]" />
                   <th
                     scope="col"
                     className={`${TH_CLASS} px-4 py-3 text-center w-[24%]`}
@@ -1499,18 +1716,17 @@ export function CPMSLYearConfigTabs({
                       colSpan={6}
                       className="px-4 py-6 text-center text-neutral-500 text-sm"
                     >
-                      Aucune matière — utilisez &laquo;&nbsp;Gérer les
-                      matières&nbsp;&raquo; pour en ajouter
+                      Aucune matière — utilisez &laquo;&nbsp;Nouvelle
+                      matière&nbsp;&raquo; pour en ajouter
                     </td>
                   </tr>
                 ) : (
-                  filteredSubjectParents.map((parent, parentIndex) => {
+                  pagedSubjectParents.map((parent, parentIndex) => {
                     const children = subjectChildren.filter(
                       (c) => c.parentId === parent.id,
                     );
                     const isExpanded = expandedSubjects.has(parent.id);
                     const hasChildren = children.length > 0;
-                    const cR = rubricClasses(parent.rubrique);
                     return (
                       <React.Fragment key={parent.id}>
                         <tr
@@ -1553,9 +1769,11 @@ export function CPMSLYearConfigTabs({
                           </td>
                           <td className="px-4 py-3">
                             <Badge
-                              className={`text-xs font-medium border-0 ${cR.badge}`}
+                              className={`text-xs font-medium border-0 tabular-nums ${RUBRIQUE_BADGE_CLASS}`}
                             >
                               {parent.rubrique}
+                              {rubriqueShare(parent.rubrique) &&
+                                ` · ${rubriqueShare(parent.rubrique)}`}
                             </Badge>
                           </td>
                           <td className="px-4 py-3 text-neutral-900 text-sm">
@@ -1567,49 +1785,34 @@ export function CPMSLYearConfigTabs({
                             )}
                           </td>
                           <td className="px-4 py-3">
-                            <div className="flex items-center justify-center gap-2">
-                              {!isArchived && (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      handleAddSubjectChild(parent)
-                                    }
-                                    className={`${LINK_BTN_CLASS} text-primary-800 focus-visible:outline-primary-800`}
-                                  >
-                                    + Sous-matière
-                                  </button>
-                                  <span
-                                    className="text-neutral-300"
-                                    aria-hidden="true"
-                                  >
-                                    |
-                                  </span>
-                                </>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => handleEditSubjectParent(parent)}
-                                className={`${LINK_BTN_CLASS} text-primary-500 focus-visible:outline-primary-500`}
-                              >
-                                Modifier
-                              </button>
-                              <span
-                                className="text-neutral-300"
-                                aria-hidden="true"
-                              >
-                                |
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleDeleteSubjectParent(parent)
-                                }
-                                className={`${LINK_BTN_CLASS} text-error focus-visible:outline-error`}
-                              >
-                                Supprimer
-                              </button>
-                            </div>
+                            {!isArchived && (
+                              <RowActions
+                                actions={[
+                                  {
+                                    key: "add-child",
+                                    label: "+ Sous-matière",
+                                    onClick: onAddSubjectChild
+                                      ? () => handleAddSubjectChild(parent)
+                                      : undefined,
+                                  },
+                                  {
+                                    key: "edit-subject",
+                                    label: "Modifier",
+                                    onClick: onEditSubjectParent
+                                      ? () => handleEditSubjectParent(parent)
+                                      : undefined,
+                                  },
+                                  {
+                                    key: "delete-subject",
+                                    label: "Supprimer",
+                                    tone: "destructive",
+                                    onClick: onDeleteSubjectParent
+                                      ? () => handleDeleteSubjectParent(parent)
+                                      : undefined,
+                                  },
+                                ]}
+                              />
+                            )}
                           </td>
                         </tr>
                         {isExpanded &&
@@ -1636,32 +1839,28 @@ export function CPMSLYearConfigTabs({
                               <td className="px-4 py-3"></td>
                               <td className="px-4 py-3"></td>
                               <td className="px-4 py-3">
-                                <div className="flex items-center justify-center gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      handleEditSubjectChild(child)
-                                    }
-                                    className={`${LINK_BTN_CLASS} text-primary-500 focus-visible:outline-primary-500`}
-                                  >
-                                    Modifier
-                                  </button>
-                                  <span
-                                    className="text-neutral-300"
-                                    aria-hidden="true"
-                                  >
-                                    |
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      handleDeleteSubjectChild(child)
-                                    }
-                                    className={`${LINK_BTN_CLASS} text-error focus-visible:outline-error`}
-                                  >
-                                    Supprimer
-                                  </button>
-                                </div>
+                                {!isArchived && (
+                                  <RowActions
+                                    actions={[
+                                      {
+                                        key: "edit-child",
+                                        label: "Modifier",
+                                        onClick: onEditSubjectChild
+                                          ? () => handleEditSubjectChild(child)
+                                          : undefined,
+                                      },
+                                      {
+                                        key: "delete-child",
+                                        label: "Supprimer",
+                                        tone: "destructive",
+                                        onClick: onDeleteSubjectChild
+                                          ? () =>
+                                              handleDeleteSubjectChild(child)
+                                          : undefined,
+                                      },
+                                    ]}
+                                  />
+                                )}
                               </td>
                             </tr>
                           ))}
@@ -1671,17 +1870,38 @@ export function CPMSLYearConfigTabs({
                 )}
               </tbody>
             </table>
+
+            {/* Le controle vit dans l'enveloppe du tableau, sous son dernier
+                filet : il appartient au tableau, pas a l'onglet. */}
+            <Pagination
+              page={subjectCurrentPage}
+              pageCount={subjectPageCount}
+              onPageChange={setSubjectPage}
+              rangeStart={subjectRangeStart + 1}
+              rangeEnd={subjectRangeStart + pagedSubjectParents.length}
+              total={filteredSubjectParents.length}
+              label="Pagination du catalogue des matières"
+              unit={
+                searchSubject.trim() !== ""
+                  ? "matières trouvées"
+                  : "matières"
+              }
+            />
           </div>
 
           {/* ── Affectation aux classes ────────────────────────────────── */}
-          <div className="mt-8 pt-8 border-t-2 border-neutral-200">
+          <div className="mt-8 pt-8 border-t border-neutral-200">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className={SECTION_HEADER_TITLE_CLASS}>
-                  Affectation aux classes
+                  {copyTargetClassroom
+                    ? `Matières de ${copyTargetClassroom.name}`
+                    : "Affectation aux classes"}
                 </h3>
                 <p className={SECTION_HEADER_SUBTITLE_CLASS}>
-                  Assignez plusieurs matières à une classe de cette année
+                  {copyTargetClassroom
+                    ? "Coefficient et note maximale de chaque matière pour cette classe"
+                    : "Choisissez une classe pour voir et modifier ses matières"}
                 </p>
               </div>
               {!isArchived &&
@@ -1736,10 +1956,13 @@ export function CPMSLYearConfigTabs({
 
             {selectedSessionForAssign &&
               (loadingClassSubjects ? (
-                <p className="text-sm text-neutral-500">Chargement...</p>
+                <p className="text-sm text-neutral-500" role="status">
+                  Chargement des matières de la classe…
+                </p>
               ) : (
                 <div className={TABLE_WRAPPER_CLASS}>
                   <table className="w-full">
+                    <caption className="sr-only">Matières assignées à la classe sélectionnée, avec coefficient et note maximale</caption>
                     <thead>
                       <tr className={TABLE_HEAD_ROW_CLASS}>
                         <th
@@ -1768,9 +1991,15 @@ export function CPMSLYearConfigTabs({
                         </th>
                         <th
                           scope="col"
-                          className={`${TH_CLASS} px-4 py-2.5 text-left`}
+                          className={`${TH_CLASS} px-4 py-2.5 text-right`}
                         >
-                          Coeff. global / note
+                          Coefficient
+                        </th>
+                        <th
+                          scope="col"
+                          className={`${TH_CLASS} px-4 py-2.5 text-right`}
+                        >
+                          Note maximale
                         </th>
                         <th
                           scope="col"
@@ -1784,7 +2013,7 @@ export function CPMSLYearConfigTabs({
                       {classSubjects.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={6}
+                            colSpan={7}
                             className="px-4 py-6 text-center text-neutral-500 text-sm"
                           >
                             <p>Aucune matière assignée à cette classe</p>
@@ -1805,7 +2034,6 @@ export function CPMSLYearConfigTabs({
                         </tr>
                       ) : (
                         classSubjects.map((cs, i) => {
-                          const cR = rubricClasses(cs.rubriqueCode);
                           return (
                             <tr
                               key={cs.id}
@@ -1820,12 +2048,19 @@ export function CPMSLYearConfigTabs({
                               <td className="px-4 py-3">
                                 {cs.rubriqueCode ? (
                                   <span
-                                    className={`px-2 py-0.5 rounded text-xs font-bold ${cR.badge}`}
+                                    className={`px-2 py-0.5 rounded text-xs font-bold tabular-nums ${RUBRIQUE_BADGE_CLASS}`}
                                   >
                                     {cs.rubriqueCode}
+                                    {rubriqueShare(cs.rubriqueCode) &&
+                                      ` · ${rubriqueShare(cs.rubriqueCode)}`}
                                   </span>
                                 ) : (
-                                  <span className="text-neutral-400">—</span>
+                                  <span
+                                    className="text-neutral-500"
+                                    title="Sans rubrique, cette matière n'apparaîtra pas sur le bulletin."
+                                  >
+                                    Aucune
+                                  </span>
                                 )}
                               </td>
                               <td className="px-4 py-3">
@@ -1839,12 +2074,38 @@ export function CPMSLYearConfigTabs({
                                   </span>
                                 )}
                               </td>
-                              <td className="px-4 py-3 text-sm tabular-nums text-neutral-900">
-                                <div className="flex flex-col">
-                                  <span>{cs.coefficient}</span>
-                                  <span className="text-xs text-neutral-500">
-                                    /{cs.subjectMaxScore || "—"}
+                              {/* La valeur affichee est celle qui s'applique
+                                  reellement a cette classe : la surcharge si
+                                  elle existe, sinon la valeur heritee de la
+                                  matiere. Afficher l'heritee alors qu'une
+                                  surcharge est posee rendait le reglage
+                                  invisible — et donc invrifiable — sur l'ecran
+                                  meme qui sert a le poser. */}
+                              <td className="px-4 py-3 text-right text-sm tabular-nums text-neutral-900">
+                                <div className="flex flex-col items-end">
+                                  <span className="font-semibold">
+                                    {cs.coefficientOverride ?? cs.coefficient}
                                   </span>
+                                  {cs.coefficientOverride != null && (
+                                    <span className="text-xs font-normal text-neutral-500">
+                                      hérité : {cs.coefficient}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-right text-sm tabular-nums text-neutral-900">
+                                <div className="flex flex-col items-end">
+                                  <span className="font-semibold">
+                                    {cs.maxScoreOverride ??
+                                      (cs.subjectMaxScore || "—")}
+                                  </span>
+                                  {cs.maxScoreOverride != null && (
+                                    <span className="text-xs font-normal text-neutral-500">
+                                      {cs.trackCode
+                                        ? `filière ${cs.trackCode} · matière : ${cs.subjectMaxScore}`
+                                        : `matière : ${cs.subjectMaxScore}`}
+                                    </span>
+                                  )}
                                 </div>
                               </td>
                               <td className="px-4 py-3">
@@ -1876,15 +2137,16 @@ export function CPMSLYearConfigTabs({
         </TabsContent>
       </Tabs>
 
-      {/* ═══════════════════ Modal Edit Coefficient Override ════════════════ */}
+      {/* ═══════════════════ Modal Barème et coefficient ════════════════════ */}
       <Dialog open={editCoeffModalOpen} onOpenChange={setEditCoeffModalOpen}>
         <DialogContent className="bg-white rounded-xl max-w-md">
           <DialogHeader>
             <DialogTitle className="font-serif text-xl font-bold text-primary-800">
-              Modifier le coefficient
+              Barème et coefficient
             </DialogTitle>
             <DialogDescription className="text-sm text-neutral-500">
               {editCoeffClassSubject?.subjectName}
+              {copyTargetClassroom ? ` — ${copyTargetClassroom.name}` : ""}
             </DialogDescription>
           </DialogHeader>
 
@@ -1892,33 +2154,10 @@ export function CPMSLYearConfigTabs({
             <div className="space-y-4 py-2">
               <div className="bg-primary-50 rounded-lg px-4 py-3">
                 <p className="text-xs text-neutral-500 mb-0.5">
-                  Coefficient global
+                  Coefficient hérité de la matière
                 </p>
                 <p className="text-base font-bold tabular-nums text-primary-800">
                   {editCoeffClassSubject.coefficient}
-                </p>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="global-max-score" className={FIELD_LABEL_CLASS}>
-                  Note globale
-                  <span className="ml-2 text-xs text-warning font-normal">
-                    (impacte toutes les classes utilisant cette matière)
-                  </span>
-                </Label>
-                <Input
-                  id="global-max-score"
-                  type="number"
-                  step="1"
-                  min="0"
-                  inputMode="decimal"
-                  value={editMaxScoreGlobalValue}
-                  onChange={(e) => setEditMaxScoreGlobalValue(e.target.value)}
-                  placeholder="Ex: 30, 100, 200"
-                  className={INPUT_CLASS}
-                />
-                <p className="text-xs text-neutral-500">
-                  C&apos;est la note maximum de la matière sur le bulletin.
                 </p>
               </div>
 
@@ -1927,10 +2166,7 @@ export function CPMSLYearConfigTabs({
                   htmlFor="coeff-override-value"
                   className={FIELD_LABEL_CLASS}
                 >
-                  Coefficient override
-                  <span className="ml-2 text-xs text-neutral-500 font-normal">
-                    (laisser vide = coefficient global)
-                  </span>
+                  Coefficient pour cette classe
                 </Label>
                 <Input
                   id="coeff-override-value"
@@ -1942,6 +2178,10 @@ export function CPMSLYearConfigTabs({
                   placeholder={String(editCoeffClassSubject.coefficient)}
                   className={INPUT_CLASS}
                 />
+                <p className="text-xs text-neutral-500">
+                  Laisser vide pour garder le coefficient de la matière (
+                  {editCoeffClassSubject.coefficient}).
+                </p>
               </div>
 
               {/* Note max propre à cette affectation (par filière) — pour les
@@ -1975,10 +2215,75 @@ export function CPMSLYearConfigTabs({
                   </p>
                 </div>
               )}
+
+              {/* La note maximale de la matière est une donnée d'école, pas
+                  d'affectation : la modifier ici la change pour toutes les
+                  classes, donc pour tous les bulletins. Elle est repliée par
+                  défaut pour qu'on ne l'atteigne jamais par accident depuis la
+                  ligne d'une classe. */}
+              <details className="group rounded-lg border border-neutral-200">
+                <summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-neutral-900 marker:content-none hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500">
+                  <ChevronRightIcon
+                    className="h-4 w-4 shrink-0 text-neutral-500 transition-transform group-open:rotate-90"
+                    aria-hidden="true"
+                  />
+                  Modifier la note maximale pour toutes les classes
+                </summary>
+                <div className="space-y-1.5 border-t border-neutral-200 px-4 py-3">
+                  <div className="rounded-md bg-warning-soft px-3 py-2 text-xs text-warning-ink">
+                    Cette note maximale appartient à la matière, pas à{" "}
+                    {copyTargetClassroom?.name ?? "cette classe"}. La changer la
+                    change pour toutes les classes où{" "}
+                    {editCoeffClassSubject.subjectName} est enseignée, et pour
+                    les bulletins de chacune.
+                  </div>
+                  <Label htmlFor="global-max-score" className={FIELD_LABEL_CLASS}>
+                    Note maximale de {editCoeffClassSubject.subjectName}
+                  </Label>
+                  <Input
+                    id="global-max-score"
+                    type="number"
+                    step="1"
+                    min="0"
+                    inputMode="decimal"
+                    value={editMaxScoreGlobalValue}
+                    onChange={(e) => setEditMaxScoreGlobalValue(e.target.value)}
+                    placeholder={`Actuelle : ${editCoeffClassSubject.subjectMaxScore}`}
+                    className={INPUT_CLASS}
+                  />
+                  <p className="text-xs text-neutral-500">
+                    C&apos;est la note sur laquelle la matière est notée au
+                    bulletin. Laisser vide pour ne rien changer.
+                  </p>
+                  {globalMaxScorePending && (
+                    <label className="mt-2 flex items-start gap-2 text-xs text-neutral-900">
+                      <input
+                        type="checkbox"
+                        checked={globalMaxAcknowledged}
+                        onChange={(e) =>
+                          setGlobalMaxAcknowledged(e.target.checked)
+                        }
+                        className="mt-0.5 h-4 w-4 shrink-0 rounded border-neutral-300 text-primary-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
+                      />
+                      <span>
+                        Je comprends que la note maximale de{" "}
+                        {editCoeffClassSubject.subjectName} change pour toutes
+                        les classes où elle est enseignée, et pour leurs
+                        bulletins.
+                      </span>
+                    </label>
+                  )}
+                </div>
+              </details>
             </div>
           )}
 
-          <DialogFooter>
+          <DialogFooter className="sm:items-center">
+            {globalMaxScorePending && !globalMaxAcknowledged && (
+              <p className="mr-auto text-xs text-warning-ink">
+                Acquittez la note maximale pour pouvoir enregistrer.
+              </p>
+            )}
             <Button
               variant="outline"
               onClick={() => setEditCoeffModalOpen(false)}
@@ -1989,7 +2294,10 @@ export function CPMSLYearConfigTabs({
             </Button>
             <Button
               onClick={handleSaveCoeffOverride}
-              disabled={editCoeffSubmitting}
+              disabled={
+                editCoeffSubmitting ||
+                (globalMaxScorePending && !globalMaxAcknowledged)
+              }
               className={BTN_DIALOG_PRIMARY_CLASS}
             >
               {editCoeffSubmitting ? "En cours..." : "Enregistrer"}
@@ -2127,7 +2435,6 @@ export function CPMSLYearConfigTabs({
                   assignableSubjects.map((s, i) => {
                     const checked = assignSelectedSubjects.has(s.id);
                     const inputId = `assign-subject-${s.id}`;
-                    const cR = rubricClasses(s.rubrique);
                     return (
                       <label
                         key={s.id}
@@ -2154,9 +2461,11 @@ export function CPMSLYearConfigTabs({
                           {s.name}
                         </span>
                         <Badge
-                          className={`text-xs font-medium border-0 ${cR.badge}`}
+                          className={`text-xs font-medium border-0 tabular-nums ${RUBRIQUE_BADGE_CLASS}`}
                         >
                           {s.rubrique}
+                          {rubriqueShare(s.rubrique) &&
+                            ` · ${rubriqueShare(s.rubrique)}`}
                         </Badge>
                       </label>
                     );
@@ -2264,7 +2573,7 @@ export function CPMSLYearConfigTabs({
             </div>
             {copySourceSessionId &&
               copySourceCounts[copySourceSessionId] === 0 && (
-                <p className="mt-2 text-xs text-warning">
+                <p className="mt-2 text-xs text-warning-ink">
                   Cette salle n&apos;a aucune matière à copier.
                 </p>
               )}
@@ -2364,7 +2673,7 @@ export function CPMSLYearConfigTabs({
               )}
             </div>
 
-            <div className="rounded-lg border border-warning/30 bg-warning-soft px-3 py-2 text-xs text-warning">
+            <div className="rounded-lg border border-warning-border bg-warning-soft px-3 py-2 text-xs text-warning-ink">
               Attention : la fusion d&apos;étapes est une action sensible. Vérifiez
               que l&apos;étape source et l&apos;étape cible correspondent bien à la même
               période métier avant de confirmer.
@@ -2434,10 +2743,16 @@ export function CPMSLYearConfigTabs({
           tracks={tracks}
           submitting={addClassroomSubmitting}
           onSubmit={async (data) => {
+            // onAddClassroom est asynchrone : sans await, l'etat de soumission
+            // s'allumait et s'eteignait dans le meme tick et la modale se
+            // fermait avant la reponse du serveur.
             setAddClassroomSubmitting(true);
-            onAddClassroom?.(selectedLevel.id, data);
-            setAddClassroomSubmitting(false);
-            setAddClassroomModalOpen(false);
+            try {
+              await onAddClassroom?.(selectedLevel.id, data);
+              setAddClassroomModalOpen(false);
+            } finally {
+              setAddClassroomSubmitting(false);
+            }
           }}
         />
       )}

@@ -260,7 +260,7 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
       .map(s => ({
         sessionId: s.id,
         // For tracked classes (NS3/NS4) the track code stands in as the "salle".
-        label: s.class.track?.code ?? s.class.letter ?? "",
+        label: s.class.letter ?? "",
       }))
       .sort((a, b) => a.label.localeCompare(b.label))
   }, [sessions, selectedClassTypeId])

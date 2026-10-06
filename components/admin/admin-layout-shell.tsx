@@ -61,6 +61,9 @@ import {
   ArchiveIcon,
   UserPlusIcon,
   HistoryIcon,
+  GraduationCapIcon,
+  CopyIcon,
+  CalendarCheckIcon,
 } from "lucide-react";
 
 import { getMe, logout, type AuthUser } from "@/lib/data/auth-data";
@@ -69,6 +72,7 @@ import {
   type AcademicYear,
 } from "@/lib/api/dashboard";
 import { cn } from "@/lib/utils";
+import { SchoolLogo } from "@/components/school/school-logo";
 import { ProfileDialog } from "@/components/school/profile-dialog";
 
 
@@ -133,6 +137,22 @@ const navItems: NavItem[] = [
     ],
   },
   {
+    label: "Fin d'année",
+    icon: CalendarCheckIcon,
+    children: [
+      {
+        label: "Promotion des élèves",
+        href: "/admin/fin-annee/promotion",
+        icon: GraduationCapIcon,
+      },
+      {
+        label: "Reprendre une année",
+        href: "/admin/fin-annee/configuration",
+        icon: CopyIcon,
+      },
+    ],
+  },
+  {
     label: "Archives",
     icon: ArchiveIcon,
     children: [
@@ -182,6 +202,8 @@ const breadcrumbMap: Record<string, string> = {
   "/admin/settings": "Établissement",
   "/admin/archives": "Bulletins archivés",
   "/admin/journal": "Journal",
+  "/admin/fin-annee/promotion": "Promotion des élèves",
+  "/admin/fin-annee/configuration": "Reprendre une année",
 };
 
 function getBreadcrumbLabel(pathname: string): string {
@@ -285,33 +307,58 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider>
+      {/* Premier noeud focalisable de la coque. Sans lui, chaque changement de
+          page imposait de retraverser une quinzaine d'elements avant d'atteindre
+          le contenu — sur un produit ou l'administratrice saisit trente notes
+          d'affilee au clavier. Invisible jusqu'au focus. */}
+      <a
+        href="#contenu-principal"
+        className="sr-only z-50 focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:rounded-md focus:bg-background focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-primary"
+      >
+        Aller au contenu
+      </a>
       {/* Sidebar */}
-      <Sidebar collapsible="icon" className="border-r border-sidebar-border">
+      {/* `offcanvas` et non `icon`, et surtout pas `none`.
+
+          `icon` masquait les sous-menus : cliquer sur un groupe ne faisait rien,
+          8 destinations sur 9 devenaient inatteignables, et l'etat etait
+          persiste en cookie 7 jours.
+
+          `none` a ete essaye et retire : la primitive rend alors un simple
+          <div>, sans le conteneur `position: fixed` ni l'element qui reserve la
+          largeur dans la mise en page — la barre defilait avec le contenu.
+
+          `offcanvas`, le defaut de shadcn, garde la structure fixe et le tiroir
+          mobile : replier fait sortir la barre entiere, et le declencheur la
+          ramene. Rien d'a moitie cache. */}
+      <Sidebar collapsible="offcanvas" className="border-r border-sidebar-border">
         {/* Logo/Header */}
         <SidebarHeader className="border-b border-sidebar-border p-4">
           <Link
             href="/admin/dashboard"
             className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center"
           >
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-              <SchoolIcon className="h-5 w-5" />
-            </div>
-
-            <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-              <span className="truncate font-semibold text-sidebar-foreground">
+            {/* Le sceau, pas une icone de bibliotheque. DESIGN.md le nomme
+                Signature Component et designe cette barre comme le seul element
+                porteur de l'identite — il n'etait appele que sur /login. Au
+                passage le contraste de l'or passe de 2,88:1 sur l'ancien fond
+                bleu a 6,90:1 sur `ardoise-profonde`, son seul fond tenable. */}
+            <SchoolLogo size="sm" showText={false} />
+            <div className="grid flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
+              <span className="truncate font-serif text-base font-bold text-sidebar-foreground">
                 CPMSL
               </span>
-              <span className="truncate text-xs text-sidebar-foreground/60">
-                Admin
+              <span className="truncate text-xs text-sidebar-foreground/70">
+                Administration
               </span>
             </div>
           </Link>
         </SidebarHeader>
 
         {/* Navigation */}
-        <SidebarContent className="gap-0">
+        <SidebarContent className="gap-0" role="navigation" aria-label="Navigation principale">
           <SidebarGroup className="px-0">
-            <SidebarGroupLabel className="px-4 py-2 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/50 group-data-[collapsible=icon]:hidden">
+            <SidebarGroupLabel className="px-4 py-2 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/70 group-data-[collapsible=icon]:hidden">
               Navigation
             </SidebarGroupLabel>
 
@@ -329,11 +376,17 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
                         tooltip={item.label}
                         className={cn(
                           "transition-colors",
+                          // Le fond `sidebar-accent` seul mesure 1,27:1 sur la
+                          // barre : invisible, la ou WCAG 1.4.11 exige 3:1. Le
+                          // filet de gauche en `sidebar-foreground` donne
+                          // 8,93:1 et porte l'etat a lui seul. Voir DESIGN.md,
+                          // section amendee le 2026-09-16.
+                          "border-l-2 border-transparent",
                           isActive &&
-                            "bg-sidebar-accent font-semibold text-sidebar-accent-foreground",
+                            "border-l-sidebar-foreground bg-sidebar-accent font-semibold text-sidebar-accent-foreground",
                         )}
                       >
-                        <Link href={item.href}>
+                        <Link href={item.href} aria-current={isActive ? "page" : undefined}>
                           <Icon className="h-4 w-4" />
                           <span>{item.label}</span>
                         </Link>
@@ -360,7 +413,7 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
                         >
                           <Icon className="h-4 w-4" />
                           <span>{item.label}</span>
-                          <ChevronRightIcon className="ml-auto size-4 text-sidebar-foreground/40 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+                          <ChevronRightIcon className="ml-auto size-4 text-sidebar-foreground/60 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
                         </SidebarMenuButton>
                       </CollapsibleTrigger>
 
@@ -380,12 +433,22 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
                                   asChild
                                   isActive={childActive}
                                   className={cn(
-                                    "transition-colors",
+                                    "transition-colors border-l-2 border-transparent",
                                     childActive &&
-                                      "bg-sidebar-accent font-semibold text-sidebar-accent-foreground",
+                                      "border-l-sidebar-foreground bg-sidebar-accent font-semibold text-sidebar-accent-foreground",
                                   )}
                                 >
-                                  <Link href={childHref}>
+                                  <Link
+                                    href={childHref}
+                                    aria-current={childActive ? "page" : undefined}
+                                    aria-disabled={childHref === "#" || undefined}
+                                    title={
+                                      childHref === "#"
+                                        ? "Aucune année active — ouvrez Paramétrage › Années Scolaires"
+                                        : undefined
+                                    }
+                                    className={cn(childHref === "#" && "cursor-not-allowed opacity-60")}
+                                  >
                                     <ChildIcon className="h-3.5 w-3.5" />
                                     <span>{child.label}</span>
                                   </Link>
@@ -423,12 +486,12 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
                       <span className="truncate font-semibold text-sidebar-foreground">
                         {currentUser?.firstname} {currentUser?.lastname}
                       </span>
-                      <span className="truncate text-xs text-sidebar-foreground/50">
+                      <span className="truncate text-xs text-sidebar-foreground/70">
                         Administrateur
                       </span>
                     </div>
 
-                    <ChevronsUpDownIcon className="ml-auto size-4 text-sidebar-foreground/40" />
+                    <ChevronsUpDownIcon className="ml-auto size-4 text-sidebar-foreground/60" />
                   </SidebarMenuButton>
                 </DropdownMenuTrigger>
 
@@ -577,7 +640,7 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8 lg:pt-6">
+        <main id="contenu-principal" tabIndex={-1} className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8 lg:pt-6">
           {children}
         </main>
       </div>

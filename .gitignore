@@ -74,3 +74,8 @@ ui-audit-report.json
 # Reliquats d edition
 *.backup
 *.bak
+.claude/
+.impeccable/
+/AUDIT_*.md
+/audit-*.md
+/diagnostic-*.md

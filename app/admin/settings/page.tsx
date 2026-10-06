@@ -61,6 +61,9 @@ import {
 } from "lucide-react"
 
 import { CatalogImportModal } from "@/components/school/catalog-import-modal"
+import { parseScore } from "@/lib/grades/score-input"
+import { RUBRIQUE_BADGE_CLASS, rubriqueShare } from "@/lib/cpmsl-classes"
+import { Pagination } from "@/components/ui/table-pagination"
 
 interface SchoolInfo  { name: string; motto?: string; foundedYear?: number; logo?: string; address?: string; phone?: string; email?: string }
 interface Holiday     { id: string; name: string; date: string }
@@ -156,19 +159,37 @@ function saveSectionCycles(sectionId: string, cycles: string[]): void {
   localStorage.setItem(`section-cycles-${sectionId}`, JSON.stringify(cycles))
 }
 
-function rubricBadgeClasses(code?: string): string {
-  if (code === "R1") return "border-info-border bg-info-soft text-info-ink"
-  if (code === "R2") return "border-success-border bg-success-soft text-success-ink"
-  if (code === "R3") return "border-warning-border bg-warning-soft text-warning-ink"
-  return "border-border bg-muted text-foreground"
+/**
+ * Badge de rubrique.
+ *
+ * Un seul traitement pour R1, R2 et R3, aligne sur RUBRIQUE_BADGE_CLASS. Cette
+ * fonction peignait R1 en `info`, R2 en `success` et R3 en `warning` : sur les
+ * 162 lignes du referentiel, la colonne Rubrique se lisait comme une carte de
+ * chaleur d'alertes, et l'ambre — reserve par DESIGN.md a l'annee archivee, la
+ * note manquante et la session expiree — designait une categorie.
+ *
+ * Deux effets, les memes que sur la surface de configuration d'annee : le vert
+ * cesse de designer a la fois « R2 » et « etape ouverte », et l'information ne
+ * depend plus de la perception des couleurs (WCAG 1.4.1) puisque le code est
+ * ecrit dans le badge.
+ */
+function rubricBadgeClasses(_code?: string): string {
+  return `border-transparent ${RUBRIQUE_BADGE_CLASS}`
 }
 
+/**
+ * Part d'une rubrique dans la moyenne d'etape.
+ *
+ * Delegue a rubriqueShare(), qui derive la valeur de RUBRIQUE_WEIGHTS
+ * (lib/bulletin/compute.ts) — la source qui fait autorite au titre de BR-001.
+ * Les chaines « 70% », « 25% », « 5% » etaient recopiees ici : la colonne
+ * « Poids BR-001 » affirmait une regle qu'elle ne lisait pas, et aurait
+ * continue a afficher 70/25/5 si la MOA en arbitrait une autre.
+ */
 function rubricWeight(code: string): string {
-  if (code === "R1") return "70%"
-  if (code === "R2") return "25%"
-  if (code === "R3") return "5%"
-  return "—"
+  return rubriqueShare(code) ?? "—"
 }
+
 
 function extractLetters(words: string[]): string {
   if (words.length === 1) return words[0].slice(0, 3)
@@ -231,6 +252,8 @@ function useSchoolSettings() {
   const [attitudes, setAttitudes] = useState<Attitude[]>([])
   const [loadingAttitudes, setLoadingAttitudes] = useState(false)
   const [attitudesLoaded, setAttitudesLoaded] = useState(false)
+  const [calendarLoaded, setCalendarLoaded] = useState(false)
+  const [loadingCalendar, setLoadingCalendar] = useState(false)
   const [currentYearId, setCurrentYearId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState("general")
 
@@ -250,7 +273,7 @@ function useSchoolSettings() {
   const [deletingSection, setDeletingSection] = useState<Section | null>(null)
   const [deleteAttitudeTarget, setDeleteAttitudeTarget] = useState<Attitude | null>(null)
   const [rubricForm, setRubricForm] = useState<RubricForm>({ name: "", code: "", description: "" })
-  const [subjectForm, setSubjectForm] = useState<SubjectForm>({ name: "", code: "", maxScore: "100", coefficient: "1", hasSections: false, rubricId: NONE_RUBRIC, classTypeId: NONE_CLASSTYPE })
+  const [subjectForm, setSubjectForm] = useState<SubjectForm>({ name: "", code: "", maxScore: "100", coefficient: "1", hasSections: false, rubricId: "", classTypeId: NONE_CLASSTYPE })
   const [sectionForm, setSectionForm] = useState<SectionForm>({ name: "", code: "", maxScore: "100", cycles: [] })
   const [classForm, setClassForm] = useState<ClassForm>({ maxStudents: "30" })
   const [attitudeLabel, setAttitudeLabel] = useState("")
@@ -306,6 +329,35 @@ function useSchoolSettings() {
     }
   }, [toast])
 
+  /**
+   * Charge le calendrier d'une annee.
+   *
+   * Cet onglet n'appelait aucun serveur : ses handlers etaient des `setState`
+   * purs, et le commentaire l'assumait — « local-state only — persisted by the
+   * component itself if needed ». Il ne l'etait pas. L'ecran affichait des
+   * toasts de succes et un tableau qui se remplissait, et tout disparaissait au
+   * rechargement.
+   */
+  const loadCalendar = useCallback(async (yearId: string) => {
+    setLoadingCalendar(true)
+    try {
+      const [h, e] = await Promise.all([
+        apiFetch<Holiday[]>(`/api/academic-years/${yearId}/holidays`),
+        apiFetch<SchoolEvent[]>(`/api/academic-years/${yearId}/events`),
+      ])
+      setHolidays(Array.isArray(h) ? h : [])
+      setEvents(Array.isArray(e) ? e : [])
+    } catch (err) {
+      toast({
+        title: "Erreur",
+        description: toMessage(err, "lors du chargement du calendrier"),
+        variant: "destructive",
+      })
+    } finally {
+      setLoadingCalendar(false)
+    }
+  }, [toast])
+
   const loadAttitudes = useCallback(async (yearId: string) => {
     setLoadingAttitudes(true)
     try {
@@ -327,6 +379,19 @@ function useSchoolSettings() {
   useEffect(() => {
     if (activeTab === "referentiel" && !referentielLoaded) { loadReferentiel(); setReferentielLoaded(true) }
     if (activeTab === "classes" && !classesLoaded) { loadClasses(); setClassesLoaded(true) }
+    if (activeTab === "calendar" && !calendarLoaded) {
+      setCalendarLoaded(true)
+      apiFetch<{ id?: string }>("/api/academic-years/current")
+        .then((data) => {
+          if (data?.id) {
+            setCurrentYearId(data.id)
+            loadCalendar(data.id)
+          }
+        })
+        .catch(() => {
+          // aucune annee active — l'interface le dit
+        })
+    }
     if (activeTab === "attitudes" && !attitudesLoaded) {
       setAttitudesLoaded(true)
       apiFetch<{ id?: string }>("/api/academic-years/current")
@@ -340,7 +405,7 @@ function useSchoolSettings() {
           // no current year set — handled in UI
         })
     }
-  }, [activeTab, referentielLoaded, classesLoaded, attitudesLoaded, loadReferentiel, loadClasses, loadAttitudes])
+  }, [activeTab, referentielLoaded, classesLoaded, attitudesLoaded, calendarLoaded, loadReferentiel, loadClasses, loadAttitudes, loadCalendar])
 
   useEffect(() => {
     if (activeTab !== "general" || schoolInfoLoaded) return
@@ -389,14 +454,98 @@ function useSchoolSettings() {
     }
   }
 
-  // ── Calendar (local-state only — persisted by the component itself if needed) ──
+  // ── Calendrier scolaire ────────────────────────────────────────────────────
+  //
+  // Chaque handler ecrit sur le serveur puis recharge depuis lui. Aucun
+  // `setState` optimiste : sur un ecran qui a menti pendant des mois en
+  // affichant « enregistre » sans rien enregistrer, l'etat affiche doit venir
+  // de ce que la base a reellement accepte.
 
-  const handleAddHoliday    = (d: { name: string; date: string }) => setHolidays((p) => [...p, { id: `h-${Date.now()}`, ...d }])
-  const handleEditHoliday   = (id: string, d: { name: string; date: string }) => setHolidays((p) => p.map((h) => (h.id === id ? { ...h, ...d } : h)))
-  const handleDeleteHoliday = (id: string) => setHolidays((p) => p.filter((h) => h.id !== id))
-  const handleAddEvent      = (d: { title: string; date: string; type: SchoolEvent["type"] }) => setEvents((p) => [...p, { id: `e-${Date.now()}`, ...d, academicYearId: "" }])
-  const handleEditEvent     = (id: string, d: { title: string; date: string; type: SchoolEvent["type"] }) => setEvents((p) => p.map((e) => (e.id === id ? { ...e, ...d } : e)))
-  const handleDeleteEvent   = (id: string) => setEvents((p) => p.filter((e) => e.id !== id))
+  const requireYear = (): string | null => {
+    if (!currentYearId) {
+      toast({
+        title: "Aucune année active",
+        description: "Activez une année scolaire avant de configurer son calendrier.",
+        variant: "destructive",
+      })
+      return null
+    }
+    return currentYearId
+  }
+
+  const calendarWrite = async (
+    run: () => Promise<unknown>,
+    successTitle: string,
+    context: string,
+  ) => {
+    const yearId = requireYear()
+    if (!yearId) return
+    try {
+      await run()
+      await loadCalendar(yearId)
+      toast({ title: successTitle })
+    } catch (err) {
+      toast({
+        title: "Erreur",
+        description: toMessage(err, context),
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleAddHoliday = (d: { name: string; date: string }) =>
+    calendarWrite(
+      () => apiFetch(`/api/academic-years/${currentYearId}/holidays/create`, {
+        method: "POST",
+        body: JSON.stringify(d),
+      }),
+      "Jour férié ajouté",
+      "lors de l'ajout du jour férié",
+    )
+
+  const handleEditHoliday = (id: string, d: { name: string; date: string }) =>
+    calendarWrite(
+      () => apiFetch(`/api/academic-years/holidays/update/${id}`, {
+        method: "POST",
+        body: JSON.stringify(d),
+      }),
+      "Jour férié modifié",
+      "lors de la modification du jour férié",
+    )
+
+  const handleDeleteHoliday = (id: string) =>
+    calendarWrite(
+      () => apiFetch(`/api/academic-years/holidays/delete/${id}`, { method: "POST" }),
+      "Jour férié supprimé",
+      "lors de la suppression du jour férié",
+    )
+
+  const handleAddEvent = (d: { title: string; date: string; type: SchoolEvent["type"] }) =>
+    calendarWrite(
+      () => apiFetch(`/api/academic-years/${currentYearId}/events/create`, {
+        method: "POST",
+        body: JSON.stringify(d),
+      }),
+      "Événement ajouté",
+      "lors de l'ajout de l'événement",
+    )
+
+  const handleEditEvent = (id: string, d: { title: string; date: string; type: SchoolEvent["type"] }) =>
+    calendarWrite(
+      () => apiFetch(`/api/academic-years/events/update/${id}`, {
+        method: "POST",
+        body: JSON.stringify(d),
+      }),
+      "Événement modifié",
+      "lors de la modification de l'événement",
+    )
+
+  const handleDeleteEvent = (id: string) =>
+    calendarWrite(
+      () => apiFetch(`/api/academic-years/events/delete/${id}`, { method: "POST" }),
+      "Événement supprimé",
+      "lors de la suppression de l'événement",
+    )
 
   // ── Rubric handlers ────────────────────────────────────────────────────────
 
@@ -430,7 +579,7 @@ function useSchoolSettings() {
 
   const openCreateSubject = () => {
     setEditingSubject(null)
-    setSubjectForm({ name: "", code: "", maxScore: "100", coefficient: "1", hasSections: false, rubricId: NONE_RUBRIC, classTypeId: NONE_CLASSTYPE })
+    setSubjectForm({ name: "", code: "", maxScore: "100", coefficient: "1", hasSections: false, rubricId: "", classTypeId: NONE_CLASSTYPE })
     setSubjectModal(true)
   }
   const openEditSubject = (s: Subject) => {
@@ -441,7 +590,11 @@ function useSchoolSettings() {
       maxScore: String(s.maxScore),
       coefficient: String(s.coefficient),
       hasSections: s.hasSections,
-      rubricId: s.rubricId || NONE_RUBRIC,
+      // "" et non NONE_RUBRIC : cette valeur n'est plus dans la liste, le
+      // selecteur rendrait vide et sans placeholder. Une matiere existante
+      // sans rubrique force donc desormais a en choisir une avant
+      // d'enregistrer — c'est voulu, elle n'apparait sur aucun bulletin.
+      rubricId: s.rubricId || "",
       classTypeId: s.classTypeId || NONE_CLASSTYPE,
     })
     setSubjectModal(true)
@@ -454,13 +607,30 @@ function useSchoolSettings() {
   const handleSaveSubject = async () => {
     setSubmitting(true)
     try {
+      // parseFloat lisait « 15,5 » comme 15 : un bareme tronque fausse TOUTES
+      // les moyennes qui s'appuient dessus, en silence. parseScore refuse la
+      // saisie au lieu de la tronquer.
+      const maxScore = parseScore(subjectForm.maxScore)
+      const coefficient = parseScore(subjectForm.coefficient)
+      if (maxScore === null || coefficient === null) {
+        toast({
+          title: "Valeur invalide",
+          description: "La note max et le coefficient doivent être des nombres (ex. 20 ou 7,5).",
+          variant: "destructive",
+        })
+        setSubmitting(false)
+        return
+      }
       const body = {
         name: subjectForm.name,
         code: subjectForm.code,
-        maxScore: Number.parseFloat(subjectForm.maxScore),
-        coefficient: Number.parseFloat(subjectForm.coefficient),
+        maxScore,
+        coefficient,
         hasSections: subjectForm.hasSections,
-        rubricId: subjectForm.rubricId === NONE_RUBRIC ? null : subjectForm.rubricId,
+        rubricId:
+          subjectForm.rubricId && subjectForm.rubricId !== NONE_RUBRIC
+            ? subjectForm.rubricId
+            : null,
         classTypeId: subjectForm.classTypeId === NONE_CLASSTYPE ? null : subjectForm.classTypeId,
       }
       const url = editingSubject ? `/api/subjects/update/${editingSubject.id}` : "/api/subjects/create"
@@ -524,7 +694,7 @@ function useSchoolSettings() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             name: sectionForm.name,
-            maxScore: parseFloat(sectionForm.maxScore),
+            maxScore: parseScore(sectionForm.maxScore) ?? Number.NaN,
           }),
         })
         // Cycles are stored client-side (localStorage). Persist the new list.
@@ -539,7 +709,7 @@ function useSchoolSettings() {
           body: JSON.stringify({
             name: sectionForm.name,
             code: sectionForm.code,
-            maxScore: parseFloat(sectionForm.maxScore),
+            maxScore: parseScore(sectionForm.maxScore) ?? Number.NaN,
             displayOrder: (parent?.sections?.length || 0) + 1,
           }),
         })
@@ -766,7 +936,7 @@ function SectionCard({
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle className="flex items-center gap-2 text-base font-semibold">
-              {Icon && <Icon className="h-4 w-4 text-[#2C4A6E]" />}
+              {Icon && <Icon className="h-4 w-4 text-primary" />}
               {title}
             </CardTitle>
             {description && <CardDescription className="mt-0.5">{description}</CardDescription>}
@@ -846,6 +1016,10 @@ function ReferentielTab({
   onToggleExpand, onOpenImport,
 }: ReferentielTabProps) {
   const [sort, setSort] = useState<TableSort | null>(null)
+  const [page, setPage] = useState(1)
+  // Changer le tri reordonne tout : rester page 4 ferait reprendre la lecture
+  // au milieu d'un classement qu'on vient de demander.
+  const handleSort = (next: TableSort | null) => { setSort(next); setPage(1) }
   const sortedSubjects = useMemo(() => {
     if (!sort) return subjects
     const val = (s: Subject) => {
@@ -865,6 +1039,17 @@ function ReferentielTab({
     })
   }, [subjects, sort])
 
+  // Pagination du referentiel : 162 matieres empilees faisaient 8708 px, soit
+  // pres de dix ecrans de defilement pour retrouver une ligne et corriger un
+  // bareme. La page effective est bornee ici plutot que corrigee apres coup :
+  // un tri qui reduit la liste ne peut pas laisser l'affichage sur une page
+  // vide.
+  const SUBJECTS_PER_PAGE = 25
+  const pageCount = Math.max(1, Math.ceil(sortedSubjects.length / SUBJECTS_PER_PAGE))
+  const currentPage = Math.min(page, pageCount)
+  const rangeStart = (currentPage - 1) * SUBJECTS_PER_PAGE
+  const pagedSubjects = sortedSubjects.slice(rangeStart, rangeStart + SUBJECTS_PER_PAGE)
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -878,7 +1063,7 @@ function ReferentielTab({
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/30 px-4 py-3">
         <div className="flex items-start gap-2">
-          <UploadCloudIcon className="mt-0.5 h-4 w-4 flex-shrink-0 text-[#2C4A6E]" />
+          <UploadCloudIcon className="mt-0.5 h-4 w-4 flex-shrink-0 text-primary" />
           <div>
             <p className="text-sm font-medium text-foreground">Import en masse (CSV)</p>
             <p className="text-xs text-muted-foreground">
@@ -886,7 +1071,7 @@ function ReferentielTab({
             </p>
           </div>
         </div>
-        <Button size="sm" onClick={onOpenImport} className="bg-[#2C4A6E] text-white hover:bg-[#1F3856]">
+        <Button size="sm" onClick={onOpenImport} className="">
           <UploadCloudIcon className="mr-2 h-4 w-4" />
           Importer CSV
         </Button>
@@ -902,7 +1087,7 @@ function ReferentielTab({
             onClick={onCreateRubric}
             disabled={rubrics.length >= 3}
             title={rubrics.length >= 3 ? "Maximum 3 rubriques" : undefined}
-            className="bg-[#2C4A6E] text-white hover:bg-[#1F3856]"
+            className=""
           >
             <PlusIcon className="mr-2 h-4 w-4" />
             Nouvelle rubrique
@@ -956,7 +1141,7 @@ function ReferentielTab({
             onClick={onCreateSubject}
             disabled={rubrics.length === 0}
             title={rubrics.length === 0 ? "Créez d'abord les rubriques" : undefined}
-            className="bg-[#2C4A6E] text-white hover:bg-[#1F3856]"
+            className=""
           >
             <PlusIcon className="mr-2 h-4 w-4" />
             Nouvelle matière
@@ -972,16 +1157,16 @@ function ReferentielTab({
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead className="w-[40px] pl-6"></TableHead>
-                <SortHead label="Code" col="code" sort={sort} setter={setSort} />
-                <SortHead label="Nom" col="nom" sort={sort} setter={setSort} />
-                <SortHead label="Niveau" col="niveau" sort={sort} setter={setSort} />
-                <SortHead label="Rubrique" col="rubrique" sort={sort} setter={setSort} />
-                <SortHead label="Note max" col="maxScore" sort={sort} setter={setSort} align="right" />
+                <SortHead label="Code" col="code" sort={sort} setter={handleSort} />
+                <SortHead label="Nom" col="nom" sort={sort} setter={handleSort} />
+                <SortHead label="Niveau" col="niveau" sort={sort} setter={handleSort} />
+                <SortHead label="Rubrique" col="rubrique" sort={sort} setter={handleSort} />
+                <SortHead label="Note max" col="maxScore" sort={sort} setter={handleSort} align="right" />
                 <TableHead className="pr-6 text-right font-semibold">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sortedSubjects.map((subject) => {
+              {pagedSubjects.map((subject) => {
                 const isExpanded = expandedSubjects.has(subject.id)
                 return (
                   <React.Fragment key={subject.id}>
@@ -1100,6 +1285,16 @@ function ReferentielTab({
             </TableBody>
           </Table>
         )}
+        <Pagination
+          page={currentPage}
+          pageCount={pageCount}
+          onPageChange={setPage}
+          rangeStart={rangeStart + 1}
+          rangeEnd={rangeStart + pagedSubjects.length}
+          total={sortedSubjects.length}
+          label="Pagination du référentiel des matières"
+          unit="matières"
+        />
       </SectionCard>
     </div>
   )
@@ -1133,7 +1328,7 @@ function ClassesTab({
             size="sm"
             onClick={onInitialize}
             disabled={initializing}
-            className="bg-[#2C4A6E] text-white hover:bg-[#1F3856]"
+            className=""
           >
             <ZapIcon className="mr-2 h-4 w-4" />
             {initializing ? "Initialisation..." : "Initialiser niveaux & classes"}
@@ -1155,7 +1350,7 @@ function ClassesTab({
           <Button
             onClick={onInitialize}
             disabled={initializing}
-            className="mt-4 bg-[#2C4A6E] text-white hover:bg-[#1F3856]"
+            className="mt-4 "
           >
             <ZapIcon className="mr-2 h-4 w-4" />
             {initializing ? "Initialisation en cours..." : "Initialiser niveaux & classes"}
@@ -1247,7 +1442,7 @@ function AttitudesTab({
           onClick={onCreateAttitude}
           disabled={!currentYearId}
           title={!currentYearId ? "Aucune année active" : undefined}
-          className="bg-[#2C4A6E] text-white hover:bg-[#1F3856]"
+          className=""
         >
           <PlusIcon className="mr-2 h-4 w-4" />
           Nouvelle attitude
@@ -1266,7 +1461,7 @@ function AttitudesTab({
           </p>
           <Button
             onClick={onCreateAttitude}
-            className="mt-4 bg-[#2C4A6E] text-white hover:bg-[#1F3856]"
+            className="mt-4 "
           >
             <PlusIcon className="mr-2 h-4 w-4" />
             Créer la première attitude
@@ -1373,7 +1568,7 @@ function RubricModal({ open, onOpenChange, form, onChange, editing, submitting, 
           <Button
             onClick={onSave}
             disabled={submitting || !form.name || !form.code}
-            className="bg-[#2C4A6E] text-white hover:bg-[#1F3856]"
+            className=""
           >
             {submitting ? "En cours..." : editing ? "Enregistrer" : "Créer"}
           </Button>
@@ -1434,7 +1629,10 @@ function SubjectModal({ open, onOpenChange, form, onChange, onNameChange, rubric
                 <SelectValue placeholder="Sélectionner une rubrique" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={NONE_RUBRIC}>Aucune</SelectItem>
+                {/* Pas d'entree « Aucune » : une matiere sans rubrique ne
+                    tombe dans aucun des trois seaux 70/25/5 et disparait de la
+                    moyenne imprimee, sans erreur ni alerte. CLAUDE.md : « Chaque
+                    matiere est rattachee a une rubrique R1, R2 ou R3. » */}
                 {rubrics.map((r) => (
                   <SelectItem key={r.id} value={r.id}>
                     {r.code} — {r.name}
@@ -1493,8 +1691,16 @@ function SubjectModal({ open, onOpenChange, form, onChange, onNameChange, rubric
           </Button>
           <Button
             onClick={onSave}
-            disabled={submitting || !form.name || !form.code || !form.classTypeId || form.classTypeId === NONE_CLASSTYPE}
-            className="bg-[#2C4A6E] text-white hover:bg-[#1F3856]"
+            disabled={
+              submitting ||
+              !form.name ||
+              !form.code ||
+              !form.rubricId ||
+              form.rubricId === NONE_RUBRIC ||
+              !form.classTypeId ||
+              form.classTypeId === NONE_CLASSTYPE
+            }
+            className=""
           >
             {submitting ? "En cours..." : editing ? "Enregistrer" : "Créer"}
           </Button>
@@ -1569,7 +1775,7 @@ function SectionModal({ open, onOpenChange, form, onChange, onNameChange, onTogg
                     className={cn(
                       "flex cursor-pointer items-center gap-3 px-3 py-2.5 transition-colors",
                       i > 0 && "border-t",
-                      isChecked ? "bg-[#F0F4F7]" : "hover:bg-muted/30"
+                      isChecked ? "bg-primary/5" : "hover:bg-muted/30"
                     )}
                   >
                     <Checkbox
@@ -1598,7 +1804,7 @@ function SectionModal({ open, onOpenChange, form, onChange, onNameChange, onTogg
           <Button
             onClick={onSave}
             disabled={submitting || !form.name || !form.code}
-            className="bg-[#2C4A6E] text-white hover:bg-[#1F3856]"
+            className=""
           >
             {submitting ? "En cours..." : editing ? "Enregistrer" : "Créer"}
           </Button>
@@ -1648,7 +1854,7 @@ function AttitudeModal({ open, onOpenChange, label, onLabelChange, editing, subm
           <Button
             onClick={onSave}
             disabled={submitting || !label.trim()}
-            className="bg-[#2C4A6E] text-white hover:bg-[#1F3856]"
+            className=""
           >
             {submitting ? "En cours..." : editing ? "Enregistrer" : "Créer"}
           </Button>
@@ -1693,7 +1899,7 @@ function ClassModal({ open, onOpenChange, form, onChange, editing, submitting, o
           <Button
             onClick={onSave}
             disabled={submitting}
-            className="bg-[#2C4A6E] text-white hover:bg-[#1F3856]"
+            className=""
           >
             {submitting ? "En cours..." : "Enregistrer"}
           </Button>

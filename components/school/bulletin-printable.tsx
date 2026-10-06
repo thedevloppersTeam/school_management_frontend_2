@@ -862,12 +862,12 @@ export function BulletinPrintable({
                 />
                 <MoyLine
                   label="Moyenne sur 10"
-                  value={formatBulletinNumber(data.moyR1)}
+                  value={data.moyR1Texte ?? formatBulletinNumber(data.moyR1)}
                   valueTone={colorClass(data.moyR1, 10)}
                 />
                 <MoyLine
                   label="Moyenne classe sur 10"
-                  value={formatBulletinNumber(data.moyClasseR1)}
+                  value={data.moyClasseR1Texte ?? formatBulletinNumber(data.moyClasseR1)}
                   valueTone={colorClass(data.moyClasseR1, 10)}
                   variant="class"
                 />
@@ -884,12 +884,12 @@ export function BulletinPrintable({
                 />
                 <MoyLine
                   label="Moyenne sur 10"
-                  value={formatBulletinNumber(data.moyR2)}
+                  value={data.moyR2Texte ?? formatBulletinNumber(data.moyR2)}
                   valueTone={colorClass(data.moyR2, 10)}
                 />
                 <MoyLine
                   label="Moyenne classe sur 10"
-                  value={formatBulletinNumber(data.moyClasseR2)}
+                  value={data.moyClasseR2Texte ?? formatBulletinNumber(data.moyClasseR2)}
                   valueTone={colorClass(data.moyClasseR2, 10)}
                   variant="class"
                 />
@@ -934,12 +934,12 @@ export function BulletinPrintable({
                 />
                 <MoyLine
                   label="Moyenne sur 10"
-                  value={formatBulletinNumber(data.moyR3)}
+                  value={data.moyR3Texte ?? formatBulletinNumber(data.moyR3)}
                   valueTone={colorClass(data.moyR3, 10)}
                 />
                 <MoyLine
                   label="Moyenne classe sur 10"
-                  value={formatBulletinNumber(data.moyClasseR3)}
+                  value={data.moyClasseR3Texte ?? formatBulletinNumber(data.moyClasseR3)}
                   valueTone={colorClass(data.moyClasseR3, 10)}
                   variant="class"
                 />

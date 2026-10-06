@@ -4,6 +4,7 @@ import {
   computeRubrique,
   computeStep,
   computeStepAverage,
+  stepAverageOrNull,
   computeClassAverage,
   type RubriqueCode,
   type RubriqueResult,
@@ -21,6 +22,21 @@ export type BulletinAverages = {
   moyR3: number | null
   moyenneEtape: number | null
   appreciation: string
+  /**
+   * Les MEMES valeurs, jamais passees par un flottant.
+   *
+   * Les champs `number` ci-dessus restent : ils alimentent la teinte
+   * (`colorClass`), qui compare des nombres. Le TEXTE imprime, lui, se formate
+   * a partir d'ici. Un double ne represente pas exactement un demi-centieme :
+   * 6,425 exact devient 6,4249999999999998224, et `toFixed(2)` imprime alors
+   * « 6,42 » au lieu de « 6,43 ».
+   */
+  exact: {
+    moyR1: Decimal | null
+    moyR2: Decimal | null
+    moyR3: Decimal | null
+    moyenneEtape: Decimal | null
+  }
 }
 
 export type BulletinClassAverages = {
@@ -28,6 +44,13 @@ export type BulletinClassAverages = {
   moyClasseR2: number | null
   moyClasseR3: number | null
   moyenneClasseEtape: number | null
+  /** Idem : le texte imprime se formate d'ici, la teinte lit les `number`. */
+  exact: {
+    moyClasseR1: Decimal | null
+    moyClasseR2: Decimal | null
+    moyClasseR3: Decimal | null
+    moyenneClasseEtape: Decimal | null
+  }
 }
 
 /**
@@ -144,17 +167,25 @@ export function calculateBulletinAverages(subjects: SubjectInput[]): BulletinAve
   const moyR3 = step.r3.average === null ? null : step.r3.average.toNumber()
 
   // Rien d'exploitable dans les trois rubriques : pas de moyenne, un trait.
-  // Distinct d'une moyenne de 0, qui est un vrai résultat.
-  const moyenneEtape =
-    moyR1 === null && moyR2 === null && moyR3 === null
-      ? null
-      : step.average.toNumber()
+  // Distinct d'une moyenne de 0, qui est un vrai résultat. La règle vit
+  // maintenant dans `stepAverageOrNull`, avec le calcul.
+  const etapeExacte = stepAverageOrNull(step)
+  const moyenneEtape = etapeExacte === null ? null : etapeExacte.toNumber()
 
   return {
     moyR1,
     moyR2,
     moyR3,
     moyenneEtape,
+    exact: {
+      moyR1: step.r1.average,
+      moyR2: step.r2.average,
+      moyR3: step.r3.average,
+      moyenneEtape: etapeExacte,
+    },
+    // L'appréciation lettrée continue de lire le `number`. Elle compare à des
+    // seuils (9,00 · 8,50 · 7,80 …) et n'est PAS dans le périmètre de cet
+    // alignement : la déplacer ferait bouger une mention, pas un affichage.
     appreciation: getBulletinAppreciation(moyenneEtape),
   }
 }
@@ -166,20 +197,31 @@ export function calculateBulletinAverages(subjects: SubjectInput[]): BulletinAve
  * éventuellement 0, et reste compté. Sur 30 élèves dont 3 dispensés, la
  * moyenne porte sur 27.
  */
-function classAverageOf(values: Array<number | null | undefined>): number | null {
-  const entries = values.map((value) => ({
-    average: value === null || value === undefined ? null : new Decimal(value),
-  }))
-  const result = computeClassAverage(entries)
-  return result === null ? null : result.toNumber()
+function classAverageOf(values: Array<Decimal | null>): Decimal | null {
+  return computeClassAverage(values.map((average) => ({ average })))
 }
 
 export function calculateClassAverages(averages: BulletinAverages[]): BulletinClassAverages {
+  // Les valeurs entrent en Decimal. Elles faisaient auparavant un aller-retour
+  // `Decimal -> number -> Decimal` avant d'etre moyennees, puis un dernier
+  // `toNumber()` en sortie : trois conversions pour une moyenne.
+  const r1 = classAverageOf(averages.map((avg) => avg.exact.moyR1))
+  const r2 = classAverageOf(averages.map((avg) => avg.exact.moyR2))
+  const r3 = classAverageOf(averages.map((avg) => avg.exact.moyR3))
+  const etape = classAverageOf(averages.map((avg) => avg.exact.moyenneEtape))
+  const n = (d: Decimal | null) => (d === null ? null : d.toNumber())
+
   return {
-    moyClasseR1: classAverageOf(averages.map((avg) => avg.moyR1)),
-    moyClasseR2: classAverageOf(averages.map((avg) => avg.moyR2)),
-    moyClasseR3: classAverageOf(averages.map((avg) => avg.moyR3)),
-    moyenneClasseEtape: classAverageOf(averages.map((avg) => avg.moyenneEtape)),
+    moyClasseR1: n(r1),
+    moyClasseR2: n(r2),
+    moyClasseR3: n(r3),
+    moyenneClasseEtape: n(etape),
+    exact: {
+      moyClasseR1: r1,
+      moyClasseR2: r2,
+      moyClasseR3: r3,
+      moyenneClasseEtape: etape,
+    },
   }
 }
 

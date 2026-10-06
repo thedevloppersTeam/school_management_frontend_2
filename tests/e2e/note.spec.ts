@@ -1,6 +1,14 @@
 import { test, expect } from '@playwright/test';
 import { setupJeuEssai, loginAsAdmin } from '../fixtures/jeu-essai';
 
+// Les cellules de note de la grille. Elles etaient ciblees par
+// getByRole('spinbutton'), un role reserve a <input type="number"> ; la grille
+// est passee en type="text" inputMode="decimal" pour que la virgule du pave
+// numerique cesse d'etre mangee par la sanitisation du navigateur.
+// getByRole('textbox') ne conviendrait PAS : il attraperait aussi le champ de
+// recherche, qui precede le tableau dans le DOM.
+const NOTE_CELL = 'input[data-grid-row]';
+
 // Helper: naviguer vers la page de saisie des notes de l'annee active
 async function goToGradesPage(page: any) {
   // Utiliser le lien sidebar "Notes" qui pointe vers l'annee active
@@ -58,7 +66,7 @@ test.describe('Module NOTE — Saisie et validation des notes', () => {
     await selectGradeContext(page);
 
     // Etape 3: Saisir les notes suivantes pour les eleves : 7.00, 8.25, 9.50
-    const noteInputs = page.getByRole('spinbutton');
+    const noteInputs = page.locator(NOTE_CELL);
     const count = await noteInputs.count();
 
     if (count >= 1) {
@@ -90,7 +98,7 @@ test.describe('Module NOTE — Saisie et validation des notes', () => {
     await selectGradeContext(page);
 
     // Etape 2: Tenter de saisir la note 7.10 (pas multiple de 0,25)
-    const noteInputs = page.getByRole('spinbutton');
+    const noteInputs = page.locator(NOTE_CELL);
     await noteInputs.first().fill('7.10');
 
     // Cliquer ailleurs pour declencher la validation
@@ -114,7 +122,7 @@ test.describe('Module NOTE — Saisie et validation des notes', () => {
     await selectGradeContext(page);
 
     // Etape 2: Tenter de saisir la note 11 (hors plage)
-    const noteInputs = page.getByRole('spinbutton');
+    const noteInputs = page.locator(NOTE_CELL);
     await noteInputs.first().fill('11');
 
     // Cliquer ailleurs pour declencher la validation
@@ -138,7 +146,7 @@ test.describe('Module NOTE — Saisie et validation des notes', () => {
     await selectGradeContext(page);
 
     // Etape 2: Saisir 8.00 pour tous les eleves visibles
-    const noteInputs = page.getByRole('spinbutton');
+    const noteInputs = page.locator(NOTE_CELL);
     const count = await noteInputs.count();
     for (let i = 0; i < count; i++) {
       await noteInputs.nth(i).fill('8.00');
@@ -199,7 +207,7 @@ test.describe('Module NOTE — Saisie et validation des notes', () => {
     await selectGradeContext(page);
 
     // Etape 2: Saisir des notes pour seulement 3 eleves
-    const noteInputs = page.getByRole('spinbutton');
+    const noteInputs = page.locator(NOTE_CELL);
     const count = await noteInputs.count();
     for (let i = 0; i < Math.min(3, count); i++) {
       await noteInputs.nth(i).fill('7.00');

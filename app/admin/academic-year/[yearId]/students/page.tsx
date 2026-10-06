@@ -52,7 +52,6 @@ import {
   ArrowDownIcon,
   MoreHorizontalIcon,
   PencilIcon,
-  ArrowRightLeftIcon,
   UserRoundXIcon,
   UserRoundCheckIcon,
   GraduationCapIcon,
@@ -61,11 +60,10 @@ import {
 import { ArchivedYearBanner } from "@/components/school/archived-year-banner"
 import { StudentEnrollForm } from "@/components/school/students/student-enroll-form"
 import { EditStudentModal, type EditStudentData } from "@/components/school/edit-student-modal"
-import { TransferEnrollmentModal } from "@/components/school/transfer-enrollment-modal"
-import { BulkTransferModal } from "@/components/school/bulk-transfer-modal"
 import { StepExemptionModal } from "@/components/school/step-exemption-modal"
 import { StudentTrackModal } from "@/components/school/student-track-modal"
 import { CorrectAssignmentModal } from "@/components/school/correct-assignment-modal"
+import { CorrectAssignmentBatchModal } from "@/components/school/correct-assignment-batch-modal"
 import { Checkbox } from "@/components/ui/checkbox"
 import { StatCard } from "@/components/school/stat-card"
 import { fetchClassSessions, type AcademicYear, type ClassSession } from "@/lib/api/dashboard"
@@ -155,18 +153,18 @@ export default function StudentsManagementPage() {
   const [itemsPerPage, setItemsPerPage] = useState(15)
   const PAGE_SIZE_OPTIONS = [15, 25, 50, 100]
 
-  // Désactivation
-  const [deactivatingId, setDeactivatingId] = useState<string | null>(null)
-  const [deactivationReason, setDeactivationReason] = useState("")
-  const [deactivating, setDeactivating] = useState(false)
+  // Départ / annulation du départ. Un seul état pour les deux sens : ils
+  // appellent le même endpoint, exigent le même motif, et ne diffèrent que
+  // par le statut visé et les libellés.
+  const [movement, setMovement] = useState<{ enrollmentId: string; to: 'DROPPED' | 'ACTIVE' } | null>(null)
+  const [movementReason, setMovementReason] = useState("")
+  const [movementSubmitting, setMovementSubmitting] = useState(false)
 
   // Modification profil
   const [editingStudent, setEditingStudent]     = useState<StudentRow | null>(null)
   const [editSubmitting, setEditSubmitting]     = useState(false)
 
   // Transfert
-  const [transferringStudent, setTransferringStudent] = useState<StudentRow | null>(null)
-  const [transferSubmitting, setTransferSubmitting]   = useState(false)
 
   // Dispense d'étape
   const [exemptingStudent, setExemptingStudent] = useState<StudentRow | null>(null)
@@ -177,10 +175,9 @@ export default function StudentsManagementPage() {
   // Correction d affectation (erreur de saisie a l inscription, pas un transfert)
   const [correctingStudent, setCorrectingStudent] = useState<StudentRow | null>(null)
 
-  // Transfert groupé
+  // Sélection multiple
   const [selectedEnrollmentIds, setSelectedEnrollmentIds] = useState<Set<string>>(new Set())
-  const [bulkTransferOpen, setBulkTransferOpen] = useState(false)
-  const [bulkSubmitting, setBulkSubmitting] = useState(false)
+  const [bulkCorrectOpen, setBulkCorrectOpen] = useState(false)
 
   // Tri
   type SortCol = 'nisu' | 'name' | 'class'
@@ -223,10 +220,15 @@ export default function StudentsManagementPage() {
               parentsEmail?: string
               user?: { firstname?: string; lastname?: string; profilePhoto?: string; birthDate?: string; email?: string }
             }
-          }>>(`/api/enrollments?classSessionId=${session.id}`)
+            // includeTransferred : cet ecran est un affichage d'historique, pas
+            // un calcul. Il compte les eleves « inactifs » d'une annee et les
+            // liste quand on ouvre la bascule, donc il veut toutes les
+            // situations. /api/enrollments retire desormais les inscriptions
+            // TRANSFERRED par defaut ; on les redemande ici explicitement pour
+            // que ce compteur ne change pas de valeur.
+          }>>(`/api/enrollments?classSessionId=${session.id}&includeTransferred=true`)
 
-                    const trackSuffix = session.class.track ? ` — ${session.class.track.code}` : ''
-          const className = `${session.class.classType.name} ${session.class.letter}${trackSuffix}`
+                  const className = `${session.class.classType.name} ${session.class.letter}`
 
           enrollments.forEach(enr => {
             allEnrollments.push({
@@ -309,10 +311,9 @@ export default function StudentsManagementPage() {
   const paginated         = displayed.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
   // Liste des classes dérivée des sessions (pas des élèves) : une salle
   // nouvellement créée et encore vide doit apparaître dans le filtre.
-  const uniqueClasses     = [...new Set(sessions.map(s => {
-    const trackSuffix = s.class.track ? ` — ${s.class.track.code}` : ''
-    return `${s.class.classType.name} ${s.class.letter}${trackSuffix}`
-  }))].sort((a, b) => a.localeCompare(b))
+  const uniqueClasses     = [...new Set(
+    sessions.map(s => `${s.class.classType.name} ${s.class.letter}`)
+  )].sort((a, b) => a.localeCompare(b))
 
   // ── Tri ──────────────────────────────────────────────────────────────────────
   const handleSort = (col: SortCol) => {
@@ -334,41 +335,40 @@ export default function StudentsManagementPage() {
       : <ArrowDownIcon className="h-3 w-3 inline ml-1" />
   }
 
-  // ── Désactivation ─────────────────────────────────────────────────────────────
-  const handleDeactivate = async () => {
-    if (!deactivatingId) return
-    setDeactivating(true)
+  // ── Départ et annulation du départ ───────────────────────────────────────────
+  // Les deux sens passent par le même modal : le backend journalise le geste
+  // et refuse un motif vide (400), donc l'annulation ne peut plus être un
+  // simple clic dans le menu.
+  const handleMovement = async () => {
+    if (!movement) return
+    const reason = movementReason.trim()
+    if (!reason) return
+    setMovementSubmitting(true)
     try {
-      const res = await fetch(`/api/enrollments/status-update/${deactivatingId}`, {
+      const res = await fetch(`/api/enrollments/status-update/${movement.enrollmentId}`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'DROPPED', notes: deactivationReason || undefined })
+        body: JSON.stringify({ status: movement.to, reason })
       })
-      if (!res.ok) throw new Error()
-      toast({ title: "Élève désactivé" })
-      setDeactivatingId(null)
+      const payload = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(payload?.message || undefined)
+      toast({ title: movement.to === 'DROPPED' ? "Départ enregistré" : "Départ annulé" })
+      setMovement(null)
       loadStudents()
-    } catch {
-      toast({ title: "Erreur", description: "Impossible de désactiver l'élève", variant: "destructive" })
+    } catch (err) {
+      toast({
+        title: "Erreur",
+        description:
+          err instanceof Error && err.message
+            ? err.message
+            : movement.to === 'DROPPED'
+              ? "Impossible d'enregistrer le départ"
+              : "Impossible d'annuler le départ",
+        variant: "destructive",
+      })
     } finally {
-      setDeactivating(false)
-    }
-  }
-
-  const handleReactivate = async (enrollmentId: string) => {
-    try {
-      const res = await fetch(`/api/enrollments/status-update/${enrollmentId}`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'ACTIVE' })
-      })
-      if (!res.ok) throw new Error()
-      toast({ title: "Élève réactivé" })
-      loadStudents()
-    } catch {
-      toast({ title: "Erreur", variant: "destructive" })
+      setMovementSubmitting(false)
     }
   }
 
@@ -404,45 +404,7 @@ export default function StudentsManagementPage() {
     }
   }
 
-  // ── Transfert ──────────────────────────────────────────────────────────────
-  const handleTransfer = async (data: { newClassSessionId: string; notes?: string; migrateGrades?: boolean }) => {
-    if (!transferringStudent) return
-    setTransferSubmitting(true)
-    try {
-      const res = await fetch('/api/enrollments/transfer', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          enrollmentId: transferringStudent.enrollmentId,
-          newClassSessionId: data.newClassSessionId,
-          notes: data.notes,
-          migrateGrades: data.migrateGrades ?? false,
-        }),
-      })
-      const payload = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(payload.message)
-      const m = payload.migration
-      toast({
-        title: "Élève transféré avec succès",
-        description: m
-          ? `${m.grades} note${m.grades > 1 ? 's' : ''}, ${m.behaviors} comportement${m.behaviors > 1 ? 's' : ''} et ${m.exclusions} dispense${m.exclusions > 1 ? 's' : ''} migrés vers la nouvelle classe`
-          : undefined,
-      })
-      setTransferringStudent(null)
-      loadStudents()
-    } catch (err) {
-      toast({
-        title: "Erreur",
-        description: err instanceof Error && err.message ? err.message : "Impossible de transférer l'élève",
-        variant: "destructive",
-      })
-    } finally {
-      setTransferSubmitting(false)
-    }
-  }
-
-  // ── Transfert groupé ─────────────────────────────────────────────────────────
+  // ── Sélection multiple ───────────────────────────────────────────────────────
   const toggleSelected = (enrollmentId: string) => {
     setSelectedEnrollmentIds(prev => {
       const next = new Set(prev)
@@ -466,58 +428,6 @@ export default function StudentsManagementPage() {
   }
 
   const selectedStudents = students.filter(s => selectedEnrollmentIds.has(s.enrollmentId))
-
-  const handleBulkTransfer = async (data: { newClassSessionId: string; notes?: string; migrateGrades: boolean }) => {
-    setBulkSubmitting(true)
-    // Les élèves déjà dans la salle cible sont ignorés (le modal les signale)
-    const toTransfer = selectedStudents.filter(s => s.classSessionId !== data.newClassSessionId)
-    let ok = 0
-    let grades = 0, behaviors = 0, exclusions = 0
-    const errors: string[] = []
-    // Séquentiel : le contrôle de capacité de la salle cible reste fiable
-    for (const s of toTransfer) {
-      try {
-        const res = await fetch('/api/enrollments/transfer', {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            enrollmentId: s.enrollmentId,
-            newClassSessionId: data.newClassSessionId,
-            notes: data.notes,
-            migrateGrades: data.migrateGrades,
-          }),
-        })
-        const payload = await res.json().catch(() => ({}))
-        if (!res.ok) throw new Error(payload.message)
-        ok++
-        if (payload.migration) {
-          grades += payload.migration.grades ?? 0
-          behaviors += payload.migration.behaviors ?? 0
-          exclusions += payload.migration.exclusions ?? 0
-        }
-      } catch (err) {
-        errors.push(`${s.firstname} ${s.lastname}${err instanceof Error && err.message ? ` (${err.message})` : ''}`)
-      }
-    }
-    const failed = errors.length
-    toast({
-      title: failed === 0
-        ? `${ok} élève${ok > 1 ? 's' : ''} transféré${ok > 1 ? 's' : ''} avec succès`
-        : `${ok} transféré${ok > 1 ? 's' : ''}, ${failed} échec${failed > 1 ? 's' : ''}`,
-      description: [
-        data.migrateGrades && ok > 0
-          ? `${grades} note${grades > 1 ? 's' : ''}, ${behaviors} comportement${behaviors > 1 ? 's' : ''} et ${exclusions} dispense${exclusions > 1 ? 's' : ''} migrés`
-          : null,
-        failed > 0 ? `Échecs : ${errors.slice(0, 3).join(', ')}${errors.length > 3 ? '…' : ''}` : null,
-      ].filter(Boolean).join(' — ') || undefined,
-      variant: failed > 0 ? "destructive" : undefined,
-    })
-    setBulkSubmitting(false)
-    setBulkTransferOpen(false)
-    setSelectedEnrollmentIds(new Set())
-    loadStudents()
-  }
 
   // ── Rendu ─────────────────────────────────────────────────────────────────────
   if (loading) {
@@ -667,7 +577,7 @@ export default function StudentsManagementPage() {
           </div>
         </div>
 
-        {/* Barre d'action — transfert groupé */}
+        {/* Barre d'action — correction d'affectation en lot */}
         {!isArchived && selectedEnrollmentIds.size > 0 && (
           <div className="flex flex-col gap-2 border-t bg-primary/5 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
             <span className="text-sm font-medium text-foreground">
@@ -681,9 +591,9 @@ export default function StudentsManagementPage() {
               >
                 Tout désélectionner
               </Button>
-              <Button size="sm" onClick={() => setBulkTransferOpen(true)}>
-                <ArrowRightLeftIcon className="mr-2 h-4 w-4" />
-                Transférer la sélection
+              <Button size="sm" onClick={() => setBulkCorrectOpen(true)}>
+                <PencilIcon className="mr-2 h-4 w-4" />
+                Corriger l&apos;affectation
               </Button>
             </div>
           </div>
@@ -833,21 +743,20 @@ export default function StudentsManagementPage() {
                               <DropdownMenuSeparator />
                               {isInactive ? (
                                 <DropdownMenuItem
-                                  onClick={() => handleReactivate(student.enrollmentId)}
+                                  onClick={() => {
+                                    setMovement({ enrollmentId: student.enrollmentId, to: 'ACTIVE' })
+                                    setMovementReason('')
+                                  }}
                                   className="text-success-ink focus:text-success-ink"
                                 >
                                   <UserRoundCheckIcon className="mr-2 h-4 w-4" />
-                                  Réactiver
+                                  Annuler le départ
                                 </DropdownMenuItem>
                               ) : (
                                 <>
                                   <DropdownMenuItem onClick={() => setEditingStudent(student)}>
                                     <PencilIcon className="mr-2 h-4 w-4" />
-                                    Modifier
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => setTransferringStudent(student)}>
-                                    <ArrowRightLeftIcon className="mr-2 h-4 w-4" />
-                                    Transférer
+                                    Modifier le profil
                                   </DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => setCorrectingStudent(student)}>
                                     <WrenchIcon className="mr-2 h-4 w-4" />
@@ -865,11 +774,14 @@ export default function StudentsManagementPage() {
                                   </DropdownMenuItem>
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem
-                                    onClick={() => { setDeactivatingId(student.enrollmentId); setDeactivationReason('') }}
+                                    onClick={() => {
+                                      setMovement({ enrollmentId: student.enrollmentId, to: 'DROPPED' })
+                                      setMovementReason('')
+                                    }}
                                     className="text-destructive focus:text-destructive"
                                   >
                                     <UserRoundXIcon className="mr-2 h-4 w-4" />
-                                    Désactiver
+                                    Enregistrer un départ
                                   </DropdownMenuItem>
                                 </>
                               )}
@@ -970,33 +882,64 @@ export default function StudentsManagementPage() {
         )}
       </Card>
 
-      {/* ── Modal désactivation ── */}
-      <Dialog open={!!deactivatingId} onOpenChange={open => !open && setDeactivatingId(null)}>
+      {/* ── Modal départ / annulation du départ ── */}
+      <Dialog open={!!movement} onOpenChange={open => !open && setMovement(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Désactiver cet élève</DialogTitle>
+            <DialogTitle>
+              {movement?.to === 'ACTIVE'
+                ? "Annuler le départ de cet élève"
+                : "Enregistrer le départ de cet élève"}
+            </DialogTitle>
             <DialogDescription>
-              L'élève ne sera plus visible dans les listes actives. Cette action est réversible —
-              vous pouvez réactiver l'élève à tout moment.
+              {movement?.to === 'ACTIVE' ? (
+                <>
+                  L&apos;élève redevient actif : il réapparaît dans les listes et compte de
+                  nouveau dans les effectifs. Le motif porte la seule distinction que le
+                  bouton ne peut pas dire — un départ saisi par erreur, ou un élève
+                  réellement revenu.
+                </>
+              ) : (
+                <>
+                  L&apos;élève ne sera plus visible dans les listes actives, et ne comptera
+                  plus dans les effectifs. Son inscription et ses notes sont conservées.
+                  L&apos;action se défait par &laquo;&nbsp;Annuler le départ&nbsp;&raquo;.
+                </>
+              )}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 py-2">
-            <Label htmlFor="deactivation-reason" className="text-sm font-medium">
-              Raison (optionnelle)
+            <Label htmlFor="movement-reason" className="text-sm font-medium">
+              Motif <span className="text-destructive">*</span>
             </Label>
             <Input
-              id="deactivation-reason"
-              placeholder="Ex: Déménagement, transfert..."
-              value={deactivationReason}
-              onChange={e => setDeactivationReason(e.target.value)}
+              id="movement-reason"
+              placeholder={
+                movement?.to === 'ACTIVE'
+                  ? "Ex : départ saisi par erreur — ou élève de retour depuis le 12 janvier"
+                  : "Ex : déménagement, transfert vers une autre école"
+              }
+              value={movementReason}
+              onChange={e => setMovementReason(e.target.value)}
             />
+            <p className="text-xs text-muted-foreground">
+              Consigné au journal d&apos;audit, avec votre nom et la date.
+            </p>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeactivatingId(null)}>
+            <Button variant="outline" onClick={() => setMovement(null)}>
               Annuler
             </Button>
-            <Button variant="destructive" onClick={handleDeactivate} disabled={deactivating}>
-              {deactivating ? 'En cours...' : 'Confirmer la désactivation'}
+            <Button
+              variant={movement?.to === 'ACTIVE' ? 'default' : 'destructive'}
+              onClick={handleMovement}
+              disabled={movementSubmitting || movementReason.trim().length === 0}
+            >
+              {movementSubmitting
+                ? 'Enregistrement…'
+                : movement?.to === 'ACTIVE'
+                  ? 'Annuler le départ'
+                  : 'Enregistrer le départ'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1027,29 +970,6 @@ export default function StudentsManagementPage() {
         />
       )}
 
-      {/* Modal transfert */}
-      {transferringStudent && (
-        <TransferEnrollmentModal
-          open={!!transferringStudent}
-          onOpenChange={open => !open && setTransferringStudent(null)}
-          studentName={`${transferringStudent.firstname} ${transferringStudent.lastname}`}
-          currentClassName={transferringStudent.className}
-          currentClassTypeId={sessions.find(s => s.id === transferringStudent.classSessionId)?.class.classType.id}
-          sessions={sessions
-            .filter(s => s.id !== transferringStudent.classSessionId)
-            .map(s => {
-              const trackSuffix = s.class.track ? ` — ${s.class.track.code}` : '';
-              return {
-                id: s.id,
-                label: `${s.class.classType.name} ${s.class.letter}${trackSuffix}`,
-                classTypeId: s.class.classType.id,
-              };
-            })}
-          submitting={transferSubmitting}
-          onSubmit={handleTransfer}
-        />
-      )}
-
       {/* Modal filière (classes terminales) */}
       {trackStudent && (
         <StudentTrackModal
@@ -1074,15 +994,36 @@ export default function StudentsManagementPage() {
           currentClassName={correctingStudent.className}
           currentTrackId={correctingStudent.trackId}
           currentClassTypeId={sessions.find(s => s.id === correctingStudent.classSessionId)?.class.classType.id}
-          sessions={sessions.map(s => {
-            const trackSuffix = s.class.track ? ` — ${s.class.track.code}` : ''
-            return {
-              id: s.id,
-              label: `${s.class.classType.name} ${s.class.letter}${trackSuffix}`,
-              classTypeId: s.class.classType.id,
-            }
-          })}
+          sessions={sessions.map(s => ({
+            id: s.id,
+            label: `${s.class.classType.name} ${s.class.letter}`,
+            classTypeId: s.class.classType.id,
+          }))}
           onCorrected={loadStudents}
+        />
+      )}
+
+      {/* Modal correction d'affectation en lot */}
+      {bulkCorrectOpen && (
+        <CorrectAssignmentBatchModal
+          open={bulkCorrectOpen}
+          onOpenChange={setBulkCorrectOpen}
+          students={selectedStudents.map(s => ({
+            enrollmentId:   s.enrollmentId,
+            studentName:    `${s.firstname} ${s.lastname}`,
+            classSessionId: s.classSessionId,
+            className:      s.className,
+            classTypeId:    sessions.find(cs => cs.id === s.classSessionId)?.class.classType.id,
+          }))}
+          sessions={sessions.map(s => ({
+            id: s.id,
+            label: `${s.class.classType.name} ${s.class.letter}`,
+            classTypeId: s.class.classType.id,
+          }))}
+          onCorrected={() => {
+            setSelectedEnrollmentIds(new Set())
+            void loadStudents()
+          }}
         />
       )}
 
@@ -1097,30 +1038,6 @@ export default function StudentsManagementPage() {
         />
       )}
 
-      {/* Modal transfert groupé */}
-      {bulkTransferOpen && (
-        <BulkTransferModal
-          open={bulkTransferOpen}
-          onOpenChange={open => !open && setBulkTransferOpen(false)}
-          students={selectedStudents.map(s => ({
-            enrollmentId: s.enrollmentId,
-            name: `${s.firstname} ${s.lastname}`,
-            className: s.className,
-            classSessionId: s.classSessionId,
-            classTypeId: sessions.find(sess => sess.id === s.classSessionId)?.class.classType.id,
-          }))}
-          sessions={sessions.map(s => {
-            const trackSuffix = s.class.track ? ` — ${s.class.track.code}` : '';
-            return {
-              id: s.id,
-              label: `${s.class.classType.name} ${s.class.letter}${trackSuffix}`,
-              classTypeId: s.class.classType.id,
-            };
-          })}
-          submitting={bulkSubmitting}
-          onSubmit={handleBulkTransfer}
-        />
-      )}
     </div>
   )
 }

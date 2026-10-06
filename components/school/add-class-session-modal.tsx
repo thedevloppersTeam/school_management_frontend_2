@@ -6,6 +6,17 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  BTN_DIALOG_PRIMARY_CLASS,
+  BTN_OUTLINE_CLASS,
+  DIALOG_CONTENT_CLASS,
+  DIALOG_PREVIEW_CLASS,
+  DIALOG_TITLE_CLASS,
+  FIELD_HINT_CLASS,
+  FIELD_LABEL_CLASS,
+  INPUT_CLASS,
+  REQUIRED_MARK_CLASS,
+} from "@/lib/cpmsl-classes"
 
 interface Track {
   id: string
@@ -76,9 +87,9 @@ export function AddClassSessionModal({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent style={{ maxWidth: '420px' }}>
+      <DialogContent className={`${DIALOG_CONTENT_CLASS} max-w-[420px]`}>
         <DialogHeader>
-          <DialogTitle style={{ fontFamily: 'var(--font-serif)', fontSize: 'var(--text-xl)', color: '#2A3740' }}>
+          <DialogTitle className={DIALOG_TITLE_CLASS}>
             {title}
           </DialogTitle>
         </DialogHeader>
@@ -88,17 +99,18 @@ export function AddClassSessionModal({
           {/* Lettre de salle — fondamental et ns-tronc */}
           {level.category !== 'ns-filiere' && (
             <div className="space-y-2">
-              <Label style={{ fontSize: 'var(--text-sm)', fontWeight: 500, color: '#1E1A17' }}>
-                Salle <span style={{ color: '#C43C3C' }}>*</span>
+              <Label htmlFor="class-session-letter" className={FIELD_LABEL_CLASS}>
+                Salle <span className={REQUIRED_MARK_CLASS} aria-label="obligatoire">*</span>
               </Label>
               <Input
+                id="class-session-letter"
                 value={letter}
                 onChange={e => setLetter(e.target.value.toUpperCase())}
                 placeholder="Ex : A, B, C..."
                 maxLength={2}
-                style={{ border: '1px solid #D1CECC', borderRadius: '8px', textTransform: 'uppercase' }}
+                className={`${INPUT_CLASS} uppercase`}
               />
-              <p style={{ fontSize: 'var(--text-2xs)', color: '#78756F' }}>
+              <p className={FIELD_HINT_CLASS}>
                 Lettre identifiant la salle physique
               </p>
             </div>
@@ -107,11 +119,11 @@ export function AddClassSessionModal({
           {/* Filière — ns-tronc et ns-filiere */}
           {level.category !== 'fondamental' && (
             <div className="space-y-2">
-              <Label style={{ fontSize: 'var(--text-sm)', fontWeight: 500, color: '#1E1A17' }}>
-                Filière <span style={{ color: '#C43C3C' }}>*</span>
+              <Label htmlFor="class-session-track" className={FIELD_LABEL_CLASS}>
+                Filière <span className={REQUIRED_MARK_CLASS} aria-label="obligatoire">*</span>
               </Label>
               <Select value={trackId} onValueChange={setTrackId}>
-                <SelectTrigger style={{ border: '1px solid #D1CECC', borderRadius: '8px' }}>
+                <SelectTrigger id="class-session-track" className={INPUT_CLASS}>
                   <SelectValue placeholder="Sélectionner une filière" />
                 </SelectTrigger>
                 <SelectContent>
@@ -125,27 +137,10 @@ export function AddClassSessionModal({
             </div>
           )}
 
-          {/* Aperçu */}
-          <div style={{
-            backgroundColor: '#F1F5F9',
-            borderRadius: '8px',
-            padding: '10px 14px',
-            fontSize: 'var(--text-sm)',
-            color: '#5A7085',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}>
-            <span style={{ fontWeight: 500, color: '#3A4A57' }}>Résultat :</span>
-            <span style={{
-              backgroundColor: '#FFFFFF',
-              border: '1px solid #D1CECC',
-              borderRadius: '6px',
-              padding: '2px 10px',
-              fontWeight: 600,
-              color: '#2C4A6E',
-              fontSize: 'var(--text-sm)'
-            }}>
+          {/* Aperçu du nom qui sera créé */}
+          <div className={DIALOG_PREVIEW_CLASS}>
+            <span className="font-medium text-primary-700">Résultat :</span>
+            <span className="rounded-sm border border-neutral-300 bg-white px-2.5 py-0.5 text-sm font-semibold text-primary-800">
               {preview}
             </span>
           </div>
@@ -155,20 +150,15 @@ export function AddClassSessionModal({
           <Button
             variant="outline"
             onClick={() => handleOpenChange(false)}
-            style={{ borderColor: '#D1CECC', color: '#5C5955' }}
-          >
+            className={BTN_OUTLINE_CLASS}
+         >
             Annuler
           </Button>
           <Button
             onClick={handleSubmit}
             disabled={!isValid() || submitting}
-            style={{
-              backgroundColor: !isValid() || submitting ? '#9CA3AF' : '#5A7085',
-              color: '#FFFFFF',
-              borderRadius: '8px',
-              cursor: !isValid() || submitting ? 'not-allowed' : 'pointer'
-            }}
-          >
+            className={BTN_DIALOG_PRIMARY_CLASS}
+         >
             {submitting ? 'Création...' : 'Créer'}
           </Button>
         </DialogFooter>

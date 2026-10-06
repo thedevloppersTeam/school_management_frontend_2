@@ -149,7 +149,10 @@
   --sidebar-accent: 205 16% 27%;
   --sidebar-accent-foreground: 0 0% 100%;
   --sidebar-border: 205 16% 27%;
-  --sidebar-ring: 205 20% 43%;
+  /* 205 20% 43% donnait 2,38:1 sur la tranche : sous les 3:1 que WCAG 1.4.11
+     exige d'un indicateur de focus. La valeur de `sidebar-foreground` donne
+     8,93:1 et reste dans la rampe de la tranche. */
+  --sidebar-ring: 210 25% 87%;
 }
 
 .dark {

@@ -17,6 +17,10 @@ import type { ApiClassSubject, ApiEnrollment, ApiGrade, CreateGradePayload } fro
 import { fetchClassSubjects, fetchEnrollments, fetchGradesForClassSubjectStep, bulkCreateGrades, updateGrade, deleteGrade } from "@/lib/api/grades"
 import type { UpdateGradePayload } from "@/components/school/cpmsl-grades-grid"
 import { toMessage } from '@/lib/errors'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 function buildSaveDescription(created: number, updated: number, deleted: number): string {
   const parts: string[] = []
@@ -60,6 +64,20 @@ export default function GradesPage() {
   const [loadingContext, setLoadingContext] = useState(false)
   const [error,          setError]          = useState<string | null>(null)
   const [activeTab,      setActiveTab]      = useState<string>("notes")
+  const [saveFailures, setSaveFailures] = useState<Array<{ label: string; reason: string }>>([])
+
+  // Radix demonte le TabsContent inactif : changer d'onglet detruit l'etat de la
+  // grille ET desenregistre son `beforeunload`. La bascule Par matiere / Par
+  // eleve est un ternaire, donc elle demonte aussi. Le compte remonte par la
+  // grille est la seule facon pour cette page de savoir qu'il y a quelque chose
+  // a perdre.
+  const [gridDirtyCount, setGridDirtyCount] = useState(0)
+  const [pendingNav, setPendingNav] = useState<{ label: string; apply: () => void } | null>(null)
+
+  function guardNavigation(label: string, apply: () => void) {
+    if (gridDirtyCount === 0) { apply(); return }
+    setPendingNav({ label, apply })
+  }
   // Mode de saisie dans l'onglet "Saisie" : par matière (grille) ou par élève.
   const [entryMode,      setEntryMode]      = useState<"subject" | "student">("subject")
 
@@ -145,30 +163,67 @@ export default function GradesPage() {
     if (selectedClassSubjectId && id) loadGrades(selectedClassSubjectId, id)
   }
 
+  // EP-011 — l'enregistrement n'est pas atomique et ne peut pas le devenir ici :
+  // une requete groupee, plus une par modification et une par suppression, soit
+  // une trentaine d'appels pour une session ordinaire. `Promise.all` rejetait au
+  // PREMIER echec pendant que les autres partaient quand meme, le `catch` ne
+  // rechargeait rien, et l'ecran continuait d'afficher des valeurs locales sur
+  // un etat serveur partiel et inconnu. En contexte reseau haitien, l'echec
+  // partiel n'est pas un cas limite.
+  //
+  // `allSettled` attend tout le monde, on recharge TOUJOURS depuis le serveur,
+  // et on nomme ce qui a echoue au lieu d'annoncer un echec global sur un
+  // enregistrement qui a partiellement reussi.
+  // Cible a terme : un POST /api/grades/batch transactionnel cote backend.
   async function handleSaveGrades(toCreate: CreateGradePayload[], toUpdate: UpdateGradePayload[], toDelete: string[] = []) {
     setSaving(true)
-    try {
-      const ops: Promise<void>[] = []
-      if (toCreate.length > 0) ops.push(bulkCreateGrades(toCreate))
-      toUpdate.forEach(u => ops.push(updateGrade(u.gradeId, u.studentScore, u.gradeType)))
-      toDelete.forEach(id => ops.push(deleteGrade(id)))
-      await Promise.all(ops)
+    setSaveFailures([])
 
-      const created = toCreate.length
-      const updated = toUpdate.length
-      const desc = buildSaveDescription(created, updated, toDelete.length)
-
-      toast({ title: 'Notes enregistrées', description: desc })
-      if (selectedClassSubjectId && selectedStepId) {
-        await loadGrades(selectedClassSubjectId, selectedStepId)
-      }
-    } catch (e) {
-      toast({
-        title: "Échec de l'enregistrement",
-        description: toMessage(e, "lors de l'enregistrement des notes"),
-        variant: 'destructive'
+    type Op = { label: string; run: () => Promise<void> }
+    const ops: Op[] = []
+    if (toCreate.length > 0) {
+      const plural = toCreate.length > 1 ? 's' : ''
+      ops.push({
+        label: `${toCreate.length} note${plural} nouvelle${plural}`,
+        run: () => bulkCreateGrades(toCreate),
       })
+    }
+    toUpdate.forEach((u, i) => ops.push({
+      label: `modification ${i + 1}`,
+      run: () => updateGrade(u.gradeId, u.studentScore, u.gradeType),
+    }))
+    toDelete.forEach((id, i) => ops.push({
+      label: `suppression ${i + 1}`,
+      run: () => deleteGrade(id),
+    }))
+
+    try {
+      const settled = await Promise.allSettled(ops.map(o => o.run()))
+      const failures = settled
+        .map((r, i) => (r.status === 'rejected'
+          ? { label: ops[i].label, reason: toMessage(r.reason, "lors de l'enregistrement") }
+          : null))
+        .filter((f): f is { label: string; reason: string } => f !== null)
+
+      if (failures.length === 0) {
+        toast({
+          title: 'Notes enregistrées',
+          description: buildSaveDescription(toCreate.length, toUpdate.length, toDelete.length),
+        })
+      } else {
+        setSaveFailures(failures)
+        toast({
+          title: `Enregistrement incomplet — ${failures.length} opération${failures.length > 1 ? 's' : ''} en échec`,
+          description: 'Le détail reste affiché au-dessus de la grille. Les autres notes sont bien enregistrées.',
+          variant: 'destructive',
+        })
+      }
     } finally {
+      // Systematique, succes comme echec : apres un echec partiel, l'ecran doit
+      // montrer ce qui est REELLEMENT en base, pas ce qui avait ete tape.
+      if (selectedClassSubjectId && selectedStepId) {
+        await loadGrades(selectedClassSubjectId, selectedStepId).catch(() => {})
+      }
       setSaving(false)
     }
   }
@@ -204,7 +259,11 @@ export default function GradesPage() {
     }
 
     return (
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => guardNavigation("d'onglet", () => setActiveTab(v))}
+        className="space-y-6"
+      >
         <TabsList>
           <TabsTrigger value="notes">Saisie</TabsTrigger>
           <TabsTrigger value="consultation">Consultation</TabsTrigger>
@@ -214,18 +273,47 @@ export default function GradesPage() {
 
         {/* Saisie — W3 */}
         <TabsContent value="notes" className="space-y-4">
+          {/* Un toast disparait en quatre secondes ; un enregistrement partiel
+              doit rester lisible le temps de le reparer. */}
+          {saveFailures.length > 0 && (
+            <div role="alert" className="rounded-lg border border-destructive bg-destructive/5 p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-destructive">
+                    Enregistrement incomplet — {saveFailures.length} opération
+                    {saveFailures.length > 1 ? 's' : ''} en échec
+                  </p>
+                  <p className="mt-0.5 max-w-prose text-xs text-muted-foreground">
+                    Les autres notes sont bien enregistrées ; la grille a été rechargée
+                    depuis le serveur et montre l&apos;état réel. Corrigez les lignes
+                    ci-dessous puis enregistrez à nouveau.
+                  </p>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => setSaveFailures([])}>
+                  Masquer
+                </Button>
+              </div>
+              <ul className="cpmsl-scroll mt-2 max-h-32 space-y-0.5 overflow-y-auto">
+                {saveFailures.map((f, i) => (
+                  <li key={i} className="text-xs text-destructive">
+                    <span className="font-medium">{f.label}</span> — {f.reason}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {/* Bascule du mode de saisie */}
           <div className="inline-flex rounded-lg border bg-muted/40 p-1">
             <button
               type="button"
-              onClick={() => setEntryMode("subject")}
+              onClick={() => guardNavigation("de mode de saisie", () => setEntryMode("subject"))}
               className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${entryMode === "subject" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
             >
               Par matière
             </button>
             <button
               type="button"
-              onClick={() => setEntryMode("student")}
+              onClick={() => guardNavigation("de mode de saisie", () => setEntryMode("student"))}
               className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${entryMode === "student" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
             >
               Par élève
@@ -249,6 +337,7 @@ export default function GradesPage() {
               onClassSubjectChange={handleClassSubjectChange}
               onStepChange={handleStepChange}
               onSaveGrades={handleSaveGrades}
+              onDirtyChange={setGridDirtyCount}
             />
           ) : (
             <CPMSLGradesByStudent
@@ -311,6 +400,30 @@ export default function GradesPage() {
       </div>
 
       {renderMainContent()}
+
+      <AlertDialog open={pendingNav !== null} onOpenChange={(o) => { if (!o) setPendingNav(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {gridDirtyCount} note{gridDirtyCount > 1 ? 's' : ''} non enregistrée{gridDirtyCount > 1 ? 's' : ''}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Changer {pendingNav?.label} ferme la grille de saisie et efface{' '}
+              {gridDirtyCount > 1 ? 'ces saisies' : 'cette saisie'}. Enregistrez d&apos;abord
+              pour {gridDirtyCount > 1 ? 'les' : 'la'} conserver.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Revenir à la saisie</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { pendingNav?.apply(); setPendingNav(null) }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Abandonner {gridDirtyCount > 1 ? 'les modifications' : 'la modification'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

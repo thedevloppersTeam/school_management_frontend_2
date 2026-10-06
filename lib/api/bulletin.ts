@@ -20,8 +20,25 @@ import {
   normalizeRubriqueLabel,
   type BulletinClassAverages,
 } from "@/lib/bulletin-calculations"
-import { toSubjectInputs, WHOLE_SUBJECT } from "@/lib/bulletin/from-api"
+import { toSubjectInputs } from "@/lib/bulletin/from-api"
 import type { SubjectInput } from "@/lib/bulletin/compute"
+import {
+  computeStep,
+  computeAnnualAverage,
+  formatAverage,
+} from "@/lib/bulletin/compute"
+import type Decimal from "decimal.js"
+import { safeFetch } from "@/lib/api/safe-fetch"
+import {
+  fetchSessionStepExclusions,
+  invalidateExclusionsCache,
+  exclusionKey,
+} from "@/lib/api/step-exclusions"
+
+// Les appelants historiques importent `invalidateExclusionsCache` depuis ce
+// module (components/school/cpmsl-grades-grid.tsx). L'extraction ne doit pas
+// leur imposer un changement de chemin : on re-exporte.
+export { invalidateExclusionsCache }
 
 // ── Types internes ────────────────────────────────────────────────────────────
 
@@ -130,16 +147,6 @@ function avg(arr: number[]): number | null {
   return arr.length > 0 ? arr.reduce((s, v) => s + v, 0) / arr.length : null
 }
 
-async function safeFetch<T>(url: string, fallback: T): Promise<T> {
-  try {
-    const res = await fetch(url, { credentials: 'include' })
-    if (!res.ok) return fallback
-    return res.json()
-  } catch {
-    return fallback
-  }
-}
-
 function readPath(source: unknown, path: string): unknown {
   return path.split('.').reduce<unknown>((current, key) => {
     if (current && typeof current === 'object' && key in current) {
@@ -238,8 +245,9 @@ function rubricCodeIndex(classSubjects: ApiClassSubject[]): Record<string, strin
 /**
  * Passe des clés de dispense LOCALES (`classSubjectId::sectionId`, l'élève
  * étant porté par la Map) aux clés de lib/bulletin/from-api, qui sont à trois
- * parties. Les deux schémas partagent la sentinelle WHOLE_SUBJECT, importée
- * plus haut : le préfixage est donc exact, pas une coïncidence de format.
+ * parties. Les deux schémas partagent la sentinelle WHOLE_SUBJECT — celle de
+ * lib/bulletin/from-api, que lib/api/step-exclusions utilise pour bâtir la clé
+ * locale : le préfixage est donc exact, pas une coïncidence de format.
  */
 function toComputeExclusions(
   enrollmentId: string,
@@ -363,83 +371,10 @@ function buildRubriques(
 }
 
 // ── Dispenses (exclusions) par étape ────────────────────────────────────────
-// Une dispense est scopée par (élève + matière + section + étape). L'étape est
-// portée par la requête ; les trois autres parties par la clé ci-dessous.
-//
-// La clé DOIT inclure classSubjectId : une même matière peut être affectée deux
-// fois à une session — tronc commun (trackId null) et examen de filière — via
-// @@unique([classSessionId, subjectId, trackId]). Les deux affectations
-// partagent le même subject, donc les mêmes sectionId. Une clé réduite à
-// (enrollmentId, sectionId) dispensait l'élève sur les DEUX affectations.
-//
-// sectionId null = dispense de la matière entière, symétrique de
-// grades.section_id IS NULL qui signifie « note globale » (classes d'examen
-// 9e et NS4, qui notent directement la matière sans sous-matières).
-// WHOLE_SUBJECT est importé de lib/bulletin/from-api : une seule sentinelle
-// pour les deux schémas de clé, celui d'ici et celui du module de calcul.
-
-function exclusionKey(classSubjectId: string, sectionId: string | null): string {
-  return `${classSubjectId}::${sectionId ?? WHOLE_SUBJECT}`
-}
-
-type SessionStepExclusions = Map<string, Set<string>> // enrollmentId -> Set<clé>
-
-const exclusionsCache = new Map<string, Promise<SessionStepExclusions>>()
-
-/** À appeler après l'enregistrement ou la suppression d'une dispense. */
-export function invalidateExclusionsCache(classSessionId?: string, stepId?: string): void {
-  if (!classSessionId) { exclusionsCache.clear(); return }
-  if (stepId) { exclusionsCache.delete(`${classSessionId}:${stepId}`); return }
-  for (const k of exclusionsCache.keys()) {
-    if (k.startsWith(`${classSessionId}:`)) exclusionsCache.delete(k)
-  }
-}
-
-function fetchSessionStepExclusions(
-  classSessionId: string,
-  stepId: string,
-): Promise<SessionStepExclusions> {
-  const cacheKey = `${classSessionId}:${stepId}`
-  const cached = exclusionsCache.get(cacheKey)
-  if (cached) return cached
-
-  const promise = (async () => {
-    // Le backend renvoie les QUATRE parties de la clé. Le type les déclare
-    // toutes : en n'en déclarant que deux, classSubjectId arrivait et était
-    // silencieusement jeté.
-    const rows = await safeFetch<
-      Array<{
-        enrollmentId: string
-        classSubjectId: string
-        sectionId: string | null
-        stepId?: string
-      }>
-    >(
-      `/api/enrollments/excluded-sections?classSessionId=${classSessionId}&stepId=${stepId}`,
-      [],
-    )
-    const map: SessionStepExclusions = new Map()
-    for (const row of rows) {
-      // Une dispense sans portee ne peut pas etre appliquee : sans
-      // classSubjectId on ne sait pas SUR QUELLE affectation elle porte.
-      // Signale au lieu d'absorber en silence.
-      if (!row.classSubjectId) {
-        console.warn(
-          `[dispenses] ligne ignoree : classSubjectId absent (eleve ${row.enrollmentId}, ` +
-          `section ${row.sectionId}). Dispense sans portee dans ` +
-          `enrollment_section_exclusions.`,
-        )
-        continue
-      }
-      if (!map.has(row.enrollmentId)) map.set(row.enrollmentId, new Set())
-      map.get(row.enrollmentId)!.add(exclusionKey(row.classSubjectId, row.sectionId))
-    }
-    return map
-  })()
-
-  exclusionsCache.set(cacheKey, promise)
-  return promise
-}
+// La lecture, son cache et la forme de la clé vivent maintenant dans
+// lib/api/step-exclusions.ts : le bulletin n'en est plus le seul lecteur.
+// Ce fichier n'en garde que la traduction vers les clés à trois parties
+// attendues par lib/bulletin/from-api (toComputeExclusions, plus bas).
 
 async function getClassAverages(params: {
   classSessionId: string
@@ -501,13 +436,29 @@ async function getClassAverages(params: {
 }
 
 
+/**
+ * Moyenne ANNUELLE d'une inscription — chemin normatif.
+ *
+ *   from-api (toSubjectInputs) -> computeStep -> computeAnnualAverage
+ *
+ * Le calcul par etape passait deja par ce chemin ; la moyenne des etapes, non.
+ * Chaque moyenne d'etape etait convertie en flottant (`.toNumber()`) avant
+ * d'etre moyennee en `number`, ce qui deplacait l'arrondi d'affichage des que
+ * la moyenne exacte tombait sur un demi-centieme. Le Decimal ne quitte plus le
+ * calcul : la conversion n'a lieu qu'au formatage, une seule fois.
+ *
+ * La regle « une etape sans rien d'exploitable ne compte pas » n'est plus
+ * rejouee ici : elle vit dans `stepAverageOrNull`, avec le calcul.
+ *
+ * Renvoie un Decimal — l'appelant formate. Voir `formatAverage`.
+ */
 async function calculateGeneralAverageForEnrollment(params: {
   enrollmentId: string
   classSessionId: string
   academicYearId: string
   selectedStepId: string
   classSubjects: ApiClassSubject[]
-}): Promise<number | null> {
+}): Promise<Decimal | null> {
   // Dispenses d'étape : une étape dont l'élève est dispensé est totalement
   // exclue de la moyenne générale (ni au numérateur, ni au dénominateur).
   const [steps, exemptionRows] = await Promise.all([
@@ -528,7 +479,7 @@ async function calculateGeneralAverageForEnrollment(params: {
 
   if (eligibleSteps.length === 0) return null
 
-  const averages = await Promise.all(
+  const results = await Promise.all(
     eligibleSteps.map(async (step) => {
       try {
         // Dispenses propres à CETTE étape : elles n'affectent que la moyenne
@@ -539,27 +490,25 @@ async function calculateGeneralAverageForEnrollment(params: {
           ),
           fetchSessionStepExclusions(params.classSessionId, step.id),
         ])
-        return calculateBulletinAverages(
+        return computeStep(
           buildSubjectInputs(
             params.classSubjects,
             grades,
             params.enrollmentId,
             exclusions.get(params.enrollmentId),
           ),
-        ).moyenneEtape
+        )
       } catch {
+        // Etape dont les donnees n'ont pas charge. `null` la fait sortir du
+        // calcul, comme avant : la compter zero serait un mensonge.
         return null
       }
     }),
   )
 
-  const validAverages = averages.filter((average): average is number =>
-    average !== null && Number.isFinite(average),
+  return computeAnnualAverage(
+    results.filter((r): r is NonNullable<typeof r> => r !== null),
   )
-
-  if (validAverages.length === 0) return null
-
-  return validAverages.reduce((sum, average) => sum + average, 0) / validAverages.length
 }
 
 // ── Bloc comportement ─────────────────────────────────────────────────────────
@@ -782,7 +731,8 @@ export async function buildBulletinData(params: {
   const averages = calculateBulletinAverages(
     buildSubjectInputs(scopedClassSubjects, allGrades, enrollmentId, excludedForStep),
   )
-  const moyenneEtape = formatBulletinNumber(averages.moyenneEtape)
+  // Le texte imprime se formate depuis le Decimal, jamais depuis le flottant.
+  const moyenneEtape = formatAverage(averages.exact.moyenneEtape)
   const appreciation = averages.appreciation
   const classAverages = await getClassAverages({
     classSessionId,
@@ -795,7 +745,7 @@ export async function buildBulletinData(params: {
   const backendMoyenneClasse = firstString(student, ['moyenneClasse', 'classAverage', 'bulletin.moyenneClasse', 'bulletin.classAverage'])
   const moyenneClasse = backendMoyenneClasse !== '—'
     ? backendMoyenneClasse
-    : formatBulletinNumber(classAverages.moyenneClasseEtape)
+    : formatAverage(classAverages.exact.moyenneClasseEtape)
   // Moyenne générale : elle « mélange » toutes les étapes. Sur le bulletin
   // d'EXAMEN, on ne se limite PAS aux seules matières d'examen (qui ne sont
   // notées qu'à l'étape d'examen → une seule étape à moyenner) : la générale
@@ -807,7 +757,7 @@ export async function buildBulletinData(params: {
       ? filterSubjectsByScope(classSubjects, 'all', studentTrackId)
       : scopedClassSubjects
   const moyenneGenerale = includeGeneralAverage
-    ? formatBulletinNumber(await calculateGeneralAverageForEnrollment({
+    ? formatAverage(await calculateGeneralAverageForEnrollment({
         enrollmentId,
         classSessionId,
         academicYearId: yearId,
@@ -849,19 +799,25 @@ export async function buildBulletinData(params: {
     rubrique1Poids: '70%',
     rubrique1:      r1,
     moyR1: averages.moyR1,
+    moyR1Texte: formatAverage(averages.exact.moyR1),
     moyClasseR1: classAverages.moyClasseR1,
+    moyClasseR1Texte: formatAverage(classAverages.exact.moyClasseR1),
 
     rubrique2Name:  r2Name,
     rubrique2Poids: '25%',
     rubrique2:      r2,
     moyR2: averages.moyR2,
+    moyR2Texte: formatAverage(averages.exact.moyR2),
     moyClasseR2: classAverages.moyClasseR2,
+    moyClasseR2Texte: formatAverage(classAverages.exact.moyClasseR2),
 
     rubrique3Name:  r3Name,
     rubrique3Poids: '5%',
     rubrique3:      r3,
     moyR3: averages.moyR3,
+    moyR3Texte: formatAverage(averages.exact.moyR3),
     moyClasseR3: classAverages.moyClasseR3,
+    moyClasseR3Texte: formatAverage(classAverages.exact.moyClasseR3),
 
     moyenneEtape,
     appreciation,

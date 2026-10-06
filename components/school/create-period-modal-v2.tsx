@@ -13,8 +13,11 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import {
+  BTN_DIALOG_PRIMARY_CLASS,
+  BTN_OUTLINE_CLASS,
+  REQUIRED_MARK_CLASS,
+} from "@/lib/cpmsl-classes"
 
 interface CreatePeriodModalV2Props {
   existingPeriodsCount: number
@@ -97,7 +100,7 @@ export function CreatePeriodModalV2({
   }
 
   // ── FIX 2 : max 5 étapes — variable utilisée sur le bouton submit ─────────
-  const isDisabled = existingPeriodsCount >= 5
+  const isDisabled = existingPeriodsCount>= 5
 
   const handleSubmit = () => {
     if (isFormValid() && !isDisabled) {
@@ -116,25 +119,17 @@ export function CreatePeriodModalV2({
     <Dialog open={currentOpen} onOpenChange={handleOpenChange}>
       {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent
-        className="max-w-xl"
-        style={{
-          backgroundColor: '#FFFFFF',
-          border: '1px solid #E8E6E3',
-          borderRadius: '10px',
-          padding: '32px'
-        }}
-      >
+        className="max-w-xl rounded-lg border border-neutral-200 bg-white p-8"
+     >
         <DialogHeader>
           <DialogTitle
-            className="heading-3"
-            style={{ color: '#1E1A17', marginBottom: '8px' }}
-          >
+            className="heading-3 mb-2 text-neutral-900"
+         >
             Nouvelle étape
           </DialogTitle>
           <DialogDescription
-            className="body-base"
-            style={{ color: '#5C5955' }}
-          >
+            className="body-base text-neutral-600"
+         >
             {isDisabled
               ? "Maximum 5 étapes atteint — impossible d'en créer une nouvelle."
               : `${existingPeriodsCount} / 5 étapes créées pour cette année`}
@@ -146,10 +141,9 @@ export function CreatePeriodModalV2({
           <div className="space-y-2">
             <Label
               htmlFor="name"
-              className="label-ui"
-              style={{ color: '#1E1A17', fontWeight: 600 }}
-            >
-              Nom de l'étape <span style={{ color: '#C84A3D' }}>*</span>
+              className="label-ui font-semibold text-neutral-900"
+           >
+              Nom de l&apos;étape <span className={REQUIRED_MARK_CLASS}>*</span>
             </Label>
             <Input
               id="name"
@@ -157,52 +151,32 @@ export function CreatePeriodModalV2({
               value={name}
               onChange={(e) => setName(e.target.value)}
               disabled={isDisabled}
-              style={{
-                border: '1px solid #D1CECC',
-                borderRadius: '8px',
-                backgroundColor: isDisabled ? '#F5F4F2' : '#FFFFFF'
-              }}
-              className="focus:border-[#2C4A6E] focus:ring-[#2C4A6E]"
+              className="focus:border-primary-500 focus:ring-primary-500 rounded-md border border-neutral-300 bg-white disabled:bg-neutral-100"
             />
           </div>
 
-          {/* Type */}
-          <div className="space-y-2">
-            <Label
-              className="label-ui"
-              style={{ color: '#1E1A17', fontWeight: 600 }}
-            >
-              Type <span style={{ color: '#C84A3D' }}>*</span>
-            </Label>
-            <RadioGroup
-              value={type}
-              onValueChange={(value) => setType(value as 'normal' | 'blanc')}
-              className="flex items-center gap-6"
-              disabled={isDisabled}
-            >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="normal" id="normal" />
-                <Label htmlFor="normal" className="body-base cursor-pointer" style={{ color: '#1E1A17', fontWeight: 400 }}>
-                  Évaluation normale
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="blanc" id="blanc" />
-                <Label htmlFor="blanc" className="body-base cursor-pointer" style={{ color: '#1E1A17', fontWeight: 400 }}>
-                  Évaluation blanc
-                </Label>
-              </div>
-            </RadioGroup>
-          </div>
+          {/*
+            Le type d'étape (« normale » / « blanc ») et la description ont été
+            retirés du formulaire le 2026-09-16.
+
+            Raison : ils n'avaient aucun stockage. Le modèle Prisma
+            `AcademicYearStep` ne porte ni colonne `type` ni colonne
+            `description`, et `createStep` (src/controllers/academicYearSteps.ts)
+            ne lit que `name`, `stepNumber`, `startDate`, `endDate`. Le champ
+            « Type » était de surcroît marqué obligatoire : l'écran exigeait une
+            saisie qu'il jetait.
+
+            Si l'étape blanche est une notion à conserver, elle demande une
+            migration backend — décision consignée dans docs/BACKLOG.md.
+          */}
 
           {/* Date de début — optionnelle */}
           <div className="space-y-2">
             <Label
               htmlFor="startDate"
-              className="label-ui"
-              style={{ color: '#1E1A17', fontWeight: 600 }}
-            >
-              Date de début <span style={{ color: '#78756F', fontWeight: 400 }}>(optionnelle)</span>
+              className="label-ui font-semibold text-neutral-900"
+           >
+              Date de début <span className="font-normal text-neutral-500">(optionnelle)</span>
             </Label>
             <Input
               id="startDate"
@@ -210,12 +184,7 @@ export function CreatePeriodModalV2({
               value={startDate}
               onChange={(e) => handleStartDateChange(e.target.value)}
               disabled={isDisabled}
-              style={{
-                border: '1px solid #D1CECC',
-                borderRadius: '8px',
-                backgroundColor: isDisabled ? '#F5F4F2' : '#FFFFFF'
-              }}
-              className="focus:border-[#2C4A6E] focus:ring-[#2C4A6E]"
+              className="focus:border-primary-500 focus:ring-primary-500 rounded-md border border-neutral-300 bg-white disabled:bg-neutral-100"
             />
           </div>
 
@@ -223,10 +192,9 @@ export function CreatePeriodModalV2({
           <div className="space-y-2">
             <Label
               htmlFor="endDate"
-              className="label-ui"
-              style={{ color: '#1E1A17', fontWeight: 600 }}
-            >
-              Date de fin <span style={{ color: '#78756F', fontWeight: 400 }}>(optionnelle)</span>
+              className="label-ui font-semibold text-neutral-900"
+           >
+              Date de fin <span className="font-normal text-neutral-500">(optionnelle)</span>
             </Label>
             <Input
               id="endDate"
@@ -234,77 +202,31 @@ export function CreatePeriodModalV2({
               value={endDate}
               onChange={(e) => handleEndDateChange(e.target.value)}
               disabled={isDisabled}
-              style={{
-                border: dateError ? '1px solid #C84A3D' : '1px solid #D1CECC',
-                borderRadius: '8px',
-                backgroundColor: isDisabled ? '#F5F4F2' : '#FFFFFF'
-              }}
-              className="focus:border-[#2C4A6E] focus:ring-[#2C4A6E]"
+              className={`rounded-md bg-white disabled:bg-neutral-100 focus:border-primary-500 focus:ring-primary-500 ${
+                dateError ? "border border-error" : "border border-neutral-300"
+              }`}
             />
             {dateError && (
-              <p className="caption" style={{ color: '#C84A3D', marginTop: '4px' }}>
+              <p className="caption mt-1 text-error">
                 {dateError}
               </p>
             )}
           </div>
 
-          {/* Description */}
-          <div className="space-y-2">
-            <Label
-              htmlFor="description"
-              className="label-ui"
-              style={{ color: '#1E1A17', fontWeight: 600 }}
-            >
-              Description
-            </Label>
-            <Textarea
-              id="description"
-              placeholder="Notes additionnelles sur cette étape..."
-              value={description}
-              onChange={(e) => {
-                if (e.target.value.length <= 200) setDescription(e.target.value)
-              }}
-              maxLength={200}
-              rows={3}
-              disabled={isDisabled}
-              style={{
-                border: '1px solid #D1CECC',
-                borderRadius: '8px',
-                backgroundColor: isDisabled ? '#F5F4F2' : '#FFFFFF',
-                resize: 'none'
-              }}
-              className="focus:border-[#2C4A6E] focus:ring-[#2C4A6E]"
-            />
-            <p className="caption" style={{ color: '#78756F', textAlign: 'right' }}>
-              {description.length}/200 caractères
-            </p>
-          </div>
         </div>
 
         <DialogFooter className="mt-6">
           <Button
             variant="outline"
-            onClick={() => handleOpenChange(false)}
-            style={{
-              borderRadius: '8px',
-              border: '1px solid #D1CECC',
-              color: '#5C5955'
-            }}
-          >
+            onClick={() => handleOpenChange(false)} className={BTN_OUTLINE_CLASS}
+         >
             Annuler
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={!isFormValid() || isDisabled}
-            style={{
-              backgroundColor: (!isFormValid() || isDisabled) ? '#E8E6E3' : '#2C4A6E',
-              color: (!isFormValid() || isDisabled) ? '#A8A5A2' : '#FFFFFF',
-              borderRadius: '8px',
-              cursor: (!isFormValid() || isDisabled) ? 'not-allowed' : 'pointer'
-            }}
-            className={(!isFormValid() || isDisabled) ? '' : 'hover:bg-[#243B56]'}
-          >
-            Créer l'étape
+            disabled={!isFormValid() || isDisabled} className={BTN_DIALOG_PRIMARY_CLASS}
+         >
+            Créer l&apos;étape
           </Button>
         </DialogFooter>
       </DialogContent>

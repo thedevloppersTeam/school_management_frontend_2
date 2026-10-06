@@ -106,7 +106,7 @@ export function FilieresTab() {
             terminale et aux matières d&apos;examen officiel.
           </CardDescription>
         </div>
-        <Button size="sm" onClick={openCreate} className="bg-[#2C4A6E] text-white hover:bg-[#1F3856]">
+        <Button size="sm" onClick={openCreate} className="">
           <PlusIcon className="mr-2 h-4 w-4" />
           Nouvelle filière
         </Button>
@@ -201,7 +201,7 @@ export function FilieresTab() {
             <Button
               onClick={handleSave}
               disabled={submitting || !form.code.trim() || !form.name.trim()}
-              className="bg-[#2C4A6E] text-white hover:bg-[#1F3856]"
+              className=""
             >
               {submitting ? "Enregistrement..." : editing ? "Enregistrer" : "Créer"}
             </Button>
