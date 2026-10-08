@@ -64,8 +64,11 @@ import { EditStudentModal } from "@/components/school/edit-student-modal"
 import { PromotionPhotoModal } from "@/components/school/promotion-photo-modal"
 import { normalizeUploadUrl } from "@/lib/upload-url"
 import { StatCard } from "@/components/school/stat-card"
-import { fetchActiveAcademicYear, type AcademicYear } from "@/lib/api/dashboard"
+import { type AcademicYear } from "@/lib/api/dashboard"
+import { useAcademicYearContext } from "@/lib/contexts/academic-year-context"
 import { cn } from "@/lib/utils"
+import { estArchivee } from "@/lib/academic-years/status"
+import { libelleClasseSalle } from "@/lib/classes/labels"
 import { isNisuValid, NISU_RULE_LABEL } from "@/lib/nisu"
 
 // ── Types locaux ──────────────────────────────────────────────────────────────
@@ -84,9 +87,11 @@ interface StudentRow {
   // Latest enrollment (any year) — may be absent if the student was never enrolled
   enrollmentId?:   string
   classSessionId?: string
-  className?:      string         // combined (e.g. "2ème AF A") — used for filtering/sorting
-  classTypeName?:  string         // e.g. "2ème AF"
-  salleLabel?:     string         // e.g. "A" or track code "LLA"
+  // Forme fusionnee (« 2ème AF A ») : CLE DE TRI uniquement, jamais affichee.
+  // Les deux champs lus a l'ecran sont `classTypeName` et `salleLabel`.
+  className?:      string
+  classTypeName?:  string         // la CLASSE, ex. « 2ème AF »
+  salleLabel?:     string         // la SALLE, ex. « A » — jamais une filiere
   yearString?:     string
   yearId?:         string
   status?:         EnrollmentStatus
@@ -132,13 +137,6 @@ function normalizePromotionPhotos(value: unknown): PromotionPhotoListItem[] {
     return photoUrl ? [{ studentId, academicYearId, photoUrl }] : []
   })
 }
-
-function deriveYearStatus(year: AcademicYear): 'active' | 'preparation' | 'archived' {
-  if (year.isCurrent) return 'active'
-  if (new Date(year.endDate) < new Date()) return 'archived'
-  return 'preparation'
-}
-
 
 function StatusBadge({ status }: { status?: EnrollmentStatus }) {
   if (!status) return <Badge variant="outline" className="border-border bg-muted text-muted-foreground">Non inscrit</Badge>
@@ -209,14 +207,18 @@ export default function StudentsManagementPage() {
   type SortCol = 'nisu' | 'name' | 'class' | 'date'
   const [sortCol, setSortCol]   = useState<SortCol | null>(null)
   const [sortDir, setSortDir]   = useState<'asc' | 'desc' | null>(null)
+  const { activeYear: contextYear, loading: yearLoading } = useAcademicYearContext()
 
   // ── Chargement ───────────────────────────────────────────────────────────────
   const loadStudents = useCallback(async () => {
     setLoading(true)
     setNoCurrentYear(false)
     try {
-      // 1. Année courante (utilisée pour l'inscription et la photo de promotion)
-      const yearData = await fetchActiveAcademicYear()
+      // 1. Année courante — lue dans le contexte, plus par un fetch propre à
+      // cet écran. `loadStudents` est rappelée après chaque mutation d'élève
+      // (lignes 470, 523, 646) : elle relisait donc l'année à chaque fois, sans
+      // que l'année ait pu changer. Le contexte la donne sans requête.
+      const yearData = contextYear
       setYear(yearData)
       setNoCurrentYear(!yearData)
 
@@ -251,10 +253,13 @@ export default function StudentsManagementPage() {
         status: EnrollmentStatus
         classSession?: {
           id: string
+          // Pas de `track` ici : une SALLE n'a pas de filiere. Le modele ne la
+          // porte ni sur `Class` ni sur `ClassSession` — elle vit sur
+          // l'inscription de l'eleve (`Enrollment.trackId`). Le champ etait
+          // declare et lu plus bas ; le backend ne l'a jamais envoye.
           class?: {
             letter?: string
             classType?: { name?: string }
-            track?: { code?: string }
           }
           academicYear?: { id?: string; yearString?: string; name?: string; isCurrent?: boolean }
         }
@@ -319,11 +324,14 @@ export default function StudentsManagementPage() {
 
       const rows: StudentRow[] = studentsData.map((s) => {
         const latest = latestByStudent.get(s.id)
-        const cls = latest?.classSession?.class
-        const classTypeName = cls?.classType?.name
-        // For tracked classes (NS3/NS4) the track code is treated as the "salle"
-        // (per the school convention from the config tabs). Otherwise the letter is used.
-        const salleLabel = cls?.track?.code ?? cls?.letter
+        // Deux champs distincts, composes en un seul point (lib/classes/labels).
+        // Le repli `track?.code ?? letter` qui vivait ici etait une branche
+        // morte : `Class` ne porte pas de filiere, l'expression valait toujours
+        // `letter`. Voir « La Regle des Deux Champs » dans DESIGN.md.
+        const { classe, salle } = libelleClasseSalle(latest?.classSession?.class)
+        const classTypeName = classe || undefined
+        const salleLabel = salle || undefined
+        // Fusion conservee pour la seule CLE DE TRI de la colonne Classe.
         const className = classTypeName
           ? `${classTypeName}${salleLabel ? ` ${salleLabel}` : ""}`
           : undefined
@@ -363,9 +371,11 @@ export default function StudentsManagementPage() {
     } finally {
       setLoading(false)
     }
-  }, [toast])
+  }, [toast, contextYear])
 
-  useEffect(() => { loadStudents() }, [loadStudents])
+  // `yearLoading` garde l'appel : sans elle, le premier rendu partirait avec
+  // `contextYear` à null et afficherait « aucune année active » à tort.
+  useEffect(() => { if (!yearLoading) loadStudents() }, [loadStudents, yearLoading])
 
   // ── KPIs ─────────────────────────────────────────────────────────────────────
   const totalStudents       = students.length
@@ -552,7 +562,7 @@ export default function StudentsManagementPage() {
     )
   }
 
-  const isArchived = year ? deriveYearStatus(year) === 'archived' : false
+  const isArchived = year ? estArchivee(year) : false
 
   // Pagination window (up to 5 numbered pages with ellipsis)
   const paginationWindow = (() => {
