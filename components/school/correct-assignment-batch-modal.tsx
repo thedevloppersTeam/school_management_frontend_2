@@ -317,9 +317,13 @@ export function CorrectAssignmentBatchModal({
           )}
 
           {/* ── Sélection de la cible ─────────────────────────────────────── */}
+          {/* Option de liste : fusion classe + salle légitime et nécessaire —
+              quand la sélection mélange plusieurs niveaux, `candidates` n'est
+              pas filtré et la lettre seule serait ambiguë. L'étiquette nomme
+              donc les deux champs (DESIGN.md, « La Règle des Deux Champs »). */}
           <div className="space-y-2">
             <Label className="text-sm font-medium">
-              Salle cible <span className="text-destructive">*</span>
+              Classe et salle cibles <span className="text-destructive">*</span>
             </Label>
             <Select value={targetSessionId} onValueChange={handleSessionChange}>
               <SelectTrigger>

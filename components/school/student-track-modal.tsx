@@ -17,7 +17,12 @@ interface Props {
   onOpenChange:  (open: boolean) => void
   enrollmentId:  string
   studentName:   string
-  className:     string
+  /** La CLASSE seule, ex. « NS3 ». Deux champs distincts jusqu'au rendu :
+   *  voir « La Règle des Deux Champs » dans DESIGN.md. */
+  classe:        string
+  /** La SALLE seule, ex. « A ». Jamais un code de filière : la filière est
+   *  précisément ce que cette modale fait saisir, et elle est individuelle. */
+  salle:         string
   currentTrackId?: string | null
   onSaved?:      () => void
 }
@@ -28,7 +33,7 @@ const C = {
 }
 
 export function StudentTrackModal({
-  open, onOpenChange, enrollmentId, studentName, className, currentTrackId, onSaved,
+  open, onOpenChange, enrollmentId, studentName, classe, salle, currentTrackId, onSaved,
 }: Props) {
   const { toast } = useToast()
   const [tracks, setTracks] = useState<TrackOption[]>([])
@@ -82,9 +87,31 @@ export function StudentTrackModal({
           <DialogTitle style={{ fontFamily: 'var(--font-serif)', fontSize: 'var(--text-xl)', fontWeight: 700, color: C.primary[800] }}>
             Filière de l&apos;élève
           </DialogTitle>
+          {/* Identité de l'inscription. La classe et la salle sont deux champs
+              étiquetés, pas « NS3 A » : c'est ici qu'on choisit une filière,
+              et confondre une lettre de salle avec un code de filière est
+              exactement l'erreur que cette page doit rendre impossible. */}
           <p style={{ fontSize: 'var(--text-sm)', color: C.neutral[500], marginTop: '2px' }}>
-            {studentName} · {className}
+            {studentName}
           </p>
+          <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="text-2xs uppercase tracking-wide">Classe</span>
+              <span className={classe ? "font-medium text-foreground" : "italic"}>
+                {classe || "non renseignée"}
+              </span>
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="text-2xs uppercase tracking-wide">Salle</span>
+              {salle ? (
+                <span className="inline-flex items-center justify-center rounded-md bg-muted px-2 py-0.5 font-mono text-xs font-semibold text-foreground">
+                  {salle}
+                </span>
+              ) : (
+                <span className="italic">non attribuée</span>
+              )}
+            </span>
+          </div>
         </DialogHeader>
 
         <div className="space-y-4 py-2">

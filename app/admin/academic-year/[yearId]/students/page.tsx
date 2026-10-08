@@ -66,8 +66,10 @@ import { CorrectAssignmentModal } from "@/components/school/correct-assignment-m
 import { CorrectAssignmentBatchModal } from "@/components/school/correct-assignment-batch-modal"
 import { Checkbox } from "@/components/ui/checkbox"
 import { StatCard } from "@/components/school/stat-card"
-import { fetchClassSessions, type AcademicYear, type ClassSession } from "@/lib/api/dashboard"
+import { fetchClassSessions, getClassSessionName, type AcademicYear, type ClassSession } from "@/lib/api/dashboard"
+import { libelleClasseSalle } from "@/lib/classes/labels"
 import { cn } from "@/lib/utils"
+import { estArchivee } from "@/lib/academic-years/status"
 import { isNisuValid, NISU_RULE_LABEL } from "@/lib/nisu"
 
 // ── Types locaux ──────────────────────────────────────────────────────────────
@@ -83,7 +85,12 @@ interface StudentRow {
   email?:        string
   profilePhoto?: string
   classSessionId: string
+  // Forme fusionnee (« 1e AF A ») : filtre, cle de tri et libelle repris dans
+  // les modales. JAMAIS affichee dans le tableau — les deux champs lus a
+  // l'ecran sont `classTypeName` et `salleLabel`.
   className:     string
+  classTypeName: string   // la CLASSE, ex. « 1e AF »
+  salleLabel:    string   // la SALLE, ex. « A » — jamais une filiere
   status:        'ACTIVE' | 'TRANSFERRED' | 'DROPPED' | 'GRADUATED'
   // Filière (portée par l'inscription) — obligatoire en classe terminale
   trackId?:      string | null
@@ -98,13 +105,6 @@ interface StudentRow {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function deriveYearStatus(year: AcademicYear): 'active' | 'preparation' | 'archived' {
-  if (year.isCurrent) return 'active'
-  if (new Date(year.endDate) < new Date()) return 'archived'
-  return 'preparation'
-}
-
 
 function StatusBadge({ status }: { status: StudentRow['status'] }) {
   switch (status) {
@@ -228,7 +228,14 @@ export default function StudentsManagementPage() {
             // que ce compteur ne change pas de valeur.
           }>>(`/api/enrollments?classSessionId=${session.id}&includeTransferred=true`)
 
-                  const className = `${session.class.classType.name} ${session.class.letter}`
+          // Deux champs distincts pour la LECTURE (colonnes Classe et Salle),
+          // composes en un seul point — voir « La Regle des Deux Champs »
+          // dans DESIGN.md.
+          const { classe, salle } = libelleClasseSalle(session)
+          // La forme fusionnee reste, mais pour ses seuls usages legitimes :
+          // valeur du filtre « Toutes les classes », cle de tri, et libelle
+          // repris dans les modales de correction d'affectation.
+          const className = getClassSessionName(session)
 
           enrollments.forEach(enr => {
             allEnrollments.push({
@@ -246,6 +253,8 @@ export default function StudentsManagementPage() {
               isTerminal:    session.class.classType.isTerminal === true,
               classSessionId: session.id,
               className,
+              classTypeName: classe,
+              salleLabel:    salle,
               status:        enr.status,
               address:       enr.student?.address || '',
               motherName:    enr.student?.motherName || '',
@@ -311,8 +320,11 @@ export default function StudentsManagementPage() {
   const paginated         = displayed.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
   // Liste des classes dérivée des sessions (pas des élèves) : une salle
   // nouvellement créée et encore vide doit apparaître dans le filtre.
+  // Valeur de FILTRE : forme fusionnee, donc legitime — mais elle doit rester
+  // identique caractere pour caractere a `className` ci-dessus, sinon le filtre
+  // ne retrouve plus aucun eleve. D'ou le point unique plutot qu'une copie.
   const uniqueClasses     = [...new Set(
-    sessions.map(s => `${s.class.classType.name} ${s.class.letter}`)
+    sessions.map(s => getClassSessionName(s))
   )].sort((a, b) => a.localeCompare(b))
 
   // ── Tri ──────────────────────────────────────────────────────────────────────
@@ -447,7 +459,7 @@ export default function StudentsManagementPage() {
     )
   }
 
-  const isArchived = year ? deriveYearStatus(year) === 'archived' : false
+  const isArchived = year ? estArchivee(year) : false
 
   // Pagination window (up to 5 numbered pages with ellipsis)
   const paginationWindow = (() => {
@@ -649,6 +661,7 @@ export default function StudentsManagementPage() {
                   >
                     Classe <SortIcon col="class" />
                   </TableHead>
+                  <TableHead className="font-semibold">Salle</TableHead>
                   <TableHead className="font-semibold">Statut</TableHead>
                   <TableHead className="pr-6 text-right font-semibold">Actions</TableHead>
                 </TableRow>
@@ -712,7 +725,9 @@ export default function StudentsManagementPage() {
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         <div className="flex flex-col">
-                          <span>{student.className}</span>
+                          <span className={cn(student.classTypeName ? "text-foreground" : "italic")}>
+                            {student.classTypeName || "Aucune classe"}
+                          </span>
                           {student.isTerminal && (
                             student.trackCode ? (
                               <span className="text-2xs font-medium text-info-ink">
@@ -725,6 +740,15 @@ export default function StudentsManagementPage() {
                             )
                           )}
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        {student.salleLabel ? (
+                          <span className="inline-flex items-center justify-center rounded-md bg-muted px-2 py-0.5 font-mono text-xs font-semibold text-foreground">
+                            {student.salleLabel}
+                          </span>
+                        ) : (
+                          <span className="text-xs italic text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <StatusBadge status={student.status} />
@@ -977,7 +1001,8 @@ export default function StudentsManagementPage() {
           onOpenChange={open => !open && setTrackStudent(null)}
           enrollmentId={trackStudent.enrollmentId}
           studentName={`${trackStudent.firstname} ${trackStudent.lastname}`}
-          className={trackStudent.className}
+          classe={trackStudent.classTypeName}
+          salle={trackStudent.salleLabel}
           currentTrackId={trackStudent.trackId}
           onSaved={loadStudents}
         />
@@ -994,9 +1019,12 @@ export default function StudentsManagementPage() {
           currentClassName={correctingStudent.className}
           currentTrackId={correctingStudent.trackId}
           currentClassTypeId={sessions.find(s => s.id === correctingStudent.classSessionId)?.class.classType.id}
+          // Valeur d'OPTION de liste : la fusion y est légitime, mais elle a
+          // son point unique. Pas de recomposition locale ici (DESIGN.md,
+          // « La Règle des Deux Champs »).
           sessions={sessions.map(s => ({
             id: s.id,
-            label: `${s.class.classType.name} ${s.class.letter}`,
+            label: getClassSessionName(s),
             classTypeId: s.class.classType.id,
           }))}
           onCorrected={loadStudents}
@@ -1015,9 +1043,10 @@ export default function StudentsManagementPage() {
             className:      s.className,
             classTypeId:    sessions.find(cs => cs.id === s.classSessionId)?.class.classType.id,
           }))}
+          // Même raison qu'au-dessus : option de liste, fusion via le point unique.
           sessions={sessions.map(s => ({
             id: s.id,
-            label: `${s.class.classType.name} ${s.class.letter}`,
+            label: getClassSessionName(s),
             classTypeId: s.class.classType.id,
           }))}
           onCorrected={() => {
