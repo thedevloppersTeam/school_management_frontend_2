@@ -1,9 +1,11 @@
 import Decimal from 'decimal.js'
-import { computeStep, computeSubject, formatScore, coeffCellValue } from './compute'
+import { computeStep, computeSubject, formatScore, coeffCellValue, stepAverageOrNull } from './compute'
 import {
-  toSubjectInputs, buildExclusionSet, exclusionKey, rubricIndex, WHOLE_SUBJECT,
+  toSubjectInputs, toScopedSubjectInputs, buildExclusionSet, exclusionKey, rubricIndex, WHOLE_SUBJECT,
   type ApiClassSubjectLike, type ApiGradeLike,
 } from './from-api'
+import { filterSubjectsByScope, type ApiClassSubject } from '@/lib/api/grades'
+import { calculateBulletinAverages } from '@/lib/bulletin-calculations'
 
 const D = (v: string | number) => new Decimal(v)
 let pass = 0, fail = 0
@@ -161,6 +163,54 @@ console.log('\n=== CAS PIERRE, BOUT EN BOUT DEPUIS L API ===')
   }).subjects)
   check('dispensee : R1 = 20/50', dispensee.r1.average!, D(4))
   check('dispensee : moyenne etape', dispensee.average, D('2.8'))
+}
+
+// ═══ C2 — PORTEE FILIERE : l'ecran doit egaler le bulletin ════════════════
+console.log('\n=== C2 : portee filiere, ecran = bulletin ===')
+{
+  // Salle a deux filieres : tronc commun + un examen par filiere, tout en R1 /10.
+  const matiere = (id: string, trackId: string | null): ApiClassSubject => ({
+    id, subjectId: `s-${id}`, classSessionId: 'cls', coefficientOverride: null,
+    maxScoreOverride: null, trackId,
+    subject: { id: `s-${id}`, name: id, maxScore: 10, rubric: { id: 'r1' }, sections: [] },
+  } as unknown as ApiClassSubject)
+  const salle = [matiere('tronc', null), matiere('examA', 'tA'), matiere('examB', 'tB')]
+  // Eleve de la filiere A : tronc 8/10, examen A 9/10, rien en examen B (pas sa filiere)
+  const grades: ApiGradeLike[] = [
+    { classSubjectId: 'tronc', sectionId: null, studentScore: 8 },
+    { classSubjectId: 'examA', sectionId: null, studentScore: 9 },
+  ]
+
+  // Reference : le chemin EXACT du bulletin (bulletin.ts:722 puis :732)
+  const bulletin = (scope: 'common' | 'exam', trackId: string | null) =>
+    calculateBulletinAverages(toSubjectInputs({
+      classSubjects: filterSubjectsByScope(salle, scope, trackId),
+      grades, rubricCodeById: idx, enrollmentId: 'e1',
+    }).subjects).exact.moyenneEtape
+  const ecran = (scope: 'common' | 'exam', trackId: string | null) =>
+    stepAverageOrNull(computeStep(toScopedSubjectInputs({
+      classSubjects: salle, grades, rubricCodeById: idx, enrollmentId: 'e1',
+      scope, trackId,
+    }).subjects))
+
+  check('normal : bulletin = 8/10 x 0,70', bulletin('common', 'tA')!, D('5.6'))
+  check('normal : ecran = bulletin', ecran('common', 'tA')!, bulletin('common', 'tA')!)
+  check('examen : bulletin = 9/10 x 0,70', bulletin('exam', 'tA')!, D('6.3'))
+  check('examen : ecran = bulletin', ecran('exam', 'tA')!, bulletin('exam', 'tA')!)
+  check('examen B jamais compte pour un eleve de A',
+    toScopedSubjectInputs({ classSubjects: salle, grades, rubricCodeById: idx, enrollmentId: 'e1', scope: 'exam', trackId: 'tA' })
+      .subjects.some((s) => s.classSubjectId === 'examB'), false)
+  check('examen, eleve sans filiere : rien a moyenner', String(ecran('exam', null)), String(bulletin('exam', null)))
+
+  // Salle sans filiere : la portee normale ne change rien
+  const fondamental = [matiere('m1', null), matiere('m2', null)]
+  const g2: ApiGradeLike[] = [
+    { classSubjectId: 'm1', sectionId: null, studentScore: 6 },
+    { classSubjectId: 'm2', sectionId: null, studentScore: 7 },
+  ]
+  const avant = computeStep(toSubjectInputs({ classSubjects: fondamental, grades: g2, rubricCodeById: idx, enrollmentId: 'e1' }).subjects)
+  const apres = computeStep(toScopedSubjectInputs({ classSubjects: fondamental, grades: g2, rubricCodeById: idx, enrollmentId: 'e1', scope: 'common', trackId: null }).subjects)
+  check('sans filiere : moyenne inchangee', apres.average, avant.average)
 }
 
 console.log(out.join('\n'))

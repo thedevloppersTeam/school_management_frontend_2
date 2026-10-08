@@ -11,6 +11,7 @@
 
 import Decimal from 'decimal.js'
 import type { RubriqueCode, SectionInput, SubjectInput } from './compute'
+import { filterSubjectsByScope, type ApiClassSubject, type SubjectScope } from '@/lib/api/grades'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Formes minimales attendues de l'API. Volontairement structurelles : on ne
@@ -178,6 +179,32 @@ export function toSubjectInputs(params: {
   }
 
   return { subjects, unmapped }
+}
+
+/**
+ * Entrees de calcul d'UN eleve, restreintes a la portee d'un bulletin.
+ *
+ * Meme filtre que le bulletin (lib/api/bulletin.ts, `filterSubjectsByScope`
+ * avant `buildSubjectInputs`) : 'common' = bulletin normal, tronc commun seul ;
+ * 'exam' = bulletin d'examen, matieres de LA filiere de l'eleve seules. Sans ce
+ * filtre, les matieres d'examen des AUTRES filieres entraient comme notes
+ * manquantes (0 au numerateur, bareme au denominateur).
+ */
+export function toScopedSubjectInputs(params: {
+  classSubjects: ApiClassSubject[]
+  grades: ApiGradeLike[]
+  rubricCodeById: Record<string, string>
+  enrollmentId: string
+  exclusions?: Set<string>
+  scope: Exclude<SubjectScope, 'all'>
+  /** Enrollment.trackId de l'eleve, null hors secondaire. */
+  trackId: string | null | undefined
+}): ToSubjectInputsResult {
+  const { classSubjects, scope, trackId, ...rest } = params
+  return toSubjectInputs({
+    ...rest,
+    classSubjects: filterSubjectsByScope(classSubjects, scope, trackId),
+  })
 }
 
 /** Raccourci : id de rubrique -> code, depuis une liste { id, code }. */

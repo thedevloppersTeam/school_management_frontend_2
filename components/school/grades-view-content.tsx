@@ -33,6 +33,7 @@ import { fetchClassSubjects, fetchEnrollments, type ApiClassSubject, type ApiEnr
 import { computeStep } from "@/lib/bulletin/compute"
 import {
   toSubjectInputs,
+  toScopedSubjectInputs,
   buildExclusionSet,
   rubricIndex,
   type ApiExclusionLike,
@@ -82,6 +83,17 @@ function getAppreciation(m: number | null): string {
 // `getClassSessionName`, importé du même module que `ClassSession`. Rien à
 // découper ici : cet écran n'affiche la classe nulle part ailleurs.
 
+/**
+ * Portée du calcul, la même que celle du bulletin : 'common' = bulletin normal
+ * (tronc commun), 'exam' = bulletin d'examen (matières de la filière de
+ * l'élève). Une salle sans matière de filière n'a qu'une portée possible.
+ */
+type PorteeBulletin = 'common' | 'exam'
+
+function porteeEffective(cs: ApiClassSubject[], choix: PorteeBulletin): PorteeBulletin {
+  return cs.some(c => c.trackId != null) ? choix : 'common'
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export function GradesViewContent({
@@ -102,6 +114,7 @@ export function GradesViewContent({
 
   const [selectedSession, setSelectedSession] = useState(initialSessionId)
   const [selectedStep,    setSelectedStep]    = useState(initialStepId)
+  const [scope,           setScope]           = useState<PorteeBulletin>('common')
 
   const [classSubjects, setClassSubjects] = useState<ApiClassSubject[]>([])
   const isLocked = useMemo(() => {
@@ -154,6 +167,7 @@ export function GradesViewContent({
 
       const rubricCodeById = rubricIndex(rubrics)
       const exclusions     = buildExclusionSet(exclusionRows)
+      const portee         = porteeEffective(cs, scope)
 
       // DR-003 — le mapping ne depend ni de l'eleve ni des notes : on le
       // constate une fois pour la salle.
@@ -167,12 +181,16 @@ export function GradesViewContent({
             const res       = await fetch(`/api/grades/enrollment/${enrollment.id}?stepId=${stepId}`, { credentials: 'include' })
             const rawGrades = res.ok ? await res.json() : []
 
-            const { subjects } = toSubjectInputs({
+            // Même portée que le bulletin : sans elle, les matières d'examen
+            // des autres filières entraient comme notes manquantes.
+            const { subjects } = toScopedSubjectInputs({
               classSubjects: cs,
               grades:        rawGrades,
               rubricCodeById,
               enrollmentId:  enrollment.id,
               exclusions,
+              scope:         portee,
+              trackId:       enrollment.trackId,
             })
             const step = computeStep(subjects)
 
@@ -250,12 +268,21 @@ export function GradesViewContent({
     } finally {
       setLoadingGrid(false)
     }
-  }, [rubrics, toast])
+  }, [rubrics, scope, toast])
 
   useEffect(() => {
     if (selectedSession && selectedStep) loadGrid(selectedSession, selectedStep)
     else { setGradeRows([]); setClassSubjects([]); setUnmappedSubjects([]) }
   }, [selectedSession, selectedStep, loadGrid])
+
+  // ── Portée affichée ───────────────────────────────────────────────────────
+  // Les colonnes suivent la portée du calcul : tronc commun en bulletin normal,
+  // matières de filière en bulletin d'examen.
+  const hasTrackSubjects = useMemo(() => classSubjects.some(cs => cs.trackId != null), [classSubjects])
+  const visibleSubjects  = useMemo(() => {
+    const portee = porteeEffective(classSubjects, scope)
+    return classSubjects.filter(cs => portee === 'common' ? cs.trackId == null : cs.trackId != null)
+  }, [classSubjects, scope])
 
   // ── Groupes rubriques ─────────────────────────────────────────────────────
   const rubricGroups = useMemo(() => {
@@ -265,18 +292,18 @@ export function GradesViewContent({
     ;['R1', 'R2', 'R3'].forEach(code => {
       const rubric   = rubrics.find(r => r.code === code)
       if (!rubric) return
-      const subjects = classSubjects.filter(cs => cs.subject.rubric?.id && rubricMap[cs.subject.rubric.id] === code)
+      const subjects = visibleSubjects.filter(cs => cs.subject.rubric?.id && rubricMap[cs.subject.rubric.id] === code)
       if (subjects.length > 0) groups.push({ rubric, subjects })
     })
-    const withoutRubric = classSubjects.filter(cs => !cs.subject.rubric)
+    const withoutRubric = visibleSubjects.filter(cs => !cs.subject.rubric)
     if (withoutRubric.length > 0) groups.push({ rubric: { id: 'none', code: '—', name: 'Sans rubrique' }, subjects: withoutRubric })
     return groups
-  }, [classSubjects, rubrics])
+  }, [visibleSubjects, rubrics])
 
   // ── KPIs ──────────────────────────────────────────────────────────────────
   const columnAverages = useMemo(() => {
     const avgs: Record<string, number | null> = {}
-    classSubjects.forEach(cs => {
+    visibleSubjects.forEach(cs => {
       // Une dispense sort de la moyenne de colonne ; une note manquante y
       // compte ZERO. C'est la difference entre 27/30 et 27/27.
       const notes = gradeRows.flatMap(r => {
@@ -287,7 +314,7 @@ export function GradesViewContent({
       avgs[cs.id] = notes.length > 0 ? notes.reduce((s, v) => s + v, 0) / notes.length : null
     })
     return avgs
-  }, [classSubjects, gradeRows])
+  }, [visibleSubjects, gradeRows])
 
   const classAverage = useMemo(() => {
     const avgs = gradeRows.map(r => r.average).filter((a): a is number => a !== null)
@@ -402,6 +429,20 @@ export function GradesViewContent({
                 ))}
               </SelectContent>
             </Select>
+
+            {/* Uniquement si la salle a des matières de filière : ailleurs, les
+                deux bulletins portent sur le même tronc commun. */}
+            {hasTrackSubjects && (
+              <Select value={scope} onValueChange={(v) => setScope(v as PorteeBulletin)}>
+                <SelectTrigger aria-label="Portée du calcul">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="common">Bulletin normal (tronc commun)</SelectItem>
+                  <SelectItem value="exam">Bulletin d&apos;examen (matières de la filière)</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
           </div>
         </CardContent>
       </Card>
