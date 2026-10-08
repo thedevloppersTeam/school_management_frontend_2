@@ -731,6 +731,52 @@ hausse le ton, mais par l'accumulation de détails justes.
 - **Focus :** l'anneau de 1 px reste la règle ; il ne doit pas déplacer la
   cellule ni élargir la ligne.
 
+### La Règle des Deux Champs
+
+*Tranchée le 18 septembre 2026.*
+
+Partout où l'utilisateur **lit une donnée**, la classe et la salle sont **deux
+champs distincts et étiquetés** : deux colonnes de tableau, deux badges, deux
+lignes de fiche, « Classe : 1e AF » et « Salle : A ». Jamais « 1e AF A ».
+
+Une chaîne fusionnée ne se trie pas par salle, ne se filtre pas par niveau et ne
+se relit pas : elle oblige chaque écran suivant à la redécouper au motif pour
+retrouver ce qu'elle contenait. C'est ce qui s'est produit — dix-neuf sites de
+composition, cinq copies locales de la même logique, huit libellés écrits en
+dur, et des divergences qu'aucune règle ne permettait d'arbitrer.
+
+**La fusion n'est admise que dans quatre cas, et nulle part ailleurs :** valeur
+d'option de liste, clé de tri ou de recherche, nom de fichier exporté, prose de
+confirmation. Elle y garde son point unique, `getClassSessionName`
+(`lib/api/dashboard.ts`). Une chaîne fusionnée qui atterrit dans une cellule de
+tableau est un défaut, même si elle se lit bien.
+
+`getClassSessionName` n'est donc **pas un vestige à supprimer** : une valeur
+d'option (`SelectItem`), un comparateur de tri et un nom de fichier PDF exporté
+ont besoin d'une chaîne unique, et il vaut mieux qu'ils partagent celle-là que
+d'en recomposer chacun la sienne. La passe suivante ne le remplace pas par
+`libelleClasseSalle` : les deux fonctions répondent à deux besoins distincts.
+
+**La filière n'entre jamais dans un libellé de classe ou de salle.** Une salle
+n'a pas de filière : le modèle ne la porte ni sur `Class` ni sur
+`ClassSession` — elle appartient à l'inscription de l'élève, et une même salle
+en héberge plusieurs. La filière s'affiche comme un champ à elle, sous le nom de
+l'élève ou dans sa propre colonne. Un repli du type « code de filière à défaut
+de lettre » affiche une salle qui n'existe pas.
+
+**Un seul mot pour l'action de création : « salle ».** L'écran de configuration
+disait « Ajouter salle » au fondamental, « Ajouter une classe » en NS1/NS2 et
+« Ajouter filière » en NS3/NS4, pour un formulaire qui, dans les trois cas, ne
+demande qu'une lettre. Trois mots pour un seul geste, dont un faux. Le libellé
+d'action, le titre de la modale et l'en-tête de la colonne de comptage disent
+tous « salle », quel que soit le niveau.
+
+**Application.** Les deux valeurs se composent en un seul point,
+`libelleClasseSalle` (`lib/classes/labels.ts`), qui rend `{ classe, salle }` —
+deux chaînes, vides quand la donnée manque. Le texte de remplacement
+(« Aucune classe », « — ») appartient à l'écran, qui seul sait ce que l'absence
+veut dire à cet endroit.
+
 ### Signature Component — Le Sceau (`SchoolLogo`)
 Carré plein `#2A3740`, coins 14 px, ombre douce `0 4px 12px rgba(42,55,64,.15)`,
 glyphe « SL » en Libre Baskerville gras `#C3B594`. Deux tailles : 40 px (glyphe
@@ -786,6 +832,8 @@ autre module change d'où viennent les chiffres, pas la mise en page.
 - **Do** composer le vertical avec 24 px entre sections et 16 px à l'intérieur.
 - **Do** appeler le backend via les gestionnaires de route `app/api/**` : la
   couche visuelle ne parle jamais au serveur en direct.
+- **Do** présenter la classe et la salle comme deux champs étiquetés, composés
+  par `libelleClasseSalle` (`lib/classes/labels.ts`).
 
 ### Don't:
 - **Don't** modifier le gabarit du bulletin imprimé, sous aucun prétexte visuel.
@@ -819,6 +867,9 @@ autre module change d'où viennent les chiffres, pas la mise en page.
   hexadécimal dans un composant d'interface — le sceau excepté.
 - **Don't** ajouter un troisième pas d'espacement vertical à côté de 24 px et
   16 px sans raison explicite.
+- **Don't** afficher « 1e AF A » en une seule chaîne dans une colonne, une fiche
+  ou un badge, ni y accoler une filière. La fusion ne sert qu'à une option de
+  liste, une clé de tri, un nom de fichier ou une phrase.
 
 ### Écarts connus au 14 septembre 2026
 
