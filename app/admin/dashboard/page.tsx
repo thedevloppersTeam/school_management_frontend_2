@@ -25,7 +25,6 @@ import {
   UsersIcon,
 } from "lucide-react";
 import {
-  fetchActiveAcademicYear,
   fetchClassSessions,
   fetchEnrollmentCount,
   fetchSteps,
@@ -36,6 +35,7 @@ import {
 } from "@/lib/api/dashboard";
 import { clientFetch as apiFetch } from "@/lib/client-fetch";
 import { toMessage } from "@/lib/errors";
+import { useAcademicYearContext } from "@/lib/contexts/academic-year-context";
 import {
   Card,
   CardContent,
@@ -609,6 +609,8 @@ export default function AdminDashboardPage() {
   // Une requête plus ancienne ne doit jamais écraser une plus récente : le
   // bouton « Réessayer » peut relancer un chargement pendant qu'un autre court.
   const requestIdRef = useRef(0);
+  const { activeYear: contextYear, loading: yearLoading, refresh: refreshActiveYear } =
+    useAcademicYearContext();
 
   // Aucun setState synchrone ici : la fonction est appelée depuis un effet, et
   // tout état visible n'est écrit qu'après le premier `await`. La remise à zéro
@@ -618,7 +620,10 @@ export default function AdminDashboardPage() {
     const isStale = () => requestIdRef.current !== requestId;
 
     try {
-      const year = await fetchActiveAcademicYear();
+      // Annee lue dans le contexte. `reload` ci-dessous appelle `refresh()`
+      // avant `loadDashboard`, de sorte que le bouton « recharger » relit
+      // toujours l'annee — la semantique d'origine est preservee.
+      const year = contextYear;
       if (isStale()) return;
       setActiveYear(year);
       setErrorMessage(null);
@@ -697,21 +702,28 @@ export default function AdminDashboardPage() {
       setErrorMessage(toMessage(err));
       setLoadState("error");
     }
-  }, []);
+    // `contextYear` EST une dependance depuis que l'annee vient du contexte :
+    // sans elle, `loadDashboard` resterait fige sur la valeur du premier
+    // rendu, c'est-a-dire `null`.
+  }, [contextYear]);
 
   const reload = useCallback(() => {
     setLoadState("loading");
     setErrorMessage(null);
     setPartialReasons([]);
-    void loadDashboard();
-  }, [loadDashboard]);
+    // Relit l'annee AVANT le reste : sans ca, le bouton rechargerait tout
+    // sauf l'annee, qui viendrait du cache du contexte.
+    void refreshActiveYear().then(() => loadDashboard());
+  }, [loadDashboard, refreshActiveYear]);
 
   useEffect(() => {
-    void loadDashboard();
+    // `yearLoading` garde l'appel : partir avec `contextYear` a null ferait
+    // afficher « aucune annee active » alors que la reponse est en vol.
+    if (!yearLoading) void loadDashboard();
     return () => {
       requestIdRef.current += 1;
     };
-  }, [loadDashboard]);
+  }, [loadDashboard, yearLoading]);
 
   const routes = useMemo(() => getRouteSet(activeYear), [activeYear]);
   const currentStep = useMemo(() => getCurrentStep(steps), [steps]);

@@ -67,11 +67,8 @@ import {
 } from "lucide-react";
 
 import { getMe, logout, type AuthUser } from "@/lib/data/auth-data";
-import {
-  fetchActiveAcademicYear,
-  type AcademicYear,
-} from "@/lib/api/dashboard";
 import { cn } from "@/lib/utils";
+import { useAcademicYearContext } from "@/lib/contexts/academic-year-context";
 import { SchoolLogo } from "@/components/school/school-logo";
 import { ProfileDialog } from "@/components/school/profile-dialog";
 
@@ -230,8 +227,10 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
 
-  const [activeYear, setActiveYear] = useState<AcademicYear | null>(null);
-  const [yearLoading, setYearLoading] = useState(true);
+  // L'annee active vient du contexte, plus d'un fetch local monte une seule
+  // fois : c'est ce fetch qui laissait le bandeau fige apres une activation
+  // faite sur un autre ecran.
+  const { activeYear, loading: yearLoading } = useAcademicYearContext();
 
   const [profileOpen, setProfileOpen] = useState(false);
 
@@ -247,14 +246,6 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
         setAuthLoading(false);
       }
     });
-  }, []);
-
-  // Année active
-  useEffect(() => {
-    fetchActiveAcademicYear()
-      .then((year) => setActiveYear(year))
-      .catch(() => setActiveYear(null))
-      .finally(() => setYearLoading(false));
   }, []);
 
   // Pas de cloche de notifications : il n'existe aucune source de notifications

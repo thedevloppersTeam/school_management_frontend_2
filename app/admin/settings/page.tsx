@@ -5,6 +5,7 @@ import { useToast } from "@/components/ui/use-toast"
 import { clientFetch as apiFetch } from "@/lib/client-fetch"
 import { parseDecimal } from "@/lib/decimal"
 import { toMessage } from "@/lib/errors"
+import { useAcademicYearContext } from "@/lib/contexts/academic-year-context"
 import { cn } from "@/lib/utils"
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -255,6 +256,7 @@ function useSchoolSettings() {
   const [calendarLoaded, setCalendarLoaded] = useState(false)
   const [loadingCalendar, setLoadingCalendar] = useState(false)
   const [currentYearId, setCurrentYearId] = useState<string | null>(null)
+  const { activeYear } = useAcademicYearContext()
   const [activeTab, setActiveTab] = useState("general")
 
   // modals
@@ -379,33 +381,21 @@ function useSchoolSettings() {
   useEffect(() => {
     if (activeTab === "referentiel" && !referentielLoaded) { loadReferentiel(); setReferentielLoaded(true) }
     if (activeTab === "classes" && !classesLoaded) { loadClasses(); setClassesLoaded(true) }
-    if (activeTab === "calendar" && !calendarLoaded) {
+    // L'annee active vient du contexte, plus d'un `apiFetch` direct. Cet ecran
+    // etait le seul a court-circuiter `lib/api/dashboard.ts` pour lire la meme
+    // donnee, avec sa propre forme de repli — une incoherence de chemin qui
+    // n'avait aucune raison metier, seulement l'anciennete.
+    if (activeTab === "calendar" && !calendarLoaded && activeYear?.id) {
       setCalendarLoaded(true)
-      apiFetch<{ id?: string }>("/api/academic-years/current")
-        .then((data) => {
-          if (data?.id) {
-            setCurrentYearId(data.id)
-            loadCalendar(data.id)
-          }
-        })
-        .catch(() => {
-          // aucune annee active — l'interface le dit
-        })
+      setCurrentYearId(activeYear.id)
+      loadCalendar(activeYear.id)
     }
-    if (activeTab === "attitudes" && !attitudesLoaded) {
+    if (activeTab === "attitudes" && !attitudesLoaded && activeYear?.id) {
       setAttitudesLoaded(true)
-      apiFetch<{ id?: string }>("/api/academic-years/current")
-        .then((data) => {
-          if (data?.id) {
-            setCurrentYearId(data.id)
-            loadAttitudes(data.id)
-          }
-        })
-        .catch(() => {
-          // no current year set — handled in UI
-        })
+      setCurrentYearId(activeYear.id)
+      loadAttitudes(activeYear.id)
     }
-  }, [activeTab, referentielLoaded, classesLoaded, attitudesLoaded, calendarLoaded, loadReferentiel, loadClasses, loadAttitudes, loadCalendar])
+  }, [activeTab, referentielLoaded, classesLoaded, attitudesLoaded, calendarLoaded, loadReferentiel, loadClasses, loadAttitudes, loadCalendar, activeYear])
 
   useEffect(() => {
     if (activeTab !== "general" || schoolInfoLoaded) return

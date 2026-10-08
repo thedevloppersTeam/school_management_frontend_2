@@ -14,7 +14,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { BulletinPDFGenerator } from "@/components/bulletin-pdf-generator"
 import { SearchIcon, ArchiveIcon, ClockIcon, UserIcon, ChevronsUpDownIcon, ArrowUpIcon, ArrowDownIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { fetchActiveAcademicYear, fetchClassSessions, fetchSteps, getClassSessionName, type AcademicYear, type ClassSession, type AcademicYearStep } from "@/lib/api/dashboard"
+import { fetchClassSessions, fetchSteps, getClassSessionName, type AcademicYear, type ClassSession, type AcademicYearStep } from "@/lib/api/dashboard"
+import { useAcademicYearContext } from "@/lib/contexts/academic-year-context"
 import type { BulletinData } from "@/components/BulletinScolaire"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -64,6 +65,7 @@ export default function ArchivesPage() {
   const router = useRouter()
 
   // ── Contexte ─────────────────────────────────────────────────────────────
+  const { activeYear: contextYear, loading: yearLoading } = useAcademicYearContext()
   const [activeYear,  setActiveYear]  = useState<AcademicYear | null>(null)
   const [sessions,    setSessions]    = useState<ClassSession[]>([])
   const [steps,       setSteps]       = useState<AcademicYearStep[]>([])
@@ -124,7 +126,9 @@ export default function ArchivesPage() {
   useEffect(() => {
     async function init() {
       try {
-        const year = await fetchActiveAcademicYear()
+        // L'annee vient du contexte : une seule lecture pour toute la zone
+        // /admin, et elle se reactualise quand une activation a lieu ailleurs.
+        const year = contextYear
         setActiveYear(year)
         if (year) {
           const [sess, stps] = await Promise.all([
@@ -140,8 +144,11 @@ export default function ArchivesPage() {
         setLoadingCtx(false)
       }
     }
-    init()
-  }, [])
+    // On attend que le contexte ait fini sa premiere lecture : sans cette
+    // garde, `init` partirait avec `contextYear` a null et conclurait « aucune
+    // annee active » alors que la reponse est encore en vol.
+    if (!yearLoading) init()
+  }, [contextYear, yearLoading])
 
   // ── Chargement archives ───────────────────────────────────────────────────
   const loadArchives = useCallback(async () => {
