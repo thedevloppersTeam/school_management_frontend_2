@@ -1,5 +1,7 @@
 import Decimal from 'decimal.js'
-import { computeStep, computeSubject, formatScore, coeffCellValue, stepAverageOrNull } from './compute'
+import { computeStep, computeSubject, formatScore, coeffCellValue, stepAverageOrNull, formatAverage } from './compute'
+import { afficherMoyenne, bandePourcent, moyenneColonne, moyenneClasse } from './grades-view'
+import { gradeMention } from './grade-color'
 import {
   toSubjectInputs, toScopedSubjectInputs, buildExclusionSet, exclusionKey, rubricIndex, WHOLE_SUBJECT,
   type ApiClassSubjectLike, type ApiGradeLike,
@@ -211,6 +213,74 @@ console.log('\n=== C2 : portee filiere, ecran = bulletin ===')
   const avant = computeStep(toSubjectInputs({ classSubjects: fondamental, grades: g2, rubricCodeById: idx, enrollmentId: 'e1' }).subjects)
   const apres = computeStep(toScopedSubjectInputs({ classSubjects: fondamental, grades: g2, rubricCodeById: idx, enrollmentId: 'e1', scope: 'common', trackId: null }).subjects)
   check('sans filiere : moyenne inchangee', apres.average, avant.average)
+}
+
+// ═══ C1 / C3 — moyennes de l'ecran Consultation en Decimal ════════════════
+console.log('\n=== C1 / C3 : moyennes de colonne et de classe, arrondi ===')
+{
+  const matiere = (id: string, max: number, rubric: string): ApiClassSubject => ({
+    id, subjectId: `s-${id}`, classSessionId: 'cls', coefficientOverride: null,
+    maxScoreOverride: null, trackId: null,
+    subject: { id: `s-${id}`, name: id, maxScore: max, rubric: { id: rubric }, sections: [] },
+  } as unknown as ApiClassSubject)
+
+  // C3 — R1 60/100, R2 36/40, R3 19/20 : moyenne exacte 6,925, le bulletin imprime 6,93
+  const salle = [matiere('a', 100, 'r1'), matiere('b', 40, 'r2'), matiere('c', 20, 'r3')]
+  const step = computeStep(toSubjectInputs({
+    classSubjects: salle, rubricCodeById: idx, enrollmentId: 'e1',
+    grades: [
+      { classSubjectId: 'a', sectionId: null, studentScore: 60 },
+      { classSubjectId: 'b', sectionId: null, studentScore: 36 },
+      { classSubjectId: 'c', sectionId: null, studentScore: 19 },
+    ],
+  }).subjects)
+  const exacte = stepAverageOrNull(step)
+  check('C3 : moyenne exacte', exacte!, D('6.925'))
+  check('C3 : affichage ecran = bulletin', afficherMoyenne(exacte), formatAverage(exacte))
+  check('C3 : affichage 6,93', afficherMoyenne(exacte), '6.93')
+  out.push(`  NOTE  ancien chemin ecran (toNumber().toFixed) : ${exacte!.toNumber().toFixed(2)}`)
+
+  // Bande et mention sur la valeur EXACTE : 6,8999... reste en C, pas C+
+  // 20 chiffres significatifs : la precision par defaut de decimal.js, celle des
+  // moyennes produites par compute.ts.
+  const presque = D('6.8999999999999999999')
+  check('bande exacte : 6,8999… -> C', gradeMention(bandePourcent(presque)), 'C')
+  out.push(`  NOTE  ancien chemin ecran (toNumber() x 10) : ${gradeMention(presque.toNumber() * 10)}`)
+  check('bande exacte : 6,90 -> C+', gradeMention(bandePourcent(D('6.9'))), 'C+')
+  check('bande exacte : 5,00 -> E (borne <=)', gradeMention(bandePourcent(D('5'))), 'E')
+  check('bande exacte : 5,0001 -> D', gradeMention(bandePourcent(D('5.0001'))), 'D')
+  check('bande : pas de moyenne', String(bandePourcent(null)), 'null')
+
+  // Regle 3 — colonne : dispense exclue, manquante comptee 0
+  const sortie = (state: 'noted' | 'missing' | 'exempted', score: number, max: number) =>
+    computeSubject({
+      classSubjectId: 'm', name: 'm', rubrique: 'R1', maxScore: D(max), maxScoreOverride: null,
+      sections: [], globalScores: state === 'noted' ? [D(score)] : [], exempted: state === 'exempted',
+    })
+  const colonne = moyenneColonne(
+    [sortie('noted', 8, 10), sortie('missing', 0, 10), sortie('exempted', 0, 10), undefined],
+    D(10),
+  )
+  check('regle 3 : colonne = (8 + 0) / 2 eleves', colonne!, D(4))
+  check('regle 3 : tous dispenses -> pas de moyenne', String(moyenneColonne([sortie('exempted', 0, 10)], D(10))), 'null')
+
+  // C1 — dispense PARTIELLE : chaque eleve compte par SA moyenne, sur /10
+  const fr = (dispenseS4: boolean, v: number) => computeSubject({
+    classSubjectId: 'fr', name: 'fr', rubrique: 'R1', maxScore: D(40), maxScoreOverride: null,
+    globalScores: [], exempted: false,
+    sections: [1, 2, 3, 4].map((i) => ({
+      sectionId: `s${i}`, name: `s${i}`, maxScore: D(10),
+      scores: i === 4 && dispenseS4 ? [] : [D(v)], exempted: i === 4 && dispenseS4,
+    })),
+  })
+  const c1 = moyenneColonne([fr(true, 10), fr(false, 5), fr(false, 5)], D(40))
+  check('C1 : colonne /40 = moyenne(10 ; 5 ; 5)/10 x 40', c1!.toFixed(2), '26.67')
+  out.push('  NOTE  ancien calcul en ligne (notes brutes 30, 20, 20) : 23.33')
+
+  // Regle 3 — classe : eleve sans rien d'exploitable exclu, eleve a 0 compte
+  const classe = moyenneClasse([D('7.005'), D('6.995'), null, D(0)])
+  check('regle 3 : classe = (7,005 + 6,995 + 0) / 3', classe!.toFixed(4), '4.6667')
+  check('classe vide -> pas de moyenne', String(moyenneClasse([null, null])), 'null')
 }
 
 console.log(out.join('\n'))

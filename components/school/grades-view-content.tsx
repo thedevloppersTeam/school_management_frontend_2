@@ -29,8 +29,11 @@ import {
 } from "lucide-react"
 import { gradeBand, gradeBandToneClass, gradeMention } from "@/lib/bulletin/grade-color"
 import { fetchClassSessions, fetchSteps, getClassSessionName, type AcademicYearStep, type ClassSession } from "@/lib/api/dashboard"
-import { fetchClassSubjects, fetchEnrollments, type ApiClassSubject, type ApiEnrollment } from "@/lib/api/grades"
-import { computeStep } from "@/lib/bulletin/compute"
+import { fetchClassSubjects, fetchEnrollments, effectiveMaxScore, type ApiClassSubject, type ApiEnrollment } from "@/lib/api/grades"
+import DecimalJs from "decimal.js"
+import type Decimal from "decimal.js"
+import { computeStep, stepAverageOrNull, type SubjectOutput } from "@/lib/bulletin/compute"
+import { afficherMoyenne, bandePourcent, moyenneColonne, moyenneClasse } from "@/lib/bulletin/grades-view"
 import {
   toSubjectInputs,
   toScopedSubjectInputs,
@@ -52,7 +55,16 @@ interface GradeRow {
   firstname:    string
   studentCode:  string
   grades:       Record<string, number | null>
+  /**
+   * Moyenne d'etape en flottant, lue UNIQUEMENT par le calcul du rang : sa
+   * regle d'egalite (valeur exacte ou affichee) attend la MOA. Tout ce qui
+   * s'affiche part de `exact`.
+   */
   average:      number | null
+  /** Moyenne d'etape exacte sur 10, ou null si rien d'exploitable. */
+  exact:        Decimal | null
+  /** Sortie du calcul par matiere : source des moyennes de colonne. */
+  subjectOutputs: Record<string, SubjectOutput>
   isComplete:   boolean
   rang:         number | null
   /**
@@ -70,10 +82,11 @@ interface GradeRow {
 /**
  * Mention MENFP. Était une copie locale du barème, la cinquième du dépôt ;
  * délègue maintenant à `lib/bulletin/grade-color.ts`, qui porte la table unique
- * alignée sur la légende imprimée du bulletin. `m` est sur /10.
+ * alignée sur la légende imprimée du bulletin. `m` est la moyenne EXACTE sur
+ * /10 : la bande se lit sur elle, comme `isPassing` côté bulletin.
  */
-function getAppreciation(m: number | null): string {
-  return gradeMention(m === null ? null : m * 10)
+function getAppreciation(m: Decimal | null): string {
+  return gradeMention(bandePourcent(m))
 }
 
 // La copie locale de la fusion « classe + salle » qui vivait ici a été
@@ -194,22 +207,26 @@ export function GradesViewContent({
             })
             const step = computeStep(subjects)
 
-            const grades:        Record<string, number | null> = {}
-            const subjectStates: GradeRow['subjectStates']     = {}
-            const maxScores:     Record<string, number>        = {}
-            let anyDenominator = false
+            const grades:         Record<string, number | null> = {}
+            const subjectStates:  GradeRow['subjectStates']     = {}
+            const subjectOutputs: Record<string, SubjectOutput> = {}
+            const maxScores:      Record<string, number>        = {}
             let anyMissing     = false
 
             for (const rubrique of [step.r1, step.r2, step.r3]) {
-              if (!rubrique.denominator.isZero()) anyDenominator = true
               for (const s of rubrique.subjects) {
-                subjectStates[s.classSubjectId] = s.state
+                subjectStates[s.classSubjectId]  = s.state
+                subjectOutputs[s.classSubjectId] = s
                 maxScores[s.classSubjectId]     = s.denominator.toNumber()
                 // La colonne affiche la note dans SON bareme, pas ramenee sur 10.
                 grades[s.classSubjectId]        = s.state === 'noted' ? s.numerator.toNumber() : null
                 if (s.state === 'missing') anyMissing = true
               }
             }
+
+            // Sur /10. Null si les trois rubriques ont un denominateur nul :
+            // rien d'exploitable.
+            const exact = stepAverageOrNull(step)
 
             return {
               enrollmentId: enrollment.id,
@@ -218,9 +235,10 @@ export function GradesViewContent({
               firstname:    enrollment.student.user.firstname,
               studentCode:  enrollment.student.studentCode,
               grades,
-              // Desormais sur /10. Null si les trois rubriques ont un
-              // denominateur nul : rien d'exploitable.
-              average:      anyDenominator ? step.average.toNumber() : null,
+              // Flottant pour le rang SEULEMENT (voir GradeRow.average).
+              average:      exact === null ? null : exact.toNumber(),
+              exact,
+              subjectOutputs,
               // Une matiere DISPENSEE ne rend pas l'eleve incomplet.
               isComplete:   !anyMissing,
               rang:         null,
@@ -236,6 +254,8 @@ export function GradesViewContent({
               studentCode:  enrollment.student.studentCode,
               grades:       {},
               average:      null,
+              exact:        null,
+              subjectOutputs: {},
               isComplete:   false,
               rang:         null,
               subjectStates: {},
@@ -301,25 +321,27 @@ export function GradesViewContent({
   }, [visibleSubjects, rubrics])
 
   // ── KPIs ──────────────────────────────────────────────────────────────────
+  // Regle 3 via computeClassAverage : une dispense sort de la moyenne de
+  // colonne, une note manquante y compte ZERO (27/30 contre 27/27). Chaque
+  // eleve y entre par SA moyenne de la matiere, ce qui neutralise les baremes
+  // reduits par une dispense partielle ; le resultat est rendu dans le bareme
+  // nominal de la colonne, celui des cellules. Portee : les colonnes visibles,
+  // donc les memes matieres que la moyenne d'eleve.
   const columnAverages = useMemo(() => {
-    const avgs: Record<string, number | null> = {}
+    const avgs: Record<string, Decimal | null> = {}
     visibleSubjects.forEach(cs => {
-      // Une dispense sort de la moyenne de colonne ; une note manquante y
-      // compte ZERO. C'est la difference entre 27/30 et 27/27.
-      const notes = gradeRows.flatMap(r => {
-        const state = r.subjectStates[cs.id]
-        if (state === undefined || state === 'exempted') return []
-        return [state === 'missing' ? 0 : (r.grades[cs.id] ?? 0)]
-      })
-      avgs[cs.id] = notes.length > 0 ? notes.reduce((s, v) => s + v, 0) / notes.length : null
+      avgs[cs.id] = moyenneColonne(
+        gradeRows.map(r => r.subjectOutputs[cs.id]),
+        new DecimalJs(effectiveMaxScore(cs)),
+      )
     })
     return avgs
   }, [visibleSubjects, gradeRows])
 
-  const classAverage = useMemo(() => {
-    const avgs = gradeRows.map(r => r.average).filter((a): a is number => a !== null)
-    return avgs.length > 0 ? avgs.reduce((s, v) => s + v, 0) / avgs.length : null
-  }, [gradeRows])
+  const classAverage = useMemo(
+    () => moyenneClasse(gradeRows.map(r => r.exact)),
+    [gradeRows],
+  )
 
   const completeCount   = gradeRows.filter(r => r.isComplete).length
   const incompleteCount = gradeRows.length - completeCount
@@ -360,7 +382,8 @@ export function GradesViewContent({
     if (code === 'R3') return '5%'
     return ''
   }
-  const fmt = (v: number | null) => v !== null ? v.toFixed(2) : '—'
+  // Moyennes : formatées depuis le Decimal, comme le bulletin (formatAverage).
+  const fmt = (v: Decimal | null) => afficherMoyenne(v)
 
   // Seuils 70/50 remplacés par les bandes du bulletin imprimé (E ≤ 50,
   // D 51-59, C 60-68, puis aucune couleur). C'était la divergence d'origine :
@@ -371,10 +394,10 @@ export function GradesViewContent({
     return gradeBandToneClass(gradeBand((note / max) * 100))
   }
 
-  // `avg` est sur /10 ; les bandes raisonnent en pourcentage.
-  const averageColorClass = (avg: number | null) => {
+  // `avg` est la moyenne EXACTE sur /10 ; les bandes raisonnent en pourcentage.
+  const averageColorClass = (avg: Decimal | null) => {
     if (avg === null) return 'text-muted-foreground'
-    return gradeBandToneClass(gradeBand(avg * 10))
+    return gradeBandToneClass(gradeBand(bandePourcent(avg)))
   }
 
   if (loadingCtx) {
@@ -523,7 +546,7 @@ export function GradesViewContent({
               />
               <StatCard
                 label="Moyenne classe"
-                value={classAverage !== null ? classAverage.toFixed(2) : '—'}
+                value={afficherMoyenne(classAverage)}
                 icon={TrendingUpIcon}
                 iconClassName="text-primary"
                 iconBgClassName="bg-primary/10"
@@ -683,11 +706,11 @@ export function GradesViewContent({
                             <TableCell
                               className={cn(
                                 "min-w-[96px] border-l-2 border-border bg-primary/5 text-center text-sm font-bold tabular-nums",
-                                averageColorClass(row.average)
+                                averageColorClass(row.exact)
                               )}
                             >
                               <span className="inline-flex min-w-[72px] justify-center rounded-md bg-background px-2 py-1 shadow-sm">
-                                {fmt(row.average)}
+                                {fmt(row.exact)}
                               </span>
                             </TableCell>
                             {/* Statut */}
@@ -709,10 +732,10 @@ export function GradesViewContent({
                             {/* Appréciation */}
                             <TableCell className="border-l border-border text-center">
                               <Badge
-                                variant={row.average !== null ? "secondary" : "outline"}
+                                variant={row.exact !== null ? "secondary" : "outline"}
                                 className="font-bold tabular-nums"
                               >
-                                {getAppreciation(row.average)}
+                                {getAppreciation(row.exact)}
                               </Badge>
                             </TableCell>
                           </TableRow>
