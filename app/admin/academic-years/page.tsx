@@ -16,6 +16,16 @@ import {
   type AcademicYear,
 } from "@/lib/api/dashboard"
 import { toMessage } from "@/lib/errors"
+import { paginate } from "@/lib/pagination"
+import { Pagination } from "@/components/ui/table-pagination"
+import { useAcademicYearContext } from "@/lib/contexts/academic-year-context"
+import { deriveAcademicYearStatus } from "@/lib/academic-years/status"
+
+/**
+ * Grille de 3 colonnes sur 5 lignes. Les annees s'accumulent d'une par an et ne
+ * sont jamais supprimees : sans decoupage, l'ecran s'allonge indefiniment.
+ */
+const ITEMS_PER_PAGE = 15
 
 // ── Types locaux ──────────────────────────────────────────────────────────────
 
@@ -36,52 +46,12 @@ interface YearCard {
   }
 }
 
-// ── Helper ────────────────────────────────────────────────────────────────────
-
-/**
- * Statut d'affichage d'une annee scolaire.
- *
- * `isCurrent` prime : l'annee active reste active meme si sa date de fin est
- * passee — c'est l'administratrice qui bascule, pas le calendrier.
- *
- * Sinon, une annee dont la date de fin est derriere nous est **revolue**. Sans
- * cette branche, `deriveStatus` ne retournait jamais 'archived' alors que son
- * type l'annonce, et toute la chaine en dependait : `archivedYears` restait
- * vide, donc « Copier depuis une annee archivee » ne pouvait proposer que
- * l'annee active ; le badge « Archivee », le bouton « Consulter » et la ligne
- * de resume archive de `cpmsl-year-card.tsx` n'etaient jamais atteints. Une
- * annee close depuis un an s'affichait « En preparation », en ambre, avec un
- * bouton « Activer » a un clic.
- *
- * Limite assumee : c'est une **inference de date**, pas un etat de registre.
- * Une annee reellement cloturee avant son terme, ou prolongee, sera mal
- * classee. Le champ de statut explicite cote backend est le correctif de fond
- * — chantier ouvert, voir docs/BACKLOG.md.
- */
-function deriveStatus(year: AcademicYear): 'active' | 'preparation' | 'archived' {
-  if (year.isCurrent) return 'active'
-
-  const end = new Date(year.endDate)
-  if (!Number.isNaN(end.getTime()) && end.getTime() < Date.now()) return 'archived'
-
-  return 'preparation'
-}
-
-// ── Calcul des dates des étapes ───────────────────────────────────────────────
-
-function computeStepDates(
-  yearStart: string,
-  yearEnd: string,
-  count: number
-): Array<{ startDate: string; endDate: string }> {
-  const start = new Date(yearStart).getTime()
-  const end   = new Date(yearEnd).getTime()
-  const step  = (end - start) / count
-
-  return Array.from({ length: count }, (_, i) => ({
-    startDate: new Date(start + i * step).toISOString(),
-    endDate:   new Date(start + (i + 1) * step - 1).toISOString(),
-  }))
+/** Date courte française, ou '—' si la date est illisible. */
+function formatDateCourte(raw?: string): string {
+  if (!raw) return '—'
+  const d = new Date(raw)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
 // ── Composant ─────────────────────────────────────────────────────────────────
@@ -139,6 +109,7 @@ async function countYearSubjects(yearId: string): Promise<number | null> {
 export default function AcademicYearsPage() {
   const router   = useRouter()
   const { toast } = useToast()
+  const { refresh: refreshActiveYear } = useAcademicYearContext()
 
   const [years, setYears]               = useState<AcademicYear[]>([])
   const [yearCards, setYearCards]       = useState<YearCard[]>([])
@@ -148,6 +119,13 @@ export default function AcademicYearsPage() {
 
   // EP-005 : état pour le modal de confirmation d'activation
   const [yearToActivate, setYearToActivate] = useState<AcademicYear | null>(null)
+
+  /**
+   * Page demandee. Elle n'est jamais bornee ICI : `paginate` la ramene dans
+   * l'intervalle au calcul. Supprimer des annees alors qu'on est en page 2 ne
+   * laisse donc pas une grille vide, et aucun effet de correction n'est requis.
+   */
+  const [page, setPage] = useState(1)
 
   // ── Chargement ────────────────────────────────────────────────────────────
 
@@ -159,7 +137,7 @@ export default function AcademicYearsPage() {
 
       const cards = await Promise.all(
         allYears.map(async (year) => {
-          const status = deriveStatus(year)
+          const status = deriveAcademicYearStatus(year)
 
           if (status === 'archived') {
             return { year: { id: year.id, name: year.name, status, endDate: year.endDate } }
@@ -210,6 +188,32 @@ export default function AcademicYearsPage() {
   //   2. L'Administrateur tape le nom de l'année pour confirmer
   //   3. Click "Activer définitivement" → handleConfirmActivation exécute
 
+  // Carte déjà calculée pour l'année visée : on réutilise ses statistiques
+  // plutôt que de les recharger pour la modale.
+  const activationCard = yearToActivate
+    ? yearCards.find(c => c.year.id === yearToActivate.id)
+    : undefined
+  const activationIsArchived = activationCard?.year.status === 'archived'
+
+  /**
+   * Contexte chiffré de l'année visée, tel qu'il est DÉJÀ calculé pour la
+   * carte. Rien n'est rechargé.
+   *
+   * DEUX LIMITES, toutes deux assumées :
+   *   · `loadYears` ne calcule AUCUNE statistique pour une année archivée
+   *     (elle sort tôt, sans `stats`). Pour une réactivation — le seul cas où
+   *     ce contexte servirait — il est donc vide en pratique, et la modale se
+   *     rabat sur la date de fin, seule donnée disponible à coup sûr.
+   *   · le nombre d'élèves n'est calculé nulle part sur cet écran : le type
+   *     `YearCard` ne porte que périodes, classes et matières.
+   * Charger ces compteurs pour les années archivées est un choix produit, pas
+   * un oubli technique.
+   */
+  const activationContexte = (() => {
+    const n = activationCard?.stats?.classes?.current
+    return n != null ? `${n} classes` : null
+  })()
+
   // Étape 1 — ouverture du modal
   const handleActivateYear = (yearId: string) => {
     const target = years.find(y => y.id === yearId)
@@ -221,25 +225,45 @@ export default function AcademicYearsPage() {
   const handleConfirmActivation = async () => {
     if (!yearToActivate) return
 
+    // Réactiver une année close est un geste distinct, et le serveur le refuse
+    // (400) sans cette confirmation explicite. Le drapeau n'est donc pas une
+    // formalité d'interface : il porte l'intention jusqu'au journal d'audit,
+    // qui enregistre `confirmedReactivation`.
+    const reactivation = activationIsArchived
+
     setActivatingId(yearToActivate.id)
     try {
       const res = await fetch(`/api/academic-years/set-current/${yearToActivate.id}`, {
         method: 'POST',
         credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(reactivation ? { confirmReactivation: true } : {}),
       })
 
+      const payload = await res.json().catch(() => null)
+
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.message || 'Erreur activation')
+        // Le contrôleur rend `error` sur un refus métier (400) et `message`
+        // sur une panne. Ne lire que `message` rendait le refus muet — c'est
+        // le défaut que ce lot corrige, on ne le réintroduit pas ici.
+        throw new Error(
+          payload?.error || payload?.message || `Échec de l'activation (HTTP ${res.status})`,
+        )
       }
 
       toast({
-        title: "Année activée",
+        title: reactivation ? "Année réactivée" : "Année activée",
         description: `${yearToActivate.name} est maintenant l'année scolaire active.`
       })
       setYearToActivate(null)
-      await loadYears()
+      // `loadYears` rafraichit CETTE liste ; `refreshActiveYear` rafraichit le
+      // bandeau du bandeau superieur et tous les autres consommateurs. Sans le
+      // second, le badge restait fige sur l'ancienne annee jusqu'a un
+      // rechargement complet de la page.
+      await Promise.all([loadYears(), refreshActiveYear()])
     } catch (e) {
+      // La modale reste OUVERTE : l'administratrice voit le message et peut
+      // réessayer ou annuler, au lieu d'un échec qui ferme tout en silence.
       toast({
         title: "Erreur d'activation",
         description: toMessage(e, "lors de l'activation de l'année scolaire"),
@@ -252,6 +276,19 @@ export default function AcademicYearsPage() {
 
   // ── Création d'une année ──────────────────────────────────────────────────
 
+  /**
+   * Création d'une année — UN appel, une transaction côté serveur.
+   *
+   * Remplace une cascade de requêtes indépendantes pilotée d'ici : l'année,
+   * puis une requête par étape, puis une par salle, puis une par matière —
+   * jusqu'à ~280 pour une année copiée. Chaque échec y était avalé par
+   * `.then(r => r.ok).catch(() => false)`, et l'écran annonçait « structure
+   * incomplète » sur une année qu'aucun écran ne savait défaire.
+   *
+   * Le serveur garantit désormais la structure entière ou rien. Il n'y a donc
+   * plus de comptage d'échecs partiels à faire ici : il n'existe plus d'état
+   * partiel à compter.
+   */
   const handleCreateYear = async (data: {
     name: string
     startDate?: string
@@ -261,171 +298,63 @@ export default function AcademicYearsPage() {
   }) => {
     setCreating(true)
     try {
-      // La modale envoie desormais toujours les deux dates, et elle les
-      // affiche. Ce repli ne sert donc plus que si un autre appelant omet les
-      // dates — mais il etait faux : calcule sur `new Date().getFullYear()`, il
-      // produisait une annee decalee d'un an des qu'on creait hors de la
-      // fenetre aout-decembre. Il derive maintenant du nom, comme la modale.
-      const nameMatch = data.name.match(/(\d{4})-(\d{4})/)
-      const yearStart = data.startDate ||
-        (nameMatch ? `${nameMatch[1]}-09-01` : `${new Date().getFullYear()}-09-01`)
-      const yearEnd   = data.endDate ||
-        (nameMatch ? `${nameMatch[2]}-06-30` : `${new Date().getFullYear() + 1}-06-30`)
-
-      const res = await fetch('/api/academic-years/create', {
+      // Les dates ne sont plus repliées ici : le serveur refuse une date
+      // invalide avec un message, au lieu d'en inventer une silencieusement.
+      const res = await fetch('/api/academic-years', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name:       data.name,
-          yearString: data.name,
-          startDate:  yearStart,
-          endDate:    yearEnd,
-        })
+          name:          data.name,
+          yearString:    data.name,
+          startDate:     data.startDate,
+          endDate:       data.endDate,
+          numberOfSteps: data.numberOfPeriods ?? 4,
+          ...(data.copyFromYearId
+            ? {
+                copyFrom: {
+                  sourceAcademicYearId: data.copyFromYearId,
+                  includeRooms:    true,
+                  includeSubjects: true,
+                },
+              }
+            : {}),
+        }),
       })
 
+      const payload = await res.json().catch(() => null)
+
       if (!res.ok) {
-        // Le message du serveur distingue un doublon de nom d'une panne. Le
-        // remplacer par une constante rendait les deux indiscernables, alors
-        // que `toMessage` est justement la pour le restituer.
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err?.message || `Échec de la création (HTTP ${res.status})`)
-      }
-      const { year } = await res.json()
-      const newYearId = year.id
-
-      const stepCount = data.numberOfPeriods || 4
-      const stepNames = ['1ère Étape', '2ème Étape', '3ème Étape', '4ème Étape', '5ème Étape']
-        .slice(0, stepCount)
-
-      const stepDates = computeStepDates(yearStart, yearEnd, stepCount)
-
-      // La creation d'une annee est irreversible : aucun ecran de ce produit ne
-      // sait la defaire. Elle ne peut donc pas se permettre d'annoncer « 4
-      // etapes » sans avoir verifie que le serveur en a ecrit quatre. Chaque
-      // appel de la cascade est desormais compte sur sa reponse reelle.
-      const stepResults = await Promise.all(
-        stepNames.map((name, index) =>
-          fetch(`/api/academic-years/${newYearId}/steps/create`, {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              name,
-              stepNumber: index + 1,
-              startDate:  stepDates[index].startDate,
-              endDate:    stepDates[index].endDate,
-            })
-          }).then(r => r.ok).catch(() => false)
+        // Le message du serveur est restitué tel quel. Un doublon (409), une
+        // date invalide (400) et une panne ne se ressemblent plus à l'écran.
+        throw new Error(
+          payload?.error || payload?.message || `Échec de la création (HTTP ${res.status})`,
         )
-      )
-      const stepsCreated = stepResults.filter(Boolean).length
-
-      let classesExpected = 0
-      let classesCreated = 0
-      const classesRes = await fetch('/api/classes/', { credentials: 'include' })
-      if (classesRes.ok) {
-        const classes: Array<{ id: string }> = await classesRes.json()
-        classesExpected = classes.length
-
-        if (classes.length > 0) {
-          const sessionResults = await Promise.all(
-            classes.map(cls =>
-              fetch('/api/class-sessions/create', {
-                method: 'POST',
-                credentials: 'include',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  classId:        cls.id,
-                  academicYearId: newYearId,
-                })
-              }).then(r => r.ok).catch(() => false)
-            )
-          )
-          classesCreated = sessionResults.filter(Boolean).length
-        }
-      } else {
-        classesExpected = -1 // liste des classes indisponible : on ne sait pas
       }
 
-      let copiedExpected = 0
-      let copiedOk = 0
-      if (data.copyFromYearId && newYearId) {
-        const sessionsRes = await fetch(
-          `/api/class-sessions?academicYearId=${data.copyFromYearId}`,
-          { credentials: 'include' }
-        )
-        const sourceSessions: Array<{ id: string; classId: string }> =
-          sessionsRes.ok ? await sessionsRes.json() : []
+      const { stepsCreated, roomsCreated, subjectsCreated } = payload ?? {}
+      const details = [
+        `${stepsCreated} étape${stepsCreated > 1 ? 's' : ''}`,
+        ...(roomsCreated ? [`${roomsCreated} salle${roomsCreated > 1 ? 's' : ''}`] : []),
+        ...(subjectsCreated ? [`${subjectsCreated} matière${subjectsCreated > 1 ? 's' : ''}`] : []),
+      ].join(', ')
 
-        await Promise.all(sourceSessions.map(async (sourceSession) => {
-          const subjectsRes = await fetch(
-            `/api/class-subjects?classSessionId=${sourceSession.id}`,
-            { credentials: 'include' }
-          )
-          if (!subjectsRes.ok) return
-          const sourceSubjects: Array<{ subjectId: string; coefficientOverride: number | null }> =
-            await subjectsRes.json()
-
-          const existingSessionRes = await fetch(
-            `/api/class-sessions?academicYearId=${newYearId}&classId=${sourceSession.classId}`,
-            { credentials: 'include' }
-          )
-          const existingSessions = existingSessionRes.ok ? await existingSessionRes.json() : []
-          const targetSessionId = existingSessions[0]?.id
-          if (!targetSessionId) return
-
-          const copyResults = await Promise.all(sourceSubjects.map(cs =>
-            fetch('/api/class-subjects/create', {
-              method: 'POST',
-              credentials: 'include',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                classSessionId:      targetSessionId,
-                subjectId:           cs.subjectId,
-                coefficientOverride: cs.coefficientOverride ?? null,
-              })
-            }).then(r => r.ok).catch(() => false)
-          ))
-          copiedExpected += sourceSubjects.length
-          copiedOk += copyResults.filter(Boolean).length
-        }))
-      }
-
-      const structureIncomplete =
-        stepsCreated < stepCount ||
-        (classesExpected > 0 && classesCreated < classesExpected) ||
-        classesExpected === -1
-      const copyIncomplete = structureIncomplete || copiedOk < copiedExpected
-
-      if (data.copyFromYearId && newYearId) {
-        toast({
-          title: copyIncomplete ? "Année créée, copie partielle" : "Année créée avec copie",
-          description:
-            `${data.name} — ${stepsCreated}/${stepCount} étapes, ` +
-            `${copiedOk}/${copiedExpected} matières copiées.` +
-            (copyIncomplete ? " Vérifiez la configuration avant de saisir des notes." : ""),
-          variant: copyIncomplete ? "destructive" : undefined,
-        })
-      } else {
-        toast({
-          title: structureIncomplete ? "Année créée, structure incomplète" : "Année créée",
-          description:
-            `${data.name} — ${stepsCreated}/${stepCount} étapes` +
-            (classesExpected > 0 ? `, ${classesCreated}/${classesExpected} classes` : "") +
-            "." +
-            (structureIncomplete ? " Vérifiez la configuration avant de saisir des notes." : ""),
-          variant: structureIncomplete ? "destructive" : undefined,
-        })
-      }
+      toast({
+        title: "Année créée",
+        description: `${data.name} — ${details}.`,
+      })
 
       await loadYears()
     } catch (e) {
       toast({
-        title: "Erreur",
+        title: "Création impossible",
         description: toMessage(e, "lors de la création de l'année scolaire"),
-        variant: "destructive"
+        variant: "destructive",
       })
+      // RELANCE : sans ça, la modale ne saurait pas que l'appel a échoué et se
+      // fermerait en emportant la saisie. Le toast reste — il porte le message
+      // hors de la modale —, mais il ne suffit plus.
+      throw e
     } finally {
       setCreating(false)
     }
@@ -440,7 +369,12 @@ export default function AcademicYearsPage() {
   // ── Données pour le modal ─────────────────────────────────────────────────
 
   const activeYear    = years.find(y => y.isCurrent)
-  const archivedYears = years.filter(y => deriveStatus(y) === 'archived')
+  const archivedYears = years.filter(y => deriveAcademicYearStatus(y) === 'archived')
+
+  // Decoupage APRES toute derivation de la liste — il n'y a aujourd'hui ni
+  // filtre ni tri sur cet ecran, mais l'ordre compte le jour ou il y en aura :
+  // paginer d'abord afficherait une page 2 calculee sur une liste non filtree.
+  const pageCourante = paginate(yearCards, page, ITEMS_PER_PAGE)
   const hasActiveYear = !!activeYear
 
   // ── Rendu ─────────────────────────────────────────────────────────────────
@@ -471,6 +405,7 @@ export default function AcademicYearsPage() {
         </div>
 
         <CreateAcademicYearModalV2
+          years={years}
           activeYear={activeYear}
           archivedYears={archivedYears}
           hasActiveYear={hasActiveYear}
@@ -507,41 +442,74 @@ export default function AcademicYearsPage() {
       */}
 
       {/* Year cards list */}
-      <div className="space-y-3">
-        {yearCards.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-xl border bg-card py-16 shadow-sm">
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
-              <SchoolIcon className="h-7 w-7 text-muted-foreground" />
-            </div>
-            <h2 className="mt-4 text-base font-semibold text-foreground">
-              Aucune année scolaire
-            </h2>
-            <p className="mt-1 max-w-prose text-sm text-muted-foreground">
-              Créez votre première année pour commencer
-            </p>
+      {yearCards.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-xl border bg-card py-16 shadow-sm">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+            <SchoolIcon className="h-7 w-7 text-muted-foreground" />
           </div>
-        ) : (
-          yearCards.map(card => (
-            <CPMSLYearCard
-              key={card.year.id}
-              year={card.year}
-              stats={card.stats}
-              onConfigure={handleConfigure}
-              onActivate={card.year.status === 'preparation' ? handleActivateYear : undefined}
-              isActivating={activatingId === card.year.id}
-            />
-          ))
-        )}
-      </div>
+          <h2 className="mt-4 text-base font-semibold text-foreground">
+            Aucune année scolaire
+          </h2>
+          <p className="mt-1 max-w-prose text-sm text-muted-foreground">
+            Créez votre première année pour commencer
+          </p>
+        </div>
+      ) : (
+        <div>
+          {/* `items-start` : sans lui, les cartes d'une meme ligne s'etirent a
+              la hauteur de la plus haute. Une annee archivee — qui n'a ni
+              compteurs ni bouton Configurer plein — se retrouvait avec un
+              grand vide au milieu pour s'aligner sur ses voisines. */}
+          <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {pageCourante.items.map(card => (
+              <CPMSLYearCard
+                key={card.year.id}
+                year={card.year}
+                stats={card.stats}
+                onConfigure={handleConfigure}
+                onActivate={
+                  card.year.status === 'preparation' || card.year.status === 'archived'
+                    ? handleActivateYear
+                    : undefined
+                }
+                isActivating={activatingId === card.year.id}
+              />
+            ))}
+          </div>
+
+          {/* Sous la grille. Le composant se masque tout seul a une seule page
+              (`pageCount <= 1`) : aucune condition a ecrire ici. */}
+          <Pagination
+            page={pageCourante.page}
+            pageCount={pageCourante.pageCount}
+            onPageChange={setPage}
+            rangeStart={pageCourante.rangeStart + 1}
+            rangeEnd={pageCourante.rangeEnd}
+            total={pageCourante.total}
+            label="Pagination des années scolaires"
+            unit="années"
+          />
+        </div>
+      )}
 
       {/* EP-005 : Modal de confirmation d'activation */}
       <ConfirmDestructive
         open={yearToActivate !== null}
         onOpenChange={(open) => !open && setYearToActivate(null)}
-        title="Activer cette année scolaire ?"
+        title={
+          activationIsArchived
+            ? "Réactiver cette année archivée ?"
+            : "Activer cette année scolaire ?"
+        }
         description={
           yearToActivate
-            ? `Cette action change l'année scolaire active pour toute l'application. ` +
+            ? (activationIsArchived
+                ? `${yearToActivate.name} est une année CLOSE, terminée le ` +
+                  `${formatDateCourte(yearToActivate.endDate)}` +
+                  `${activationContexte ? ` (${activationContexte})` : ''}. ` +
+                  `La réactiver la remet en cours pour toute l'application. `
+                : ``) +
+              `Cette action change l'année scolaire active pour toute l'application. ` +
               `Les utilisateurs verront désormais les données de ${yearToActivate.name}. ` +
               (hasActiveYear
                 ? `L'année actuellement active (${activeYear?.name}) sera automatiquement ` +
@@ -551,7 +519,9 @@ export default function AcademicYearsPage() {
         }
         confirmationName={yearToActivate?.name}
         requireTypedName={true}
-        confirmLabel="Activer définitivement"
+        confirmLabel={
+          activationIsArchived ? "Confirmer la réactivation" : "Activer définitivement"
+        }
         onConfirm={handleConfirmActivation}
         loading={activatingId !== null}
       />
