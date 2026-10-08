@@ -29,6 +29,7 @@ import type { ApiClassSession } from "@/lib/api/students"
 import type { AcademicYearStep } from "@/lib/api/dashboard"
 import type { ApiEnrollment } from "@/lib/api/grades"
 import { fetchEnrollments } from "@/lib/api/grades"
+import { libelleClasseSalle } from "@/lib/classes/labels"
 import { cn } from "@/lib/utils"
 
 // Types API
@@ -259,7 +260,9 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
       .filter(s => s.class?.classType?.id === selectedClassTypeId)
       .map(s => ({
         sessionId: s.id,
-        // For tracked classes (NS3/NS4) the track code stands in as the "salle".
+        // Le commentaire d'origine annoncait un repli sur le code de filiere
+        // pour les classes NS3/NS4 : il ne decrivait plus le code, et la
+        // filiere n'est de toute facon pas une salle. La salle est la lettre.
         label: s.class.letter ?? "",
       }))
       .sort((a, b) => a.label.localeCompare(b.label))
@@ -617,9 +620,9 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
   const selectedSession = sessions.find(s => s.id === selectedSessionId)
   const selectedStep    = steps.find(s => s.id === selectedStepId)
   const isLocked        = selectedStep ? !selectedStep.isCurrent : false
-  const sessionLabelStr = selectedSession
-    ? `${selectedSession.class?.classType?.name ?? ""} ${selectedSession.class?.letter ?? ""}`.trim()
-    : ""
+  // CLASSE et SALLE : deux champs, jamais fusionnes a l'affichage. Voir
+  // « La Regle des Deux Champs » dans DESIGN.md.
+  const { classe: classeLabel, salle: salleLabel } = libelleClasseSalle(selectedSession)
 
   // Pagination footer
   function renderPaginationFooter() {
@@ -802,15 +805,27 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
             <CardHeader className="pb-3">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div>
+                  {/* Le titre ne porte plus « Étape N - 1e AF A » : la classe
+                      et la salle sont deux champs, et les badges ci-dessous les
+                      disent chacun avec son étiquette. */}
                   <CardTitle className="text-base font-semibold">
-                    Étape {selectedStep?.stepNumber} - {sessionLabelStr}
+                    Étape {selectedStep?.stepNumber}
                   </CardTitle>
                   <CardDescription>
                     {filteredEnrollments.length} élève{filteredEnrollments.length > 1 ? "s" : ""} affiché{filteredEnrollments.length > 1 ? "s" : ""} sur {sortedEnrollments.length} - {kpis.entered} / {kpis.total} saisis
                   </CardDescription>
                   <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                    <Badge variant="outline">Classe sélectionnée : {selectedSession?.class?.classType?.name ?? "-"}</Badge>
-                    <Badge variant="outline">Salle : {selectedSession?.class?.track?.code ?? selectedSession?.class?.letter ?? "-"}</Badge>
+                    <Badge variant="outline">
+                      Classe : <span className="ml-1 font-semibold text-foreground">{classeLabel || "—"}</span>
+                    </Badge>
+                    {/* Le repli `track?.code ?? letter` qui vivait ici etait une
+                        branche morte : ni `Class` ni `ClassSession` ne portent de
+                        filiere, l'expression valait toujours `letter`. Elle
+                        pouvait en revanche afficher un code de filiere comme une
+                        SALLE le jour ou le backend en aurait renvoye un. */}
+                    <Badge variant="outline">
+                      Salle : <span className="ml-1 font-mono font-semibold text-foreground">{salleLabel || "—"}</span>
+                    </Badge>
                     <Badge variant="outline">Étape : {selectedStep ? `Étape ${selectedStep.stepNumber}` : "-"}</Badge>
                     {isLocked && (
                       <Badge variant="outline" className="border-warning-border bg-warning-soft text-warning-ink">

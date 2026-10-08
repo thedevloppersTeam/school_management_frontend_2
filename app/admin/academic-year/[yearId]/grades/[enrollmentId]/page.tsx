@@ -31,6 +31,7 @@ import {
   type SubjectScope,
 } from "@/lib/api/grades"
 import { parseDecimal } from "@/lib/decimal"
+import { libelleClasseSalle } from "@/lib/classes/labels"
 import { RUBRIQUE_WEIGHTS, type RubriqueCode } from "@/lib/bulletin/compute"
 import { parseScore, validateScoreInput } from "@/lib/grades/score-input"
 import { useUnsavedChangesWarning } from "@/hooks/use-unsaved-changes-warning"
@@ -337,7 +338,10 @@ export default function StudentGradesPage() {
   }
 
   const studentName = `${enrollment?.student?.user?.firstname ?? ""} ${enrollment?.student?.user?.lastname ?? ""}`.trim()
-  const className = `${enrollment?.classSession?.class?.classType?.name ?? ""} ${enrollment?.classSession?.class?.letter ?? ""}`.trim()
+  // CLASSE et SALLE : deux champs, jamais « 1e AF A » en une chaîne. Voir
+  // « La Règle des Deux Champs » dans DESIGN.md. La filière ne s'y ajoute pas :
+  // elle vient de l'inscription (`enrollment.track`) et garde son propre badge.
+  const { classe, salle } = libelleClasseSalle(enrollment?.classSession?.class)
 
   // Matières groupées par rubrique R1 → R2 → R3 (dans la portée choisie)
   const maxScoreByKey = new Map<string, number>()
@@ -402,13 +406,37 @@ export default function StudentGradesPage() {
             <ArrowLeftIcon className="mr-1 h-4 w-4" /> Retour aux notes
           </Button>
           <h1 className="heading-2 break-words text-foreground">{studentName || "Élève sans nom"}</h1>
-          <p className="max-w-prose text-sm text-muted-foreground">
-            {className} — saisie des notes par élève
+          {/* Identite de l'inscription : trois champs etiquetes, lisibles
+              separement. La salle porte le meme badge monospace que la colonne
+              Salle de la liste des eleves. */}
+          <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="text-2xs uppercase tracking-wide">Classe</span>
+              <span className={classe ? "font-medium text-foreground" : "italic"}>
+                {classe || "non renseignée"}
+              </span>
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="text-2xs uppercase tracking-wide">Salle</span>
+              {salle ? (
+                <span className="inline-flex items-center justify-center rounded-md bg-muted px-2 py-0.5 font-mono text-xs font-semibold text-foreground">
+                  {salle}
+                </span>
+              ) : (
+                <span className="italic">non attribuée</span>
+              )}
+            </span>
             {enrollment?.track && (
-              <span className="ml-2 rounded border border-info-border bg-info-soft px-1.5 py-0.5 text-xs font-medium text-info-ink">
-                Filière {enrollment.track.code}
+              <span className="inline-flex items-center gap-1.5">
+                <span className="text-2xs uppercase tracking-wide">Filière</span>
+                <span className="rounded border border-info-border bg-info-soft px-1.5 py-0.5 text-xs font-medium text-info-ink">
+                  {enrollment.track.code}
+                </span>
               </span>
             )}
+          </div>
+          <p className="mt-1 max-w-prose text-xs text-muted-foreground">
+            Saisie des notes par élève
           </p>
         </div>
         <div className="flex items-center gap-3">

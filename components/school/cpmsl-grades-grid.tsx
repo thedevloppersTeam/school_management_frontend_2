@@ -48,6 +48,7 @@ import { cn } from "@/lib/utils"
 import { parseDecimal } from "@/lib/decimal"
 import { parseScore, validateScoreInput } from "@/lib/grades/score-input"
 import { invalidateExclusionsCache } from "@/lib/api/bulletin"
+import { libelleClasseSalle } from "@/lib/classes/labels"
 import { useUnsavedChangesWarning } from "@/hooks/use-unsaved-changes-warning"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -99,12 +100,6 @@ interface CPMSLGradesGridProps {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function sessionLabel(session: ApiClassSession): string {
-  const { classType, letter, track } = session.class
-  const base = `${classType.name} ${letter}`
-  return track ? `${base} ${track.code}` : base
-}
 
 const frenchCollator = new Intl.Collator('fr', {
   numeric: true,
@@ -831,13 +826,22 @@ export function CPMSLGradesGrid({
     focusCell(next)
   }
 
-  const headerLabel = useMemo(() => {
+  // CLASSE et SALLE : deux champs, jamais « 1e AF A » en une chaîne. Voir
+  // « La Règle des Deux Champs » dans DESIGN.md. Le repli qui collait ici un
+  // code de filière à la place de la lettre affichait une salle inexistante :
+  // le modèle ne porte pas de filière sur `Class`.
+  const { classe, salle } = useMemo(
+    () => libelleClasseSalle(selectedSession),
+    [selectedSession]
+  )
+
+  // Ce qui reste du contexte — étape et matière — garde sa forme de prose.
+  const contexteLabel = useMemo(() => {
     return [
-      selectedSession ? sessionLabel(selectedSession) : null,
       selectedStep?.name,
       selectedClassSubject?.subject.name,
     ].filter(Boolean).join(' — ')
-  }, [selectedSession, selectedStep, selectedClassSubject])
+  }, [selectedStep, selectedClassSubject])
 
   // ── Badge helper ──────────────────────────────────────────────────────────
 
@@ -1250,8 +1254,21 @@ export function CPMSLGradesGrid({
             <div>
                 <CardTitle className="text-base font-semibold">Saisie des notes</CardTitle>
                 <CardDescription className="flex flex-wrap items-center gap-2">
-                  <span>
-                  {headerLabel} &middot; {enteredCount} / {enrollmentsForSubject.length} notes saisies
+                  <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                    {/* La salle porte le meme badge monospace que la colonne
+                        Salle de la liste des eleves. */}
+                    <span className={classe ? undefined : "italic"}>
+                      {classe || "Classe non renseignée"}
+                    </span>
+                    {salle && (
+                      <span className="inline-flex items-center justify-center rounded-md bg-muted px-2 py-0.5 font-mono text-xs font-semibold text-foreground">
+                        {salle}
+                      </span>
+                    )}
+                    <span>
+                      {contexteLabel && <>&mdash; {contexteLabel} </>}
+                      &middot; {enteredCount} / {enrollmentsForSubject.length} notes saisies
+                    </span>
                   </span>
                   {hasUnsavedChanges && (
                 <Badge

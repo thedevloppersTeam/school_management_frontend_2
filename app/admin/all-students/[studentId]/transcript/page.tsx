@@ -44,6 +44,7 @@ import {
 } from "@/lib/bulletin/grade-color"
 import { parseDecimal } from "@/lib/decimal"
 import { toMessage } from "@/lib/errors"
+import { libelleClasseSalle } from "@/lib/classes/labels"
 import { cn } from "@/lib/utils"
 import { normalizeUploadUrl } from "@/lib/upload-url"
 
@@ -195,11 +196,6 @@ function genderLabel(gender?: "MALE" | "FEMALE" | null): string | null {
   if (gender === "MALE") return "Masculin"
   if (gender === "FEMALE") return "Féminin"
   return null
-}
-
-function classDisplayName(e: ApiEnrollment): string {
-  const trackSuffix = e.track ? ` — ${e.track.code}` : ""
-  return `${e.classSession.class.classType.name} ${e.classSession.class.letter}${trackSuffix}`
 }
 
 function buildEnrollmentSummary(
@@ -813,7 +809,7 @@ export default function StudentTranscriptPage() {
             >
               {summaries.map((summary) => {
                 const e = summary.enrollment
-                const className = classDisplayName(e)
+                const { classe, salle } = libelleClasseSalle(e.classSession)
                 const yearPhoto = photosByYear.get(e.classSession.academicYear.id)
                 return (
                   <AccordionItem key={e.id} value={e.id} className="border-b last:border-b-0">
@@ -830,7 +826,34 @@ export default function StudentTranscriptPage() {
                           <div className="flex flex-wrap items-center gap-2">
                             {/* DESIGN.md nomme `.heading-3` pour l'en-tête d'année
                                 scolaire : c'est ici que le serif porte l'autorité. */}
-                            <span className="heading-3 text-foreground">{className}</span>
+                            <span className="heading-3 text-foreground">
+                              {classe || "Classe inconnue"}
+                            </span>
+                            {/* « La Règle des Deux Champs » : la salle est un champ
+                                à elle, badge monospace comme la colonne Salle de la
+                                liste des élèves. Et la FILIÈRE n'est pas un suffixe
+                                de salle — elle vient de l'inscription
+                                (`Enrollment.trackId`), pas de la classe : ce libellé
+                                composait « NS3 A — SMP », trois données en une
+                                chaîne que rien ne permettait de relire. Les deux
+                                champs portent une étiquette : hors tableau, un
+                                badge nu ne dit pas ce qu'il contient. */}
+                            {salle && (
+                              <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                                <span className="text-2xs uppercase tracking-wide">Salle</span>
+                                <span className="inline-flex items-center justify-center rounded-md bg-muted px-2 py-0.5 font-mono text-xs font-semibold text-foreground">
+                                  {salle}
+                                </span>
+                              </span>
+                            )}
+                            {e.track && (
+                              <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                                <span className="text-2xs uppercase tracking-wide">Filière</span>
+                                <span className="rounded border border-info-border bg-info-soft px-1.5 py-0.5 text-xs font-medium text-info-ink">
+                                  {e.track.code}
+                                </span>
+                              </span>
+                            )}
                             <Badge variant="outline" className="font-mono text-xs">
                               {e.classSession.academicYear.yearString}
                             </Badge>
@@ -959,9 +982,14 @@ export default function StudentTranscriptPage() {
                               chiffres sans savoir de quelle matière — et une ligne
                               `└` anonyme ne veut plus rien dire. */}
                           <Table containerClassName="cpmsl-scroll max-h-[70vh]">
+                            {/* Prose lue par un lecteur d'écran : la fusion y
+                                serait admise, mais deux champs nommés se lisent
+                                mieux à voix haute qu'un « NS3 A » collé. */}
                             <TableCaption className="sr-only">
-                              Notes de {className}, année {e.classSession.academicYear.yearString},
-                              par matière et par étape. Moyennes sur 10.
+                              Notes de la classe {classe || "inconnue"}
+                              {salle ? `, salle ${salle}` : ""}, année{" "}
+                              {e.classSession.academicYear.yearString}, par matière et par
+                              étape. Moyennes sur 10.
                             </TableCaption>
                             <TableHeader>
                               <TableRow className="hover:bg-transparent">

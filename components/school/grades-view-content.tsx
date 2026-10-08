@@ -28,7 +28,7 @@ import {
   InboxIcon,
 } from "lucide-react"
 import { gradeBand, gradeBandToneClass, gradeMention } from "@/lib/bulletin/grade-color"
-import { fetchClassSessions, fetchSteps, type AcademicYearStep, type ClassSession } from "@/lib/api/dashboard"
+import { fetchClassSessions, fetchSteps, getClassSessionName, type AcademicYearStep, type ClassSession } from "@/lib/api/dashboard"
 import { fetchClassSubjects, fetchEnrollments, type ApiClassSubject, type ApiEnrollment } from "@/lib/api/grades"
 import { computeStep } from "@/lib/bulletin/compute"
 import {
@@ -75,10 +75,12 @@ function getAppreciation(m: number | null): string {
   return gradeMention(m === null ? null : m * 10)
 }
 
-function sessionLabel(s: ClassSession): string {
-  const { classType, letter } = s.class
-  return `${classType.name} ${letter}`
-}
+// La copie locale de la fusion « classe + salle » qui vivait ici a été
+// supprimée : son unique consommateur est une valeur d'option de liste
+// (`SelectItem`), l'un des quatre cas où DESIGN.md (« La Règle des Deux
+// Champs ») admet une chaîne fusionnée. Le point unique de cette fusion est
+// `getClassSessionName`, importé du même module que `ClassSession`. Rien à
+// découper ici : cet écran n'affiche la classe nulle part ailleurs.
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
@@ -385,7 +387,7 @@ export function GradesViewContent({
               </SelectTrigger>
               <SelectContent>
                 {sessions.map(s => (
-                  <SelectItem key={s.id} value={s.id}>{sessionLabel(s)}</SelectItem>
+                  <SelectItem key={s.id} value={s.id}>{getClassSessionName(s)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
