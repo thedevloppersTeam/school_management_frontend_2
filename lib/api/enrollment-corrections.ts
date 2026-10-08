@@ -254,7 +254,16 @@ export interface AssignmentCorrectedDetails {
 
 export interface StudentAuditLogRow {
   id:             string
-  studentId:      string
+  /**
+   * Nul pour un geste de structure — creation d'annee, de salle, d'affectation
+   * de matiere. Le journal n'a plus l'eleve pour sujet unique : le sujet est
+   * porte cote base par (entityType, entityId), non encore expose ici.
+   *
+   * Le type le disait `string` non nul, et deux ecrans y accedaient sans garde.
+   * Le declarer nullable rend les gardes EXIGEES par le compilateur au lieu de
+   * dependre de la vigilance du prochain lecteur.
+   */
+  studentId:      string | null
   enrollmentId:   string | null
   academicYearId: string | null
   action:         StudentAuditAction
@@ -266,7 +275,7 @@ export interface StudentAuditLogRow {
     id:          string
     studentCode: string
     user:        { firstname: string; lastname: string }
-  }
+  } | null
   actor:        { id: string; username: string } | null
   academicYear: { id: string; yearString: string } | null
 }
