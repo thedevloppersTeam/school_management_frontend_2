@@ -1,3 +1,45 @@
+/**
+ * MAQUETTE NON BRANCHÉE — À LIRE AVANT TOUT REBRANCHEMENT.
+ *
+ * Ce composant est INATTEIGNABLE depuis l'interface actuelle. Son unique
+ * consommateur, `cpmsl-year-config-tabs.tsx`, déclare bien l'état
+ * `createLevelModalOpen` et passe `onOpenChange`, mais `setCreateLevelModalOpen(true)`
+ * n'a AUCUN appelant dans le dépôt : la modale ne peut jamais s'ouvrir. Son
+ * `onSubmit` appelle `onAddLevel`, que `config/page.tsx` omet délibérément
+ * (voir le bloc « Handlers volontairement non passés » : les niveaux MENFP sont
+ * fixes, `/api/class-types` n'expose que `create`). La soumission est donc un
+ * no-op de bout en bout. Conservé comme maquette, pas comme fonctionnalité.
+ *
+ * SI ELLE EST UN JOUR REBRANCHÉE, trois défauts déjà corrigés ailleurs
+ * reviendraient avec elle :
+ *
+ * 1. `filieres` (le champ « Filières disponibles * » et sa ligne d'aide
+ *    « Chaque filière sélectionnée créera une salle automatiquement »)
+ *    matérialise une filière en objet de structure. C'est exactement le motif
+ *    retiré des salles en septembre 2026. LA FILIÈRE APPARTIENT À
+ *    `Enrollment.trackId` — à l'inscription de l'élève, jamais à une salle ni à
+ *    un niveau. Une même salle héberge plusieurs filières ; ni `Class`, ni
+ *    `ClassSession`, ni `ClassType` ne portent de filière en base. Le catalogue
+ *    de filières légitime existe déjà : onglet Filières des réglages
+ *    (`filieres-tab.tsx` → `/api/class-tracks`). Les quatre codes en dur
+ *    (LLA/SES/SMP/SVT) ne s'y alimentent pas.
+ *
+ * 2. Écart de nommage : les noms proposés (`7e`, `8e`, `9e`, `NSI`…`NSIV`) ne
+ *    correspondent à AUCUN `ClassType` réel. Le seed (`CLASS_TYPES_SEED`,
+ *    `app/admin/settings/page.tsx`) donne « 1ère AF » … « 9ème AF » et
+ *    « NS1 » … « NS4 ». Le filtre anti-doublon de `getAvailableClassNames`
+ *    ne peut donc jamais matcher, et un niveau créé ici casserait la dérivation
+ *    de catégorie faite au frontend sur `t.name === 'NS3' | 'NS4'`.
+ *
+ * 3. Même branchée, la donnée s'arrête au contrat : `POST /api/class-types/create`
+ *    ne prend que `{ name, isTerminal }`. `filieres` serait ignoré en silence,
+ *    comme l'était `trackId` sur la création de salle.
+ *
+ * À LIRE AVANT DE TOUCHER À CE FICHIER : `DESIGN.md`, section « La Règle des
+ * Deux Champs » (classe et salle sont deux champs distincts et étiquetés ; la
+ * filière n'entre jamais dans un libellé de classe ou de salle), et le point de
+ * composition unique `lib/classes/labels.ts` (`libelleClasseSalle`).
+ */
 "use client"
 
 import { useState, useEffect } from "react"
@@ -209,7 +251,13 @@ export function CreateLevelModalV2({
             </Select>
           </div>
 
-          {/* Filières Selection (only for Nouveau Secondaire) */}
+          {/* Filières Selection (only for Nouveau Secondaire)
+              DÉFAUT CONNU — voir l'avertissement en tête de fichier. Ce bloc, et
+              la ligne d'aide « créera une salle automatiquement », font d'une
+              filière un objet de structure. La filière appartient à
+              `Enrollment.trackId`, jamais à une salle ni à un niveau
+              (DESIGN.md, « La Règle des Deux Champs »). Ne pas recopier ce bloc
+              ailleurs, ne pas le rebrancher en l'état. */}
           {niveau === 'Nouveau Secondaire' && (
             <div className="space-y-3">
               <Label className="block text-sm font-medium text-primary-800"

@@ -5,7 +5,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   BTN_DIALOG_PRIMARY_CLASS,
   BTN_OUTLINE_CLASS,
@@ -18,72 +17,74 @@ import {
   REQUIRED_MARK_CLASS,
 } from "@/lib/cpmsl-classes"
 
-interface Track {
-  id: string
-  code: string
-  name: string
-}
-
 interface AddClassSessionModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   level: {
     id: string
     name: string
+    /**
+     * Plus lu ici : le titre ne depend plus de la categorie du niveau (voir
+     * plus bas). Le champ reste declare le temps que soit tranche le sort de
+     * la categorie `ns-filiere` elle-meme, qui n'existe qu'au frontend.
+     */
     category: 'fondamental' | 'ns-tronc' | 'ns-filiere'
   }
-  tracks: Track[]
   submitting?: boolean
-  onSubmit: (data: { letter?: string; trackId?: string }) => void
+  onSubmit: (data: { letter?: string }) => void
 }
 
+/**
+ * Creation d'une salle pour un niveau donne.
+ *
+ * Une salle NE PORTE PAS de filiere. `Class` n'a aucune colonne `track` et
+ * `createClass` ne persiste que { classTypeId, letter, maxStudents,
+ * description }. La filiere est individuelle : elle vit sur l'inscription de
+ * l'eleve (`Enrollment.trackId`) et se choisit a l'inscription, pas ici. Le
+ * champ « Filiere * » qui figurait dans ce formulaire n'etait enregistre nulle
+ * part et son apercu annoncait un libelle (« NSIII SMP ») que la liste des
+ * salles n'affichait jamais : le nom reel est toujours
+ * `${classType.name} ${letter}`.
+ *
+ * Le seul discriminant d'une salle, quel que soit le niveau, est donc sa
+ * lettre — y compris pour NSIII / NSIV, ou elle n'etait pas demandee et
+ * retombait silencieusement sur « A ».
+ */
 export function AddClassSessionModal({
   open,
   onOpenChange,
   level,
-  tracks,
   submitting = false,
   onSubmit,
 }: Readonly<AddClassSessionModalProps>) {
-  const [letter,  setLetter]  = useState('')
-  const [trackId, setTrackId] = useState('')
+  const [letter, setLetter] = useState('')
 
-  const isValid = () => {
-    if (level.category === 'fondamental') return letter.trim().length > 0
-    if (level.category === 'ns-tronc')   return letter.trim().length > 0 && trackId.length > 0
-    if (level.category === 'ns-filiere') return trackId.length > 0
-    return false
-  }
+  const isValid = () => letter.trim().length > 0
 
   const handleSubmit = () => {
     if (!isValid() || submitting) return
-    onSubmit({
-      letter:  level.category !== 'ns-filiere' ? letter.trim().toUpperCase() : undefined,
-      trackId: level.category !== 'fondamental' ? trackId : undefined,
-    })
+    onSubmit({ letter: letter.trim().toUpperCase() })
     reset()
   }
 
-  const reset = () => { setLetter(''); setTrackId('') }
+  const reset = () => { setLetter('') }
 
   const handleOpenChange = (o: boolean) => {
     if (!o) reset()
     onOpenChange(o)
   }
 
-  const selectedTrack = tracks.find(t => t.id === trackId)
+  /**
+   * Un seul titre, quel que soit le niveau. Il en existait trois — « salle »
+   * au fondamental, « classe » pour NS1/NS2, « filière » pour NS3/NS4 — reste
+   * de la conception ou une salle de NS3 ETAIT une filiere. Le formulaire ne
+   * demande qu'une lettre de salle et l'action qui l'ouvre dit « Ajouter
+   * salle » pour tous les niveaux : le titre disait autre chose que ce que la
+   * modale fait.
+   */
+  const title = `Ajouter une salle — ${level.name}`
 
-  const title =
-    level.category === 'fondamental' ? `Ajouter une salle — ${level.name}` :
-    level.category === 'ns-tronc'    ? `Ajouter une classe — ${level.name}` :
-                                       `Ajouter une filière — ${level.name}`
-
-  const preview =
-    level.category === 'fondamental'
-      ? `${level.name} ${letter || '?'}`
-      : level.category === 'ns-tronc'
-      ? `${level.name} ${letter || '?'}${selectedTrack ? ` — ${selectedTrack.code}` : ' — ?'}`
-      : `${level.name} ${selectedTrack ? selectedTrack.code : '?'}`
+  const preview = `${level.name} ${letter || '?'}`
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -96,46 +97,23 @@ export function AddClassSessionModal({
 
         <div className="space-y-4 py-2">
 
-          {/* Lettre de salle — fondamental et ns-tronc */}
-          {level.category !== 'ns-filiere' && (
-            <div className="space-y-2">
-              <Label htmlFor="class-session-letter" className={FIELD_LABEL_CLASS}>
-                Salle <span className={REQUIRED_MARK_CLASS} aria-label="obligatoire">*</span>
-              </Label>
-              <Input
-                id="class-session-letter"
-                value={letter}
-                onChange={e => setLetter(e.target.value.toUpperCase())}
-                placeholder="Ex : A, B, C..."
-                maxLength={2}
-                className={`${INPUT_CLASS} uppercase`}
-              />
-              <p className={FIELD_HINT_CLASS}>
-                Lettre identifiant la salle physique
-              </p>
-            </div>
-          )}
-
-          {/* Filière — ns-tronc et ns-filiere */}
-          {level.category !== 'fondamental' && (
-            <div className="space-y-2">
-              <Label htmlFor="class-session-track" className={FIELD_LABEL_CLASS}>
-                Filière <span className={REQUIRED_MARK_CLASS} aria-label="obligatoire">*</span>
-              </Label>
-              <Select value={trackId} onValueChange={setTrackId}>
-                <SelectTrigger id="class-session-track" className={INPUT_CLASS}>
-                  <SelectValue placeholder="Sélectionner une filière" />
-                </SelectTrigger>
-                <SelectContent>
-                  {tracks.map(t => (
-                    <SelectItem key={t.id} value={t.id}>
-                      {t.code} — {t.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+          {/* Lettre de salle — seul identifiant persiste d'une salle */}
+          <div className="space-y-2">
+            <Label htmlFor="class-session-letter" className={FIELD_LABEL_CLASS}>
+              Salle <span className={REQUIRED_MARK_CLASS} aria-label="obligatoire">*</span>
+            </Label>
+            <Input
+              id="class-session-letter"
+              value={letter}
+              onChange={e => setLetter(e.target.value.toUpperCase())}
+              placeholder="Ex : A, B, C..."
+              maxLength={2}
+              className={`${INPUT_CLASS} uppercase`}
+            />
+            <p className={FIELD_HINT_CLASS}>
+              Lettre identifiant la salle physique
+            </p>
+          </div>
 
           {/* Aperçu du nom qui sera créé */}
           <div className={DIALOG_PREVIEW_CLASS}>

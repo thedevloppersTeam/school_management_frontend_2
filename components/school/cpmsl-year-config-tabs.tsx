@@ -91,14 +91,27 @@ interface Level {
   id: string;
   name: string;
   niveau: string;
-  filiere?: string;
+  // Pas de champ `filiere` ici : un NIVEAU n'en porte pas. La filière vit sur
+  // l'inscription (`Enrollment.trackId`) et sur l'affectation de matière
+  // (`ClassSubject.trackId`). Retiré le 2026-09-19 : ni écrivain, ni lecteur.
   description?: string;
   category?: "fondamental" | "ns-tronc" | "ns-filiere";
   isTerminal?: boolean; // classe terminale → matières d'examen par filière
 }
 interface Classroom {
   id: string;
+  /**
+   * Libellé fusionné (« NS3 A »), réservé aux usages où la fusion est admise :
+   * valeur d'`<option>`, libellé de radio, titre de modale, prose. L'arbre des
+   * niveaux lit `salle` — « La Règle des Deux Champs », DESIGN.md.
+   */
   name: string;
+  /**
+   * La lettre de salle, seule. L'arbre n'a pas besoin du niveau : sa ligne
+   * parente le porte déjà. Pas de champ `classe` ici pour cette raison, et
+   * aucun champ de filière : une salle n'en a pas.
+   */
+  salle: string;
   levelId: string;
   capacity: number;
   description?: string;
@@ -186,9 +199,11 @@ interface CPMSLYearConfigTabsProps {
     },
   ) => void;
   onDeleteSubjectChild?: (childId: string) => void;
+  // Une salle n'a qu'une lettre. Pas de `trackId` : la filiere vit sur
+  // l'inscription de l'eleve, jamais sur la salle.
   onAddClassroom?: (
     levelId: string,
-    data: { letter?: string; trackId?: string },
+    data: { letter?: string },
   ) => Promise<void> | void;
   onEditClassroom?: (classroomId: string) => void;
   onDeleteClassroom?: (classroomId: string) => void;
@@ -1329,13 +1344,13 @@ export function CPMSLYearConfigTabs({
           <div className="flex items-start justify-between gap-4">
             <div>
               <span className="text-sm font-medium text-neutral-600">
-                {levels.length} niveaux · {totalClassrooms} salles / filières
+                {levels.length} niveaux · {totalClassrooms}{" "}
+                {totalClassrooms === 1 ? "salle" : "salles"}
               </span>
               {!isArchived && (
                 <p className="mt-0.5 text-xs text-neutral-500">
                   Les niveaux sont ceux du MENFP : ils ne se créent ni ne se
-                  suppriment. Ce qui se configure ici, ce sont leurs salles et
-                  leurs filières.
+                  suppriment. Ce qui se configure ici, ce sont leurs salles.
                 </p>
               )}
             </div>
@@ -1357,7 +1372,7 @@ export function CPMSLYearConfigTabs({
 
           <div className={TABLE_WRAPPER_CLASS}>
             <table className="w-full">
-              <caption className="sr-only">Niveaux, salles et filières de l&apos;année, avec leurs effectifs</caption>
+              <caption className="sr-only">Niveaux et salles de l&apos;année, avec leurs effectifs</caption>
               <thead>
                 <tr className={TABLE_HEAD_ROW_CLASS}>
                   <th
@@ -1366,7 +1381,7 @@ export function CPMSLYearConfigTabs({
                   ></th>
                   <SortableTH label="Nom" col="nom" sort={classSort} setter={setClassSort} className="w-[12%]" />
                   <SortableTH label="Niveau" col="niveau" sort={classSort} setter={setClassSort} className="w-[22%]" />
-                  <SortableTH label="Groupes" col="salles" sort={classSort} setter={setClassSort} className="w-[18%]" />
+                  <SortableTH label="Salles" col="salles" sort={classSort} setter={setClassSort} className="w-[18%]" />
                   <SortableTH label="Élèves" col="eleves" sort={classSort} setter={setClassSort} className="w-[18%]" />
                   <th
                     scope="col"
@@ -1411,7 +1426,6 @@ export function CPMSLYearConfigTabs({
                   const isExpanded = expandedLevels.has(level.id);
                   const hasClassrooms = levelClassrooms.length > 0;
                   const totalStudents = getTotalStudentCountForLevel(level.id);
-                  const isFiliere = level.category === "ns-filiere";
                   return (
                     <React.Fragment key={`level-${level.id}`}>
                       <tr
@@ -1450,15 +1464,13 @@ export function CPMSLYearConfigTabs({
                         <td className="px-4 py-3 text-neutral-600 text-sm">
                           {level.niveau}
                         </td>
+                        {/* « 3 filières » comptait en réalité des salles, comme
+                            le montrent les lignes dépliées juste en dessous.
+                            Un niveau NS3 n'a pas de filières à lui : ce sont
+                            ses élèves qui en ont une chacun. */}
                         <td className="px-4 py-3 text-neutral-600 text-sm">
                           {`${levelClassrooms.length} ${
-                            isFiliere
-                              ? levelClassrooms.length === 1
-                                ? "filière"
-                                : "filières"
-                              : levelClassrooms.length === 1
-                                ? "salle"
-                                : "salles"
+                            levelClassrooms.length === 1 ? "salle" : "salles"
                           }`}
                         </td>
                         <td className="px-4 py-3 text-neutral-600 text-sm">
@@ -1471,9 +1483,11 @@ export function CPMSLYearConfigTabs({
                               actions={[
                                 {
                                   key: "add-classroom",
-                                  label: isFiliere
-                                    ? "Ajouter filière"
-                                    : "Ajouter salle",
+                                  // « Ajouter filière » pour NS3/NS4 : le
+                                  // formulaire ouvert ne demande qu'une lettre
+                                  // de salle, et une salle n'a pas de filière.
+                                  // Un seul libellé, celui des autres niveaux.
+                                  label: "Ajouter salle",
                                   icon: (
                                     <PlusIcon
                                       className="h-3 w-3"
@@ -1523,21 +1537,32 @@ export function CPMSLYearConfigTabs({
                                   >
                                     └
                                   </span>
-                                  {isFiliere ? (
-                                    <div className="flex items-center gap-2">
-                                      <span className="bg-info-soft text-info px-2 py-0.5 rounded text-xs font-medium">
-                                        Filière
+                                  {/* Une salle, et rien d'autre. Ces lignes
+                                      portaient un badge « Filière » pour NS3/NS4
+                                      alors que la valeur affichée était
+                                      « NS3 A » — le niveau de la ligne parente
+                                      répété, suivi d'une LETTRE DE SALLE
+                                      annoncée comme une filière. Une salle n'a
+                                      pas de filière (elle vit sur
+                                      `Enrollment.trackId`, et une même salle en
+                                      héberge plusieurs), et répéter le niveau
+                                      sous son propre niveau n'apprend rien.
+                                      Reste la lettre, dans le badge monospace
+                                      de la colonne Salle. */}
+                                  <div className="flex items-center gap-2">
+                                    <span className="bg-neutral-100 text-neutral-600 px-2 py-0.5 rounded text-xs font-medium">
+                                      Salle
+                                    </span>
+                                    {classroom.salle ? (
+                                      <span className="inline-flex items-center justify-center rounded-md bg-muted px-2 py-0.5 font-mono text-xs font-semibold text-foreground">
+                                        {classroom.salle}
                                       </span>
-                                      <span>{classroom.name}</span>
-                                    </div>
-                                  ) : (
-                                    <div className="flex items-center gap-2">
-                                      <span className="bg-neutral-100 text-neutral-600 px-2 py-0.5 rounded text-xs font-medium">
-                                        Salle
+                                    ) : (
+                                      <span className="italic text-neutral-500">
+                                        sans lettre
                                       </span>
-                                      <span>{classroom.name}</span>
-                                    </div>
-                                  )}
+                                    )}
+                                  </div>
                                 </div>
                               </td>
                               {/* Niveau et catégorie appartiennent a la ligne
@@ -2740,7 +2765,6 @@ export function CPMSLYearConfigTabs({
             name: selectedLevel.name,
             category: selectedLevel.category || "fondamental",
           }}
-          tracks={tracks}
           submitting={addClassroomSubmitting}
           onSubmit={async (data) => {
             // onAddClassroom est asynchrone : sans await, l'etat de soumission

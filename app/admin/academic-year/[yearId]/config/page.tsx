@@ -10,10 +10,13 @@ import { ArrowLeftIcon } from "lucide-react"
 import {
   fetchSteps,
   fetchClassSessions,
+  getClassSessionName,
   type AcademicYear,
   type AcademicYearStep
 } from "@/lib/api/dashboard"
+import { libelleClasseSalle } from "@/lib/classes/labels"
 import { toMessage } from '@/lib/errors'
+import { estArchivee } from "@/lib/academic-years/status"
 
 // ── Types locaux (format attendu par CPMSLYearConfigTabs) ─────────────────────
 
@@ -29,14 +32,23 @@ interface Level {
   id: string
   name: string
   niveau: string
-  filiere?: string
+  // Pas de champ `filiere` ici : un NIVEAU n'en porte pas. La filiere vit sur
+  // l'inscription (`Enrollment.trackId`) et sur l'affectation de matiere
+  // (`ClassSubject.trackId`). Retire le 2026-09-19 : ni ecrivain, ni lecteur.
   category: 'fondamental' | 'ns-tronc' | 'ns-filiere'
   isTerminal: boolean
 }
 
 interface Classroom {
   id: string
+  /**
+   * Libelle FUSIONNE (« NS3 A »), reserve aux usages ou la fusion est admise :
+   * valeur d'`<option>`, titre de modale, prose de confirmation. L'arbre, lui,
+   * lit `salle` — voir « La Regle des Deux Champs » dans DESIGN.md.
+   */
   name: string
+  /** La lettre de salle, seule. Vide si la classe n'en porte pas. */
+  salle: string
   levelId: string
   capacity: number
 }
@@ -69,12 +81,6 @@ interface SubjectChild {
 
 function deriveStepStatus(step: AcademicYearStep): 'open' | 'closed' {
   return step.isCurrent ? 'open' : 'closed'
-}
-
-function deriveYearStatus(year: AcademicYear): 'active' | 'preparation' | 'archived' {
-  if (year.isCurrent) return 'active'
-  if (new Date(year.endDate) < new Date()) return 'archived'
-  return 'preparation'
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -151,15 +157,17 @@ export default function AcademicYearConfigPage() {
       // filiere aujourd'hui, ses eleves en ont une chacun.
       const loadClassroomsAndStudents = async () => {
         const sessionsData = await fetchClassSessions(yearId)
-        const classroomRows = sessionsData.map(s => {
-          const name = `${s.class.classType.name} ${s.class.letter}`
-          return {
-            id:       s.id,
-            name,
-            levelId:  s.class.classType.id,
-            capacity: 30
-          }
-        })
+        const classroomRows = sessionsData.map(s => ({
+          id:       s.id,
+          // Fusion legitime (options de liste, prose de modale) : point unique
+          // `getClassSessionName`. Elle n'etait pas recomposee ici pour rien.
+          name:     getClassSessionName(s),
+          // Champ lu tel quel dans l'arbre, ou le niveau est deja porte par la
+          // ligne parente : point unique `libelleClasseSalle`.
+          salle:    libelleClasseSalle(s).salle,
+          levelId:  s.class.classType.id,
+          capacity: 30
+        }))
         setClassrooms(classroomRows)
 
         const levelBySessionId = new Map(
@@ -540,17 +548,21 @@ export default function AcademicYearConfigPage() {
 
   // ── Handlers — Classes ─────────────────────────────────────────────────────
 
-  const handleAddClassroom = async (levelId: string, data: { letter?: string; trackId?: string }) => {
+  // Une salle ne porte pas de filiere : `createClass` ne persiste que
+  // { classTypeId, letter, maxStudents, description } et `Class` n'a aucune
+  // colonne `track`. La filiere est individuelle (`Enrollment.trackId`), elle
+  // se choisit a l'inscription. Le `trackId` qui transitait ici n'etait plus
+  // emis par la modale et n'etait enregistre nulle part.
+  const handleAddClassroom = async (levelId: string, data: { letter?: string }) => {
     try {
       const level = levels.find(l => l.id === levelId)
       if (!level) throw new Error('Niveau introuvable')
 
-      const classBody: Record<string, unknown> = {
+      const classBody = {
         classTypeId: levelId,
         letter:      data.letter || 'A',
         maxStudents: 30,
       }
-      if (data.trackId) classBody.trackId = data.trackId
 
       const classRes = await fetch('/api/classes/create', {
         method: 'POST',
@@ -633,7 +645,7 @@ export default function AcademicYearConfigPage() {
     )
   }
 
-  const isArchived = deriveYearStatus(year) === 'archived'
+  const isArchived = estArchivee(year)
 
   return (
     <div className="space-y-6">
