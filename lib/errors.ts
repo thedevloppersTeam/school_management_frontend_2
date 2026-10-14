@@ -54,10 +54,12 @@ const KEYWORD_PATTERNS: Array<{ match: RegExp; message: string }> = [
     message: "La période est clôturée. Modification impossible.",
   },
 
-  // NISU invalide
+  // NISU invalide — format acté le 2026-09-13 (lib/nisu.ts). Placée APRÈS la
+  // règle d'unicité : « NISU already exists » reste un doublon. Le texte est
+  // fixe : il ne reprend jamais la valeur contenue dans le message du serveur.
   {
-    match: /nisu.*(invalid|format|chiffre|digit)/i,
-    message: "Le NISU doit contenir 12 chiffres.",
+    match: /nisu.*(invalid|format|chiffre|digit|caract|character|alphanum)/i,
+    message: "Le NISU doit contenir exactement 20 caractères alphanumériques (lettres majuscules et chiffres).",
   },
 
   // Note invalide
