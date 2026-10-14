@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { ALERT_ERROR_CLASS, BTN_DESTRUCTIVE_CLASS } from "@/lib/cpmsl-classes"
 
 /**
  * delete-level-modal.tsx — Patch EP-006
@@ -81,8 +82,8 @@ export function DeleteLevelModal({
 
         <div className="space-y-4">
           {/* Warning block */}
-          <div className="bg-[#FEE2E2] border border-[#FCA5A5] rounded-md p-4">
-            <p className="text-sm text-[#991B1B] leading-relaxed">
+          <div className={ALERT_ERROR_CLASS}>
+            <p className="text-sm leading-relaxed">
               Cette classe contient {classroomCount} {getClassroomLabel()} et {studentCount} élèves.
               La suppression retirera toutes les {getClassroomLabel()} et tous les élèves associés.
               Cette action est irréversible.
@@ -136,7 +137,7 @@ export function DeleteLevelModal({
             type="button"
             onClick={handleConfirm}
             disabled={!canConfirm}
-            className="bg-[#B91C1C] hover:bg-[#991B1B] text-white disabled:bg-[#D1CECC] disabled:cursor-not-allowed disabled:hover:bg-[#D1CECC]"
+            className={BTN_DESTRUCTIVE_CLASS}
           >
             Supprimer définitivement
           </Button>

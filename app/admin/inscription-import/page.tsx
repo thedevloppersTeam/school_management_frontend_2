@@ -29,14 +29,15 @@ import {
 import { useToast } from "@/components/ui/use-toast"
 import { clientFetch as apiFetch } from "@/lib/client-fetch"
 import { toMessage } from "@/lib/errors"
+import { useAcademicYearContext } from "@/lib/contexts/academic-year-context"
 import { cn } from "@/lib/utils"
 import {
-  fetchActiveAcademicYear,
   fetchClassSessions,
   getClassSessionName,
   type AcademicYear,
   type ClassSession,
 } from "@/lib/api/dashboard"
+import { libelleClasseSalle } from "@/lib/classes/labels"
 import { type ApiFieldGroup, type ApiCustomField } from "@/lib/api/student-form"
 import { isNisuValid, normalizeNisu, NISU_RULE_LABEL } from "@/lib/nisu"
 
@@ -165,7 +166,11 @@ interface PreparedRow {
   csvLine: number
   nisu: string
   name: string
-  className: string
+  // Classe et salle restent DEUX champs jusqu'au rendu (DESIGN.md, « La Règle
+  // des Deux Champs »). La fusion ne survit que dans `resolveClass` et dans le
+  // texte d'erreur, où elle est légitime (clé de recherche, prose).
+  classe: string
+  salle: string
   payload: BulkRow | null
   error: string | null
   match: RowMatch          // new | existing | error
@@ -195,6 +200,7 @@ const NONE = "__none__"
 export default function InscriptionImportPage() {
   const { toast } = useToast()
 
+  const { activeYear: contextYear, loading: yearLoading } = useAcademicYearContext()
   const [year, setYear] = useState<AcademicYear | null>(null)
   const [sessions, setSessions] = useState<ClassSession[]>([])
   const [customGroups, setCustomGroups] = useState<ApiFieldGroup[]>([])
@@ -218,11 +224,15 @@ export default function InscriptionImportPage() {
 
   // ── Load year + sessions + custom schema ──────────────────────────────────
   useEffect(() => {
+    // On attend la premiere lecture du contexte : partir avec `null` ferait
+    // conclure « aucune annee active » alors que la reponse est encore en vol.
+    if (yearLoading) return
     let cancelled = false
     ;(async () => {
       setLoadingMeta(true)
       try {
-        const y = await fetchActiveAcademicYear()
+        // Annee lue dans le contexte, plus par un fetch propre a cet ecran.
+        const y = contextYear
         if (cancelled) return
         setYear(y)
         const [sess, groups, students] = await Promise.all([
@@ -251,7 +261,7 @@ export default function InscriptionImportPage() {
       }
     })()
     return () => { cancelled = true }
-  }, [])
+  }, [contextYear, yearLoading])
 
   // Custom targets (IMAGE excluded — can't be imported via CSV).
   const customTargets = useMemo<Target[]>(() => {
@@ -395,22 +405,30 @@ export default function InscriptionImportPage() {
       // Class: a mapped column holds a label to resolve; a default holds a sessionId.
       const classCol = columnMap["sys:classSessionId"]
       let classSessionId = ""
-      let className = ""
+      let classe = ""      // le niveau lu, ex. « 1ère AF »
+      let salle = ""       // la salle lue, ex. « A »
+      let classLabel = ""  // fusion — RÉSOLUTION et MESSAGES uniquement, jamais affichée telle quelle
       let classAmbiguous = false
       if (classCol != null && classCol >= 0) {
-        const levelRaw = (row[classCol] ?? "").trim()
-        const salleRaw = get("salle") // separate column or default, may be empty
-        const combined = salleRaw ? `${levelRaw} ${salleRaw}` : levelRaw
-        className = combined
+        classe = (row[classCol] ?? "").trim()
+        salle = get("salle") // separate column or default, may be empty
+        // Les deux colonnes du CSV sont déjà distinctes : elles le restent
+        // jusqu'au tableau. La fusion ci-dessous ne sert qu'à interroger
+        // `resolveClass`, qui compare au libellé unique de
+        // `getClassSessionName` — clé de recherche, pas surface de lecture.
+        classLabel = salle ? `${classe} ${salle}` : classe
         // Prefer the level+salle combination; fall back to level-only.
-        let r = resolveClass(combined)
-        if (!r.id && salleRaw) r = resolveClass(levelRaw)
+        let r = resolveClass(classLabel)
+        if (!r.id && salle) r = resolveClass(classe)
         classSessionId = r.id
         classAmbiguous = r.reason === "ambiguous"
       } else {
         classSessionId = (defaults["sys:classSessionId"] ?? "").trim()
         const s = sessions.find((x) => x.id === classSessionId)
-        className = s ? getClassSessionName(s) : ""
+        const l = libelleClasseSalle(s)
+        classe = l.classe
+        salle = l.salle
+        classLabel = s ? getClassSessionName(s) : ""
       }
 
       // Validate system fields. NISU is optional — only checked when present.
@@ -424,8 +442,8 @@ export default function InscriptionImportPage() {
       else if (!error && !birthDate) error = `Date invalide : « ${birthRaw} »`
 
       if (!error && !classSessionId) {
-        if (classAmbiguous) error = `Classe ambiguë : « ${className} » (plusieurs salles — précisez la salle)`
-        else error = className ? `Classe introuvable : « ${className} »` : "Classe manquante"
+        if (classAmbiguous) error = `Classe ambiguë : « ${classLabel} » (plusieurs salles — précisez la salle)`
+        else error = classLabel ? `Classe introuvable : « ${classLabel} »` : "Classe manquante"
       }
 
       // Custom values.
@@ -498,7 +516,7 @@ export default function InscriptionImportPage() {
         }
       }
 
-      return { csvLine, nisu, name, className: className || "—", payload, error, match, existingChanged }
+      return { csvLine, nisu, name, classe, salle, payload, error, match, existingChanged }
     })
   }, [dataRows, columnMap, defaults, allTargets, customTargets, resolveClass, sessions, byNisu, byComposite])
 
@@ -886,6 +904,7 @@ export default function InscriptionImportPage() {
                   <TableHead>NISU</TableHead>
                   <TableHead>Nom complet</TableHead>
                   <TableHead>Classe</TableHead>
+                  <TableHead>Salle</TableHead>
                   <TableHead>Statut</TableHead>
                 </TableRow>
               </TableHeader>
@@ -895,7 +914,18 @@ export default function InscriptionImportPage() {
                     <TableCell className="text-xs text-muted-foreground">{p.csvLine}</TableCell>
                     <TableCell className="font-mono text-xs">{p.nisu || "—"}</TableCell>
                     <TableCell className="text-sm">{p.name}</TableCell>
-                    <TableCell className="text-sm">{p.className}</TableCell>
+                    <TableCell className="text-sm">
+                      {p.classe || <span className="text-xs italic text-muted-foreground">—</span>}
+                    </TableCell>
+                    <TableCell>
+                      {p.salle ? (
+                        <span className="inline-flex items-center justify-center rounded-md bg-muted px-2 py-0.5 font-mono text-xs font-semibold text-foreground">
+                          {p.salle}
+                        </span>
+                      ) : (
+                        <span className="text-xs italic text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       {p.error ? (
                         <span className="text-xs text-error-ink">{p.error}</span>
@@ -950,6 +980,7 @@ export default function InscriptionImportPage() {
                   <TableHead>NISU</TableHead>
                   <TableHead>Nom complet</TableHead>
                   <TableHead>Classe (CSV)</TableHead>
+                  <TableHead>Salle (CSV)</TableHead>
                   <TableHead>Erreur</TableHead>
                 </TableRow>
               </TableHeader>
@@ -959,7 +990,18 @@ export default function InscriptionImportPage() {
                     <TableCell className="text-xs text-muted-foreground">{p.csvLine}</TableCell>
                     <TableCell className="font-mono text-xs">{p.nisu || "—"}</TableCell>
                     <TableCell className="text-sm">{p.name}</TableCell>
-                    <TableCell className="text-sm">{p.className}</TableCell>
+                    <TableCell className="text-sm">
+                      {p.classe || <span className="text-xs italic text-muted-foreground">—</span>}
+                    </TableCell>
+                    <TableCell>
+                      {p.salle ? (
+                        <span className="inline-flex items-center justify-center rounded-md bg-muted px-2 py-0.5 font-mono text-xs font-semibold text-foreground">
+                          {p.salle}
+                        </span>
+                      ) : (
+                        <span className="text-xs italic text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-xs text-error-ink">{p.error}</TableCell>
                   </TableRow>
                 ))}

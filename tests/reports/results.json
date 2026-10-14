@@ -393,7 +393,7 @@
         {
           "title": "Module CALC — Calcul des moyennes",
           "file": "calc.spec.ts",
-          "line": 4,
+          "line": 12,
           "column": 6,
           "specs": [
             {
@@ -413,7 +413,7 @@
               ],
               "id": "c77fb733e8ed1e6f380b-ba4095673ee9b0ae4287",
               "file": "calc.spec.ts",
-              "line": 9,
+              "line": 17,
               "column": 7
             },
             {
@@ -433,7 +433,7 @@
               ],
               "id": "c77fb733e8ed1e6f380b-08589927eef231b0387f",
               "file": "calc.spec.ts",
-              "line": 44,
+              "line": 52,
               "column": 7
             },
             {
@@ -453,7 +453,7 @@
               ],
               "id": "c77fb733e8ed1e6f380b-52e3675e59ace76531fc",
               "file": "calc.spec.ts",
-              "line": 71,
+              "line": 79,
               "column": 7
             },
             {
@@ -473,7 +473,7 @@
               ],
               "id": "c77fb733e8ed1e6f380b-4750ca3416d5c3db1f3d",
               "file": "calc.spec.ts",
-              "line": 92,
+              "line": 100,
               "column": 7
             }
           ]
@@ -490,7 +490,7 @@
         {
           "title": "Module CLOT — Clôture de période",
           "file": "clot.spec.ts",
-          "line": 16,
+          "line": 24,
           "column": 6,
           "specs": [
             {
@@ -510,7 +510,7 @@
               ],
               "id": "e44bddc84a6c571c5684-62e70d8e67f9454e300e",
               "file": "clot.spec.ts",
-              "line": 21,
+              "line": 29,
               "column": 7
             },
             {
@@ -530,7 +530,7 @@
               ],
               "id": "e44bddc84a6c571c5684-c8487c91b305e65d4736",
               "file": "clot.spec.ts",
-              "line": 63,
+              "line": 71,
               "column": 7
             },
             {
@@ -550,7 +550,7 @@
               ],
               "id": "e44bddc84a6c571c5684-386f239001697c603fa1",
               "file": "clot.spec.ts",
-              "line": 122,
+              "line": 130,
               "column": 7
             },
             {
@@ -570,7 +570,7 @@
               ],
               "id": "e44bddc84a6c571c5684-f1747e182aed78205603",
               "file": "clot.spec.ts",
-              "line": 161,
+              "line": 169,
               "column": 7
             }
           ]
@@ -587,7 +587,7 @@
         {
           "title": "Module CORR — Corrections post-clôture",
           "file": "corr.spec.ts",
-          "line": 4,
+          "line": 12,
           "column": 6,
           "specs": [
             {
@@ -607,7 +607,7 @@
               ],
               "id": "9b0e53c025312cb7f920-73c9af69ebbad2593195",
               "file": "corr.spec.ts",
-              "line": 9,
+              "line": 17,
               "column": 7
             },
             {
@@ -627,7 +627,7 @@
               ],
               "id": "9b0e53c025312cb7f920-ec5c18bdcc0503276d18",
               "file": "corr.spec.ts",
-              "line": 67,
+              "line": 75,
               "column": 7
             },
             {
@@ -647,7 +647,7 @@
               ],
               "id": "9b0e53c025312cb7f920-6ecc215cfef7b7cfb411",
               "file": "corr.spec.ts",
-              "line": 97,
+              "line": 105,
               "column": 7
             },
             {
@@ -667,7 +667,7 @@
               ],
               "id": "9b0e53c025312cb7f920-8a96a5b0f0c6c565e77c",
               "file": "corr.spec.ts",
-              "line": 138,
+              "line": 146,
               "column": 7
             }
           ]
@@ -858,7 +858,7 @@
         {
           "title": "Module NOTE — Saisie et validation des notes",
           "file": "note.spec.ts",
-          "line": 42,
+          "line": 50,
           "column": 6,
           "specs": [
             {
@@ -878,7 +878,7 @@
               ],
               "id": "80dd51fcd5b14b3090f9-151d097b495754027574",
               "file": "note.spec.ts",
-              "line": 47,
+              "line": 55,
               "column": 7
             },
             {
@@ -898,7 +898,7 @@
               ],
               "id": "80dd51fcd5b14b3090f9-7a0c16fdfee2a0250e4c",
               "file": "note.spec.ts",
-              "line": 81,
+              "line": 89,
               "column": 7
             },
             {
@@ -918,7 +918,7 @@
               ],
               "id": "80dd51fcd5b14b3090f9-4c3ef00ffe4759829579",
               "file": "note.spec.ts",
-              "line": 105,
+              "line": 113,
               "column": 7
             },
             {
@@ -938,7 +938,7 @@
               ],
               "id": "80dd51fcd5b14b3090f9-be301c93bd0190929a7a",
               "file": "note.spec.ts",
-              "line": 129,
+              "line": 137,
               "column": 7
             },
             {
@@ -958,7 +958,7 @@
               ],
               "id": "80dd51fcd5b14b3090f9-af92677cd6a6575bb6af",
               "file": "note.spec.ts",
-              "line": 154,
+              "line": 162,
               "column": 7
             },
             {
@@ -978,7 +978,7 @@
               ],
               "id": "80dd51fcd5b14b3090f9-3ed29f5c19e94b9cc345",
               "file": "note.spec.ts",
-              "line": 190,
+              "line": 198,
               "column": 7
             }
           ]
@@ -1339,8 +1339,8 @@
   ],
   "errors": [],
   "stats": {
-    "startTime": "2026-09-12T08:20:45.309Z",
-    "duration": 2773.276,
+    "startTime": "2026-09-15T19:59:02.989Z",
+    "duration": 1110.0739999999996,
     "expected": 0,
     "skipped": 53,
     "unexpected": 0,

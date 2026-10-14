@@ -111,13 +111,26 @@ async function computeClassroomStatus(
   // Pas de données → classe vide ou erreur → statut "not-started"
   if (!subjects || !enrollments) return base
 
-  // Filtrer les enrollments actifs (exclure ceux désactivés si applicable)
+  // Inscriptions qui doivent porter une note à cette étape — le dénominateur.
+  //
+  // Le commentaire précédent annonçait d'exclure « ceux désactivés », puis
+  // gardait tout sauf CANCELLED et TRANSFERRED : un élève parti restait au
+  // dénominateur. Sa colonne de notes ne se remplira jamais, la salle restait
+  // donc éternellement `incomplete`, et l'alarme permanente apprend à passer
+  // outre — c'est-à-dire à ne plus lire la checklist du tout.
+  //
+  // CE QUE L'EXCLUSION COÛTE, et c'est assumé : aucune date de départ n'existe
+  // en base, seulement un statut courant. L'exclusion vaut donc pour TOUTES les
+  // étapes, y compris celles déjà écoulées. Un élève présent en T1 et parti en
+  // décembre sort aussi du dénominateur de T1, où il aurait dû compter : T1
+  // devient légèrement optimiste. Une imprécision bornée sur une étape passée
+  // vaut mieux qu'une alarme permanente qui entraîne au contournement.
+  //
+  // GRADUATED reste compté : il se pose en fin d'année, l'élève a bien suivi
+  // les étapes, et ses notes sont attendues.
   const activeEnrollments = enrollments.filter(e => {
-    // Le statut exact varie selon le backend. On garde tout sauf si
-    // explicitement "CANCELLED" / "TRANSFERRED" etc. Règle prudente :
-    // on considère tout enrollment présent comme "actif" par défaut.
     const status = (e.status ?? '').toUpperCase()
-    return status !== 'CANCELLED' && status !== 'TRANSFERRED'
+    return status !== 'CANCELLED' && status !== 'TRANSFERRED' && status !== 'DROPPED'
   })
 
   // NISU optionnel : seuls les NISU présents mais mal formés bloquent.
@@ -151,12 +164,30 @@ async function computeClassroomStatus(
   )
 
   const totalGrades = subjects.length * activeEnrollments.length
-  const gradesEntered = gradesPerSubject
-    .flatMap(g => g ?? [])
-    // Ne compter qu'une note par (enrollment, classSubject, step), pas
-    // les notes de section. sectionId === null = note principale.
-    .filter(g => g.sectionId === null)
-    .length
+
+  // Le numérateur se compte sur les mêmes inscriptions que le dénominateur.
+  // /api/grades/class-subject/:id/step/:id ne filtre pas le statut : une note
+  // portée par une inscription TRANSFERRED gonflait gradesEntered sans peser sur
+  // totalGrades, et une salle incomplète pouvait franchir le test
+  // `gradesEntered >= totalGrades` plus bas et être déclarée « complete ».
+  // Clôturer verrouille les notes : le coût d'une clôture prématurée est élevé.
+  // On réutilise activeEnrollments, donc le filtre négatif posé plus haut, sans
+  // en écrire un second qui pourrait diverger.
+  //
+  // On compte des paires (inscription, matière) distinctes plutôt que des lignes.
+  // Le seul filtre `sectionId === null` ne bornait pas gradesEntered : rien en
+  // base n'interdit deux notes principales sur la même paire — la table `grades`
+  // n'a que des index sur (enrollment_id, class_subject_id, section_id, step_id),
+  // aucune contrainte d'unicité, et createGrade fait un `create` simple sans
+  // vérifier l'existant. Compter des paires borne le numérateur par construction
+  // au lieu de dépendre de cette discipline d'écriture.
+  const activeEnrollmentIds = new Set(activeEnrollments.map(e => e.id))
+  const gradesEntered = new Set(
+    gradesPerSubject
+      .flatMap(g => g ?? [])
+      .filter(g => g.sectionId === null && activeEnrollmentIds.has(g.enrollmentId))
+      .map(g => `${g.enrollmentId}|${g.classSubjectId}`)
+  ).size
 
   // Statut dérivé
   let status: ClassroomStatus['status']

@@ -168,7 +168,7 @@ export function CPMSLBulletinsSection({
         .filter((s) => s.class.classType.id === selectedClassTypeId)
         .map((s) => ({
           sessionId: s.id,
-          label: s.class.track ? `${s.class.letter} — ${s.class.track.code}` : s.class.letter,
+          label: s.class.letter,
         }))
         .sort((a, b) => a.label.localeCompare(b.label, "fr", { numeric: true }));
 

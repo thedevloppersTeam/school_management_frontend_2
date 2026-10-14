@@ -26,7 +26,10 @@ const AccordionTrigger = React.forwardRef<
     <AccordionPrimitive.Trigger
       ref={ref}
       className={cn(
-        "flex flex-1 items-center justify-between py-4 text-sm font-medium transition-all hover:underline [&[data-state=open]>svg]:rotate-180",
+        // Anneau de focus de 1 px en --ring, focus-visible : ces déclencheurs
+        // étaient les seuls contrôles répétés du produit à ne porter que
+        // l'anneau par défaut du navigateur.
+        "flex flex-1 items-center justify-between py-4 text-sm font-medium transition-all hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [&[data-state=open]>svg]:rotate-180",
         className,
       )}
       {...props}

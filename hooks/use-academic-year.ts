@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react"
 import { clientFetch } from "@/lib/client-fetch"
 import type { AcademicYear } from "@/types"
+import { estArchivee } from "@/lib/academic-years/status"
 
 export function useAcademicYear(yearId: string) {
   const [academicYear, setAcademicYear] = useState<AcademicYear | null>(null)
@@ -14,10 +15,10 @@ export function useAcademicYear(yearId: string) {
         const year = await clientFetch<AcademicYear>(`/api/academic-years/${yearId}`)
         setAcademicYear(year)
         
-        // Vérifier si l'année est archivée
-        const now = new Date()
-        const endDate = new Date(year.endDate)
-        setIsArchived(now > endDate && !year.isCurrent)
+        // Meme regle que partout ailleurs. Elle etait ici reecrite a
+        // l'envers (`now > endDate && !isCurrent`) et sans garde sur une
+        // date illisible.
+        setIsArchived(estArchivee(year))
       } catch (error) {
         console.error("Error fetching academic year:", error)
       } finally {

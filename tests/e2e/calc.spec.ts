@@ -1,6 +1,14 @@
 import { test, expect } from '@playwright/test';
 import { setupJeuEssai, loginAsAdmin } from '../fixtures/jeu-essai';
 
+// Les cellules de note de la grille. Elles etaient ciblees par
+// getByRole('spinbutton'), un role reserve a <input type="number"> ; la grille
+// est passee en type="text" inputMode="decimal" pour que la virgule du pave
+// numerique cesse d'etre mangee par la sanitisation du navigateur.
+// getByRole('textbox') ne conviendrait PAS : il attraperait aussi le champ de
+// recherche, qui precede le tableau dans le DOM.
+const NOTE_CELL = 'input[data-grid-row]';
+
 test.describe('Module CALC — Calcul des moyennes', () => {
   test.beforeEach(async () => {
     await setupJeuEssai();
@@ -132,7 +140,7 @@ test.describe('Module CALC — Calcul des moyennes', () => {
       await page.getByRole('option').first().click();
 
       // Corriger une note et sauvegarder
-      const noteInputs = page.getByRole('spinbutton');
+      const noteInputs = page.locator(NOTE_CELL);
       await noteInputs.first().fill('9.00');
       await page.getByRole('button', { name: /enregistrer les notes/i }).click();
 

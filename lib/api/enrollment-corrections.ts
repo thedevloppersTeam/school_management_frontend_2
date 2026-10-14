@@ -4,9 +4,13 @@
  * Correction d'affectation + journal d'audit élève.
  *
  * Corriger une affectation, c'est réparer une erreur de saisie à l'inscription :
- * l'élève n'a jamais appartenu à la salle ou à la filière enregistrée. C'est un
- * geste distinct du transfert (l'élève y était, il n'y est plus), qui passe par
- * `/api/enrollments/transfer`.
+ * l'élève n'a jamais appartenu à la salle ou à la filière enregistrée.
+ *
+ * C'est le seul geste qui déplace un élève à l'intérieur d'une année. L'ancien
+ * transfert interne, `/api/enrollments/transfer`, a été retiré : il passait
+ * l'inscription à TRANSFERRED et en créait une seconde, donc un doublon qui
+ * pesait deux fois dans les moyennes. L'élève qui quitte réellement
+ * l'établissement relève du départ, pas d'un déplacement.
  *
  * L'id de l'inscription ne change jamais. Deux modes, déterminés par la
  * filière :
@@ -37,8 +41,14 @@ export interface CorrectionAssignment {
  *   R1 année ou niveau différent · R2 cible identique à la source ·
  *   R3 inscription déjà existante sur la salle cible ·
  *   R4 filière absente de la salle cible ·
- *   R5 matière notée sans équivalent (MODE A) ·
- *   R6 barème ou coefficient divergent (MODE A).
+ *   R5 matière sans équivalent dans la salle cible (MODE A) — qu'elle porte
+ *      des notes, une dispense de section, ou les deux ; `detail` nomme le cas ·
+ *   R6 barème ou coefficient divergent (MODE A), sur les matières notées
+ *      seulement : une matière seulement dispensée ne porte aucune note ·
+ *   R7 capacité de la salle cible dépassée.
+ *
+ * Deux codes ne visent aucun élève en particulier et n'arrivent que sur un
+ * lot : `MIXED_MODE` et `R7`. Ils sont rendus dans `lot.blockers`.
  */
 export interface CorrectionBlocker {
   rule:         string
@@ -119,6 +129,91 @@ export interface CorrectAssignmentResult {
   warnings: CorrectionWarning[]
 }
 
+// ── Correction en lot ────────────────────────────────────────────────────────
+
+/**
+ * Le lot obéit à trois règles que l'écran doit rendre visibles :
+ *
+ *  - TOUT OU RIEN. Un seul élève bloqué, et rien n'est écrit. Le backend tient
+ *    le lot entier dans une seule transaction.
+ *  - UN LOT = UN MODE. La filière vit sur l'inscription, pas sur la salle :
+ *    une même salle héberge des élèves de filières différentes, donc une
+ *    sélection peut mélanger les deux modes. Le lot mixte est refusé — un seul
+ *    acquittement ne peut pas couvrir la destruction des notes d'une partie
+ *    seulement des élèves.
+ *  - R7, CAPACITÉ. Le total après correction doit tenir dans la capacité de la
+ *    salle cible. Bloquant, ici comme en unitaire.
+ */
+
+/** Plafond appliqué par le backend. Au-delà, il refuse en 400. */
+export const BATCH_MAX_ENROLLMENTS = 50
+
+/** Une ligne de l'aperçu, par élève. `mode` est `null` si le plan a échoué. */
+export interface BatchPreviewStudent {
+  enrollmentId:   string
+  studentName:    string | null
+  current:        CorrectionAssignment | null
+  mode:           CorrectionMode | null
+  canCorrect:     boolean
+  blockers:       CorrectionBlocker[]
+  warnings:       CorrectionWarning[]
+  impact:         CorrectionImpact | null
+  gradesToDelete: GradeToDelete[]
+}
+
+/**
+ * Verdict du lot. `blockers` porte les écarts qui ne visent aucun élève en
+ * particulier : `MIXED_MODE`, `R7`, et rien d'autre à ce jour.
+ */
+export interface BatchPreviewLot {
+  count:           number
+  mode:            CorrectionMode | null
+  canCorrect:      boolean
+  blockers:        CorrectionBlocker[]
+  blockedStudents: number
+  modeBreakdown:   { A: number; B: number }
+  maxBatchSize:    number
+  totals: {
+    gradesMoved:       number
+    gradesDeleted:     number
+    exclusionsMoved:   number
+    exclusionsDeleted: number
+  }
+}
+
+export interface BatchCorrectionPreview {
+  lot:      BatchPreviewLot
+  target:   CorrectionAssignment | null
+  students: BatchPreviewStudent[]
+}
+
+export interface BatchCorrectPayload {
+  enrollmentIds:        string[]
+  targetClassSessionId: string
+  targetTrackId:        string | null
+  reason:               string
+  /** Obligatoire en MODE B : sans lui le backend refuse en 400. */
+  acknowledgeDataLoss?: boolean
+}
+
+export interface BatchCorrectResult {
+  message: string
+  mode:    CorrectionMode
+  count:   number
+  applied: {
+    gradesMoved:       number
+    gradesDeleted:     number
+    exclusionsMoved:   number
+    exclusionsDeleted: number
+  }
+  students: Array<{
+    enrollmentId: string
+    studentName:  string
+    impact:       CorrectionImpact
+    warnings:     CorrectionWarning[]
+  }>
+}
+
 // ── Journal d'audit ──────────────────────────────────────────────────────────
 
 export type StudentAuditAction =
@@ -159,7 +254,16 @@ export interface AssignmentCorrectedDetails {
 
 export interface StudentAuditLogRow {
   id:             string
-  studentId:      string
+  /**
+   * Nul pour un geste de structure — creation d'annee, de salle, d'affectation
+   * de matiere. Le journal n'a plus l'eleve pour sujet unique : le sujet est
+   * porte cote base par (entityType, entityId), non encore expose ici.
+   *
+   * Le type le disait `string` non nul, et deux ecrans y accedaient sans garde.
+   * Le declarer nullable rend les gardes EXIGEES par le compilateur au lieu de
+   * dependre de la vigilance du prochain lecteur.
+   */
+  studentId:      string | null
   enrollmentId:   string | null
   academicYearId: string | null
   action:         StudentAuditAction
@@ -171,7 +275,7 @@ export interface StudentAuditLogRow {
     id:          string
     studentCode: string
     user:        { firstname: string; lastname: string }
-  }
+  } | null
   actor:        { id: string; username: string } | null
   academicYear: { id: string; yearString: string } | null
 }
@@ -245,5 +349,49 @@ export function fetchStudentAuditLogs(
 ): Promise<StudentAuditLogPage> {
   return apiFetch<StudentAuditLogPage>(
     `/api/student-audit-logs${buildQuery({ ...query })}`,
+  )
+}
+
+/**
+ * Impact d'une correction sur toute une sélection, avant écriture. À rappeler
+ * à chaque changement de salle ou de filière cible, comme en unitaire.
+ *
+ * Un élève dont le plan échoue ne fait pas tomber l'aperçu des autres : il
+ * revient avec `canCorrect: false` et un bloqueur `R0`. L'écriture, elle, ne
+ * pardonne pas — c'est voulu.
+ */
+export function fetchBatchCorrectionPreview(
+  enrollmentIds: string[],
+  targetClassSessionId: string,
+  targetTrackId: string | null,
+): Promise<BatchCorrectionPreview> {
+  return apiFetch<BatchCorrectionPreview>(
+    '/api/enrollments/correction-preview-batch',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enrollmentIds, targetClassSessionId, targetTrackId }),
+    },
+  )
+}
+
+/**
+ * Applique la correction au lot entier. Tout ou rien.
+ *
+ * Refus possibles : 400 si le motif est vide, si `acknowledgeDataLoss` manque
+ * en MODE B, ou si la sélection dépasse le plafond ; 409 si un élève reste
+ * bloqué, si la sélection mélange les deux modes, si la capacité de la salle
+ * cible est dépassée, ou si l'état a changé depuis l'aperçu.
+ */
+export function correctAssignmentBatch(
+  payload: BatchCorrectPayload,
+): Promise<BatchCorrectResult> {
+  return apiFetch<BatchCorrectResult>(
+    '/api/enrollments/correct-assignment-batch',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
   )
 }

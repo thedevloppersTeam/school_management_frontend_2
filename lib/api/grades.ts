@@ -1,4 +1,5 @@
 import { parseDecimal } from '@/lib/decimal'
+import { assertStorableScore } from '@/lib/grades/score-input'
 
 export interface ApiSubjectSection {
   id: string
@@ -160,6 +161,10 @@ export async function fetchGradesForClassSubjectStep(
 // ── Bulk create grades ────────────────────────────────────────────────────────
 
 export async function bulkCreateGrades(grades: CreateGradePayload[]): Promise<void> {
+  grades.forEach((g, i) =>
+    assertStorableScore(g.studentScore, `grades[${i}]`),
+  )
+
   const res = await fetch('/api/grades/bulk-create', {
     method: 'POST',
     credentials: 'include',
@@ -194,6 +199,8 @@ export async function updateGrade(
   studentScore: number,
   gradeType: 'EXAM' | 'HOMEWORK' | 'ORAL' = 'EXAM'
 ): Promise<void> {
+  assertStorableScore(studentScore, `note ${gradeId}`)
+
   const res = await fetch(`/api/grades/update/${gradeId}`, {
     method: 'POST',
     credentials: 'include',

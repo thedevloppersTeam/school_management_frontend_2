@@ -22,6 +22,7 @@ import {
   PaginationItem,
 } from "@/components/ui/pagination"
 import { HistoryIcon, LockIcon } from "lucide-react"
+import { toMessage } from "@/lib/errors"
 import { StudentAuditTimeline } from "@/components/school/student-audit-timeline"
 import {
   AUDIT_ACTION_LABELS,
@@ -44,6 +45,7 @@ interface StudentOption {
 export default function JournalPage() {
   const [years, setYears] = useState<AcademicYear[]>([])
   const [students, setStudents] = useState<StudentOption[]>([])
+  const [studentsError, setStudentsError] = useState<string | null>(null)
 
   const [filterYear, setFilterYear] = useState(ALL)
   const [filterStudent, setFilterStudent] = useState(ALL)
@@ -68,6 +70,11 @@ export default function JournalPage() {
       .then((data) => {
         const byId = new Map<string, StudentOption>()
         for (const log of data.logs ?? []) {
+          // Le journal porte desormais aussi des gestes de structure, sans
+          // eleve : ces lignes n'alimentent pas le filtre eleve. L'acces direct
+          // levait une TypeError, avalee par le `.catch` ci-dessous, et le
+          // filtre se vidait sans un mot.
+          if (!log.studentId || !log.student?.user) continue
           byId.set(log.studentId, {
             id: log.studentId,
             label: `${log.student.user.lastname} ${log.student.user.firstname}`,
@@ -76,8 +83,15 @@ export default function JournalPage() {
         setStudents(
           [...byId.values()].sort((a, b) => a.label.localeCompare(b.label, "fr")),
         )
+        setStudentsError(null)
       })
-      .catch(() => setStudents([]))
+      .catch((err) => {
+        // Ne plus avaler : un filtre vide et un filtre en panne se
+        // ressemblaient a l'ecran, et rien ne permettait de les distinguer.
+        console.error("[journal] chargement du filtre eleve", err)
+        setStudents([])
+        setStudentsError(toMessage(err, "lors du chargement de la liste des eleves"))
+      })
   }, [])
 
   // ── Compteurs de pagination ──────────────────────────────────────────────
@@ -163,6 +177,11 @@ export default function JournalPage() {
                   ))}
                 </SelectContent>
               </Select>
+              {studentsError && (
+                <p role="alert" className="text-xs text-destructive">
+                  Liste des élèves indisponible — {studentsError}
+                </p>
+              )}
             </div>
 
             <div className="space-y-1.5">

@@ -332,6 +332,34 @@ brute. *Dette résorbée le 14 septembre 2026 : les 491 classes de palette brute
 rôles. Il n'en reste aucune. Le retour d'une de ces classes est désormais une
 régression, pas un héritage.*
 
+**La rampe `neutral` existe, et ce document l'ignorait.** *Constat du
+15 septembre 2026.* `tailwind.config.js:105-117` définit une rampe `neutral`
+propre au projet — `#FAFAF8` à `#1E1A17`, chaude, accordée au papier crème et
+sans rapport avec le gris bleuté de Tailwind. `.impeccable/design.json` la
+connaît, et c'est pourquoi le détecteur ne la signale pas. Mais **elle
+n'apparaissait nulle part ici**, si bien qu'une revue pouvait la prendre pour
+une palette brute et vouloir la bannir à tort.
+
+Elle compte **330 occurrences dans 16 fichiers**. Son statut : *tolérée, non
+recommandée*. Les rôles sémantiques — `background`, `card`, `muted`,
+`muted-foreground`, `foreground`, `border` — restent la bonne réponse, parce
+qu'eux seuls suivent le thème. Une valeur de rampe ne s'écrit que là où un rôle
+n'existe pas, et jamais pour signaler un état. **Sur toute surface neuve ou
+refondue, les rôles s'imposent** ; la migration des 330 est un chantier à part,
+consigné au backlog.
+
+**Un détecteur propre ne prouve pas une palette propre.** *Constat du
+15 septembre 2026.* La règle `design-system-color` lit les couleurs
+hexadécimales écrites en `style` en ligne, mais **pas** celles écrites en valeur
+arbitraire Tailwind — `bg-[#2C4A6E]` passe le scan, `style={{ color:
+'#2C4A6E' }}` est signalé, pour la **même** couleur. `cpmsl-grades-grid.tsx`
+rendait `[]` au détecteur tout en portant quatre de ces hex, dont un bleu absent
+de ce document comme de `.impeccable/design.json`. Le motif comptait **63
+lignes** dans `components/` + `app/` au moment du constat ; il en reste **60**
+après le nettoyage de cette grille. Avant de conclure qu'une surface est
+conforme, compléter le scan par
+`grep -rE '\[#[0-9a-fA-F]{3,8}\]' --include=*.tsx components app`.
+
 **La Règle de la Rareté.** La couleur ne dit qu'une chose : **un état**. Ce qui
 rapporte une *mesure* — un effectif, une moyenne, une médiane, un taux, une
 étape — est neutre : `text-primary` sur `bg-primary/10`. Sept teintes
@@ -476,9 +504,44 @@ par une quinzaine de matières, une colonne par sous-matière — se compose en
 `px-2 py-1` (8 × 4 px) pour la cellule courante et `px-3 py-1.5` (12 × 6 px)
 pour les en-têtes, en corps 10–11 px, avec `tabular-nums` sur toute colonne de
 chiffres, des largeurs de colonne plancher (`min-w-[…]`) et des en-têtes
-collants. C'est ce que font déjà `cpmsl-grades-grid.tsx` et
-`grades-view-content.tsx`, et c'est la bonne réponse : appliquer 24 px dans une
-grille produirait un écran illisible sur lequel personne ne peut saisir.
+collants. Appliquer 24 px dans une grille produirait un écran illisible sur
+lequel personne ne peut saisir.
+
+*Ce paragraphe citait `cpmsl-grades-grid.tsx` et `grades-view-content.tsx`
+comme exemples de cette densité. C'était faux : au 15 septembre 2026, la grille
+de saisie composait ses cellules en `h-10 … text-base`, soit un contrôle de
+40 px et un corps de 15 px, pour une ligne de 65 px. Un document qui donne pour
+acquis un état que le code ne tient pas est pire qu'un document muet — personne
+ne va vérifier ce qui est déjà présenté comme fait.*
+
+**Deux valeurs à trancher, laissées ouvertes ici plutôt que tranchées en
+silence.** La passe du 15 septembre 2026 a ramené `cpmsl-grades-grid.tsx` à
+`px-2 py-1`, contrôle `h-7`, en-tête `h-9` à fond opaque : **ligne de 37 px**,
+contre 65 avant et 28 annoncés ici.
+
+1. **28 px de hauteur de ligne est inatteignable avec les valeurs prescrites
+   par ce même paragraphe.** `py-1` (4 px haut et bas) autour d'un contrôle
+   n'atteint 28 px que si le contrôle mesure 20 px — sous le seuil utilisable
+   pour un champ de saisie. Les deux chiffres de ce document se contredisent :
+   il faut abandonner l'un des deux. **Arbitrage encore ouvert au
+   15 septembre 2026.**
+
+### La Règle de la Valeur Lisible
+
+*Tranchée le 15 septembre 2026.*
+
+Sur une surface de données, la bande 10–11 px vaut pour le **texte de service** :
+nom, code, barème, libellé de colonne, mention d'état. **La valeur saisie ou
+mesurée en sort** — elle se compose à 13 px (`text-sm`), en `tabular-nums`.
+
+C'est la donnée que l'administratrice relit pour se vérifier après l'avoir tapée.
+À 11 px, une note serait moins lisible que le nom d'élève qu'elle accompagne :
+l'objet de l'écran deviendrait le moins visible de la ligne. La densité se paie
+sur ce qui entoure la donnée, jamais sur la donnée.
+
+Appliqué à `cpmsl-grades-grid.tsx` et à
+`grades/[enrollmentId]/page.tsx` : champ `h-7`, corps 13 px, tout le reste de la
+ligne en 12 px ou moins.
 
 **Grilles.** Une colonne par défaut, puis : `lg:grid-cols-4` pour les rangées
 d'indicateurs (le motif dominant), `md:grid-cols-2` pour les formulaires,
@@ -668,6 +731,52 @@ hausse le ton, mais par l'accumulation de détails justes.
 - **Focus :** l'anneau de 1 px reste la règle ; il ne doit pas déplacer la
   cellule ni élargir la ligne.
 
+### La Règle des Deux Champs
+
+*Tranchée le 18 septembre 2026.*
+
+Partout où l'utilisateur **lit une donnée**, la classe et la salle sont **deux
+champs distincts et étiquetés** : deux colonnes de tableau, deux badges, deux
+lignes de fiche, « Classe : 1e AF » et « Salle : A ». Jamais « 1e AF A ».
+
+Une chaîne fusionnée ne se trie pas par salle, ne se filtre pas par niveau et ne
+se relit pas : elle oblige chaque écran suivant à la redécouper au motif pour
+retrouver ce qu'elle contenait. C'est ce qui s'est produit — dix-neuf sites de
+composition, cinq copies locales de la même logique, huit libellés écrits en
+dur, et des divergences qu'aucune règle ne permettait d'arbitrer.
+
+**La fusion n'est admise que dans quatre cas, et nulle part ailleurs :** valeur
+d'option de liste, clé de tri ou de recherche, nom de fichier exporté, prose de
+confirmation. Elle y garde son point unique, `getClassSessionName`
+(`lib/api/dashboard.ts`). Une chaîne fusionnée qui atterrit dans une cellule de
+tableau est un défaut, même si elle se lit bien.
+
+`getClassSessionName` n'est donc **pas un vestige à supprimer** : une valeur
+d'option (`SelectItem`), un comparateur de tri et un nom de fichier PDF exporté
+ont besoin d'une chaîne unique, et il vaut mieux qu'ils partagent celle-là que
+d'en recomposer chacun la sienne. La passe suivante ne le remplace pas par
+`libelleClasseSalle` : les deux fonctions répondent à deux besoins distincts.
+
+**La filière n'entre jamais dans un libellé de classe ou de salle.** Une salle
+n'a pas de filière : le modèle ne la porte ni sur `Class` ni sur
+`ClassSession` — elle appartient à l'inscription de l'élève, et une même salle
+en héberge plusieurs. La filière s'affiche comme un champ à elle, sous le nom de
+l'élève ou dans sa propre colonne. Un repli du type « code de filière à défaut
+de lettre » affiche une salle qui n'existe pas.
+
+**Un seul mot pour l'action de création : « salle ».** L'écran de configuration
+disait « Ajouter salle » au fondamental, « Ajouter une classe » en NS1/NS2 et
+« Ajouter filière » en NS3/NS4, pour un formulaire qui, dans les trois cas, ne
+demande qu'une lettre. Trois mots pour un seul geste, dont un faux. Le libellé
+d'action, le titre de la modale et l'en-tête de la colonne de comptage disent
+tous « salle », quel que soit le niveau.
+
+**Application.** Les deux valeurs se composent en un seul point,
+`libelleClasseSalle` (`lib/classes/labels.ts`), qui rend `{ classe, salle }` —
+deux chaînes, vides quand la donnée manque. Le texte de remplacement
+(« Aucune classe », « — ») appartient à l'écran, qui seul sait ce que l'absence
+veut dire à cet endroit.
+
 ### Signature Component — Le Sceau (`SchoolLogo`)
 Carré plein `#2A3740`, coins 14 px, ombre douce `0 4px 12px rgba(42,55,64,.15)`,
 glyphe « SL » en Libre Baskerville gras `#C3B594`. Deux tailles : 40 px (glyphe
@@ -723,6 +832,8 @@ autre module change d'où viennent les chiffres, pas la mise en page.
 - **Do** composer le vertical avec 24 px entre sections et 16 px à l'intérieur.
 - **Do** appeler le backend via les gestionnaires de route `app/api/**` : la
   couche visuelle ne parle jamais au serveur en direct.
+- **Do** présenter la classe et la salle comme deux champs étiquetés, composés
+  par `libelleClasseSalle` (`lib/classes/labels.ts`).
 
 ### Don't:
 - **Don't** modifier le gabarit du bulletin imprimé, sous aucun prétexte visuel.
@@ -756,6 +867,9 @@ autre module change d'où viennent les chiffres, pas la mise en page.
   hexadécimal dans un composant d'interface — le sceau excepté.
 - **Don't** ajouter un troisième pas d'espacement vertical à côté de 24 px et
   16 px sans raison explicite.
+- **Don't** afficher « 1e AF A » en une seule chaîne dans une colonne, une fiche
+  ou un badge, ni y accoler une filière. La fusion ne sert qu'à une option de
+  liste, une clé de tri, un nom de fichier ou une phrase.
 
 ### Écarts connus au 14 septembre 2026
 
@@ -797,3 +911,51 @@ pas de ce document.
 | `text-xs` (12 px) et `text-sm` (13 px) separes par 1 px portent les deux roles les plus frequents (709 usages) | l'echelle elle-meme | hierarchie | ouvert — ecarter les deux pas toucherait 709 noeuds et contredirait la rampe declaree. **Arbitrage a rendre**, pas un defaut a corriger seul |
 | Les deux routes d'impression n'ont aucun `h1` | `bulletins/[enrollmentId]/[stepId]`, `bulletins/lot/...` | hierarchie | ouvert — un `h1` en `sr-only` dans l'enveloppe de route reglerait le point sans toucher au gabarit, mais tout ajout de noeud dans une route capturee par `html2canvas` releve de `spec-guardian` |
 | Titres interpoles (`{studentName}`, `{fullName}`) en `.heading-2` sans `break-words` ni `truncate` | `grades/[enrollmentId]/page.tsx`, `transcript/page.tsx` | contrainte | ouvert — un nom compose long debordera |
+
+---
+
+## Amendement — l'état actif de la tranche (2026-09-16)
+
+**`tranche-actif` ne peut pas signaler l'état actif à lui seul.** Mesuré :
+`hsl(205 16% 27%)` sur `hsl(205 17% 21%)` donne **1,27:1**. WCAG 1.4.11 exige
+**3:1** d'un indicateur d'état non textuel. Le texte, lui, passe de 8,93:1 à
+9,56:1 entre inactif et actif — les deux états sont lisibles, mais **l'écart
+entre eux est nul à l'œil**. Le seul signal réellement perçu était le passage
+de la graisse 400 à 600.
+
+Le même jeton servait en outre de `sidebar-border`, c'est-à-dire à **séparer**
+les groupes. Un jeton qui doit simultanément distinguer et séparer, à 1,27:1
+dans les deux rôles, ne fait ni l'un ni l'autre.
+
+**Ce qui est décidé.** L'élément actif de la barre latérale porte désormais un
+**filet de gauche de 2 px en `tranche-texte`** (`hsl(210 25% 87%)`), mesuré à
+**8,93:1** sur la tranche. Le fond `tranche-actif` est conservé comme appui
+visuel, il ne porte plus l'information. Un `aria-current="page"` accompagne le
+filet : l'état n'était annoncé à aucun lecteur d'écran.
+
+**Ce que cela contredit, assumé.** Ce document ne connaissait qu'un poids de
+bordure — 1 px — et prescrivait `tranche-actif` comme fond de l'élément actif
+*et* de toutes ses bordures internes. Les deux règles sont amendées ici : le
+filet d'état actif fait 2 px, et l'état actif ne repose plus sur le fond seul.
+Même logique que la correction de l'or des initiales le 13/09 — **une règle qui
+autorise un état invisible est fautive, et se corrige plutôt qu'elle ne se
+contourne**.
+
+**Deux corrections de la même famille, même passe :**
+
+- **`--sidebar-ring`** passait à `hsl(205 20% 43%)`, soit **2,38:1** sur la
+  tranche : l'anneau de focus clavier y était quasi invisible. Porté à
+  `hsl(210 25% 87%)` — **8,93:1**, dans la rampe existante.
+- **Les modificateurs d'opacité** appliqués à `tranche-texte` tombaient sous le
+  seuil : `/40` donnait **2,77:1** sur les chevrons — qui portent l'état
+  ouvert/fermé d'un groupe et ne sont pas décoratifs — et `/50` donnait
+  **3,48:1** sur les libellés. Plancher fixé à **`/70`** pour le texte (5,27:1)
+  et **`/60`** pour les chevrons (4,31:1). Aucun jeton nouveau.
+
+**Leçon d'outillage, à retenir.** Le détecteur rend **zéro constat** sur cette
+surface, et le scan complémentaire des couleurs littérales — hex, `style` en
+ligne, valeurs arbitraires Tailwind — rend **zéro** lui aussi : la barre
+consomme exclusivement des variables CSS sémantiques. C'est la surface la mieux
+tenue du dépôt selon l'outillage, et c'était la plus fautive en contraste du
+produit. **Les jetons étaient correctement employés ; ce sont leurs valeurs qui
+ne passaient pas.** Un scan propre mesure la discipline, jamais la justesse.

@@ -20,12 +20,6 @@ export function parseDecimal(value: any): number | null {
   return null
 }
 
-export function formatGrade(value: any, decimals: number = 2): string {
-  const num = parseDecimal(value)
-  if (num === null) return '—'
-  return num.toFixed(decimals)
-}
-
 export function formatDate(dateString: string): string {
   if (!dateString) return '—'
   const date = new Date(dateString)

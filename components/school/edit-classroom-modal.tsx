@@ -20,6 +20,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { BTN_DIALOG_PRIMARY_CLASS } from "@/lib/cpmsl-classes"
 
 interface EditClassroomModalProps {
   classroom: {
@@ -68,13 +69,13 @@ export function EditClassroomModal({
 
   const isFondamentale = level.niveau === "Fondamentale"
   const allNameOptions = isFondamentale ? FONDAMENTALE_OPTIONS : SECONDAIRE_OPTIONS
-  
+
   // Filter out already-used names (except the current classroom's name)
   const usedNames = existingClassrooms
     .filter(c => c.id !== classroom.id)
     .map(c => c.name)
   const nameOptions = allNameOptions.filter(option => !usedNames.includes(option))
-  
+
   const maxDescriptionLength = 200
   const maxCapacity = 60
 
@@ -88,16 +89,16 @@ export function EditClassroomModal({
   }, [open, classroom])
 
   // Check if any field has changed
-  const hasChanges = 
+  const hasChanges =
     name !== classroom.name ||
     capacity !== classroom.capacity.toString() ||
     description !== (classroom.description || "")
 
   const capacityNum = parseInt(capacity)
-  const isFormValid = 
-    name && 
-    capacity && 
-    capacityNum > 0 && 
+  const isFormValid =
+    name &&
+    capacity &&
+    capacityNum > 0 &&
     capacityNum <= maxCapacity
 
   const isValid = isFormValid && hasChanges
@@ -201,19 +202,15 @@ export function EditClassroomModal({
             type="button"
             variant="outline"
             onClick={() => setOpen(false)}
-          >
+         >
             Annuler
           </Button>
           <Button
             type="button"
             onClick={handleSubmit}
             disabled={!isValid}
-            style={{
-              backgroundColor: isValid ? "#2C4A6E" : "#9CA3AF",
-              color: "white",
-            }}
-            className={isValid ? "" : "cursor-not-allowed"}
-          >
+            className={BTN_DIALOG_PRIMARY_CLASS}
+         >
             Enregistrer
           </Button>
         </DialogFooter>

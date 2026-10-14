@@ -59,7 +59,13 @@ function describe(log: StudentAuditLogRow): string | null {
 // ── Ligne ────────────────────────────────────────────────────────────────────
 
 function TimelineRow({ log }: { log: StudentAuditLogRow }) {
-  const studentName = `${log.student.user.firstname} ${log.student.user.lastname}`
+  // Le journal n'a plus l'eleve pour sujet unique : une ligne peut porter un
+  // geste de structure (creation d'annee, de salle), et `student` y est nul.
+  // L'acces direct faisait tomber toute la chronologie sur une seule ligne
+  // sans eleve.
+  const studentName = log.student?.user
+    ? `${log.student.user.firstname} ${log.student.user.lastname}`
+    : "—"
   const sentence = describe(log)
   const deletedCount = Array.isArray(log.details?.gradesDeleted)
     ? log.details!.gradesDeleted!.length

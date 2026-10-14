@@ -50,9 +50,6 @@ import {
   ArrowDownIcon,
   MoreHorizontalIcon,
   PencilIcon,
-  ArrowRightLeftIcon,
-  UserRoundXIcon,
-  UserRoundCheckIcon,
   FileTextIcon,
   CameraIcon,
   SettingsIcon,
@@ -64,12 +61,14 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { ArchivedYearBanner } from "@/components/school/archived-year-banner"
 import { StudentEnrollForm } from "@/components/school/students/student-enroll-form"
 import { EditStudentModal } from "@/components/school/edit-student-modal"
-import { TransferEnrollmentModal } from "@/components/school/transfer-enrollment-modal"
 import { PromotionPhotoModal } from "@/components/school/promotion-photo-modal"
 import { normalizeUploadUrl } from "@/lib/upload-url"
 import { StatCard } from "@/components/school/stat-card"
-import { fetchActiveAcademicYear, fetchClassSessions, type AcademicYear, type ClassSession } from "@/lib/api/dashboard"
+import { type AcademicYear } from "@/lib/api/dashboard"
+import { useAcademicYearContext } from "@/lib/contexts/academic-year-context"
 import { cn } from "@/lib/utils"
+import { estArchivee } from "@/lib/academic-years/status"
+import { libelleClasseSalle } from "@/lib/classes/labels"
 import { isNisuValid, NISU_RULE_LABEL } from "@/lib/nisu"
 
 // ── Types locaux ──────────────────────────────────────────────────────────────
@@ -88,13 +87,21 @@ interface StudentRow {
   // Latest enrollment (any year) — may be absent if the student was never enrolled
   enrollmentId?:   string
   classSessionId?: string
-  className?:      string         // combined (e.g. "2ème AF A") — used for filtering/sorting
-  classTypeName?:  string         // e.g. "2ème AF"
-  salleLabel?:     string         // e.g. "A" or track code "LLA"
+  // Forme fusionnee (« 2ème AF A ») : CLE DE TRI uniquement, jamais affichee.
+  // Les deux champs lus a l'ecran sont `classTypeName` et `salleLabel`.
+  className?:      string
+  classTypeName?:  string         // la CLASSE, ex. « 2ème AF »
+  salleLabel?:     string         // la SALLE, ex. « A » — jamais une filiere
   yearString?:     string
   yearId?:         string
   status?:         EnrollmentStatus
   enrollmentDate?: string
+  /**
+   * Plusieurs inscriptions non transferees sur la meme annee scolaire. Le
+   * departage ci-dessous n'est alors pas fiable : on affiche le conflit au lieu
+   * de choisir en silence.
+   */
+  conflitInscriptions?: string
   registrationDate?: string       // student creation date (Student.registrationDate)
   address?:      string
   motherName?:   string
@@ -131,13 +138,6 @@ function normalizePromotionPhotos(value: unknown): PromotionPhotoListItem[] {
   })
 }
 
-function deriveYearStatus(year: AcademicYear): 'active' | 'preparation' | 'archived' {
-  if (year.isCurrent) return 'active'
-  if (new Date(year.endDate) < new Date()) return 'archived'
-  return 'preparation'
-}
-
-
 function StatusBadge({ status }: { status?: EnrollmentStatus }) {
   if (!status) return <Badge variant="outline" className="border-border bg-muted text-muted-foreground">Non inscrit</Badge>
   switch (status) {
@@ -172,7 +172,6 @@ export default function StudentsManagementPage() {
   // ── État ────────────────────────────────────────────────────────────────────
   const [year, setYear]               = useState<AcademicYear | null>(null)
   const [noCurrentYear, setNoCurrentYear] = useState(false)
-  const [sessions, setSessions]       = useState<ClassSession[]>([])
   const [students, setStudents]       = useState<StudentRow[]>([])
   const [loading, setLoading]         = useState(true)
   const [enrollOpen, setEnrollOpen]   = useState(false)
@@ -187,9 +186,6 @@ export default function StudentsManagementPage() {
   const PAGE_SIZE_OPTIONS = [15, 25, 50, 100]
 
   // Désactivation
-  const [deactivatingId, setDeactivatingId] = useState<string | null>(null)
-  const [deactivationReason, setDeactivationReason] = useState("")
-  const [deactivating, setDeactivating] = useState(false)
 
   // Photo de promotion
   const [photoTarget, setPhotoTarget] = useState<StudentRow | null>(null)
@@ -199,8 +195,6 @@ export default function StudentsManagementPage() {
   const [editSubmitting, setEditSubmitting]     = useState(false)
 
   // Transfert
-  const [transferringStudent, setTransferringStudent] = useState<StudentRow | null>(null)
-  const [transferSubmitting, setTransferSubmitting]   = useState(false)
 
   // Suppression (sélection multiple + confirmation par mot de passe)
   const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set())
@@ -213,27 +207,25 @@ export default function StudentsManagementPage() {
   type SortCol = 'nisu' | 'name' | 'class' | 'date'
   const [sortCol, setSortCol]   = useState<SortCol | null>(null)
   const [sortDir, setSortDir]   = useState<'asc' | 'desc' | null>(null)
+  const { activeYear: contextYear, loading: yearLoading } = useAcademicYearContext()
 
   // ── Chargement ───────────────────────────────────────────────────────────────
   const loadStudents = useCallback(async () => {
     setLoading(true)
     setNoCurrentYear(false)
     try {
-      // 1. Année courante (utilisée pour l'inscription, le transfert, la photo de promotion)
-      const yearData = await fetchActiveAcademicYear()
+      // 1. Année courante — lue dans le contexte, plus par un fetch propre à
+      // cet écran. `loadStudents` est rappelée après chaque mutation d'élève
+      // (lignes 470, 523, 646) : elle relisait donc l'année à chaque fois, sans
+      // que l'année ait pu changer. Le contexte la donne sans requête.
+      const yearData = contextYear
       setYear(yearData)
       setNoCurrentYear(!yearData)
 
-      // 2. Sessions de classe de l'année courante (pour les modaux Transférer / Inscrire)
-      let sessionsData: ClassSession[] = []
-      if (yearData) {
-        sessionsData = await fetchClassSessions(yearData.id)
-        setSessions(sessionsData)
-      } else {
-        setSessions([])
-      }
+      // La liste des salles n'est plus chargée ici : elle n'alimentait que le
+      // modale de transfert, qui n'existe plus.
 
-      // 3. Liste de tous les élèves du système (un seul appel)
+      // 2. Liste de tous les élèves du système (un seul appel)
       const studentsData = await apiFetch<Array<{
         id: string
         studentCode?: string
@@ -261,10 +253,13 @@ export default function StudentsManagementPage() {
         status: EnrollmentStatus
         classSession?: {
           id: string
+          // Pas de `track` ici : une SALLE n'a pas de filiere. Le modele ne la
+          // porte ni sur `Class` ni sur `ClassSession` — elle vit sur
+          // l'inscription de l'eleve (`Enrollment.trackId`). Le champ etait
+          // declare et lu plus bas ; le backend ne l'a jamais envoye.
           class?: {
             letter?: string
             classType?: { name?: string }
-            track?: { code?: string }
           }
           academicYear?: { id?: string; yearString?: string; name?: string; isCurrent?: boolean }
         }
@@ -287,9 +282,38 @@ export default function StudentsManagementPage() {
         }
       }
 
-      // 6. Pour chaque élève, on retient l'inscription la plus récente
+      // 6. Pour chaque élève, on retient l'inscription la plus récente.
+      //
+      //    Les inscriptions TRANSFERRED sont d'abord ecartees : elles sont
+      //    rendues caduques par un ancien transfert et n'ont pas a departager
+      //    la ligne affichee. Le filtre est negatif, pas `=== 'ACTIVE'` : une
+      //    inscription DROPPED ou GRADUATED reste la bonne ligne pour un eleve
+      //    parti ou diplome.
+      const enrollmentsRetenues = allEnrollments.filter(
+        (e) => e.status !== "TRANSFERRED"
+      )
+
+      //    Le departage s'appuie sur `enrollmentDate`, une date SANS heure
+      //    comparee comme du texte : deux inscriptions creees le meme jour se
+      //    departagent par l'ordre d'arrivee du tableau, donc pas du tout. On
+      //    releve donc les eleves qui gardent plusieurs inscriptions sur une
+      //    meme annee, pour l'afficher plutot que de trancher au hasard.
+      const anneesParEleve = new Map<string, Map<string, number>>()
+      for (const enr of enrollmentsRetenues) {
+        const annee = enr.classSession?.academicYear?.yearString
+        if (!annee) continue
+        if (!anneesParEleve.has(enr.studentId)) anneesParEleve.set(enr.studentId, new Map())
+        const m = anneesParEleve.get(enr.studentId)!
+        m.set(annee, (m.get(annee) ?? 0) + 1)
+      }
+      const conflitsParEleve = new Map<string, string>()
+      for (const [studentId, parAnnee] of anneesParEleve) {
+        const enDouble = [...parAnnee.entries()].filter(([, n]) => n > 1).map(([a]) => a).sort()
+        if (enDouble.length > 0) conflitsParEleve.set(studentId, enDouble.join(", "))
+      }
+
       const latestByStudent = new Map<string, typeof allEnrollments[number]>()
-      for (const enr of allEnrollments) {
+      for (const enr of enrollmentsRetenues) {
         const prev = latestByStudent.get(enr.studentId)
         const enrDate = enr.enrollmentDate ?? ""
         const prevDate = prev?.enrollmentDate ?? ""
@@ -300,11 +324,14 @@ export default function StudentsManagementPage() {
 
       const rows: StudentRow[] = studentsData.map((s) => {
         const latest = latestByStudent.get(s.id)
-        const cls = latest?.classSession?.class
-        const classTypeName = cls?.classType?.name
-        // For tracked classes (NS3/NS4) the track code is treated as the "salle"
-        // (per the school convention from the config tabs). Otherwise the letter is used.
-        const salleLabel = cls?.track?.code ?? cls?.letter
+        // Deux champs distincts, composes en un seul point (lib/classes/labels).
+        // Le repli `track?.code ?? letter` qui vivait ici etait une branche
+        // morte : `Class` ne porte pas de filiere, l'expression valait toujours
+        // `letter`. Voir « La Regle des Deux Champs » dans DESIGN.md.
+        const { classe, salle } = libelleClasseSalle(latest?.classSession?.class)
+        const classTypeName = classe || undefined
+        const salleLabel = salle || undefined
+        // Fusion conservee pour la seule CLE DE TRI de la colonne Classe.
         const className = classTypeName
           ? `${classTypeName}${salleLabel ? ` ${salleLabel}` : ""}`
           : undefined
@@ -326,6 +353,7 @@ export default function StudentsManagementPage() {
           yearId: latest?.classSession?.academicYear?.id,
           status: latest?.status,
           enrollmentDate: latest?.enrollmentDate,
+          conflitInscriptions: conflitsParEleve.get(s.id),
           registrationDate: s.registrationDate,
           address: s.address || "",
           motherName: s.motherName || "",
@@ -343,9 +371,11 @@ export default function StudentsManagementPage() {
     } finally {
       setLoading(false)
     }
-  }, [toast])
+  }, [toast, contextYear])
 
-  useEffect(() => { loadStudents() }, [loadStudents])
+  // `yearLoading` garde l'appel : sans elle, le premier rendu partirait avec
+  // `contextYear` à null et afficherait « aucune année active » à tort.
+  useEffect(() => { if (!yearLoading) loadStudents() }, [loadStudents, yearLoading])
 
   // ── KPIs ─────────────────────────────────────────────────────────────────────
   const totalStudents       = students.length
@@ -432,42 +462,6 @@ export default function StudentsManagementPage() {
   }
 
   // ── Désactivation ─────────────────────────────────────────────────────────────
-  const handleDeactivate = async () => {
-    if (!deactivatingId) return
-    setDeactivating(true)
-    try {
-      const res = await fetch(`/api/enrollments/status-update/${deactivatingId}`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'DROPPED', notes: deactivationReason || undefined })
-      })
-      if (!res.ok) throw new Error()
-      toast({ title: "Élève désactivé" })
-      setDeactivatingId(null)
-      loadStudents()
-    } catch {
-      toast({ title: "Erreur", description: "Impossible de désactiver l'élève", variant: "destructive" })
-    } finally {
-      setDeactivating(false)
-    }
-  }
-
-  const handleReactivate = async (enrollmentId: string) => {
-    try {
-      const res = await fetch(`/api/enrollments/status-update/${enrollmentId}`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'ACTIVE' })
-      })
-      if (!res.ok) throw new Error()
-      toast({ title: "Élève réactivé" })
-      loadStudents()
-    } catch {
-      toast({ title: "Erreur", variant: "destructive" })
-    }
-  }
 
   // ── Modification profil ────────────────────────────────────────────────────
   const handleEditStudent = async (data: {
@@ -550,44 +544,6 @@ export default function StudentsManagementPage() {
     }
   }
 
-  // ── Transfert ──────────────────────────────────────────────────────────────
-  const handleTransfer = async (data: { newClassSessionId: string; notes?: string; migrateGrades?: boolean }) => {
-    if (!transferringStudent) return
-    setTransferSubmitting(true)
-    try {
-      const res = await fetch('/api/enrollments/transfer', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          enrollmentId: transferringStudent.enrollmentId,
-          newClassSessionId: data.newClassSessionId,
-          notes: data.notes,
-          migrateGrades: data.migrateGrades ?? false,
-        }),
-      })
-      const payload = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(payload.message)
-      const m = payload.migration
-      toast({
-        title: "Élève transféré avec succès",
-        description: m
-          ? `${m.grades} note${m.grades > 1 ? 's' : ''}, ${m.behaviors} comportement${m.behaviors > 1 ? 's' : ''} et ${m.exclusions} dispense${m.exclusions > 1 ? 's' : ''} migrés vers la nouvelle classe`
-          : undefined,
-      })
-      setTransferringStudent(null)
-      loadStudents()
-    } catch (err) {
-      toast({
-        title: "Erreur",
-        description: err instanceof Error && err.message ? err.message : "Impossible de transférer l'élève",
-        variant: "destructive",
-      })
-    } finally {
-      setTransferSubmitting(false)
-    }
-  }
-
   // ── Rendu ─────────────────────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -606,7 +562,7 @@ export default function StudentsManagementPage() {
     )
   }
 
-  const isArchived = year ? deriveYearStatus(year) === 'archived' : false
+  const isArchived = year ? estArchivee(year) : false
 
   // Pagination window (up to 5 numbered pages with ellipsis)
   const paginationWindow = (() => {
@@ -863,8 +819,6 @@ export default function StudentsManagementPage() {
                 {paginated.map(student => {
                   const nisuInvalid = !!student.nisu && !isNisuValid(student.nisu)
                   const isActive = student.status === 'ACTIVE'
-                  const isDropped = student.status === 'DROPPED'
-                  const isCurrentYear = !!year && student.yearId === year.id
                   const avatarSrc = normalizeUploadUrl(student.promotionPhotoUrl ?? student.profilePhoto)
 
                   return (
@@ -933,6 +887,17 @@ export default function StudentsManagementPage() {
                               {student.yearString}
                             </span>
                           )}
+                          {/* Le departage par `enrollmentDate` n'est pas fiable
+                              a l'interieur d'une meme journee : on dit le
+                              conflit au lieu de choisir en silence. */}
+                          {student.conflitInscriptions && (
+                            <span
+                              className="text-2xs font-medium text-error-ink"
+                              title={`Plusieurs inscriptions non transferees sur ${student.conflitInscriptions}. La classe affichee peut ne pas etre la bonne.`}
+                            >
+                              ⚠ Inscriptions multiples : {student.conflitInscriptions}
+                            </span>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -982,31 +947,6 @@ export default function StudentsManagementPage() {
                               <PencilIcon className="mr-2 h-4 w-4" />
                               Modifier le profil
                             </DropdownMenuItem>
-                            {isActive && isCurrentYear && !isArchived && (
-                              <>
-                                <DropdownMenuItem onClick={() => setTransferringStudent(student)}>
-                                  <ArrowRightLeftIcon className="mr-2 h-4 w-4" />
-                                  Transférer de classe
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  onClick={() => { if (student.enrollmentId) { setDeactivatingId(student.enrollmentId); setDeactivationReason('') } }}
-                                  className="text-destructive focus:text-destructive"
-                                >
-                                  <UserRoundXIcon className="mr-2 h-4 w-4" />
-                                  Désactiver
-                                </DropdownMenuItem>
-                              </>
-                            )}
-                            {isDropped && isCurrentYear && !isArchived && (
-                              <DropdownMenuItem
-                                onClick={() => student.enrollmentId && handleReactivate(student.enrollmentId)}
-                                className="text-success-ink focus:text-success-ink"
-                              >
-                                <UserRoundCheckIcon className="mr-2 h-4 w-4" />
-                                Réactiver
-                              </DropdownMenuItem>
-                            )}
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
                               onClick={() => { setSelectedIds(new Set([student.studentId])); openDeleteDialog() }}
@@ -1111,38 +1051,6 @@ export default function StudentsManagementPage() {
         )}
       </Card>
 
-      {/* ── Modal désactivation ── */}
-      <Dialog open={!!deactivatingId} onOpenChange={open => !open && setDeactivatingId(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Désactiver cet élève</DialogTitle>
-            <DialogDescription>
-              L'élève ne sera plus visible dans les listes actives. Cette action est réversible —
-              vous pouvez réactiver l'élève à tout moment.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2 py-2">
-            <Label htmlFor="deactivation-reason" className="text-sm font-medium">
-              Raison (optionnelle)
-            </Label>
-            <Input
-              id="deactivation-reason"
-              placeholder="Ex: Déménagement, transfert..."
-              value={deactivationReason}
-              onChange={e => setDeactivationReason(e.target.value)}
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeactivatingId(null)}>
-              Annuler
-            </Button>
-            <Button variant="destructive" onClick={handleDeactivate} disabled={deactivating}>
-              {deactivating ? 'En cours...' : 'Confirmer la désactivation'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* Modal suppression définitive (confirmation par mot de passe admin) */}
       <Dialog open={deleteOpen} onOpenChange={(o) => { if (!o) { setDeleteOpen(false); setDeletePassword(""); setDeleteError(null) } }}>
         <DialogContent className="sm:max-w-[480px]">
@@ -1214,29 +1122,6 @@ export default function StudentsManagementPage() {
           }}
           submitting={editSubmitting}
           onSubmit={handleEditStudent}
-        />
-      )}
-
-      {/* Modal transfert */}
-      {transferringStudent && (
-        <TransferEnrollmentModal
-          open={!!transferringStudent}
-          onOpenChange={open => !open && setTransferringStudent(null)}
-          studentName={`${transferringStudent.firstname} ${transferringStudent.lastname}`}
-          currentClassName={transferringStudent.className ?? ""}
-          currentClassTypeId={sessions.find(s => s.id === transferringStudent.classSessionId)?.class.classType.id}
-          sessions={sessions
-            .filter(s => s.id !== transferringStudent.classSessionId)
-            .map(s => {
-              const trackSuffix = s.class.track ? ` — ${s.class.track.code}` : '';
-              return {
-                id: s.id,
-                label: `${s.class.classType.name} ${s.class.letter}${trackSuffix}`,
-                classTypeId: s.class.classType.id,
-              };
-            })}
-          submitting={transferSubmitting}
-          onSubmit={handleTransfer}
         />
       )}
 
