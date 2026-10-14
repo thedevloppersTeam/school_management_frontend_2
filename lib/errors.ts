@@ -106,6 +106,14 @@ const KEYWORD_PATTERNS: Array<{ match: RegExp; message: string }> = [
  *  - toMessage(e, "de l'inscription")
  */
 export function toMessage(err: unknown, context?: string): string {
+  // Moyenne de classe incalculable (lib/api/bulletin.ts) : son message est
+  // rédigé pour l'écran, complet, et ne contient qu'un nombre d'élèves. Il est
+  // rendu tel quel, sans le contexte de l'écran, qui en casserait la dernière
+  // phrase. Reconnue par son nom, pour ne pas importer lib/api/bulletin.ts ici.
+  if (err instanceof Error && err.name === "ClassAverageUnavailableError") {
+    return err.message
+  }
+
   const base = resolveBaseMessage(err)
 
   if (!context?.trim()) {
