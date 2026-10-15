@@ -19,6 +19,12 @@ import {
   WEEKDAY_LONG_FR,
   WEEKDAY_SHORT_FR,
 } from "@/lib/calendar/dates";
+import {
+  describeHolidayCoverage,
+  formatHolidayCoverage,
+  type HolidayCoverage,
+  type HolidayCoverageInput,
+} from "@/lib/calendar/day-detail-state";
 import { holidaysToEvents } from "@/lib/calendar/from-holidays";
 import { buildMonthGrid, upcomingEvents, type MonthGridDay } from "@/lib/calendar/month-grid";
 import type { CalendarDayEvent } from "@/lib/calendar/types";
@@ -40,11 +46,18 @@ type HolidaysState =
   | { kind: "error"; message: string }
   | { kind: "ready"; events: CalendarDayEvent[]; ignored: number };
 
-function dayAriaLabel(day: MonthGridDay): string {
+/**
+ * Libellé complet d'un jour. Un jour sans jour férié n'affirme rien (« aucun »
+ * reste réservé au détail, quand la liste est lue) ; un jour non chargé, hors
+ * de l'année ou en erreur le dit.
+ */
+function dayAriaLabel(day: MonthGridDay, coverage: HolidayCoverage): string {
   let label = formatCivilLong(day.date);
   if (day.isToday) label += ", aujourd’hui";
-  if (day.events.length > 0) {
+  if (coverage.kind === "some") {
     label += `, jour férié : ${day.events.map((e) => e.label).join(", ")}`;
+  } else if (coverage.kind !== "none" && coverage.kind !== "no-year") {
+    label += `, ${formatHolidayCoverage(coverage)}`;
   }
   return label;
 }
@@ -74,11 +87,14 @@ export function CPMSLDashboardCalendar({
   // Date réelle, lue une fois au montage. La page ne monte ce composant
   // qu'après son propre chargement, donc jamais pendant le rendu serveur.
   const [today] = useState(() => todayCivil(new Date()));
-  const todayParts = parseCivil(today);
-  const [view, setView] = useState(() => ({
-    year: todayParts?.year ?? 2026,
-    month: todayParts?.month ?? 1,
-  }));
+  // Mois du jour, tiré de la date du jour et d'elle seule : `todayCivil`
+  // produit toujours `YYYY-MM-DD`, aucun repli n'est nécessaire — ni année ni
+  // mois écrits en dur.
+  const todayMonth = useMemo(
+    () => ({ year: Number(today.slice(0, 4)), month: Number(today.slice(5, 7)) }),
+    [today],
+  );
+  const [view, setView] = useState(() => todayMonth);
   const [focusDate, setFocusDate] = useState(today);
   const [detailDate, setDetailDate] = useState<string | null>(null);
   const [state, setState] = useState<HolidaysState>({ kind: "loading" });
@@ -171,14 +187,37 @@ export function CPMSLDashboardCalendar({
   };
 
   const goToToday = () => {
-    if (todayParts) setView({ year: todayParts.year, month: todayParts.month });
+    setView(todayMonth);
     setFocusDate(today);
     setDetailDate(null);
   };
 
+  // Ce que le calendrier a le droit d'affirmer : lib/calendar/day-detail-state.ts.
+  // L'année vient de AcademicYearContext (prop `activeYear`), jamais d'une
+  // valeur écrite ici.
+  const coverageBase: Omit<HolidayCoverageInput, "period" | "count"> = {
+    load: state.kind,
+    year: activeYear
+      ? { name: activeYear.name, startDate: activeYear.startDate, endDate: activeYear.endDate }
+      : null,
+  };
+  const dayCoverage = (day: MonthGridDay) =>
+    describeHolidayCoverage({
+      ...coverageBase,
+      period: { from: day.date, to: day.date },
+      count: day.events.length,
+    });
+  const monthDays = weeks.flat().filter((d) => d.inMonth);
+  const monthCoverage = describeHolidayCoverage({
+    ...coverageBase,
+    period: { from: monthDays[0].date, to: monthDays[monthDays.length - 1].date },
+    count: events.filter((e) => e.date.startsWith(monthPrefix)).length,
+  });
+
   const detailDay = detailDate
     ? weeks.flat().find((d) => d.date === detailDate) ?? null
     : null;
+  const detailDayCoverage = detailDay ? dayCoverage(detailDay) : null;
   const monthTitleId = "dashboard-calendar-month";
 
   return (
@@ -252,7 +291,7 @@ export function CPMSLDashboardCalendar({
                       else dayRefs.current.delete(day.date);
                     }}
                     tabIndex={day.date === rovingDate ? 0 : -1}
-                    aria-label={dayAriaLabel(day)}
+                    aria-label={dayAriaLabel(day, dayCoverage(day))}
                     aria-current={day.isToday ? "date" : undefined}
                     className={dayClasses(day)}
                     onClick={() => moveFocus(day.date)}
@@ -273,15 +312,22 @@ export function CPMSLDashboardCalendar({
           ))}
         </div>
 
-        {/* Détail du jour survolé ou focalisé — déjà annoncé par aria-label. */}
-        <p aria-hidden className="min-h-5 text-xs text-muted-foreground">
-          {detailDay
+        {/* Détail du jour survolé ou focalisé, sinon état du mois affiché.
+            N'affirme « aucun jour férié » que si la liste est lue ET que la
+            période est dans l'année active. Lisible par les lecteurs d'écran :
+            c'est ici qu'un mois hors de l'année est annoncé « non chargé ». */}
+        <p className="min-h-5 text-xs text-muted-foreground">
+          {detailDay && detailDayCoverage
             ? `${formatCivilLong(detailDay.date)} — ${
-                detailDay.events.length > 0
+                detailDayCoverage.kind === "some"
                   ? `jour férié : ${detailDay.events.map((e) => e.label).join(", ")}`
-                  : "aucun jour férié"
+                  : formatHolidayCoverage(detailDayCoverage)
               }`
-            : "Survolez ou sélectionnez un jour pour voir son libellé."}
+            : `${formatMonthTitle(view.year, view.month)} — ${formatHolidayCoverage(monthCoverage)}${
+                monthCoverage.kind === "some"
+                  ? ". Survolez ou sélectionnez un jour pour voir son libellé."
+                  : ""
+              }`}
         </p>
 
         {/* Légende */}
