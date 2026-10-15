@@ -25,7 +25,10 @@ export default defineConfig({
   webServer: {
     command: 'npm run dev',
     url: 'http://localhost:3000',
-    reuseExistingServer: !process.env.CI,
+    // Jamais de serveur deja lance : son BACKEND_URL echapperait au garde-fou
+    // de tests/fixtures/jeu-essai.ts, qui ne voit que l'environnement de ce
+    // processus — celui que Playwright transmet au serveur qu'il lance.
+    reuseExistingServer: false,
     timeout: 120_000,
   },
 });

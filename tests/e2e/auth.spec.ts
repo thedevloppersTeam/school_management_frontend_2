@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { setupJeuEssai, loginAsAdmin, JEU_ESSAI } from '../fixtures/jeu-essai';
+import { setupJeuEssai, loginAsAdmin, getAdminCredentials } from '../fixtures/jeu-essai';
 
 test.describe('Module AUTH — Authentification', () => {
   test.beforeEach(async () => {
@@ -8,9 +8,10 @@ test.describe('Module AUTH — Authentification', () => {
 
   test('AUTH-001 — Connexion valide avec identifiants corrects', async ({ page }) => {
     // Exigence(s): SR-001 | Priorite: MUST
+    const { username, password } = getAdminCredentials();
     await page.goto('/login');
-    await page.getByLabel(/nom d'utilisateur/i).fill(JEU_ESSAI.admin.email);
-    await page.getByLabel(/mot de passe/i).fill(JEU_ESSAI.admin.password);
+    await page.getByLabel(/nom d'utilisateur/i).fill(username);
+    await page.getByLabel(/mot de passe/i).fill(password);
     await page.getByRole('button', { name: /se connecter/i }).click();
     await expect(page).toHaveURL(/\/admin\/dashboard/, { timeout: 15000 });
     await expect(page.getByText(/tableau de bord/i)).toBeVisible();
@@ -18,8 +19,9 @@ test.describe('Module AUTH — Authentification', () => {
 
   test('AUTH-002 — Refus de connexion avec mot de passe incorrect', async ({ page }) => {
     // Exigence(s): SR-001 | Priorite: MUST
+    const { username } = getAdminCredentials();
     await page.goto('/login');
-    await page.getByLabel(/nom d'utilisateur/i).fill(JEU_ESSAI.admin.email);
+    await page.getByLabel(/nom d'utilisateur/i).fill(username);
     await page.getByLabel(/mot de passe/i).fill('MauvaisMotDePasse999!');
     await page.getByRole('button', { name: /se connecter/i }).click();
     // Resultat attendu: message d'erreur visible, utilisateur reste sur /login
