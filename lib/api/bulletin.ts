@@ -141,6 +141,37 @@ type AttitudePayload = {
 
 const classAveragesCache = new Map<string, Promise<BulletinClassAverages>>()
 
+/**
+ * Moyenne de classe incalculable : les notes d'au moins un élève de la salle
+ * n'ont pas pu être chargées, même après une reprise.
+ *
+ * Calculer sur les seuls élèves chargés donnerait un chiffre faux, différent
+ * d'une impression à l'autre. On n'imprime pas un bulletin dont la moyenne de
+ * classe est fausse : le calcul s'arrête ici.
+ *
+ * Ne porte que le NOMBRE d'élèves concernés — jamais leurs noms ni leurs
+ * identifiants : le message remonte jusqu'à l'écran.
+ */
+export class ClassAverageUnavailableError extends Error {
+  constructor(public readonly failedCount: number) {
+    super(
+      `Moyenne de classe indisponible : les notes de ${failedCount} élève${failedCount > 1 ? 's' : ''} ` +
+      `de la salle n'ont pas pu être chargées. Le bulletin n'est pas généré, pour ne pas imprimer ` +
+      `une moyenne de classe fausse. Réessayez dans un instant.`,
+    )
+    this.name = 'ClassAverageUnavailableError'
+  }
+}
+
+/** Une requête en échec est retentée UNE fois ; le second échec remonte. */
+async function withOneRetry<T>(load: () => Promise<T>): Promise<T> {
+  try {
+    return await load()
+  } catch {
+    return load()
+  }
+}
+
 // ── Helpers math ──────────────────────────────────────────────────────────────
 
 function avg(arr: number[]): number | null {
@@ -404,34 +435,50 @@ async function getClassAverages(params: {
       fetchSessionStepExclusions(params.classSessionId, params.stepId),
     ])
 
+    // Un élève dont les notes ne se chargent pas n'est plus retiré en silence
+    // du dénominateur : il est compté, et la moyenne n'est pas calculée.
+    let failedCount = 0
     const averages = await Promise.all(
       allEnrollments.map(async (enrollment) => {
-        try {
-          // Matières propres à CET élève : le tronc commun est partagé, les
-          // matières d'examen sont celles de SA filière.
-          const subjects = filterSubjectsByScope(
-            params.classSubjects,
-            params.scope,
-            enrollment.trackId,
-          )
-          if (subjects.length === 0) return null
+        // Matières propres à CET élève : le tronc commun est partagé, les
+        // matières d'examen sont celles de SA filière. Un élève sans matière
+        // dans cette portée ne fait pas partie du calcul — ce n'est pas un échec.
+        const subjects = filterSubjectsByScope(
+          params.classSubjects,
+          params.scope,
+          enrollment.trackId,
+        )
+        if (subjects.length === 0) return null
 
-          const grades = await apiFetch<ApiGrade[]>(
-            `/api/grades/enrollment/${enrollment.id}?stepId=${params.stepId}`,
-          )
-          return calculateBulletinAverages(
-            buildSubjectInputs(subjects, grades, enrollment.id, exclusions.get(enrollment.id)),
+        let grades: ApiGrade[]
+        try {
+          grades = await withOneRetry(() =>
+            apiFetch<ApiGrade[]>(
+              `/api/grades/enrollment/${enrollment.id}?stepId=${params.stepId}`,
+            ),
           )
         } catch {
+          failedCount++
           return null
         }
+        // Un élève sans aucune note (liste vide) est compté, comme avant.
+        return calculateBulletinAverages(
+          buildSubjectInputs(subjects, grades, enrollment.id, exclusions.get(enrollment.id)),
+        )
       }),
     )
+
+    if (failedCount > 0) throw new ClassAverageUnavailableError(failedCount)
 
     return calculateClassAverages(averages.filter((avg): avg is NonNullable<typeof avg> => avg !== null))
   })()
 
   classAveragesCache.set(cacheKey, promise)
+  // Un échec ne se met pas en cache : sinon la salle resterait en erreur
+  // jusqu'au rechargement de la page, même une fois le réseau revenu.
+  promise.catch(() => {
+    if (classAveragesCache.get(cacheKey) === promise) classAveragesCache.delete(cacheKey)
+  })
   return promise
 }
 
