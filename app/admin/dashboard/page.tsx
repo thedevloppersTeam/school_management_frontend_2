@@ -36,9 +36,10 @@ import {
 import { clientFetch as apiFetch } from "@/lib/client-fetch";
 import { toMessage } from "@/lib/errors";
 import {
-  sumEnrollmentCounts,
-  toEnrollmentCount,
-} from "@/lib/dashboard/students-total";
+  loadDashboardData,
+  type DashboardApi,
+  type DashboardExtraData,
+} from "@/lib/dashboard/load-dashboard";
 import { useAcademicYearContext } from "@/lib/contexts/academic-year-context";
 import {
   Card,
@@ -66,30 +67,6 @@ type ChecklistStatus =
 
 type LoadState = "loading" | "ready" | "error";
 
-interface SubjectRow {
-  id: string;
-}
-
-interface ClassSubjectRow {
-  id: string;
-}
-
-interface ArchiveRow {
-  id: string;
-}
-
-interface AssignmentSummary {
-  totalAssigned: number;
-  sessionsWithSubjects: number;
-  checkedSessions: number;
-}
-
-interface DashboardExtraData {
-  subjectCount: number | null;
-  assignmentSummary: AssignmentSummary | null;
-  archiveCount: number | null;
-}
-
 interface SummaryCardItem {
   label: string;
   value: string | number;
@@ -116,6 +93,21 @@ const EMPTY_EXTRA_DATA: DashboardExtraData = {
   subjectCount: null,
   assignmentSummary: null,
   archiveCount: null,
+};
+
+/**
+ * Les appels du tableau de bord, injectés dans l'orchestration
+ * (lib/dashboard/load-dashboard.ts) : dépendances minimales, 6 en vol au plus.
+ */
+const DASHBOARD_API: DashboardApi<ClassSession, AcademicYearStep> = {
+  fetchSteps,
+  fetchClassSessions,
+  fetchEnrollmentCount,
+  fetchSubjects: () => apiFetch<unknown>("/api/subjects"),
+  fetchArchives: (academicYearId) =>
+    apiFetch<unknown>(`/api/bulletin-archives?academicYearId=${academicYearId}`),
+  fetchClassSubjects: (classSessionId) =>
+    apiFetch<unknown[]>(`/api/class-subjects?classSessionId=${classSessionId}`),
 };
 
 const TIME_FORMAT = new Intl.DateTimeFormat("fr-FR", {
@@ -164,61 +156,6 @@ function countElapsedSteps(steps: AcademicYearStep[], now: number): number {
     const end = new Date(step.endDate).getTime();
     return Number.isFinite(end) && end < now;
   }).length;
-}
-
-async function fetchDashboardExtraData(
-  year: AcademicYear,
-  sessions: ClassSession[],
-): Promise<DashboardExtraData> {
-  const [subjectsResult, archivesResult, assignmentsResult] =
-    await Promise.allSettled([
-      apiFetch<SubjectRow[]>("/api/subjects"),
-      apiFetch<ArchiveRow[]>(`/api/bulletin-archives?academicYearId=${year.id}`),
-      Promise.allSettled(
-        sessions.map((session) =>
-          apiFetch<ClassSubjectRow[]>(
-            `/api/class-subjects?classSessionId=${session.id}`,
-          ),
-        ),
-      ),
-    ]);
-
-  const subjectCount =
-    subjectsResult.status === "fulfilled" && Array.isArray(subjectsResult.value)
-      ? subjectsResult.value.length
-      : null;
-
-  const archiveCount =
-    archivesResult.status === "fulfilled" && Array.isArray(archivesResult.value)
-      ? archivesResult.value.length
-      : null;
-
-  let assignmentSummary: AssignmentSummary | null = null;
-  if (assignmentsResult.status === "fulfilled") {
-    const fulfilled = assignmentsResult.value.filter(
-      (result): result is PromiseFulfilledResult<ClassSubjectRow[]> =>
-        result.status === "fulfilled",
-    );
-
-    if (fulfilled.length > 0 || sessions.length === 0) {
-      assignmentSummary = {
-        totalAssigned: fulfilled.reduce(
-          (sum, result) => sum + result.value.length,
-          0,
-        ),
-        sessionsWithSubjects: fulfilled.filter(
-          (result) => result.value.length > 0,
-        ).length,
-        checkedSessions: fulfilled.length,
-      };
-    }
-  }
-
-  return {
-    subjectCount,
-    archiveCount,
-    assignmentSummary,
-  };
 }
 
 function buildChecklist(params: {
@@ -630,101 +567,72 @@ export default function AdminDashboardPage() {
   const [partialReasons, setPartialReasons] = useState<string[]>([]);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
 
-  // Une requête plus ancienne ne doit jamais écraser une plus récente : le
-  // bouton « Réessayer » peut relancer un chargement pendant qu'un autre court.
-  const requestIdRef = useRef(0);
   const { activeYear: contextYear, loading: yearLoading, refresh: refreshActiveYear } =
     useAcademicYearContext();
 
-  // Aucun setState synchrone ici : la fonction est appelée depuis un effet, et
-  // tout état visible n'est écrit qu'après le premier `await`. La remise à zéro
-  // avant chargement appartient à `reload`, que seuls les boutons déclenchent.
-  const loadDashboard = useCallback(async () => {
-    const requestId = ++requestIdRef.current;
-    const isStale = () => requestIdRef.current !== requestId;
+  // Incrémenté par « Actualiser » / « Réessayer » : relance le chargement même
+  // quand `refresh()` rend la même année (ou échoue et garde l'ancienne).
+  const [reloadToken, setReloadToken] = useState(0);
 
-    try {
-      // Annee lue dans le contexte. `reload` ci-dessous appelle `refresh()`
-      // avant `loadDashboard`, de sorte que le bouton « recharger » relit
-      // toujours l'annee — la semantique d'origine est preservee.
-      const year = contextYear;
-      if (isStale()) return;
-      setActiveYear(year);
-      setErrorMessage(null);
+  // Dernière année lue dans le contexte, pour l'effet de chargement ci-dessous.
+  // L'effet dépend de son IDENTIFIANT, pas de l'objet : `refresh()` rend un
+  // nouvel objet à chaque relecture, ce qui doublerait le chargement avec
+  // `reloadToken`.
+  const contextYearRef = useRef(contextYear);
+  useEffect(() => {
+    contextYearRef.current = contextYear;
+  }, [contextYear]);
+  const contextYearId = contextYear?.id ?? null;
 
-      if (!year) {
-        setSteps([]);
-        setSessions([]);
-        setTotalStudents(0);
-        setExtraData(EMPTY_EXTRA_DATA);
+  /**
+   * Charge les données de l'année et les écrit dans l'état.
+   *
+   * Corrige `react-hooks/set-state-in-effect` sans le désactiver : TOUS les
+   * `setState` viennent après le premier `await` — y compris le cas « aucune
+   * année », qui attend une promesse déjà résolue. L'effet ne fait donc que
+   * lancer un callback asynchrone, et aucun rendu en cascade ne part de son
+   * corps.
+   *
+   * `signal` est annulé par le nettoyage de l'effet (changement d'année,
+   * actualisation, démontage) : une réponse de l'ancienne année n'écrit
+   * jamais dans l'état de la nouvelle.
+   */
+  const runLoad = useCallback(
+    async (year: AcademicYear | null, signal: AbortSignal) => {
+      try {
+        const result = await (year
+          ? loadDashboardData(year.id, DASHBOARD_API, { signal })
+          : Promise.resolve(null));
+        if (signal.aborted) return;
+
+        setActiveYear(year);
+        setErrorMessage(null);
+        if (result) {
+          setSteps(result.steps);
+          setSessions(result.sessions);
+          setTotalStudents(result.totalStudents);
+          setExtraData(result.extra);
+          setPartialReasons(result.partialReasons);
+        } else {
+          setSteps([]);
+          setSessions([]);
+          setTotalStudents(0);
+          setExtraData(EMPTY_EXTRA_DATA);
+          setPartialReasons([]);
+        }
         setLastUpdatedAt(new Date());
         setLoadState("ready");
-        return;
+      } catch (err) {
+        if (signal.aborted) return;
+        // Surtout : on ne vide RIEN. Une panne de lecture n'est pas une perte de
+        // données, et l'écran ne doit jamais laisser croire le contraire.
+        setActiveYear(year);
+        setErrorMessage(toMessage(err));
+        setLoadState("error");
       }
-
-      const [stepsData, sessionsData] = await Promise.all([
-        fetchSteps(year.id),
-        fetchClassSessions(year.id),
-      ]);
-
-      if (isStale()) return;
-      const orderedSteps = [...stepsData].sort(
-        (a, b) => a.stepNumber - b.stepNumber,
-      );
-      setSteps(orderedSteps);
-      setSessions(sessionsData);
-
-      const counts = await Promise.allSettled(
-        sessionsData.map(async (session) => ({
-          sessionId: session.id,
-          studentCount: await fetchEnrollmentCount(session.id),
-        })),
-      );
-
-      if (isStale()) return;
-      // Un comptage rejeté, ou qui n'est pas un effectif, vaut `null` : il
-      // n'est jamais compté comme 0, et il rend le total inconnu.
-      const perSession = counts.map((result) =>
-        result.status === "fulfilled"
-          ? toEnrollmentCount(result.value.studentCount)
-          : null,
-      );
-      setTotalStudents(sumEnrollmentCounts(perSession));
-
-      const reasons: string[] = [];
-      const missing = perSession.filter((count) => count === null).length;
-      if (missing > 0) {
-        reasons.push(`les effectifs de ${missing} classe(s)`);
-      }
-
-      const dashboardExtra = await fetchDashboardExtraData(year, sessionsData);
-      if (isStale()) return;
-      setExtraData(dashboardExtra);
-
-      if (dashboardExtra.subjectCount === null) {
-        reasons.push("le compteur des matières");
-      }
-      if (dashboardExtra.assignmentSummary === null) {
-        reasons.push("les affectations matières / classes");
-      }
-      if (dashboardExtra.archiveCount === null) {
-        reasons.push("le compteur des bulletins archivés");
-      }
-
-      setPartialReasons(reasons);
-      setLastUpdatedAt(new Date());
-      setLoadState("ready");
-    } catch (err) {
-      if (isStale()) return;
-      // Surtout : on ne vide RIEN. Une panne de lecture n'est pas une perte de
-      // données, et l'écran ne doit jamais laisser croire le contraire.
-      setErrorMessage(toMessage(err));
-      setLoadState("error");
-    }
-    // `contextYear` EST une dependance depuis que l'annee vient du contexte :
-    // sans elle, `loadDashboard` resterait fige sur la valeur du premier
-    // rendu, c'est-a-dire `null`.
-  }, [contextYear]);
+    },
+    [],
+  );
 
   const reload = useCallback(() => {
     setLoadState("loading");
@@ -732,17 +640,19 @@ export default function AdminDashboardPage() {
     setPartialReasons([]);
     // Relit l'annee AVANT le reste : sans ca, le bouton rechargerait tout
     // sauf l'annee, qui viendrait du cache du contexte.
-    void refreshActiveYear().then(() => loadDashboard());
-  }, [loadDashboard, refreshActiveYear]);
+    void refreshActiveYear().then(() => setReloadToken((t) => t + 1));
+  }, [refreshActiveYear]);
 
   useEffect(() => {
     // `yearLoading` garde l'appel : partir avec `contextYear` a null ferait
     // afficher « aucune annee active » alors que la reponse est en vol.
-    if (!yearLoading) void loadDashboard();
-    return () => {
-      requestIdRef.current += 1;
-    };
-  }, [loadDashboard, yearLoading]);
+    if (yearLoading) return;
+    const controller = new AbortController();
+    void runLoad(contextYearRef.current, controller.signal);
+    return () => controller.abort();
+    // `contextYearId` et `reloadToken` sont les DÉCLENCHEURS : l'année lue
+    // vient de `contextYearRef`, à jour avant cet effet (déclaré plus haut).
+  }, [runLoad, yearLoading, contextYearId, reloadToken]);
 
   const routes = useMemo(() => getRouteSet(activeYear), [activeYear]);
   const currentStep = useMemo(() => getCurrentStep(steps), [steps]);
@@ -832,34 +742,6 @@ export default function AdminDashboardPage() {
     [routes],
   );
 
-  if (loadState === "loading") {
-    return (
-      <div className="space-y-6" role="status" aria-live="polite" aria-busy>
-        <span className="sr-only">Chargement du tableau de bord…</span>
-        <div className="space-y-1">
-          <Skeleton className="h-9 w-80" />
-          <Skeleton className="h-5 w-72" />
-        </div>
-        <Skeleton className="h-44 rounded-xl" />
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {[1, 2, 3, 4].map((item) => (
-            <Skeleton key={item} className="h-[132px] rounded-xl" />
-          ))}
-        </div>
-        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
-          <div className="space-y-6">
-            <Skeleton className="h-40 rounded-xl" />
-            <Skeleton className="h-96 rounded-xl" />
-          </div>
-          <div className="space-y-6">
-            <Skeleton className="h-48 rounded-xl" />
-            <Skeleton className="h-96 rounded-xl" />
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   if (loadState === "error") {
     return (
       <div className="space-y-6">
@@ -889,8 +771,31 @@ export default function AdminDashboardPage() {
     );
   }
 
+  const loading = loadState === "loading";
+
+  // « Chargement » et « prêt » partagent UN SEUL arbre : la grille des deux
+  // colonnes occupe la même place dans les deux états. Les widgets du
+  // calendrier et des événements y sont montés dès que l'année active est
+  // connue (contexte), sans attendre le reste du chargement, et ne sont pas
+  // remontés — donc pas rechargés — quand la page passe à « prêt ».
   return (
     <div className="space-y-6">
+      {loading ? (
+        <div className="space-y-6" role="status" aria-live="polite" aria-busy>
+          <span className="sr-only">Chargement du tableau de bord…</span>
+          <div className="space-y-1">
+            <Skeleton className="h-9 w-80" />
+            <Skeleton className="h-5 w-72" />
+          </div>
+          <Skeleton className="h-44 rounded-xl" />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[1, 2, 3, 4].map((item) => (
+              <Skeleton key={item} className="h-[132px] rounded-xl" />
+            ))}
+          </div>
+        </div>
+      ) : (
+        <>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <PageHeading activeYear={activeYear} />
         <Button
@@ -979,6 +884,8 @@ export default function AdminDashboardPage() {
           </CardContent>
         </Card>
       )}
+        </>
+      )}
 
       {/* Deux colonnes de même hauteur : l'accès rapide et la préparation de
           l'année à gauche ; les événements et le calendrier de l'école à
@@ -987,27 +894,53 @@ export default function AdminDashboardPage() {
           calendrier garde sa taille naturelle. Empilées sous `xl` (1280 px) :
           à 1024 px, la colonne de gauche ne ferait que ~296 px à côté des
           384 px de droite. Le squelette de chargement suit la même règle. */}
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
+      <div
+        className={cn(
+          "grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]",
+          loading && "items-start",
+        )}
+      >
         {/* Titres de colonne pour les lecteurs d'écran : sans eux, la page
             passe du h1 aux h3 des cartes. `sr-only` est en position absolue,
-            hors du flux flex : il n'ajoute aucun espacement à la colonne. */}
+            hors du flux flex : il n'ajoute aucun espacement à la colonne.
+            Le squelette de chargement reste sans titre. */}
         <div className="flex min-w-0 flex-col gap-6">
-          <h2 className="sr-only">Accès rapide et préparation de l’année</h2>
-          <QuickLinks links={quickLinks} />
-          <ProgressChecklist items={checklist} className="flex-1" />
+          {loading ? (
+            <>
+              <Skeleton className="h-40 rounded-xl" />
+              <Skeleton className="h-96 rounded-xl" />
+            </>
+          ) : (
+            <>
+              <h2 className="sr-only">Accès rapide et préparation de l’année</h2>
+              <QuickLinks links={quickLinks} />
+              <ProgressChecklist items={checklist} className="flex-1" />
+            </>
+          )}
         </div>
         <div className="flex min-w-0 flex-col gap-6">
-          <h2 className="sr-only">Événements et calendrier de l’école</h2>
-          {/* `key` : changer d'année active remet les deux cartes en chargement. */}
-          <CPMSLDashboardEvents
-            key={`events-${activeYear?.id ?? "aucune"}`}
-            activeYear={activeYear}
-            className="flex-1"
-          />
-          <CPMSLDashboardCalendar
-            key={`calendar-${activeYear?.id ?? "aucune"}`}
-            activeYear={activeYear}
-          />
+          {!loading && <h2 className="sr-only">Événements et calendrier de l’école</h2>}
+          {yearLoading ? (
+            <>
+              <Skeleton className="h-48 rounded-xl" />
+              <Skeleton className="h-96 rounded-xl" />
+            </>
+          ) : (
+            <>
+              {/* Année du CONTEXTE : connue avant la fin du chargement de la
+                  page. `key` : changer d'année active remet les deux cartes en
+                  chargement. */}
+              <CPMSLDashboardEvents
+                key={`events-${contextYear?.id ?? "aucune"}`}
+                activeYear={contextYear}
+                className="flex-1"
+              />
+              <CPMSLDashboardCalendar
+                key={`calendar-${contextYear?.id ?? "aucune"}`}
+                activeYear={contextYear}
+              />
+            </>
+          )}
         </div>
       </div>
     </div>
