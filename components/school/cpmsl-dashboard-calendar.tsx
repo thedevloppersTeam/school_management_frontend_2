@@ -26,6 +26,7 @@ import {
   type HolidayCoverageInput,
 } from "@/lib/calendar/day-detail-state";
 import { holidaysToEvents } from "@/lib/calendar/from-holidays";
+import { weekEdgeTarget } from "@/lib/calendar/grid-keys";
 import { buildMonthGrid, upcomingEvents, type MonthGridDay } from "@/lib/calendar/month-grid";
 import type { CalendarDayEvent } from "@/lib/calendar/types";
 import {
@@ -64,15 +65,20 @@ function dayAriaLabel(day: MonthGridDay, coverage: HolidayCoverage): string {
 
 function dayClasses(day: MonthGridDay): string {
   return cn(
-    "relative flex h-8 w-full items-center justify-center rounded-md border text-sm tabular-nums transition-colors",
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+    // 40 px de haut sous `sm` (cible tactile), 32 px ensuite. La largeur suit
+    // la colonne : sept cases de 40 px ne tiennent pas à 375 px (voir lot 4b).
+    "relative flex h-10 w-full items-center justify-center rounded-md border text-sm tabular-nums transition-colors sm:h-8",
+    // Focus clavier : anneau de 1 px en --ring, comme toute primitive (DESIGN.md).
+    "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
     !day.inMonth && "border-transparent text-muted-foreground",
     day.inMonth && day.events.length === 0 && "border-transparent text-foreground hover:bg-muted",
     day.inMonth && day.isWeekend && day.events.length === 0 && "bg-muted",
     day.inMonth &&
       day.events.length > 0 &&
       "border-info-border bg-info-soft font-semibold text-info-ink",
-    day.isToday && "ring-1 ring-primary",
+    // Aujourd'hui : chiffre en gras et souligné. Plus d'anneau, qui se
+    // confondait avec le focus ; et jamais la couleur seule.
+    day.isToday && "font-bold underline underline-offset-4",
   );
 }
 
@@ -178,6 +184,13 @@ export function CPMSLDashboardCalendar({
       e.preventDefault();
       const target = addMonths(view.year, view.month, e.key === "PageUp" ? -1 : 1);
       moveFocus(`${target.year}-${String(target.month).padStart(2, "0")}-01`);
+    } else {
+      // Début / Fin : lundi / dimanche de la semaine (lib/calendar/grid-keys.ts).
+      const edge = weekEdgeTarget(e.key, rovingDate);
+      if (edge) {
+        e.preventDefault();
+        moveFocus(edge);
+      }
     }
   };
 
@@ -231,9 +244,11 @@ export function CPMSLDashboardCalendar({
         </CardDescription>
       </CardHeader>
       <Separator />
-      <CardContent className="space-y-3 p-4">
+      <CardContent className="space-y-4 p-6">
         {/* Navigation */}
-        <div className="flex items-center justify-between gap-2">
+        {/* `flex-wrap` : avec des boutons de 44 px sous `sm`, le titre du mois
+            ne tient plus sur la même ligne à 320 px ; il passe au-dessus. */}
+        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-4">
           <p
             id={monthTitleId}
             aria-live="polite"
@@ -245,19 +260,19 @@ export function CPMSLDashboardCalendar({
             <Button
               size="icon"
               variant="outline"
-              className="h-8 w-8"
+              className="h-11 w-11 sm:h-8 sm:w-8"
               aria-label="Mois précédent"
               onClick={() => goToMonth(-1)}
             >
               <ChevronLeftIcon className="h-4 w-4" />
             </Button>
-            <Button size="sm" variant="outline" className="h-8" onClick={goToToday}>
+            <Button size="sm" variant="outline" className="h-11 sm:h-8" onClick={goToToday}>
               Aujourd’hui
             </Button>
             <Button
               size="icon"
               variant="outline"
-              className="h-8 w-8"
+              className="h-11 w-11 sm:h-8 sm:w-8"
               aria-label="Mois suivant"
               onClick={() => goToMonth(1)}
             >
@@ -331,19 +346,19 @@ export function CPMSLDashboardCalendar({
         </p>
 
         {/* Légende */}
-        <ul className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-muted-foreground" aria-label="Légende">
+        <ul className="flex flex-wrap gap-4 text-xs text-muted-foreground" aria-label="Légende">
           <li className="flex items-center gap-2">
-            <span aria-hidden className="relative inline-flex h-4 w-4 rounded border border-info-border bg-info-soft">
+            <span aria-hidden className="relative inline-flex h-4 w-4 rounded-sm border border-info-border bg-info-soft">
               <span className="absolute bottom-0.5 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-info" />
             </span>
             Jour férié
           </li>
           <li className="flex items-center gap-2">
-            <span aria-hidden className="inline-flex h-4 w-4 rounded ring-1 ring-primary" />
+            <span aria-hidden className="inline-flex h-4 min-w-4 items-center justify-center text-xs font-bold tabular-nums text-foreground underline underline-offset-4">{Number(today.slice(8))}</span>
             Aujourd’hui
           </li>
           <li className="flex items-center gap-2">
-            <span aria-hidden className="inline-flex h-4 w-4 rounded bg-muted" />
+            <span aria-hidden className="inline-flex h-4 w-4 rounded-sm bg-muted" />
             Week-end
           </li>
         </ul>
@@ -362,7 +377,7 @@ export function CPMSLDashboardCalendar({
         ) : state.kind === "error" ? (
           <div
             role="alert"
-            className="rounded-md border border-error-border bg-error-soft p-3 text-sm text-error-ink"
+            className="rounded-md border border-error-border bg-error-soft p-4 text-sm text-error-ink"
           >
             <p className="font-medium">Les jours fériés n’ont pas pu être lus.</p>
             <p className="mt-1 text-xs">
@@ -381,18 +396,18 @@ export function CPMSLDashboardCalendar({
             </Link>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-4">
             <h4 className="text-xs font-medium uppercase text-muted-foreground">
               Prochains jours fériés
             </h4>
             {upcoming.length > 0 ? (
-              <ul className="space-y-1.5">
-                {upcoming.map((event) => (
+              <ul className="space-y-4">
+                {upcoming.map((event, index) => (
                   <li
-                    key={`${event.date}-${event.label}`}
+                    key={`${event.date}-${event.label}-${index}`}
                     className="flex items-baseline justify-between gap-3 text-sm"
                   >
-                    <span className="min-w-0 truncate text-foreground">{event.label}</span>
+                    <span className="min-w-0 truncate text-foreground" title={event.label}>{event.label}</span>
                     <span className="shrink-0 tabular-nums text-muted-foreground">
                       {formatCivilLong(event.date)}
                     </span>

@@ -95,7 +95,7 @@ export function CPMSLDashboardEvents({
     );
   } else if (state.kind === "loading") {
     body = (
-      <div role="status" aria-live="polite" aria-busy className="space-y-2">
+      <div role="status" aria-live="polite" aria-busy className="space-y-4">
         <span className="sr-only">Chargement des événements…</span>
         <Skeleton className="h-10 rounded-md" />
         <Skeleton className="h-10 rounded-md" />
@@ -105,7 +105,7 @@ export function CPMSLDashboardEvents({
     body = (
       <div
         role="alert"
-        className="rounded-md border border-error-border bg-error-soft p-3 text-sm text-error-ink"
+        className="rounded-md border border-error-border bg-error-soft p-4 text-sm text-error-ink"
       >
         <p className="font-medium">Les événements n’ont pas pu être lus.</p>
         <p className="mt-1 text-xs">Détail : {state.message}</p>
@@ -113,19 +113,19 @@ export function CPMSLDashboardEvents({
     );
   } else {
     body = (
-      <div className="space-y-3">
+      <div className="space-y-4">
         {upcoming.length > 0 ? (
           <ul className="divide-y">
-            {upcoming.map((event) => (
+            {upcoming.map((event, index) => (
               <li
-                key={`${event.date}-${event.title}`}
-                className="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0"
+                key={`${event.date}-${event.title}-${index}`}
+                className="flex items-start gap-3 py-4 first:pt-0 last:pb-0"
               >
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                   <CalendarDaysIcon className="h-4 w-4" aria-hidden />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-foreground">
+                  <p className="truncate text-sm font-semibold text-foreground" title={event.title}>
                     {event.title}
                   </p>
                   <p className="text-xs tabular-nums text-muted-foreground">
@@ -170,7 +170,7 @@ export function CPMSLDashboardEvents({
         </CardDescription>
       </CardHeader>
       <Separator />
-      <CardContent className="space-y-4 p-4">
+      <CardContent className="space-y-4 p-6">
         {body}
         {activeYear && (
           <Link href={SETTINGS_HREF} className={LINK_CLASS}>
