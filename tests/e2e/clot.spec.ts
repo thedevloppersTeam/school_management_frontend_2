@@ -1,6 +1,14 @@
 import { test, expect } from '@playwright/test';
 import { setupJeuEssai, loginAsAdmin } from '../fixtures/jeu-essai';
 
+// Les cellules de note de la grille. Elles etaient ciblees par
+// getByRole('spinbutton'), un role reserve a <input type="number"> ; la grille
+// est passee en type="text" inputMode="decimal" pour que la virgule du pave
+// numerique cesse d'etre mangee par la sanitisation du navigateur.
+// getByRole('textbox') ne conviendrait PAS : il attraperait aussi le champ de
+// recherche, qui precede le tableau dans le DOM.
+const NOTE_CELL = 'input[data-grid-row]';
+
 // Helper: navigate to the config page for the active year
 async function goToYearConfig(page: any) {
   await page.goto('/admin/academic-years');
@@ -99,7 +107,7 @@ test.describe('Module CLOT — Clôture de période', () => {
       }
 
       // Étape 2: Tenter de modifier directement une note de la période T1 clôturée
-      const noteInputs = page.getByRole('spinbutton');
+      const noteInputs = page.locator(NOTE_CELL);
       const inputCount = await noteInputs.count();
 
       if (inputCount > 0) {

@@ -74,3 +74,11 @@ ui-audit-report.json
 # Reliquats d edition
 *.backup
 *.bak
+.claude/
+.agents/
+.codex/
+_cpmsl_dashboard_tmp/
+.impeccable/
+/AUDIT_*.md
+/audit-*.md
+/diagnostic-*.md

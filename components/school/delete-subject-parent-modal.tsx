@@ -12,6 +12,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import {
+  ALERT_ERROR_CLASS,
+  BTN_DESTRUCTIVE_CLASS,
+  BTN_OUTLINE_CLASS,
+  DIALOG_CONTENT_CLASS,
+  DIALOG_FOOTER_CLASS,
+  DIALOG_HEADER_CLASS,
+} from "@/lib/cpmsl-classes"
 
 /**
  * delete-subject-parent-modal.tsx — Patch EP-006
@@ -69,79 +77,40 @@ export function DeleteSubjectParentModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
-      <DialogContent
-        style={{
-          maxWidth: '520px',
-          backgroundColor: '#FFFFFF',
-          border: '1px solid #E8E6E3',
-          borderRadius: '12px',
-          padding: 0
-        }}
-      >
-        <DialogHeader style={{ padding: '24px 24px 16px 24px', borderBottom: '1px solid #E8E6E3' }}>
-          <DialogTitle
-            style={{
-              color: '#1E1A17',
-              fontSize: 'var(--text-xl)',
-              fontWeight: 600,
-              fontFamily: 'var(--font-serif)'
-            }}
-          >
+      <DialogContent className={`${DIALOG_CONTENT_CLASS} max-w-[520px] border border-neutral-200 p-0`}
+     >
+        <DialogHeader className={DIALOG_HEADER_CLASS}>
+          <DialogTitle className="font-serif text-xl font-bold text-neutral-900"
+         >
             Supprimer la matière {subject.name}
           </DialogTitle>
         </DialogHeader>
 
-        <div style={{ padding: '24px' }} className="space-y-4">
+        <div  className="space-y-4 p-6">
           {/* Warning block */}
-          <div
-            style={{
-              backgroundColor: '#FEE2E2',
-              border: '1px solid #FCA5A5',
-              borderRadius: '8px',
-              padding: '16px'
-            }}
-          >
-            <p
-              style={{
-                color: '#991B1B',
-                fontSize: 'var(--text-sm)',
-                lineHeight: '1.5'
-              }}
-            >
+          <div className={ALERT_ERROR_CLASS}
+         >
+            <p className="text-sm leading-normal text-error-ink"
+           >
               Cette matière contient {childCount} {childCount === 1 ? 'sous-matière' : 'sous-matières'}. La suppression retirera toutes les sous-matières associées. Cette action est irréversible.
             </p>
           </div>
 
           {/* Summary */}
-          <div style={{ marginTop: '16px' }} className="space-y-1">
-            <p
-              style={{
-                color: '#5C5955',
-                fontSize: 'var(--text-sm)',
-                fontWeight: 500
-              }}
-            >
+          <div  className="space-y-1 mt-4">
+            <p className="text-sm font-medium text-neutral-600"
+           >
               Sous-matières supprimées : {childCount}
             </p>
             {/* Élèves affectés : affiché uniquement si le chiffre est fourni */}
             {studentCount !== undefined && (
-              <p
-                style={{
-                  color: '#5C5955',
-                  fontSize: 'var(--text-sm)',
-                  fontWeight: 500
-                }}
-              >
+              <p className="text-sm font-medium text-neutral-600"
+             >
                 Élèves affectés : {studentCount}
               </p>
             )}
-            <p
-              style={{
-                color: '#5C5955',
-                fontSize: 'var(--text-sm)',
-                fontWeight: 500
-              }}
-            >
+            <p className="text-sm font-medium text-neutral-600"
+           >
               Notes associées : toutes les notes de cette matière seront supprimées
             </p>
           </div>
@@ -150,9 +119,8 @@ export function DeleteSubjectParentModal({
           {needsTypedName && (
             <div className="space-y-2 pt-2">
               <Label
-                htmlFor={`confirm-subject-${subject.id}`}
-                style={{ fontSize: 'var(--text-sm)', color: '#1E1A17' }}
-              >
+                htmlFor={`confirm-subject-${subject.id}`} className="text-sm text-neutral-900"
+             >
                 Pour confirmer, saisissez{" "}
                 <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
                   {subject.name}
@@ -167,47 +135,24 @@ export function DeleteSubjectParentModal({
                 autoComplete="off"
                 autoCorrect="off"
                 spellCheck={false}
-                autoFocus
-                style={{
-                  borderRadius: '8px',
-                  border: '1px solid #D1CECC',
-                  fontSize: 'var(--text-sm)'
-                }}
+                autoFocus className="rounded-md border border-neutral-300 text-sm"
               />
             </div>
           )}
         </div>
 
-        <DialogFooter
-          style={{
-            padding: '16px 24px',
-            borderTop: '1px solid #E8E6E3',
-            display: 'flex',
-            gap: '12px',
-            justifyContent: 'flex-end'
-          }}
-        >
+        <DialogFooter className={DIALOG_FOOTER_CLASS}
+       >
           <Button
             variant="outline"
-            onClick={() => onOpenChange?.(false)}
-            style={{
-              border: '1px solid #D1CECC',
-              color: '#5C5955',
-              borderRadius: '8px'
-            }}
-          >
+            onClick={() => onOpenChange?.(false)} className={BTN_OUTLINE_CLASS}
+         >
             Annuler
           </Button>
           <Button
             onClick={handleConfirm}
-            disabled={!canConfirm}
-            style={{
-              backgroundColor: canConfirm ? '#B91C1C' : '#D1CECC',
-              color: '#FFFFFF',
-              borderRadius: '8px',
-              cursor: canConfirm ? 'pointer' : 'not-allowed'
-            }}
-          >
+            disabled={!canConfirm} className={BTN_DESTRUCTIVE_CLASS}
+         >
             Supprimer définitivement
           </Button>
         </DialogFooter>

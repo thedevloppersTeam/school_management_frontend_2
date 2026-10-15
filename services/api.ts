@@ -394,7 +394,9 @@ export const enrollmentsApi = {
     const response = await api.post<Enrollment>("/api/enrollments/transfer", data);
     return response.data;
   },
-  updateStatus: async (id: string, data: { status: EnrollmentStatus; notes?: string }): Promise<Enrollment> => {
+  // Le motif est obligatoire cote backend (400 si absent ou vide) : le type le
+  // dit, pour qu un futur appelant ne decouvre pas la regle en production.
+  updateStatus: async (id: string, data: { status: EnrollmentStatus; reason: string }): Promise<Enrollment> => {
     const response = await api.post<Enrollment>(`/api/enrollments/status-update/${id}`, data);
     return response.data;
   },

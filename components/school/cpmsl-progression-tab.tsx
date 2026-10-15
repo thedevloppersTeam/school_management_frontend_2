@@ -30,7 +30,8 @@ import {
   CheckCircle2Icon,
   CircleDashedIcon,
 } from "lucide-react"
-import type { AcademicYearStep, ClassSession } from "@/lib/api/dashboard"
+import { getClassSessionName, type AcademicYearStep, type ClassSession } from "@/lib/api/dashboard"
+import { libelleClasseSalle } from "@/lib/classes/labels"
 import { fetchClassSubjects, fetchEnrollments } from "@/lib/api/grades"
 import { cn } from "@/lib/utils"
 
@@ -38,7 +39,14 @@ import { cn } from "@/lib/utils"
 
 interface ClassProgress {
   sessionId: string
+  /**
+   * Forme fusionnee (« 1e AF A ») : CLE DE RECHERCHE uniquement. Ce qui
+   * s'affiche, ce sont les deux champs ci-dessous — voir « La Regle des Deux
+   * Champs » dans DESIGN.md.
+   */
   className: string
+  classTypeName: string   // la CLASSE, ex. « 1e AF »
+  salleLabel: string      // la SALLE, ex. « A » — jamais une filiere
   totalExpected: number   // enrollments × class-subjects
   totalEntered: number    // grades effectivement saisies
   pct: number             // 0-100
@@ -54,10 +62,18 @@ interface CPMSLProgressionTabProps {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function sessionLabel(s: ClassSession): string {
-  const { classType, letter, track } = s.class
-  const base = `${classType.name} ${letter}`
-  return track ? `${base} — ${track.code}` : base
+/**
+ * Les trois champs d'identite d'une ligne, en un seul point.
+ *
+ * `className` reste la chaine fusionnee — c'est la cle sur laquelle porte la
+ * recherche de cet ecran, un usage legitime de la fusion. Elle vient de
+ * `getClassSessionName`, deja le point unique de ce cas ; la copie locale qui
+ * vivait ici a ete retiree. Ce qui S'AFFICHE, ce sont `classTypeName` et
+ * `salleLabel`, deux colonnes distinctes.
+ */
+function identiteClasse(s: ClassSession) {
+  const { classe, salle } = libelleClasseSalle(s)
+  return { className: getClassSessionName(s), classTypeName: classe, salleLabel: salle }
 }
 
 
@@ -93,7 +109,7 @@ export function CPMSLProgressionTab({
             if (classSubjects.length === 0 || enrollments.length === 0) {
               return {
                 sessionId: session.id,
-                className: sessionLabel(session),
+                ...identiteClasse(session),
                 totalExpected: 0,
                 totalEntered: 0,
                 pct: 0,
@@ -102,13 +118,34 @@ export function CPMSLProgressionTab({
             }
 
             // 2. Compter les notes saisies pour chaque matière
+            //
+            // Le numérateur se compte sur les MÊMES paires que le dénominateur.
+            // /api/grades/class-subject/:id/step/:id ne filtre pas le statut de
+            // l'inscription et renvoie aussi les notes de section. Compter les
+            // lignes brutes faisait donc entrer deux populations étrangères au
+            // dénominateur : les notes portées par une inscription TRANSFERRED,
+            // et les notes de section d'une matière découpée, comptées autant de
+            // fois qu'elle a de sections. Le pourcentage pouvait dépasser 100 %
+            // et marquer une salle « complète » alors qu'il manquait des notes.
+            //
+            // On compte des paires (inscription, matière) distinctes, restreintes
+            // aux inscriptions du dénominateur. Le numérateur est alors borné par
+            // construction : au plus une paire par matière et par élève retenu,
+            // soit exactement totalExpected.
+            const enrollmentIds = new Set(enrollments.map(e => e.id))
+
             const gradesCounts = await Promise.all(
               classSubjects.map(async (cs) => {
                 try {
-                  const grades = await apiFetch<Array<{ id: string }>>(
+                  const grades = await apiFetch<Array<{ id: string; enrollmentId: string }>>(
                     `/api/grades/class-subject/${cs.id}/step/${stepId}`
                   )
-                  return grades.length
+                  const notes = new Set(
+                    grades
+                      .filter(g => enrollmentIds.has(g.enrollmentId))
+                      .map(g => g.enrollmentId)
+                  )
+                  return notes.size
                 } catch {
                   return 0
                 }
@@ -128,7 +165,7 @@ export function CPMSLProgressionTab({
 
             return {
               sessionId:     session.id,
-              className:     sessionLabel(session),
+              ...identiteClasse(session),
               totalExpected,
               totalEntered,
               pct,
@@ -137,7 +174,7 @@ export function CPMSLProgressionTab({
           } catch {
             return {
               sessionId: session.id,
-              className: sessionLabel(session),
+              ...identiteClasse(session),
               totalExpected: 0,
               totalEntered:  0,
               pct:           0,
@@ -374,6 +411,7 @@ export function CPMSLProgressionTab({
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
                       <TableHead className="pl-6 font-semibold">Classe</TableHead>
+                      <TableHead className="font-semibold">Salle</TableHead>
                       <TableHead className="min-w-[220px] font-semibold">Progression</TableHead>
                       <TableHead className="font-semibold">%</TableHead>
                       <TableHead className="font-semibold">Notes</TableHead>
@@ -385,7 +423,16 @@ export function CPMSLProgressionTab({
                     {filteredProgress.map(cp => (
                       <TableRow key={cp.sessionId}>
                         <TableCell className="pl-6 font-medium text-foreground">
-                          {cp.className}
+                          {cp.classTypeName || <span className="italic text-muted-foreground">Sans classe</span>}
+                        </TableCell>
+                        <TableCell>
+                          {cp.salleLabel ? (
+                            <span className="inline-flex items-center justify-center rounded-md bg-muted px-2 py-0.5 font-mono text-xs font-semibold text-foreground">
+                              {cp.salleLabel}
+                            </span>
+                          ) : (
+                            <span className="text-xs italic text-muted-foreground">—</span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <Progress

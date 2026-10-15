@@ -12,6 +12,10 @@ import {
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import {
+  BTN_DIALOG_PRIMARY_CLASS,
+  FIELD_LABEL_CLASS,
+} from "@/lib/cpmsl-classes"
 
 interface EditLevelModalProps {
   level: {
@@ -62,91 +66,53 @@ export function EditLevelModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {trigger}
-      <DialogContent
-        style={{
-          maxWidth: '520px',
-          borderRadius: '10px',
-          border: '1px solid #E8E6E3',
-          padding: 0
-        }}
-      >
-        <DialogHeader style={{ padding: '24px 24px 16px 24px' }}>
-          <DialogTitle
-            style={{
-              color: '#1E1A17',
-              fontSize: 'var(--text-lg)',
-              fontWeight: 600,
-              fontFamily: 'var(--font-sans)'
-            }}
-          >
+      <DialogContent className="max-w-[520px] rounded-lg border border-neutral-200 p-0"
+     >
+        <DialogHeader className="px-6 pt-6 pb-4">
+          <DialogTitle className="font-sans text-lg font-semibold text-neutral-900"
+         >
             {title}
           </DialogTitle>
         </DialogHeader>
 
-        <div style={{ padding: '0 24px 24px 24px' }}>
+        <div className="px-6 pb-6">
           <div className="space-y-5">
             {/* Niveau Field - Read-only */}
             <div>
-              <Label
-                style={{
-                  color: '#1E1A17',
-                  fontSize: 'var(--text-sm)',
-                  fontWeight: 500,
-                  marginBottom: '8px',
-                  display: 'block'
-                }}
-              >
+              <Label className={`${FIELD_LABEL_CLASS} mb-2 block`}
+             >
                 Niveau *
               </Label>
               <RadioGroup value={level.niveau} disabled>
-                <div style={{ display: 'flex', gap: '16px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div className="flex gap-4">
+                  <div className="flex items-center gap-2">
                     <RadioGroupItem
                       value="Fondamentale"
                       id="niveau-fondamentale"
-                      disabled
-                      style={{ opacity: 0.5 }}
+                      disabled className="opacity-50"
                     />
                     <Label
-                      htmlFor="niveau-fondamentale"
-                      style={{
-                        color: '#9CA3AF',
-                        fontSize: 'var(--text-sm)',
-                        fontWeight: 400,
-                        cursor: 'not-allowed'
-                      }}
-                    >
+                      htmlFor="niveau-fondamentale" className="cursor-not-allowed text-sm font-normal text-neutral-400"
+                   >
                       Fondamentale
                     </Label>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div className="flex items-center gap-2">
                     <RadioGroupItem
                       value="Nouveau Secondaire"
                       id="niveau-secondaire"
-                      disabled
-                      style={{ opacity: 0.5 }}
+                      disabled className="opacity-50"
                     />
                     <Label
-                      htmlFor="niveau-secondaire"
-                      style={{
-                        color: '#9CA3AF',
-                        fontSize: 'var(--text-sm)',
-                        fontWeight: 400,
-                        cursor: 'not-allowed'
-                      }}
-                    >
+                      htmlFor="niveau-secondaire" className="cursor-not-allowed text-sm font-normal text-neutral-400"
+                   >
                       Nouveau Secondaire
                     </Label>
                   </div>
                 </div>
               </RadioGroup>
-              <p
-                style={{
-                  color: '#9CA3AF',
-                  fontSize: 'var(--text-sm)',
-                  marginTop: '6px'
-                }}
-              >
+              <p className="mt-1.5 text-sm text-neutral-400"
+             >
                 Le niveau ne peut pas être modifié
               </p>
             </div>
@@ -154,38 +120,16 @@ export function EditLevelModal({
             {/* Nom de la classe Field - Read-only */}
             <div>
               <Label
-                htmlFor="class-name"
-                style={{
-                  color: '#1E1A17',
-                  fontSize: 'var(--text-sm)',
-                  fontWeight: 500,
-                  marginBottom: '8px',
-                  display: 'block'
-                }}
-              >
+                htmlFor="class-name" className={`${FIELD_LABEL_CLASS} mb-2 block`}
+             >
                 Nom de la classe *
               </Label>
-              <div
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  borderRadius: '8px',
-                  border: '1px solid #E8E6E3',
-                  backgroundColor: '#F9FAFB',
-                  color: '#9CA3AF',
-                  fontSize: 'var(--text-sm)',
-                  cursor: 'not-allowed'
-                }}
-              >
+              <div className="w-full cursor-not-allowed rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2.5 text-sm text-neutral-400"
+             >
                 {level.name}
               </div>
-              <p
-                style={{
-                  color: '#9CA3AF',
-                  fontSize: 'var(--text-sm)',
-                  marginTop: '6px'
-                }}
-              >
+              <p className="mt-1.5 text-sm text-neutral-400"
+             >
                 Le nom ne peut pas être modifié
               </p>
             </div>
@@ -193,15 +137,8 @@ export function EditLevelModal({
             {/* Description Field - Editable */}
             <div>
               <Label
-                htmlFor="description"
-                style={{
-                  color: '#1E1A17',
-                  fontSize: 'var(--text-sm)',
-                  fontWeight: 500,
-                  marginBottom: '8px',
-                  display: 'block'
-                }}
-              >
+                htmlFor="description" className={`${FIELD_LABEL_CLASS} mb-2 block`}
+             >
                 Description
               </Label>
               <Textarea
@@ -213,28 +150,17 @@ export function EditLevelModal({
                     setDescription(value)
                   }
                 }}
-                placeholder="Description optionnelle..."
-                style={{
-                  minHeight: '100px',
-                  resize: 'vertical',
-                  borderRadius: '8px',
-                  border: '1px solid #D1CECC',
-                  fontSize: 'var(--text-sm)'
-                }}
+                placeholder="Description optionnelle..." className="min-h-[100px] resize-y rounded-md border border-neutral-300 text-sm"
               />
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'flex-end',
-                  marginTop: '6px'
-                }}
-              >
+              <div className="mt-1.5 flex justify-end"
+             >
                 <span
-                  style={{
-                    color: description.length >= maxChars ? '#B91C1C' : '#9CA3AF',
-                    fontSize: 'var(--text-sm)'
-                  }}
-                >
+                  className={`text-sm ${
+                    description.length>= maxChars
+                      ? "text-error-ink"
+                      : "text-neutral-400"
+                  }`}
+               >
                   {description.length}/{maxChars} caractères
                 </span>
               </div>
@@ -242,30 +168,17 @@ export function EditLevelModal({
           </div>
 
           {/* Buttons */}
-          <DialogFooter style={{ marginTop: '24px', gap: '12px', display: 'flex', flexDirection: 'row', justifyContent: 'flex-end' }}>
+          <DialogFooter className="mt-6 flex flex-row justify-end gap-3">
             <Button
               variant="outline"
-              onClick={() => onOpenChange?.(false)}
-              style={{
-                borderRadius: '8px',
-                border: '1px solid #D1CECC',
-                color: '#1E1A17',
-                backgroundColor: '#FFFFFF'
-              }}
-            >
+              onClick={() => onOpenChange?.(false)} className="rounded-md border border-neutral-300 bg-white text-neutral-900"
+           >
               Annuler
             </Button>
             <Button
               onClick={handleConfirm}
-              disabled={!hasChanges}
-              style={{
-                backgroundColor: hasChanges ? '#2C4A6E' : '#9CA3AF',
-                color: '#FFFFFF',
-                borderRadius: '8px',
-                cursor: hasChanges ? 'pointer' : 'not-allowed'
-              }}
-              className={hasChanges ? 'hover:bg-[#243D5A]' : ''}
-            >
+              disabled={!hasChanges} className={BTN_DIALOG_PRIMARY_CLASS}
+           >
               Enregistrer
             </Button>
           </DialogFooter>

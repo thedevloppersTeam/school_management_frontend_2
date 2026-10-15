@@ -13,9 +13,13 @@ interface CPMSLYearCardProps {
     endDate?: string
   }
   stats?: {
-    periods:     { current: number; total: number; complete: boolean }
+    // `total` optionnel et `current` nullable : un compteur qu'on ne sait pas
+    // mesurer doit pouvoir le dire. Un zero affirme qu'il n'y en a pas ; un
+    // tiret dit qu'on ne sait pas. Sur un indicateur de completude, la
+    // difference decide si l'administratrice refait un travail deja fait.
+    periods:     { current: number; total?: number; complete: boolean }
     classes:     { current: number; complete: boolean }
-    subjects:    { current: number; complete: boolean }
+    subjects:    { current: number | null; complete: boolean }
     enrollments?: number
     archivedDate?: string
   }
@@ -55,7 +59,13 @@ export function CPMSLYearCard({
       year.status === 'active' && "border-success-border shadow-success/50"
     )}>
       <CardContent className="p-5">
-        <div className="flex items-center justify-between">
+        {/* `flex-wrap` : en grille 3 colonnes, la carte tombe a ~340 px utiles.
+            Le nom de l'annee et son badge tiennent ~210 px, les deux boutons
+            ~220 px : sur une seule ligne, le nom — seul identifiant de la carte
+            — se faisait tronquer par `truncate` puisque les boutons sont en
+            `shrink-0`. En autorisant le repli, les boutons passent a la ligne
+            suivante au lieu d'ecraser le titre. */}
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
           <div className="flex items-center gap-3 min-w-0">
             <h3 className="text-xl font-semibold tracking-tight text-foreground truncate">
               {year.name}
@@ -66,7 +76,15 @@ export function CPMSLYearCard({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {year.status === 'preparation' && onActivate && (
+            {/* Une annee ARCHIVEE peut etre reactivee. Le bouton etait masque
+                pour elle, mais l'API l'acceptait deja sans broncher : la garde
+                n'existait qu'a l'ecran. Elle vit desormais aussi cote serveur
+                (`confirmReactivation`), et le bouton peut donc s'afficher.
+
+                Le libelle distingue les deux gestes — « Activer » une annee
+                preparee n'est pas « Reactiver » une annee close. Le rendu de
+                'preparation' est inchange. */}
+            {(year.status === 'preparation' || year.status === 'archived') && onActivate && (
               <Button
                 onClick={() => onActivate(year.id)}
                 disabled={isActivating}
@@ -75,7 +93,11 @@ export function CPMSLYearCard({
                 className="gap-1.5 border-success-border text-success-ink hover:bg-success-soft"
               >
                 <ZapIcon className="h-3.5 w-3.5" />
-                {isActivating ? 'Activation...' : 'Activer'}
+                {isActivating
+                  ? 'Activation...'
+                  : year.status === 'archived'
+                    ? 'Réactiver'
+                    : 'Activer'}
               </Button>
             )}
 
@@ -83,7 +105,7 @@ export function CPMSLYearCard({
               <Button
                 onClick={() => onConfigure(year.id)}
                 size="sm"
-                variant={year.status === 'active' ? 'default' : 'outline'}
+                variant="outline"
                 className="gap-1.5"
               >
                 Configurer
@@ -105,12 +127,34 @@ export function CPMSLYearCard({
 
         {/* Stats for preparation/active year */}
         {stats && (year.status === 'preparation' || year.status === 'active') && (
-          <div className="mt-3 flex items-center gap-3 text-sm text-muted-foreground">
-            <span>Étapes <span className="font-medium text-foreground">{stats.periods.current}/{stats.periods.total}</span></span>
+          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+            <span>
+              Étapes{" "}
+              <span className="font-medium text-foreground tabular-nums">
+                {stats.periods.current}
+                {stats.periods.total != null ? `/${stats.periods.total}` : ""}
+              </span>
+            </span>
             <Separator orientation="vertical" className="h-4" />
-            <span>Classes <span className="font-medium text-foreground">{stats.classes.current}</span></span>
+            <span>
+              Classes{" "}
+              <span className="font-medium text-foreground tabular-nums">
+                {stats.classes.current}
+              </span>
+            </span>
             <Separator orientation="vertical" className="h-4" />
-            <span>Matières <span className="font-medium text-foreground">{stats.subjects.current}</span></span>
+            <span
+              title={
+                stats.subjects.current == null
+                  ? "Le nombre de matières n'est pas mesuré ici. Ouvrez la configuration de l'année pour le voir."
+                  : undefined
+              }
+            >
+              Matières{" "}
+              <span className="font-medium text-foreground tabular-nums">
+                {stats.subjects.current ?? "—"}
+              </span>
+            </span>
           </div>
         )}
 

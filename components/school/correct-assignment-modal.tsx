@@ -268,14 +268,20 @@ export function CorrectAssignmentModal({
             <span>
               À utiliser quand l&apos;élève n&apos;a <strong>jamais</strong> appartenu à
               cette salle : une erreur de saisie à l&apos;inscription. S&apos;il y était
-              réellement et la quitte, utilisez <strong>Transférer</strong>.
+              réellement et quitte l&apos;établissement, enregistrez son départ.
             </span>
           </div>
 
           {/* ── Sélection de la cible ─────────────────────────────────────── */}
+          {/* L'option porte la CLASSE et la SALLE fusionnées, et c'est voulu :
+              une valeur de liste est le cas où la fusion reste légitime
+              (DESIGN.md, « La Règle des Deux Champs »), et elle est nécessaire
+              ici — sans `currentClassTypeId`, la liste couvre tous les niveaux.
+              L'étiquette dit donc ce que l'option contient, au lieu d'annoncer
+              une simple lettre de salle. */}
           <div className="space-y-2">
             <Label className="text-sm font-medium">
-              Salle cible <span className="text-destructive">*</span>
+              Classe et salle cibles <span className="text-destructive">*</span>
             </Label>
             <Select value={targetSessionId} onValueChange={handleSessionChange}>
               <SelectTrigger>
