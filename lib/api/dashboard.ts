@@ -93,6 +93,23 @@ export async function fetchClassSessions(academicYearId: string): Promise<ClassS
   return apiFetch<ClassSession[]>(`/api/class-sessions?academicYearId=${academicYearId}`)
 }
 
+/**
+ * Jours fériés d'une année scolaire, liste complète triée par date.
+ * Réponse brute : la validation de chaque élément appartient à
+ * `lib/calendar/from-holidays.ts`, qui écarte et compte les entrées illisibles.
+ */
+export async function fetchHolidays(academicYearId: string): Promise<unknown> {
+  return apiFetch<unknown>(`/api/academic-years/${academicYearId}/holidays`)
+}
+
+/**
+ * Événements scolaires d'une année, liste complète triée par date.
+ * Réponse brute, validée par `lib/calendar/from-events.ts`.
+ */
+export async function fetchSchoolEvents(academicYearId: string): Promise<unknown> {
+  return apiFetch<unknown>(`/api/academic-years/${academicYearId}/events`)
+}
+
 /** Récupère le nombre d'élèves inscrits (ACTIVE) pour une session de classe */
 export async function fetchEnrollmentCount(classSessionId: string): Promise<number> {
   const enrollments = await apiFetch<Enrollment[]>(
