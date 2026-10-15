@@ -5,23 +5,23 @@
  * ce qui permet de tester l'ordre, la concurrence et l'annulation avec des
  * promesses contrôlées.
  *
- * ── GRAPHE DE DÉPENDANCES ───────────────────────────────────────────────────
- *   année ─┬─ étapes ──────────────┐
- *          ├─ salles ─┬─ N effectifs ┤
- *          │          └─ N affectations ┤──► résultat
- *          ├─ matières ──────────────┤
- *          └─ archives ──────────────┘
+ * -- GRAPHE DE DÉPENDANCES ---------------------------------------------------
+ *   année --+-- étapes -------------------------+
+ *           +-- salles --+-- N effectifs -------+
+ *           |            +-- N affectations ----+--> résultat
+ *           +-- matières -----------------------+
+ *           +-- archives -----------------------+
  * Seuls les effectifs et les affectations attendent : ils ont besoin des
  * identifiants de salle. Tout le reste part dès que l'année est connue.
  * L'ancien enchaînement (page.tsx) attendait trois vagues successives, dont
  * deux sans raison, et lançait N + 2 appels à la fois.
  *
- * ── CONCURRENCE ─────────────────────────────────────────────────────────────
+ * -- CONCURRENCE -------------------------------------------------------------
  * Tous les appels passent par un pool : au plus `maxInFlight` (6) en vol, quel
  * que soit le nombre de salles. File d'attente FIFO : les effectifs passent
  * avant les affectations, comme dans l'ancien ordre.
  *
- * ── RÈGLES CONSERVÉES ───────────────────────────────────────────────────────
+ * -- RÈGLES CONSERVÉES -------------------------------------------------------
  *  - Étapes ou salles en échec : le chargement échoue (la page passe en erreur).
  *  - Tout autre appel en échec : la donnée vaut `null`, JAMAIS 0, et une raison
  *    est ajoutée au bandeau « Données partielles », dans l'ordre d'origine.
@@ -29,7 +29,7 @@
  *    manquant le rend `null`.
  *  - Le résultat est identique à l'ancien pour un même jeu de réponses (testé).
  *
- * ── ANNULATION ──────────────────────────────────────────────────────────────
+ * -- ANNULATION --------------------------------------------------------------
  * `signal` annulé : plus aucun appel n'est lancé, la promesse est rejetée par
  * une `AbortError`, et aucun résultat de l'ancienne année n'est rendu. Les
  * appels déjà en vol ne sont pas interrompus (le client HTTP n'accepte pas de
@@ -140,7 +140,7 @@ export async function loadDashboardData<S extends { id: string }, St extends { s
   const pool = createPool(options.maxInFlight ?? MAX_IN_FLIGHT, signal)
 
   try {
-    // ── Vague 1 : tout ce qui ne dépend que de l'année ──────────────────────
+    // -- Vague 1 : tout ce qui ne dépend que de l'année ----------------------
     const stepsP = pool.run(() => api.fetchSteps(academicYearId))
     const sessionsP = pool.run(() => api.fetchClassSessions(academicYearId))
     const subjectsP = settle(pool.run(() => api.fetchSubjects()))
@@ -151,7 +151,7 @@ export async function loadDashboardData<S extends { id: string }, St extends { s
     const essentials = Promise.all([stepsP, sessionsP])
     essentials.catch(() => pool.cancel())
 
-    // ── Vague 2 : dès les salles, sans attendre les étapes ──────────────────
+    // -- Vague 2 : dès les salles, sans attendre les étapes ------------------
     const sessions = await sessionsP
     const countsP = sessions.map((s) => settle(pool.run(() => api.fetchEnrollmentCount(s.id))))
     const assignmentsP = sessions.map((s) => settle(pool.run(() => api.fetchClassSubjects(s.id))))
@@ -166,7 +166,7 @@ export async function loadDashboardData<S extends { id: string }, St extends { s
     // Une réponse arrivée après l'annulation n'est jamais rendue.
     if (signal?.aborted) throw abortError()
 
-    // ── Calculs : identiques à l'ancien page.tsx ────────────────────────────
+    // -- Calculs : identiques à l'ancien page.tsx ----------------------------
     const perSession = counts.map((c) => (c.ok ? toEnrollmentCount(c.value) : null))
     const reasons: string[] = []
     const missing = perSession.filter((c) => c === null).length

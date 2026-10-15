@@ -16,7 +16,7 @@ function check(label: string, got: unknown, want: unknown) {
   else { fail++; out.push(`  ECHEC ${label.padEnd(60)} attendu ${w}, obtenu ${g}`) }
 }
 
-// ── Appels simulés ──────────────────────────────────────────────────────────
+// -- Appels simulés ----------------------------------------------------------
 
 interface Appel { nom: string; resoudre: (v: unknown) => void; rejeter: (e: unknown) => void; fini: boolean }
 
@@ -86,7 +86,7 @@ async function drainer(sim: ReturnType<typeof simulateur>, reponse: (nom: string
 }
 
 async function main(): Promise<void> {
-// ── 1. Dépendances ──────────────────────────────────────────────────────────
+// -- 1. Dépendances ----------------------------------------------------------
 {
   const sim = simulateur()
   const p = loadDashboardData('A', sim.api)
@@ -103,7 +103,7 @@ async function main(): Promise<void> {
   check('etapes triees par numero', r.steps.map((s) => s.stepNumber), [1, 2])
 }
 
-// ── 2. Jamais plus de 6 en vol ──────────────────────────────────────────────
+// -- 2. Jamais plus de 6 en vol ----------------------------------------------
 {
   const sim = simulateur()
   const p = loadDashboardData('A', sim.api)
@@ -114,7 +114,7 @@ async function main(): Promise<void> {
   check('20 salles : total d eleves', r.totalStudents, 200)
 }
 
-// ── 3. Un échec n'annule pas les autres, et n'est jamais un 0 ───────────────
+// -- 3. Un échec n'annule pas les autres, et n'est jamais un 0 ---------------
 {
   const sim = simulateur()
   const p = loadDashboardData('A', sim.api)
@@ -132,7 +132,7 @@ async function main(): Promise<void> {
   check('les 3 effectifs ont ete demandes', sim.noms().filter((n) => n.startsWith('count')).length, 3)
 }
 
-// ── 4. Zéro salle ───────────────────────────────────────────────────────────
+// -- 4. Zéro salle -----------------------------------------------------------
 {
   const sim = simulateur()
   const p = loadDashboardData('A', sim.api)
@@ -143,7 +143,7 @@ async function main(): Promise<void> {
   check('zero salle : aucun appel par salle', sim.noms().filter((n) => n.startsWith('count') || n.startsWith('cs')).length, 0)
 }
 
-// ── 5. Étapes ou salles en échec : le chargement échoue (comme avant) ──────
+// -- 5. Étapes ou salles en échec : le chargement échoue (comme avant) ------
 {
   const sim = simulateur()
   const p = loadDashboardData('A', sim.api).then(() => 'resolu', () => 'rejete')
@@ -153,7 +153,7 @@ async function main(): Promise<void> {
   check('etapes en echec : chargement rejete', await p, 'rejete')
 }
 
-// ── 6. Changement d'année : l'ancienne n'écrit jamais ───────────────────────
+// -- 6. Changement d'année : l'ancienne n'écrit jamais -----------------------
 {
   const sim = simulateur()
   const ctrl = new AbortController()
@@ -168,7 +168,7 @@ async function main(): Promise<void> {
   check('annulation : plus aucun appel lance apres', sim.appels.length, lancesAvant)
 }
 
-// ── 7. Résultat identique à l'ancien chargement ─────────────────────────────
+// -- 7. Résultat identique à l'ancien chargement -----------------------------
 // L'ancien enchaînement de page.tsx, recopié tel quel : vague 1, puis
 // effectifs, puis matières + archives + affectations.
 async function ancienChargement(api: DashboardApi<{ id: string }, { stepNumber: number }>, yearId: string): Promise<DashboardLoadResult<{ id: string }, { stepNumber: number }>> {
