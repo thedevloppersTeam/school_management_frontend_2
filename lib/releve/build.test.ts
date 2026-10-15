@@ -64,12 +64,18 @@ interface Scenario {
   letter: string
   /** Réponse de /api/school-info quand elle n'est pas forcée en erreur. */
   ecole: Record<string, string | null>
+  /** Transformation de la réponse nominale, par nom de route (lot 1c). */
+  mutate: Partial<Record<string, (body: Record<string, unknown>) => unknown>>
+  /** Corps BRUT renvoyé en 200, par route (« comportement:st1 » pour une étape). */
+  raw: Record<string, string>
 }
 let sc: Scenario
 function reset(over: Partial<Scenario> = {}) {
   sc = {
     trackId: 'filiere-smp', status: {}, photos: [], profilePhoto: null, letter: 'A',
     ecole: { name: 'École fictive', address: 'Adresse fictive', phone: '0000-0000', email: 'contact@exemple.test' },
+    mutate: {},
+    raw: {},
     ...over,
   }
 }
@@ -122,7 +128,11 @@ globalThis.fetch = (async (input: RequestInfo | URL) => {
     if (!m) continue
     const forced = sc.status[name]
     if (forced) return json({ message: 'erreur simulée' }, forced)
-    const b = body(m)
+    const rawKey = name === 'comportement' ? `comportement:${m[2]}` : name
+    if (rawKey in sc.raw) return new Response(sc.raw[rawKey], { status: 200 })
+    const nominal = body(m)
+    const mutate = sc.mutate[name]
+    const b = mutate && nominal && typeof nominal === 'object' ? mutate(nominal as Record<string, unknown>) : nominal
     if (b && typeof b === 'object' && '__status' in b) return json({ message: 'absent' }, (b as { __status: number }).__status)
     return json(b)
   }
@@ -249,6 +259,94 @@ async function main() {
   check('U9 courriel vide : rendu vide', r.data?.footer.courriel, '')
   reset({ ecole: ecole({ address: '' }), status: { ecole: 404 } })
   check('U9 404 : toujours « ecole-non-renseignee »', reason(await run()), 'ecole-non-renseignee')
+
+  // ── Lot 1c — K1 / G-7 : fiche de comportement en 200 mal formée ──────────
+  const fiches: Array<[string, string]> = [
+    ['corps vide', ''],
+    ['corps non JSON', 'pas du json'],
+    ['tableau', '[]'],
+    ['objet sans les 5 champs', '{}'],
+    ['objet sans respectUniforme', JSON.stringify({ retards: 1, absences: 0, devoirsManques: 0, leconsNonSues: 0 })],
+    ['champ texte', JSON.stringify({ retards: 'deux', absences: 0, devoirsManques: 0, leconsNonSues: 0, respectUniforme: 8 })],
+    ['null', 'null'],
+  ]
+  for (const [cas, corps] of fiches) {
+    reset({ raw: { 'comportement:st1': corps } })
+    check(`K1/G-7 fiche 200 ${cas} : refus « indisponible »`, reason(await run()), 'indisponible')
+  }
+  reset({ raw: { 'comportement:st1': JSON.stringify({ retards: null, absences: null, devoirsManques: null, leconsNonSues: null, respectUniforme: null, remarque: null }) } })
+  r = await run()
+  check('K1 fiche 200 aux 5 champs null : admise', reason(r), 'aucune erreur')
+  check('K1 champs null : « - » à l’étape 1', r.data?.left[r.data.left.length - 1].lines[0].cells[0].text, '-')
+
+  // ── Lot 1c — G-8 : année ACTIVE, étape 2 en cours ─────────────────────────
+  const active = (current: string | null) => (b: Record<string, unknown>) => ({
+    ...b, isCurrent: true, endDate: '2999-06-30T00:00:00.000Z',
+    steps: steps.map((x) => ({ ...x, isCurrent: x.id === current })),
+  })
+  reset({ mutate: { annee: active('st2') } })
+  const avant = appels.length
+  r = await run()
+  check('G-8 année active : pas d’erreur', reason(r), 'aucune erreur')
+  check('G-8 année active : 4 en-têtes', r.data?.stepHeaders.length, 4)
+  const lues = appels.slice(avant).filter((u) => u.startsWith('/api/grades/')).map((u) => u.split('stepId=')[1]).sort().join(',')
+  check('G-8 notes lues pour les étapes retenues seules', lues, 'st1,st2')
+  const fichesLues = appels.slice(avant).filter((u) => u.startsWith('/api/behaviors?')).length
+  check('G-8 fiches lues pour les étapes retenues seules', fichesLues, 2)
+  const betaActive = r.data ? find(r.data, 'ESSAI Beta')!.lines[0] : undefined
+  check('G-8 Beta : étapes 3-4 « - »', betaActive?.cells.map((c) => c.text).join('|'), '48.75|30.00|-|-')
+  check('G-8 Beta : Moy sur les étapes 1-2', betaActive?.average.text, '6.56')
+  check('G-8 discipline : étapes 3-4 « - »', r.data?.left[r.data.left.length - 1].lines[0].cells.map((c) => c.text).join('|'), '2|1|-|-')
+
+  reset({ mutate: { annee: active(null) } })
+  const avant2 = appels.length
+  check('G-8 année active sans étape en cours : refus', reason(await run()), 'aucune-etape-en-cours')
+  check('G-8 refus avant les autres lectures', appels.slice(avant2).some((u) => u.startsWith('/api/class-subjects')), false)
+  reset({ mutate: { annee: (b) => ({ ...b, endDate: '2999-06-30T00:00:00.000Z' }) } })
+  check('G-8 année en préparation : refus', reason(await run()), 'annee-en-preparation')
+
+  // ── Lot 1c — G-9 : inscription incohérente ou incomplète ─────────────────
+  reset({ mutate: { inscription: (b) => ({ ...b, studentId: 'autre-eleve' }) } })
+  check('G-9 inscription d’un autre élève : refus', reason(await run()), 'indisponible')
+  reset({ mutate: { inscription: (b) => ({ ...b, classSessionId: undefined, classSession: { academicYearId: YEAR, class: { letter: 'A', classType: { name: 'NS9' } } } }) } })
+  check('G-9 salle inconnue : refus', reason(await run()), 'indisponible')
+  reset({ mutate: { inscription: (b) => ({ ...b, classSession: { id: SESSION, class: { letter: 'A', classType: { name: 'NS9' } } } }) } })
+  check('G-9 année inconnue : refus', reason(await run()), 'indisponible')
+
+  // ── Lot 1c — G-10 : autres statuts d'erreur ──────────────────────────────
+  for (const status of [401, 403, 504]) {
+    reset({ status: { matieres: status } })
+    check(`G-10 matières en ${status} : refus « indisponible »`, reason(await run()), 'indisponible')
+  }
+
+  // ── Lot 1c — K5 : champs de contrat absents ──────────────────────────────
+  const sans = (key: string) => (b: Record<string, unknown>) => {
+    const copy = { ...b }
+    delete copy[key]
+    return copy
+  }
+  reset({ mutate: { inscription: sans('trackId') } })
+  check('K5 trackId absent : refus', reason(await run()), 'indisponible')
+  reset({ mutate: { inscription: (b) => ({ ...b, track: {} }) } })
+  check('K5 track.code absent (trackId non nul) : refus', reason(await run()), 'indisponible')
+  reset({ mutate: { inscription: sans('track') } })
+  check('K5 track absent (trackId non nul) : refus', reason(await run()), 'indisponible')
+  reset({ trackId: null, mutate: { inscription: sans('track') } })
+  check('K5 trackId null, track absent : « pas de filière »', reason(await run()), 'aucune erreur')
+  reset({ mutate: { inscription: (b) => ({ ...b, classSession: { id: SESSION, academicYearId: YEAR, class: { letter: 'A' } } }) } })
+  check('K5 classType absent : refus', reason(await run()), 'indisponible')
+  reset({ mutate: { annee: sans('yearString') } })
+  check('K5 yearString absent : refus', reason(await run()), 'indisponible')
+  const eleve = (user: Record<string, unknown> | undefined) => () => ({ id: STUDENT, ...(user ? { user } : {}) })
+  reset({ mutate: { eleve: eleve({ firstname: 'Alpha', lastname: 'Essai', birthDate: null }) } })
+  r = await run()
+  check('K5 date de naissance null : refus dédié', reason(r), 'naissance-non-renseignee')
+  check('K5 message date de naissance',
+    r.error instanceof Error && r.error.message, 'Relevé de notes indisponible : date de naissance de l’élève non renseignée.')
+  reset({ mutate: { eleve: eleve({ firstname: 'Alpha', lastname: 'Essai' }) } })
+  check('K5 date de naissance absente : refus dédié', reason(await run()), 'naissance-non-renseignee')
+  reset({ mutate: { eleve: eleve(undefined) } })
+  check('K5 utilisateur absent : refus', reason(await run()), 'indisponible')
 
   // ── Garde : n'appelle jamais getCurrentStep ni de route par défaut ──────
   check('aucune route non simulée appelée', appels.filter((u) => !ROUTES.some(([, re]) => re.test(u))).length, 0)

@@ -30,6 +30,7 @@ import {
 import { splitColumns } from './columns'
 import {
   ReleveUnavailableError,
+  TIRET,
   type ApiBehaviorRow,
   type ApiClassSubjectRow,
   type ApiEnrollmentRow,
@@ -54,12 +55,21 @@ async function read<T>(path: string): Promise<T> {
   }
 }
 
-/** Lecture où le 404 signifie « absent » (null) ; toute autre erreur refuse. */
-async function readOrAbsent<T>(path: string): Promise<T | null> {
+/** Marqueur d'un 404, distinct de tout corps reçu (y compris `null`). */
+const ABSENT: unique symbol = Symbol('absent')
+
+/**
+ * Lecture où le 404 signifie « absent » ; toute autre erreur refuse.
+ * Sans `marker`, le 404 rend null. Avec, il rend ABSENT, pour qu'un corps 200
+ * vide ou « null » ne passe pas pour une fiche absente (K1).
+ */
+async function readOrAbsent<T>(path: string): Promise<T | null>
+async function readOrAbsent<T>(path: string, marker: true): Promise<T | typeof ABSENT>
+async function readOrAbsent<T>(path: string, marker = false): Promise<T | null | typeof ABSENT> {
   try {
     return await clientFetch<T>(path)
   } catch (e) {
-    if (e instanceof ApiError && e.status === 404) return null
+    if (e instanceof ApiError && e.status === 404) return marker ? ABSENT : null
     throw new ReleveUnavailableError('indisponible')
   }
 }
@@ -70,6 +80,32 @@ function asArray<T>(value: unknown): T[] {
 }
 
 const text = (v: unknown): string => (typeof v === 'string' ? v.trim() : '')
+
+const BEHAVIOR_FIELDS = ['retards', 'absences', 'devoirsManques', 'leconsNonSues', 'respectUniforme'] as const
+
+/**
+ * K1 — une fiche lue en 200 doit être un objet portant les 5 champs, chacun
+ * nombre ou null (`Int?` côté serveur). Corps vide, non JSON, tableau, champ
+ * manquant ou d'un autre type : refus. Seul le 404 vaut « fiche absente ».
+ */
+function behaviorOf(raw: unknown): ApiBehaviorRow {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new ReleveUnavailableError('indisponible')
+  const row = raw as Record<string, unknown>
+  for (const field of BEHAVIOR_FIELDS) {
+    const v = row[field]
+    if (!(field in row) || (v !== null && (typeof v !== 'number' || !Number.isFinite(v)))) {
+      throw new ReleveUnavailableError('indisponible')
+    }
+  }
+  return row as ApiBehaviorRow
+}
+
+/** K5 — champ de contrat ABSENT de la réponse : refus, jamais une valeur par défaut. */
+function requireKey(source: object | null | undefined, key: string): void {
+  if (!source || typeof source !== 'object' || !(key in source) || (source as Record<string, unknown>)[key] === undefined) {
+    throw new ReleveUnavailableError('indisponible')
+  }
+}
 
 /**
  * Toutes les données du relevé d'UNE inscription, déjà formatées.
@@ -90,9 +126,26 @@ export async function buildReleveData(studentId: string, enrollmentId: string): 
   const academicYearId = session?.academicYearId ?? session?.academicYear?.id
   if (!classSessionId || !academicYearId) throw new ReleveUnavailableError('indisponible')
 
+  // K5 — champs de contrat. trackId à null = « pas de filière » ; absent = refus.
+  requireKey(enrollment, 'trackId')
+  if (enrollment.trackId !== null) {
+    requireKey(enrollment.track, 'code')
+    if (!text(enrollment.track?.code)) throw new ReleveUnavailableError('indisponible')
+  }
+  requireKey(session?.class, 'classType')
+  if (!session?.class?.classType || typeof session.class.classType.name !== 'string') {
+    throw new ReleveUnavailableError('indisponible')
+  }
+  if (!student.user || typeof student.user !== 'object') throw new ReleveUnavailableError('indisponible')
+  const birth = student.user.birthDate ?? student.user.birth_date
+  if (birth === null || birth === undefined) throw new ReleveUnavailableError('naissance-non-renseignee')
+  const dateNaissance = formatBirthDate(birth)
+  if (dateNaissance === TIRET) throw new ReleveUnavailableError('indisponible', 'date de naissance illisible')
+
   // 2. Année et période (R-REL-6) : refus avant toute autre lecture.
   const year = await read<ApiYearRow>(`/api/academic-years/${enc(academicYearId)}`)
   if (!year) throw new ReleveUnavailableError('indisponible')
+  requireKey(year, 'yearString')
   const { steps, included } = resolveSteps(year)
   const readSteps = steps.filter((s) => included.has(s.id))
 
@@ -109,13 +162,13 @@ export async function buildReleveData(studentId: string, enrollmentId: string): 
           read<unknown>(
             `/api/enrollments/excluded-sections?classSessionId=${enc(classSessionId)}&stepId=${enc(step.id)}`,
           ),
-          readOrAbsent<ApiBehaviorRow>(`/api/behaviors?enrollmentId=${enc(enrollmentId)}&stepId=${enc(step.id)}`),
+          readOrAbsent<unknown>(`/api/behaviors?enrollmentId=${enc(enrollmentId)}&stepId=${enc(step.id)}`, true),
         ])
         return {
           stepId: step.id,
           grades: asArray<ApiGradeRow>(grades),
           exclusions: asArray<ApiExclusionRow>(exclusions),
-          behavior,
+          behavior: behavior === ABSENT ? null : behaviorOf(behavior),
         }
       }),
     ),
@@ -148,12 +201,12 @@ export async function buildReleveData(studentId: string, enrollmentId: string): 
   })
   const { left, right } = splitColumns(groups, discipline)
 
-  const user = student.user ?? {}
+  const user = student.user
   return {
     identity: {
       prenom: text(user.firstname),
       nom: text(user.lastname).toLocaleUpperCase('fr'),
-      dateNaissance: formatBirthDate(user.birthDate ?? user.birth_date),
+      dateNaissance,
       photoUrl: choosePhoto(asArray<ApiPromotionPhotoRow>(photosRaw), academicYearId, user.profilePhoto),
       niveau: libelleClasseSalle(session).classe,
       anneeScolaire: formatYearRange(year.yearString),

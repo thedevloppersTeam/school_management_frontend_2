@@ -84,6 +84,7 @@ export type ReleveUnavailableReason =
   | 'annee-en-preparation'
   | 'ecole-non-renseignee'
   | 'ecole-incomplete'
+  | 'naissance-non-renseignee'
 
 const MESSAGES: Record<ReleveUnavailableReason, string> = {
   'indisponible':
@@ -96,6 +97,8 @@ const MESSAGES: Record<ReleveUnavailableReason, string> = {
     'Relevé de notes indisponible : informations de l’école non renseignées.',
   'ecole-incomplete':
     'Relevé de notes indisponible : informations de l’école incomplètes.',
+  'naissance-non-renseignee':
+    'Relevé de notes indisponible : date de naissance de l’élève non renseignée.',
 }
 
 /**
@@ -120,6 +123,8 @@ export interface ApiSectionRow {
   name: string
   maxScore: unknown
   displayOrder?: number | null
+  /** Renvoyé par GET /api/class-subjects (sections: true) ; sert au départage (K3). */
+  createdAt?: string | null
 }
 
 export interface ApiClassSubjectRow {

@@ -194,9 +194,25 @@ function requireBareme(value: unknown, what: string): Decimal {
   return d
 }
 
+/**
+ * G2 + K3 — ordre des sous-matières : displayOrder croissant, puis createdAt
+ * croissant, puis id. Les deux départages rendent l'ordre indépendant de celui
+ * de l'API, que le serveur ne garantit pas (sections chargées sans orderBy).
+ * Une valeur absente ou illisible passe après les valeurs présentes.
+ */
 function sortedSections(cs: ApiClassSubjectRow) {
   const order = (v: number | null | undefined) => (typeof v === 'number' ? v : Number.POSITIVE_INFINITY)
-  return [...(cs.subject.sections ?? [])].sort((a, b) => order(a.displayOrder) - order(b.displayOrder))
+  const created = (v: string | null | undefined) => {
+    const t = typeof v === 'string' ? Date.parse(v) : Number.NaN
+    return Number.isNaN(t) ? Number.POSITIVE_INFINITY : t
+  }
+  const byNumber = (x: number, y: number) => (x === y ? 0 : x < y ? -1 : 1)
+  return [...(cs.subject.sections ?? [])].sort(
+    (a, b) =>
+      byNumber(order(a.displayOrder), order(b.displayOrder)) ||
+      byNumber(created(a.createdAt), created(b.createdAt)) ||
+      (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+  )
 }
 
 /**
@@ -279,6 +295,15 @@ function stepValues(
 export function buildSubjectGroups(params: SubjectGroupsInput): ReleveGroup[] {
   const { classSubjects, trackCode, enrollmentId, steps, included, exemptedSteps } = params
 
+  // K4 — une étape retenue absente d'une table d'entrée est une erreur de
+  // l'appelant : la lire comme « sans note » ou « sans dispense » imprimerait
+  // des « - » à la place de données non lues (R-REL-7).
+  for (const step of steps) {
+    if (included.has(step.id) && (!params.gradesByStep.has(step.id) || !params.exclusionsByStep.has(step.id))) {
+      throw new ReleveUnavailableError('indisponible')
+    }
+  }
+
   const assignments = new Map<string, number>()
   for (const cs of classSubjects) assignments.set(cs.subject.id, (assignments.get(cs.subject.id) ?? 0) + 1)
 
@@ -298,9 +323,13 @@ export function buildSubjectGroups(params: SubjectGroupsInput): ReleveGroup[] {
     // Ligne de la matière : la seule ligne d'une matière sans sous-matière ;
     // sinon, ligne globale en fin de groupe dès qu'une étape RETENUE porte une
     // note au niveau de la matière entière (Q-A).
+    // K2 : seules comptent les étapes retenues ET non dispensées pour l'élève
+    // (ni dispense d'étape, ni dispense de la matière entière sur l'étape).
     const hasGlobalNote = steps.some(
       (step) =>
         included.has(step.id) &&
+        !exemptedSteps.has(step.id) &&
+        !exclusionsFor.get(step.id)!.has(exclusionKey(enrollmentId, cs.id, null)) &&
         (params.gradesByStep.get(step.id) ?? []).some((g) => g.classSubjectId === cs.id && g.sectionId == null),
     )
     const subjectLine: LineDef | null =
@@ -343,7 +372,7 @@ export function buildSubjectGroups(params: SubjectGroupsInput): ReleveGroup[] {
 export interface DisciplineInput {
   steps: ApiStepRow[]
   included: ReadonlySet<string>
-  /** Fiche de l'étape ; null ou absente de la table = pas de fiche (404). */
+  /** Fiche de l'étape ; null = pas de fiche (404). Chaque étape retenue doit y figurer (K4). */
   behaviorsByStep: ReadonlyMap<string, ApiBehaviorRow | null>
 }
 
@@ -367,6 +396,8 @@ export function buildDisciplineGroup(params: DisciplineInput): ReleveGroup {
     lines: DISCIPLINE_LINES.map(({ field, label, mode }): ReleveLine => {
       const values = steps.map((step) => {
         if (!included.has(step.id)) return null
+        // K4 : null = fiche absente (404) ; clé absente = étape non lue → refus.
+        if (!behaviorsByStep.has(step.id)) throw new ReleveUnavailableError('indisponible')
         const row = behaviorsByStep.get(step.id)
         return row ? toDecimal(row[field], label) : null
       })

@@ -94,7 +94,7 @@ function sectioned(
 function g(cs: string, score: string | number, sectionId: string | null = null): ApiGradeRow {
   return { classSubjectId: cs, sectionId, studentScore: score }
 }
-function groups(over: Partial<SubjectGroupsInput>): ReleveGroup[] {
+function rawGroups(over: Partial<SubjectGroupsInput>): ReleveGroup[] {
   const st = over.steps ?? steps(4)
   return buildSubjectGroups({
     classSubjects: [],
@@ -106,6 +106,21 @@ function groups(over: Partial<SubjectGroupsInput>): ReleveGroup[] {
     gradesByStep: new Map(),
     exclusionsByStep: new Map(),
     ...over,
+  })
+}
+/**
+ * Comme `rawGroups`, mais chaque étape reçoit une entrée vide dans les tables
+ * de notes et de dispenses quand le test n'en fournit pas : depuis K4, une
+ * étape retenue ABSENTE d'une table est un refus, pas « sans note ».
+ */
+function groups(over: Partial<SubjectGroupsInput>): ReleveGroup[] {
+  const st = over.steps ?? steps(4)
+  const fill = <T,>(given: ReadonlyMap<string, T[]> | undefined) =>
+    new Map(st.map((x) => [x.id, given?.get(x.id) ?? []] as [string, T[]]))
+  return rawGroups({
+    ...over,
+    gradesByStep: fill(over.gradesByStep),
+    exclusionsByStep: fill(over.exclusionsByStep),
   })
 }
 const cellsText = (gr: ReleveGroup[], gi = 0, li = 0) => gr[gi].lines[li].cells.map((c) => c.text).join('|')
@@ -297,7 +312,7 @@ function discipline(rows: Array<ApiBehaviorRow | null>, exemptedSteps: Set<strin
   const d = buildDisciplineGroup({
     steps: r.steps,
     included: r.included,
-    behaviorsByStep: new Map([['st3', { retards: 5 }], ['st1', { retards: 1 }]]),
+    behaviorsByStep: new Map([['st3', { retards: 5 }], ['st1', { retards: 1 }], ['st2', null]]),
   })
   check('T12 discipline : étapes 3 et 4 « - »', d.lines[0].cells.map((c) => c.text).join('|'), '1|-|-|-')
   check('T12 discipline : total sans l’étape 3', d.lines[0].average.text, '1')
@@ -472,6 +487,147 @@ const csAB = () => sectioned('cs1', 'Matière A', [['sa', 'Sous-matière A', '10
   check('U5 dispense matière entière étape 2 : ligne A', lineCells(r.gr, 0), '6.00|-|-|-')
   check('U5 dispense matière entière étape 2 : ligne B', lineCells(r.gr, 1), '6.00|-|-|-')
   check('U5 dispense matière entière étape 2 : ligne globale', lineCells(r.gr, 2), '6.00|-|-|-')
+}
+
+// ── Lot 1c — G-1 à G-6, G-11, G-12, K2 à K4 ─────────────────────────────────
+
+{
+  // G-1 : toutes les sous-matières dispensées à l'étape 2, ligne globale présente.
+  const both: ApiExclusionRow[] = [
+    { enrollmentId: 'e1', classSubjectId: 'cs1', sectionId: 'sa' },
+    { enrollmentId: 'e1', classSubjectId: 'cs1', sectionId: 'sb' },
+  ]
+  const r = tryGroups({
+    classSubjects: [csAB()],
+    gradesByStep: new Map([
+      ['st1', [g('cs1', '15'), g('cs1', '8', 'sa'), g('cs1', '6', 'sb')]],
+      ['st2', [g('cs1', '12'), g('cs1', '9', 'sa'), g('cs1', '9', 'sb')]],
+    ]),
+    exclusionsByStep: new Map([['st2', both]]),
+  })
+  check('G-1 sous-matière A : étape 2 « - »', lineCells(r.gr, 0), '8.00|-|-|-')
+  check('G-1 sous-matière B : étape 2 « - »', lineCells(r.gr, 1), '6.00|-|-|-')
+  check('G-1 ligne globale : étape 2 « - » (règle du bulletin)', lineCells(r.gr, 2), '15.00|-|-|-')
+  check('G-1 Moy ligne globale sur l’étape 1 seule', r.gr?.[0].lines[2]?.average.text, '7.50')
+}
+{
+  // G-2 / K2 : seule note globale sur une étape dispensée pour l'élève.
+  const r = tryGroups({
+    classSubjects: [csAB()],
+    gradesByStep: new Map([['st1', [g('cs1', '8', 'sa')]], ['st2', [g('cs1', '15')]]]),
+    exemptedSteps: new Set(['st2']),
+  })
+  check('G-2/K2 note globale sur étape dispensée seule : pas de ligne', labels(r.gr), 'Sous-matière A,Sous-matière B')
+  // G-2 bis / K2 : seule note globale sur une étape où la matière entière est dispensée.
+  const r2 = tryGroups({
+    classSubjects: [csAB()],
+    gradesByStep: new Map([['st2', [g('cs1', '15')]]]),
+    exclusionsByStep: new Map([['st2', [{ enrollmentId: 'e1', classSubjectId: 'cs1', sectionId: null }]]]),
+  })
+  check('G-2 bis/K2 note globale sous WHOLE_SUBJECT seule : pas de ligne', labels(r2.gr), 'Sous-matière A,Sous-matière B')
+  // Dispense WHOLE_SUBJECT d'un AUTRE élève : sans effet sur le déclencheur.
+  const r3 = tryGroups({
+    classSubjects: [csAB()],
+    gradesByStep: new Map([['st2', [g('cs1', '15')]]]),
+    exclusionsByStep: new Map([['st2', [{ enrollmentId: 'e2', classSubjectId: 'cs1', sectionId: null }]]]),
+  })
+  check('K2 dispense d’un autre élève : la ligne existe', labels(r3.gr), 'Sous-matière A,Sous-matière B,Matière A')
+  // G-2 ter : une note globale sur étape normale ET une sur étape dispensée.
+  const r4 = tryGroups({
+    classSubjects: [csAB()],
+    gradesByStep: new Map([['st1', [g('cs1', '14')]], ['st2', [g('cs1', '18')]]]),
+    exemptedSteps: new Set(['st2']),
+  })
+  check('G-2 ter ligne présente, étape dispensée « - »', lineCells(r4.gr, 2), '14.00|-|-|-')
+}
+{
+  // G-3 : année à 5 étapes avec ligne globale.
+  const st = steps(5)
+  const r = tryGroups({
+    steps: st,
+    included: new Set(st.map((x) => x.id)),
+    classSubjects: [csAB()],
+    gradesByStep: new Map([['st1', [g('cs1', '12'), g('cs1', '7', 'sa')]], ['st5', [g('cs1', '16')]]]),
+  })
+  check('G-3 5 étapes : cellules ligne globale', lineCells(r.gr, 2), '12.00|-|-|-|16.00')
+  check('G-3 5 étapes : Moy ligne globale (12+16)/2/20×10', r.gr?.[0].lines[2]?.average.text, '7.00')
+  check('G-3 5 étapes : sous-matière A', lineCells(r.gr, 0), '7.00|-|-|-|-')
+}
+{
+  // G-4 : maxScoreOverride (barème de la classe) sur matière simple et sur ligne globale.
+  const simple: ApiClassSubjectRow = { ...plain('cs-o', 'Matière O', '20'), maxScoreOverride: '40' }
+  const r = tryGroups({ classSubjects: [simple], gradesByStep: new Map([['st1', [g('cs-o', '20')]]]) })
+  check('G-4 override 40 : coeff', r.gr?.[0].lines[0].coeff, '4')
+  check('G-4 override 40 : Moy 20/40×10', r.gr?.[0].lines[0].average.text, '5.00')
+  check('G-4 override 40 : bande cellule 50 %', r.gr?.[0].lines[0].cells[0].band, 'echec')
+  const glob: ApiClassSubjectRow = { ...csAB(), maxScoreOverride: '40' }
+  const r2 = tryGroups({ classSubjects: [glob], gradesByStep: new Map([['st1', [g('cs1', '30')]]]) })
+  check('G-4 override 40 : coeff ligne globale', r2.gr?.[0].lines[2]?.coeff, '4')
+  check('G-4 override 40 : Moy ligne globale 30/40×10', r2.gr?.[0].lines[2]?.average.text, '7.50')
+  check('G-4 override : sous-matières inchangées', r2.gr?.[0].lines[0].coeff, '1')
+}
+{
+  // G-5 : notes et barèmes illisibles.
+  const one = (cs: ApiClassSubjectRow, score: unknown) =>
+    tryGroups({ classSubjects: [cs], gradesByStep: new Map([['st1', [{ classSubjectId: cs.id, sectionId: null, studentScore: score }]]]) }).err
+  check('G-5 note « abc » : refus', one(plain('cs1', 'M', '20'), 'abc'), 'indisponible')
+  check('G-5 note null : refus', one(plain('cs1', 'M', '20'), null), 'indisponible')
+  const bareme = (max: unknown) => tryGroups({ classSubjects: [{ ...plain('cs1', 'M', '20'), subject: { ...plain('cs1', 'M', '20').subject, maxScore: max } }] }).err
+  check('G-5 barème absent : refus', bareme(null), 'indisponible')
+  check('G-5 barème nul : refus', bareme('0'), 'indisponible')
+  check('G-5 barème négatif : refus', bareme('-5'), 'indisponible')
+  check('G-5 barème illisible : refus', bareme('dix'), 'indisponible')
+  // G-6 : note avec sectionId sur une matière SANS sous-matière.
+  check('G-6 sectionId sur matière sans sous-matière : refus',
+    tryGroups({ classSubjects: [plain('cs1', 'M', '20')], gradesByStep: new Map([['st1', [g('cs1', '5', 'sx')]]]) }).err, 'indisponible')
+}
+{
+  // G-11 / K3 : départage à displayOrder égal — createdAt, puis id.
+  const sec = (id: string, name: string, createdAt?: string) =>
+    ({ id, name, maxScore: '5', displayOrder: 1, ...(createdAt ? { createdAt } : {}) })
+  const cs = (sections: ReturnType<typeof sec>[]): ApiClassSubjectRow =>
+    ({ id: 'cs1', trackId: null, subject: { id: 's1', name: 'Matière', maxScore: '10', rubric: { code: 'R1' }, sections } })
+  const ordre = (sections: ReturnType<typeof sec>[]) => labels(tryGroups({ classSubjects: [cs(sections)] }).gr)
+  check('G-11/K3 displayOrder égal : createdAt croissant',
+    ordre([sec('s-a', 'Créée 2e', '2020-01-02T00:00:00.000Z'), sec('s-b', 'Créée 1re', '2020-01-01T00:00:00.000Z')]), 'Créée 1re,Créée 2e')
+  check('G-11/K3 createdAt égal : id croissant',
+    ordre([sec('s-b', 'Id b', '2020-01-01T00:00:00.000Z'), sec('s-a', 'Id a', '2020-01-01T00:00:00.000Z')]), 'Id a,Id b')
+  check('G-11/K3 sans createdAt : id croissant', ordre([sec('s-z', 'Id z'), sec('s-m', 'Id m')]), 'Id m,Id z')
+  check('G-11/K3 displayOrder prime sur createdAt',
+    labels(tryGroups({ classSubjects: [cs([{ ...sec('s-a', 'Ordre 2', '2020-01-01T00:00:00.000Z'), displayOrder: 2 }, sec('s-b', 'Ordre 1', '2021-01-01T00:00:00.000Z')])] }).gr),
+    'Ordre 1,Ordre 2')
+  check('G-11/K3 ordre stable, entrée inversée',
+    ordre([sec('s-a', 'Id a'), sec('s-b', 'Id b')]) === ordre([sec('s-b', 'Id b'), sec('s-a', 'Id a')]), true)
+}
+{
+  // G-12 : l'affectation de filière précède celle du tronc commun dans l'ordre API.
+  const tc = plain('cs-tc', 'Physique fictive', '10')
+  const smp: ApiClassSubjectRow = { ...plain('cs-smp', 'Physique fictive', '10', 'track-smp'), subject: { ...tc.subject } }
+  const r = tryGroups({ classSubjects: [smp, tc], trackCode: 'SMP' })
+  check('G-12 filière d’abord : suffixe sur le groupe de filière', r.gr?.map((x) => x.title).join(' / '),
+    'Physique fictive (SMP) / Physique fictive')
+}
+{
+  // K4 : étape retenue ABSENTE d'une table d'entrée → refus, jamais « sans note ».
+  const sansNotes = new Map([['st1', []], ['st2', []], ['st3', []]]) as Map<string, ApiGradeRow[]>
+  const pleines = new Map(steps(4).map((x) => [x.id, []])) as Map<string, ApiExclusionRow[]>
+  const reasonRaw = (over: Partial<SubjectGroupsInput>) => reasonOf(() => rawGroups({ classSubjects: [plain('cs1', 'M', '20')], ...over }))
+  check('K4 étape retenue absente des notes : refus',
+    reasonRaw({ gradesByStep: sansNotes, exclusionsByStep: pleines }), 'indisponible')
+  check('K4 étape retenue absente des dispenses : refus',
+    reasonRaw({ gradesByStep: new Map(steps(4).map((x) => [x.id, []])), exclusionsByStep: new Map([['st1', []]]) }), 'indisponible')
+  check('K4 étape NON retenue absente des tables : admis', reasonRaw({
+    included: new Set(['st1', 'st2']),
+    gradesByStep: new Map([['st1', []], ['st2', []]]),
+    exclusionsByStep: new Map([['st1', []], ['st2', []]]),
+  }), 'aucune erreur')
+  const st = steps(4)
+  const disc = (map: Map<string, ApiBehaviorRow | null>) =>
+    reasonOf(() => buildDisciplineGroup({ steps: st, included: new Set(st.map((x) => x.id)), behaviorsByStep: map }))
+  check('K4 discipline : étape retenue absente des fiches : refus',
+    disc(new Map([['st1', null], ['st2', null], ['st3', null]])), 'indisponible')
+  check('K4 discipline : null = fiche absente (404), admis',
+    disc(new Map([['st1', null], ['st2', null], ['st3', null], ['st4', null]])), 'aucune erreur')
 }
 
 // ── Lot 1b — U7, U8 : couleurs (C3, Q-C) ────────────────────────────────────
