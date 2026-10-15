@@ -44,6 +44,14 @@ export function eventsCardDescription(yearName: string | null): string {
 }
 
 /**
+ * Description de la carte « Calendrier de l'école » (lot 9). Même règle que
+ * `eventsCardDescription` : nom entre guillemets, jamais « année » devant.
+ */
+export function calendarCardDescription(yearName: string | null): string {
+  return yearName ? `Jours fériés de ${guillemets(yearName)}` : 'Aucune année scolaire active'
+}
+
+/**
  * Valeur d'une tuile de compteur (Élèves, Matières, Bulletins archivés).
  *
  * `null` avec une année active = l'appel a échoué → « indisponible », jamais

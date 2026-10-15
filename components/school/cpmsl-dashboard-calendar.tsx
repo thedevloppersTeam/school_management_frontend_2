@@ -28,6 +28,7 @@ import {
 import { holidaysToEvents } from "@/lib/calendar/from-holidays";
 import { weekEdgeTarget } from "@/lib/calendar/grid-keys";
 import { initialMonth } from "@/lib/calendar/initial-month";
+import { calendarCardDescription } from "@/lib/dashboard/labels";
 import { buildMonthGrid, upcomingEvents, type MonthGridDay } from "@/lib/calendar/month-grid";
 import type { CalendarDayEvent } from "@/lib/calendar/types";
 import {
@@ -248,9 +249,7 @@ export function CPMSLDashboardCalendar({
       <CardHeader className="pb-3">
         <CardTitle className="text-base font-semibold">Calendrier de l’école</CardTitle>
         <CardDescription>
-          {activeYear
-            ? `Jours fériés de l’année ${activeYear.name}`
-            : "Aucune année scolaire active"}
+          {calendarCardDescription(activeYear?.name ?? null)}
         </CardDescription>
       </CardHeader>
       <Separator />
