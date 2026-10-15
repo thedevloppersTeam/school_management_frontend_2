@@ -846,7 +846,7 @@ export default function AdminDashboardPage() {
             <Skeleton key={item} className="h-[132px] rounded-xl" />
           ))}
         </div>
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
+        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
           <div className="space-y-6">
             <Skeleton className="h-40 rounded-xl" />
             <Skeleton className="h-96 rounded-xl" />
@@ -984,8 +984,10 @@ export default function AdminDashboardPage() {
           l'année à gauche ; les événements et le calendrier de l'école à
           droite. Une carte par colonne s'étire (`flex-1`) jusqu'au bas de la
           plus haute : la préparation à gauche, les événements à droite — le
-          calendrier garde sa taille naturelle. Empilées sous `lg`. */}
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
+          calendrier garde sa taille naturelle. Empilées sous `xl` (1280 px) :
+          à 1024 px, la colonne de gauche ne ferait que ~296 px à côté des
+          384 px de droite. Le squelette de chargement suit la même règle. */}
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
         <div className="flex min-w-0 flex-col gap-6">
           <QuickLinks links={quickLinks} />
           <ProgressChecklist items={checklist} className="flex-1" />
