@@ -46,21 +46,21 @@ const texte = (over: Partial<HolidayCoverageInput>) => formatHolidayCoverage(des
   check('premier jour de l annee : dans l annee', texte({ period: jour('2025-09-01') }), 'aucun jour férié')
   check('dernier jour de l annee : dans l annee', texte({ period: jour('2026-07-31') }), 'aucun jour férié')
   check('veille du premier jour : hors de l annee', texte({ period: jour('2025-08-31') }),
-    'hors de l’année Année fictive A : non chargé')
+    'hors de la période de « Année fictive A » : non chargé')
   check('lendemain du dernier jour : hors de l annee', texte({ period: jour('2026-08-01') }),
-    'hors de l’année Année fictive A : non chargé')
+    'hors de la période de « Année fictive A » : non chargé')
   check('mois juste avant (aout 2025)', texte({ period: { from: '2025-08-01', to: '2025-08-31' } }),
-    'hors de l’année Année fictive A : non chargé')
+    'hors de la période de « Année fictive A » : non chargé')
   check('mois juste apres (aout 2026)', texte({ period: { from: '2026-08-01', to: '2026-08-31' } }),
-    'hors de l’année Année fictive A : non chargé')
+    'hors de la période de « Année fictive A » : non chargé')
   check('premier mois (septembre 2025) : dans l annee', texte({ period: { from: '2025-09-01', to: '2025-09-30' } }),
     'aucun jour férié')
   check('dernier mois (juillet 2026) : dans l annee', texte({ period: { from: '2026-07-01', to: '2026-07-31' } }),
     'aucun jour férié')
   check('hors de l annee prime sur le chargement', texte({ load: 'loading', period: jour('2026-08-01') }),
-    'hors de l’année Année fictive A : non chargé')
+    'hors de la période de « Année fictive A » : non chargé')
   check('hors de l annee prime sur l erreur', texte({ load: 'error', period: jour('2025-08-31') }),
-    'hors de l’année Année fictive A : non chargé')
+    'hors de la période de « Année fictive A » : non chargé')
 }
 
 // ── Plage d'année illisible : aucune affirmation ────────────────────────────
