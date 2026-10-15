@@ -40,6 +40,7 @@ import {
   type DashboardApi,
   type DashboardExtraData,
 } from "@/lib/dashboard/load-dashboard";
+import { yearStatusLabel } from "@/lib/dashboard/year-status-label";
 import { useAcademicYearContext } from "@/lib/contexts/academic-year-context";
 import {
   Card,
@@ -328,7 +329,7 @@ function ActiveYearCard({
         </div>
       </CardHeader>
       <Separator />
-      <CardContent className="grid gap-4 p-5 md:grid-cols-4">
+      <CardContent className="grid gap-4 p-6 md:grid-cols-4">
         <div className="md:col-span-2">
           <p className="text-xs font-medium uppercase text-muted-foreground">
             Année scolaire
@@ -342,7 +343,7 @@ function ActiveYearCard({
               : "Commencez par créer ou activer une année scolaire."}
           </p>
         </div>
-        <StatusValue label="Statut" value={activeYear ? "Active" : "À faire"} />
+        <StatusValue label="Statut" value={yearStatusLabel(activeYear, lastUpdatedAt ?? undefined)} />
         <StatusValue
           label="Chiffres relevés à"
           value={lastUpdatedAt ? TIME_FORMAT.format(lastUpdatedAt) : "—"}
@@ -370,7 +371,7 @@ function SummaryCards({ items }: { items: SummaryCardItem[] }) {
         const Icon = item.icon;
         return (
           <Card key={item.label} className="border bg-card shadow-sm">
-            <CardContent className="p-5">
+            <CardContent className="p-6">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-xs font-medium text-muted-foreground">
@@ -790,7 +791,7 @@ export default function AdminDashboardPage() {
           <Skeleton className="h-44 rounded-xl" />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[1, 2, 3, 4].map((item) => (
-              <Skeleton key={item} className="h-[132px] rounded-xl" />
+              <Skeleton key={item} className="h-[140px] rounded-xl" />
             ))}
           </div>
         </div>
@@ -850,7 +851,7 @@ export default function AdminDashboardPage() {
 
       {steps.length > 0 && (
         <Card className="border bg-card shadow-sm">
-          <CardContent className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:gap-6">
+          <CardContent className="flex flex-col gap-3 p-6 sm:flex-row sm:items-center sm:gap-6">
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
                 <CircleDashedIcon className="h-4 w-4 text-primary" />
