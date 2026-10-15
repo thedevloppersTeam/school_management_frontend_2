@@ -218,6 +218,55 @@ console.log('\n=== DR-004 — PAS DE 0,25 ===')
   check('0 valide', isValidGrade(D(0), D(20)), true)
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// CAS 10 — E3 : mode global, toutes les sous-matieres dispensees pour l'etape
+// ════════════════════════════════════════════════════════════════════════════
+console.log('\n=== E3 — DISPENSE TOTALE EN MODE GLOBAL ===')
+{
+  const sousMatieres = (dispense: [boolean, boolean]) => [
+    sec('Vocabulaire', 10, [], dispense[0]),
+    sec('Orthographe', 10, [], dispense[1]),
+  ]
+
+  // a. Note globale presente : la dispense l'emporte sur la note
+  const avecNote = computeSubject(subj('Francais', 'R1', 20, {
+    sections: sousMatieres([true, true]), globalScores: [D(12)],
+  }))
+  check('a. global, tout dispense, note 12 : etat', avecNote.state, 'exempted')
+  check('a. global, tout dispense, note 12 : numerateur', avecNote.numerator, D(0))
+  check('a. global, tout dispense, note 12 : denominateur', avecNote.denominator, D(0))
+  check('a. global, tout dispense, note 12 : ponderation', formatMaxScore(avecNote), '—')
+
+  // b. Sans note : deja exempted avant le correctif
+  const sansNote = computeSubject(subj('Francais', 'R1', 20, {
+    sections: sousMatieres([true, true]),
+  }))
+  check('b. tout dispense, sans note : etat', sansNote.state, 'exempted')
+  check('b. tout dispense, sans note : denominateur', sansNote.denominator, D(0))
+
+  // c. Dispense PARTIELLE en mode global : la note porte sur le bareme entier
+  const partielle = computeSubject(subj('Francais', 'R1', 20, {
+    sections: sousMatieres([true, false]), globalScores: [D(12)],
+  }))
+  check('c. global, dispense partielle : mode', partielle.mode, 'global')
+  check('c. global, dispense partielle : etat', partielle.state, 'noted')
+  check('c. global, dispense partielle : numerateur', partielle.numerator, D(12))
+  check('c. global, dispense partielle : denominateur', partielle.denominator, D(20))
+
+  // d. Mode sections : inchange
+  const sections = computeSubject(subj('Francais', 'R1', 20, {
+    sections: [sec('Vocabulaire', 10, [8], true), sec('Orthographe', 10, [9])],
+  }))
+  check('d. sections, dispense partielle : mode', sections.mode, 'sections')
+  check('d. sections, dispense partielle : numerateur', sections.numerator, D(9))
+  check('d. sections, dispense partielle : denominateur', sections.denominator, D(10))
+  const sectionsTout = computeSubject(subj('Francais', 'R1', 20, {
+    sections: [sec('Vocabulaire', 10, [8], true), sec('Orthographe', 10, [9], true)],
+  }))
+  check('d. sections, tout dispense : etat', sectionsTout.state, 'exempted')
+  check('d. sections, tout dispense : denominateur', sectionsTout.denominator, D(0))
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 console.log(results.join('\n'))
 console.log('\n' + '='.repeat(78))

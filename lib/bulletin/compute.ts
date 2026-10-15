@@ -220,8 +220,15 @@ export function computeSubject(subject: SubjectInput): SubjectOutput {
 
   const maxScore = effectiveMaxScore(subject)
 
+  // En mode global, une dispense de TOUTES les sous-matieres pour l'etape vaut
+  // dispense de la matiere : elle l'emporte sur une note globale saisie. Sans
+  // cette regle, la note entrait au numerateur et le bareme au denominateur.
+  // Le mode sections n'est pas concerne : il aboutit deja a 'exempted' plus bas.
+  const allSectionsExempted =
+    subject.sections.length > 0 && subject.sections.every((s) => s.exempted)
+
   // ── Dispense de la matiere entiere : sort du numerateur ET du denominateur
-  if (subject.exempted) {
+  if (subject.exempted || (mode === 'global' && allSectionsExempted)) {
     return {
       classSubjectId: subject.classSubjectId,
       name: subject.name,
