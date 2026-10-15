@@ -988,11 +988,16 @@ export default function AdminDashboardPage() {
           à 1024 px, la colonne de gauche ne ferait que ~296 px à côté des
           384 px de droite. Le squelette de chargement suit la même règle. */}
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
+        {/* Titres de colonne pour les lecteurs d'écran : sans eux, la page
+            passe du h1 aux h3 des cartes. `sr-only` est en position absolue,
+            hors du flux flex : il n'ajoute aucun espacement à la colonne. */}
         <div className="flex min-w-0 flex-col gap-6">
+          <h2 className="sr-only">Accès rapide et préparation de l’année</h2>
           <QuickLinks links={quickLinks} />
           <ProgressChecklist items={checklist} className="flex-1" />
         </div>
         <div className="flex min-w-0 flex-col gap-6">
+          <h2 className="sr-only">Événements et calendrier de l’école</h2>
           {/* `key` : changer d'année active remet les deux cartes en chargement. */}
           <CPMSLDashboardEvents
             key={`events-${activeYear?.id ?? "aucune"}`}
