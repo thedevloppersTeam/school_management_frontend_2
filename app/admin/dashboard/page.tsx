@@ -35,6 +35,10 @@ import {
 } from "@/lib/api/dashboard";
 import { clientFetch as apiFetch } from "@/lib/client-fetch";
 import { toMessage } from "@/lib/errors";
+import {
+  sumEnrollmentCounts,
+  toEnrollmentCount,
+} from "@/lib/dashboard/students-total";
 import { useAcademicYearContext } from "@/lib/contexts/academic-year-context";
 import {
   Card,
@@ -221,7 +225,8 @@ function buildChecklist(params: {
   activeYear: AcademicYear | null;
   steps: AcademicYearStep[];
   sessions: ClassSession[];
-  totalStudents: number;
+  /** `null` : au moins un comptage de salle a échoué, total inconnu. */
+  totalStudents: number | null;
   currentStep: AcademicYearStep | null;
   extraData: DashboardExtraData;
   routes: ReturnType<typeof getRouteSet>;
@@ -305,11 +310,21 @@ function buildChecklist(params: {
     },
     {
       label: "Élèves inscrits",
-      status: !activeYear ? "Bloquant" : totalStudents > 0 ? "Terminé" : "À faire",
+      // Total inconnu : ni « Terminé » ni « À faire », qui affirmeraient
+      // tous deux un nombre que l'écran n'a pas pu lire.
+      status: !activeYear
+        ? "Bloquant"
+        : totalStudents === null
+          ? "À vérifier"
+          : totalStudents > 0
+            ? "Terminé"
+            : "À faire",
       description:
-        totalStudents > 0
-          ? `${totalStudents} élève(s) inscrit(s).`
-          : "Aucun élève inscrit pour l’année scolaire active.",
+        totalStudents === null
+          ? "Les effectifs n’ont pas pu être lus. Ouvrez l’écran Élèves pour les vérifier."
+          : totalStudents > 0
+            ? `${totalStudents} élève(s) inscrit(s).`
+            : "Aucun élève inscrit pour l’année scolaire active.",
       href: routes.students,
       actionLabel: "Inscrire",
     },
@@ -606,7 +621,8 @@ export default function AdminDashboardPage() {
   const [activeYear, setActiveYear] = useState<AcademicYear | null>(null);
   const [steps, setSteps] = useState<AcademicYearStep[]>([]);
   const [sessions, setSessions] = useState<ClassSession[]>([]);
-  const [totalStudents, setTotalStudents] = useState(0);
+  // `null` : au moins un comptage a échoué (lib/dashboard/students-total.ts).
+  const [totalStudents, setTotalStudents] = useState<number | null>(0);
   const [extraData, setExtraData] =
     useState<DashboardExtraData>(EMPTY_EXTRA_DATA);
   const [loadState, setLoadState] = useState<LoadState>("loading");
@@ -666,23 +682,18 @@ export default function AdminDashboardPage() {
       );
 
       if (isStale()) return;
-      const fulfilledCounts = counts
-        .filter(
-          (
-            result,
-          ): result is PromiseFulfilledResult<{
-            sessionId: string;
-            studentCount: number;
-          }> => result.status === "fulfilled",
-        )
-        .map((result) => result.value);
-      setTotalStudents(
-        fulfilledCounts.reduce((sum, stat) => sum + stat.studentCount, 0),
+      // Un comptage rejeté, ou qui n'est pas un effectif, vaut `null` : il
+      // n'est jamais compté comme 0, et il rend le total inconnu.
+      const perSession = counts.map((result) =>
+        result.status === "fulfilled"
+          ? toEnrollmentCount(result.value.studentCount)
+          : null,
       );
+      setTotalStudents(sumEnrollmentCounts(perSession));
 
       const reasons: string[] = [];
-      if (fulfilledCounts.length !== sessionsData.length) {
-        const missing = sessionsData.length - fulfilledCounts.length;
+      const missing = perSession.filter((count) => count === null).length;
+      if (missing > 0) {
         reasons.push(`les effectifs de ${missing} classe(s)`);
       }
 
@@ -750,7 +761,8 @@ export default function AdminDashboardPage() {
     () => [
       {
         label: "Élèves",
-        value: totalStudents,
+        // Jamais 0 ni un sous-total quand un comptage manque.
+        value: totalStudents ?? "indisponible",
         description: "Inscrits dans l’année scolaire active",
         icon: UsersIcon,
       },
