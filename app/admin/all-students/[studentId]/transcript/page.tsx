@@ -617,25 +617,6 @@ export default function StudentTranscriptPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         {backLink}
-        {/* `window.print()` a été retiré : sans gabarit `@media print`, il
-            imprimait la coque d'administration, l'accordéon dans son état de
-            dépliement courant — donc sans les années repliées, que Radix
-            démonte — et les coordonnées d'un mineur. Le bouton reste visible,
-            désactivé, parce que l'impression du relevé est une décision
-            attendue et non un abandon : voir U1i-1 du backlog. */}
-        <div className="flex flex-col items-start gap-1 sm:items-end">
-          {/* Pas d'`aria-describedby` : un bouton natif désactivé n'est pas
-              focusable, la description n'y serait jamais annoncée. Le paragraphe
-              qui suit est dans l'ordre de lecture, il suffit. */}
-          <Button variant="outline" size="sm" disabled>
-            <PrinterIcon className="mr-2 h-4 w-4" />
-            Imprimer
-          </Button>
-          <p className="text-xs text-muted-foreground">
-            Gabarit d&apos;impression en attente de décision. Les bulletins, eux,
-            s&apos;impriment depuis chaque étape ci-dessous.
-          </p>
-        </div>
       </div>
 
       {/* Profile card */}
@@ -899,6 +880,15 @@ export default function StudentTranscriptPage() {
                       </div>
                     </AccordionTrigger>
                     <AccordionContent className="px-3 pb-4">
+                      {/* Relevé de notes de CETTE année : prévisualisation, puis PDF. */}
+                      <div className="mb-4 flex justify-end">
+                        <Button asChild variant="outline" size="sm">
+                          <Link href={`/admin/all-students/${studentId}/transcript/releve/${e.id}`}>
+                            <PrinterIcon className="mr-2 h-4 w-4" />
+                            Imprimer le relevé
+                          </Link>
+                        </Button>
+                      </div>
                       {summary.gradesFailed && (
                         <p
                           role="status"
