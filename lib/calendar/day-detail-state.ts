@@ -8,7 +8,8 @@
  * « Aucun jour férié » est une AFFIRMATION. Elle n'est permise que si la liste
  * a été lue (`ready`) et seulement pour une période couverte par l'année
  * active — le serveur ne renvoie que les jours fériés de cette année. Sinon :
- *  - période hors de l'année active → « hors de l'année <nom> : non chargé » ;
+ *  - période hors de l'année active → « hors de la période de « <nom> » : non
+ *    chargé » ;
  *  - lecture en cours → « chargement… » ;
  *  - lecture échouée → « jours fériés indisponibles » ;
  *  - plage de l'année illisible → on ne sait pas ce qui est couvert, on le dit.
@@ -67,7 +68,9 @@ export function formatHolidayCoverage(coverage: HolidayCoverage): string {
     case 'range-unknown':
       return 'période de l’année illisible'
     case 'outside-year':
-      return `hors de l’année ${coverage.yearName} : non chargé`
+      // « période de », pas « année » : le nom de l'année contient souvent
+      // déjà le mot (« Année 2025-2026 »). Guillemets à espaces insécables.
+      return `hors de la période de « ${coverage.yearName} » : non chargé`
     case 'loading':
       return 'chargement…'
     case 'unavailable':

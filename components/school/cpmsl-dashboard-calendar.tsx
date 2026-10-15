@@ -27,6 +27,7 @@ import {
 } from "@/lib/calendar/day-detail-state";
 import { holidaysToEvents } from "@/lib/calendar/from-holidays";
 import { weekEdgeTarget } from "@/lib/calendar/grid-keys";
+import { initialMonth } from "@/lib/calendar/initial-month";
 import { buildMonthGrid, upcomingEvents, type MonthGridDay } from "@/lib/calendar/month-grid";
 import type { CalendarDayEvent } from "@/lib/calendar/types";
 import {
@@ -100,7 +101,16 @@ export function CPMSLDashboardCalendar({
     () => ({ year: Number(today.slice(0, 4)), month: Number(today.slice(5, 7)) }),
     [today],
   );
-  const [view, setView] = useState(() => todayMonth);
+  // Ouverture : le mois d'aujourd'hui s'il est dans l'année active, sinon le
+  // mois de l'année le plus proche (lib/calendar/initial-month.ts). Le widget
+  // est remonté à chaque changement d'année (`key`), donc lu une fois suffit.
+  // « Aujourd'hui », lui, mène toujours au mois d'aujourd'hui (option 2).
+  const [view, setView] = useState(() =>
+    initialMonth(
+      today,
+      activeYear ? { startDate: activeYear.startDate, endDate: activeYear.endDate } : null,
+    ),
+  );
   const [focusDate, setFocusDate] = useState(today);
   const [detailDate, setDetailDate] = useState<string | null>(null);
   const [state, setState] = useState<HolidaysState>({ kind: "loading" });
@@ -249,13 +259,19 @@ export function CPMSLDashboardCalendar({
         {/* `flex-wrap` : avec des boutons de 44 px sous `sm`, le titre du mois
             ne tient plus sur la même ligne à 320 px ; il passe au-dessus. */}
         <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-4">
-          <p
-            id={monthTitleId}
-            aria-live="polite"
-            className="text-sm font-semibold text-foreground"
-          >
-            {formatMonthTitle(view.year, view.month)}
-          </p>
+          {/* Une seule zone annoncée : le titre du mois et, hors de l'année
+              active, le message « hors de la période… ». La ligne de détail
+              ne le répète pas (voir plus bas). */}
+          <div aria-live="polite" className="min-w-0">
+            <p id={monthTitleId} className="text-sm font-semibold text-foreground">
+              {formatMonthTitle(view.year, view.month)}
+            </p>
+            {monthCoverage.kind === "outside-year" && (
+              <p className="text-xs text-muted-foreground">
+                {formatHolidayCoverage(monthCoverage)}
+              </p>
+            )}
+          </div>
           <div className="flex items-center gap-1">
             <Button
               size="icon"
@@ -338,11 +354,14 @@ export function CPMSLDashboardCalendar({
                   ? `jour férié : ${detailDay.events.map((e) => e.label).join(", ")}`
                   : formatHolidayCoverage(detailDayCoverage)
               }`
-            : `${formatMonthTitle(view.year, view.month)} — ${formatHolidayCoverage(monthCoverage)}${
-                monthCoverage.kind === "some"
-                  ? ". Survolez ou sélectionnez un jour pour voir son libellé."
-                  : ""
-              }`}
+            : monthCoverage.kind === "outside-year"
+              ? // Déjà affiché et annoncé sous le titre du mois : pas de doublon.
+                ""
+              : `${formatMonthTitle(view.year, view.month)} — ${formatHolidayCoverage(monthCoverage)}${
+                  monthCoverage.kind === "some"
+                    ? ". Survolez ou sélectionnez un jour pour voir son libellé."
+                    : ""
+                }`}
         </p>
 
         {/* Légende */}
