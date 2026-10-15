@@ -50,6 +50,8 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
+import { CPMSLDashboardCalendar } from "@/components/school/cpmsl-dashboard-calendar";
+import { CPMSLDashboardEvents } from "@/components/school/cpmsl-dashboard-events";
 
 type ChecklistStatus =
   | "Terminé"
@@ -441,7 +443,13 @@ function SummaryCards({ items }: { items: SummaryCardItem[] }) {
   );
 }
 
-function ProgressChecklist({ items }: { items: ChecklistItem[] }) {
+function ProgressChecklist({
+  items,
+  className,
+}: {
+  items: ChecklistItem[];
+  className?: string;
+}) {
   // Une ligne « À vérifier » signale une donnée que le serveur n'a pas fournie.
   // La compter dans le dénominateur rendrait 100 % inatteignable et le
   // pourcentage cesserait de vouloir dire quelque chose.
@@ -457,7 +465,7 @@ function ProgressChecklist({ items }: { items: ChecklistItem[] }) {
   const allDone = determinable.length > 0 && completed === determinable.length;
 
   return (
-    <Card className="border bg-card shadow-sm">
+    <Card className={cn("border bg-card shadow-sm", className)}>
       <CardHeader className="pb-3">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
@@ -543,7 +551,7 @@ function QuickLinks({ links }: { links: QuickLink[] }) {
         <CardDescription>Les quatre écrans du travail courant</CardDescription>
       </CardHeader>
       <Separator />
-      <CardContent className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
+      <CardContent className="grid gap-3 p-4 sm:grid-cols-2">
         {links.map((link) => {
           const Icon = link.icon;
           return (
@@ -826,8 +834,16 @@ export default function AdminDashboardPage() {
             <Skeleton key={item} className="h-[132px] rounded-xl" />
           ))}
         </div>
-        <Skeleton className="h-24 rounded-xl" />
-        <Skeleton className="h-96 rounded-xl" />
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
+          <div className="space-y-6">
+            <Skeleton className="h-40 rounded-xl" />
+            <Skeleton className="h-96 rounded-xl" />
+          </div>
+          <div className="space-y-6">
+            <Skeleton className="h-48 rounded-xl" />
+            <Skeleton className="h-96 rounded-xl" />
+          </div>
+        </div>
       </div>
     );
   }
@@ -952,9 +968,29 @@ export default function AdminDashboardPage() {
         </Card>
       )}
 
-      <ProgressChecklist items={checklist} />
-
-      <QuickLinks links={quickLinks} />
+      {/* Deux colonnes de même hauteur : l'accès rapide et la préparation de
+          l'année à gauche ; les événements et le calendrier de l'école à
+          droite. Une carte par colonne s'étire (`flex-1`) jusqu'au bas de la
+          plus haute : la préparation à gauche, les événements à droite — le
+          calendrier garde sa taille naturelle. Empilées sous `lg`. */}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
+        <div className="flex min-w-0 flex-col gap-6">
+          <QuickLinks links={quickLinks} />
+          <ProgressChecklist items={checklist} className="flex-1" />
+        </div>
+        <div className="flex min-w-0 flex-col gap-6">
+          {/* `key` : changer d'année active remet les deux cartes en chargement. */}
+          <CPMSLDashboardEvents
+            key={`events-${activeYear?.id ?? "aucune"}`}
+            activeYear={activeYear}
+            className="flex-1"
+          />
+          <CPMSLDashboardCalendar
+            key={`calendar-${activeYear?.id ?? "aucune"}`}
+            activeYear={activeYear}
+          />
+        </div>
+      </div>
     </div>
   );
 }
