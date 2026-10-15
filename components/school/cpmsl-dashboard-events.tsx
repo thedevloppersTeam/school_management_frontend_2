@@ -18,6 +18,7 @@ import {
   type SchoolEventItem,
 } from "@/lib/calendar/from-events";
 import { upcomingEvents } from "@/lib/calendar/month-grid";
+import { eventsCardDescription, eventsEmptyMessage } from "@/lib/dashboard/labels";
 import {
   Card,
   CardContent,
@@ -144,9 +145,12 @@ export function CPMSLDashboardEvents({
           </ul>
         ) : (
           <p className="text-sm text-muted-foreground">
-            {state.events.length === 0
-              ? "Aucun événement configuré pour cette année."
-              : "Aucun événement à venir d’ici la fin de l’année."}
+            {/* Phrase selon la période de l'année active (lib/dashboard/labels.ts). */}
+            {eventsEmptyMessage({
+              configuredCount: state.events.length,
+              today,
+              year: activeYear,
+            })}
           </p>
         )}
         {state.ignored > 0 && (
@@ -163,11 +167,7 @@ export function CPMSLDashboardEvents({
     <Card className={cn("border bg-card shadow-sm", className)}>
       <CardHeader className="pb-3">
         <CardTitle className="text-base font-semibold">Événements à venir</CardTitle>
-        <CardDescription>
-          {activeYear
-            ? `Événements de l’année ${activeYear.name}`
-            : "Aucune année scolaire active"}
-        </CardDescription>
+        <CardDescription>{eventsCardDescription(activeYear?.name ?? null)}</CardDescription>
       </CardHeader>
       <Separator />
       <CardContent className="space-y-4 p-6">

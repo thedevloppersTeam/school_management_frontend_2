@@ -41,6 +41,7 @@ import {
   type DashboardExtraData,
 } from "@/lib/dashboard/load-dashboard";
 import { yearStatusLabel } from "@/lib/dashboard/year-status-label";
+import { countTileValue, partialDataMessage } from "@/lib/dashboard/labels";
 import { useAcademicYearContext } from "@/lib/contexts/academic-year-context";
 import {
   Card,
@@ -685,18 +686,18 @@ export default function AdminDashboardPage() {
       },
       {
         label: "Matières",
-        value: extraData.subjectCount ?? "À vérifier",
+        value: countTileValue(extraData.subjectCount, activeYear !== null),
         description: "Matières configurées",
         icon: ClipboardEditIcon,
       },
       {
         label: "Bulletins archivés",
-        value: extraData.archiveCount ?? "À vérifier",
+        value: countTileValue(extraData.archiveCount, activeYear !== null),
         description: "Pour l’année scolaire active",
         icon: FileTextIcon,
       },
     ],
-    [extraData.archiveCount, extraData.subjectCount, sessions.length, totalStudents],
+    [activeYear, extraData.archiveCount, extraData.subjectCount, sessions.length, totalStudents],
   );
 
   const checklist = useMemo(
@@ -819,8 +820,14 @@ export default function AdminDashboardPage() {
           <InfoIcon className="h-4 w-4 !text-info-ink" />
           <AlertTitle>Données partielles</AlertTitle>
           <AlertDescription>
-            Le serveur n’a pas renvoyé {partialReasons.join(", ")}. Les lignes
-            concernées affichent « À vérifier ».
+            {/* Variante choisie sur les valeurs reçues, pas sur le texte des
+                raisons : `null` = donnée manquante. */}
+            {partialDataMessage(partialReasons, {
+              students: totalStudents === null,
+              subjects: extraData.subjectCount === null,
+              archives: extraData.archiveCount === null,
+              assignments: extraData.assignmentSummary === null,
+            })}
           </AlertDescription>
         </Alert>
       )}
