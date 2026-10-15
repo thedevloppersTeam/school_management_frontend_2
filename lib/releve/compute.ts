@@ -104,11 +104,16 @@ export function lineAverage(cells: Array<Decimal | null>, bareme: Decimal): Deci
   return mean === null ? null : mean.dividedBy(bareme).times(DIX)
 }
 
-/** Colonne « Moy. Gnle » : texte arrondi, bande sur la moyenne exacte. */
+/**
+ * Colonne « Moy. Gnle » : calcul exact, puis bande sur la valeur AFFICHÉE
+ * (arrondie à 2 décimales, demi supérieur) × 10 — gabarit §5, Q-C, comme les
+ * moyennes du bulletin. Ex. 6.8958… → « 6.90 » → 69 % → aucune couleur.
+ */
 export function averageCellFor(cells: Array<Decimal | null>, bareme: Decimal): ReleveCell {
   const avg = lineAverage(cells, bareme)
   if (avg === null) return { text: TIRET, band: null }
-  return { text: formatNumber(avg), band: bandOf(avg, DIX) }
+  const shown = avg.toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
+  return { text: formatNumber(shown), band: bandOf(shown, DIX) }
 }
 
 /** Légende 2 × 4 : reprise telle quelle de GRADE_SCALE. */
@@ -178,6 +183,7 @@ export interface SubjectGroupsInput {
 
 interface LineDef {
   label: string
+  /** Sous-matière portée par la ligne ; null pour la ligne de matière. */
   sectionId: string | null
   bareme: Decimal
 }
@@ -194,23 +200,35 @@ function sortedSections(cs: ApiClassSubjectRow) {
 }
 
 /**
- * Valeurs exactes d'une matière pour UNE étape, une par ligne, ou null quand
- * la ligne n'est pas notée (sans note, dispensée). La valeur est celle de
- * `computeSubject`, donc celle du bulletin.
+ * Valeurs exactes d'une matière pour UNE étape : une par ligne de sous-matière,
+ * puis, si le groupe a une ligne globale, la valeur de cette ligne. null quand
+ * la ligne n'est pas notée (sans note, dispensée).
+ *
+ * Les deux familles de lignes passent chacune par `computeSubject`, donc par
+ * les règles du bulletin (lib/bulletin/compute.ts, GradingMode) :
+ *  - sous-matières : appel SANS les notes globales → mode 'sections' ;
+ *  - ligne globale : appel avec les notes globales et les sous-matières SANS
+ *    leurs notes → mode 'global' : moyenne des notes globales sur le barème de
+ *    la matière, et dispense de la matière entière (ou de toutes ses
+ *    sous-matières) → « - ».
+ * Une étape mixte (notes globales ET de sous-matières) est un état que le
+ * bulletin signale sans le trancher ; ici chaque note va dans sa ligne (Q-A).
  */
 function stepValues(
   cs: ApiClassSubjectRow,
-  lines: LineDef[],
+  sectionLines: LineDef[],
+  globalLine: LineDef | null,
   grades: ApiGradeRow[],
   exclusions: Set<string>,
   enrollmentId: string,
 ): Array<Decimal | null> {
   const name = cs.subject.name
   const own = grades.filter((g) => g.classSubjectId === cs.id)
-  const sectioned = lines.some((l) => l.sectionId !== null)
-  const known = new Set(lines.map((l) => l.sectionId))
-  if (own.some((g) => g.sectionId !== null && !known.has(g.sectionId))) {
-    throw new ReleveUnavailableError('notes-non-representables', name)
+  const known = new Set(sectionLines.map((l) => l.sectionId))
+  // Note visant une sous-matière inconnue de la matière : donnée incohérente,
+  // refus sans nom de matière dans le message (gabarit §3).
+  if (own.some((g) => g.sectionId != null && !known.has(g.sectionId))) {
+    throw new ReleveUnavailableError('indisponible')
   }
   const scores = (sectionId: string | null) =>
     own
@@ -220,37 +238,42 @@ function stepValues(
         if (d === null) throw new ReleveUnavailableError('indisponible', `note de ${name} absente`)
         return d
       })
-
-  const input: SubjectInput = {
+  const subjectExempted = exclusions.has(exclusionKey(enrollmentId, cs.id, null))
+  const input = (withSectionScores: boolean, globalScores: Decimal[], maxScore: Decimal): SubjectInput => ({
     classSubjectId: cs.id,
     name,
     // La rubrique n'est pas imprimée sur le relevé (§8) et n'entre pas dans le
     // calcul d'une ligne : valeur sans effet, requise par le type.
     rubrique: 'R1',
-    maxScore: sectioned ? (toDecimal(cs.subject.maxScore, `barème de ${name}`) ?? new Decimal(0)) : lines[0].bareme,
+    maxScore,
     maxScoreOverride: null,
-    sections: lines
-      .filter((l) => l.sectionId !== null)
-      .map((l) => ({
-        sectionId: l.sectionId as string,
-        name: l.label,
-        maxScore: l.bareme,
-        scores: scores(l.sectionId),
-        exempted: exclusions.has(exclusionKey(enrollmentId, cs.id, l.sectionId)),
-      })),
-    globalScores: scores(null),
-    exempted: exclusions.has(exclusionKey(enrollmentId, cs.id, null)),
-  }
-  const result = computeSubject(input)
+    sections: sectionLines.map((l) => ({
+      sectionId: l.sectionId as string,
+      name: l.label,
+      maxScore: l.bareme,
+      scores: withSectionScores ? scores(l.sectionId) : [],
+      exempted: exclusions.has(exclusionKey(enrollmentId, cs.id, l.sectionId)),
+    })),
+    globalScores,
+    exempted: subjectExempted,
+  })
 
-  if (!sectioned) return [result.state === 'noted' ? result.numerator : null]
-
-  // Une note globale sur une matière à sous-matières n'a pas de ligne où
-  // s'afficher : la taire fausserait le relevé, on refuse (cf. rapport).
-  if (result.state !== 'exempted' && input.globalScores.length > 0) {
-    throw new ReleveUnavailableError('notes-non-representables', name)
+  // Matière sans sous-matière : une ligne, la note porte sur la matière.
+  if (sectionLines.length === 0) {
+    const bareme = (globalLine as LineDef).bareme
+    const r = computeSubject(input(false, scores(null), bareme))
+    return [r.state === 'noted' ? r.numerator : null]
   }
-  return result.sections.map((s) => (s.state === 'noted' ? s.score : null))
+
+  const declared = toDecimal(cs.subject.maxScore, `barème de ${name}`) ?? new Decimal(0)
+  const bySection = computeSubject(input(true, [], declared))
+  const values = bySection.sections.map((sec) => (sec.state === 'noted' ? sec.score : null))
+  if (globalLine) {
+    const globals = scores(null)
+    const r = globals.length > 0 ? computeSubject(input(false, globals, globalLine.bareme)) : null
+    values.push(r && r.state === 'noted' ? r.numerator : null)
+  }
+  return values
 }
 
 export function buildSubjectGroups(params: SubjectGroupsInput): ReleveGroup[] {
@@ -267,21 +290,30 @@ export function buildSubjectGroups(params: SubjectGroupsInput): ReleveGroup[] {
 
   return classSubjects.map((cs) => {
     const name = cs.subject.name
-    const sections = sortedSections(cs)
-    const lines: LineDef[] =
-      sections.length > 0
-        ? sections.map((s) => ({ label: s.name, sectionId: s.id, bareme: requireBareme(s.maxScore, `barème de ${s.name}`) }))
-        : [{
-            label: name,
-            sectionId: null,
-            bareme: requireBareme(cs.maxScoreOverride ?? cs.subject.maxScore, `barème de ${name}`),
-          }]
+    const sectionLines: LineDef[] = sortedSections(cs).map((s) => ({
+      label: s.name,
+      sectionId: s.id,
+      bareme: requireBareme(s.maxScore, `barème de ${s.name}`),
+    }))
+    // Ligne de la matière : la seule ligne d'une matière sans sous-matière ;
+    // sinon, ligne globale en fin de groupe dès qu'une étape RETENUE porte une
+    // note au niveau de la matière entière (Q-A).
+    const hasGlobalNote = steps.some(
+      (step) =>
+        included.has(step.id) &&
+        (params.gradesByStep.get(step.id) ?? []).some((g) => g.classSubjectId === cs.id && g.sectionId == null),
+    )
+    const subjectLine: LineDef | null =
+      sectionLines.length === 0 || hasGlobalNote
+        ? { label: name, sectionId: null, bareme: requireBareme(cs.maxScoreOverride ?? cs.subject.maxScore, `barème de ${name}`) }
+        : null
+    const lines = subjectLine ? [...sectionLines, subjectLine] : sectionLines
 
     // values[étape][ligne]
     const values = steps.map((step) =>
       !included.has(step.id) || exemptedSteps.has(step.id)
         ? lines.map(() => null)
-        : stepValues(cs, lines, params.gradesByStep.get(step.id) ?? [], exclusionsFor.get(step.id)!, enrollmentId),
+        : stepValues(cs, sectionLines, subjectLine, params.gradesByStep.get(step.id) ?? [], exclusionsFor.get(step.id)!, enrollmentId),
     )
 
     const doubled = (assignments.get(cs.subject.id) ?? 0) > 1 && cs.trackId !== null && !!trackCode
@@ -304,10 +336,13 @@ export function buildSubjectGroups(params: SubjectGroupsInput): ReleveGroup[] {
 
 // ── Discipline (R-REL-5) ────────────────────────────────────────────────────
 
+/**
+ * Pas de dispenses d'étape ici : elles ne s'appliquent PAS à la discipline
+ * (R-REL-5, Q-B) — les fiches de toutes les étapes retenues sont comptées.
+ */
 export interface DisciplineInput {
   steps: ApiStepRow[]
   included: ReadonlySet<string>
-  exemptedSteps: ReadonlySet<string>
   /** Fiche de l'étape ; null ou absente de la table = pas de fiche (404). */
   behaviorsByStep: ReadonlyMap<string, ApiBehaviorRow | null>
 }
@@ -320,15 +355,18 @@ const DISCIPLINE_LINES: Array<{ field: keyof ApiBehaviorRow; label: string; mode
   { field: 'respectUniforme', label: 'Respect des prescrits de l\'uniforme', mode: 'moyenne' },
 ]
 
-/** Compteurs = total des étapes renseignées ; uniforme = moyenne ; aucune couleur. */
+/**
+ * Compteurs = total des étapes renseignées, entiers ; uniforme = moyenne, et
+ * cellules comme moyenne sur 2 décimales (« 8.00 ») ; aucune couleur.
+ */
 export function buildDisciplineGroup(params: DisciplineInput): ReleveGroup {
-  const { steps, included, exemptedSteps, behaviorsByStep } = params
+  const { steps, included, behaviorsByStep } = params
   return {
     title: DISCIPLINE_TITLE,
     kind: 'discipline',
     lines: DISCIPLINE_LINES.map(({ field, label, mode }): ReleveLine => {
       const values = steps.map((step) => {
-        if (!included.has(step.id) || exemptedSteps.has(step.id)) return null
+        if (!included.has(step.id)) return null
         const row = behaviorsByStep.get(step.id)
         return row ? toDecimal(row[field], label) : null
       })
@@ -341,7 +379,10 @@ export function buildDisciplineGroup(params: DisciplineInput): ReleveGroup {
       return {
         label,
         coeff: '1',
-        cells: values.map((v) => ({ text: v === null ? TIRET : v.toString(), band: null })),
+        cells: values.map((v) => ({
+          text: v === null ? TIRET : mode === 'total' ? v.toString() : formatNumber(v),
+          band: null,
+        })),
         blank: TIRET,
         average: { text: average, band: null },
       }

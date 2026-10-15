@@ -213,12 +213,16 @@ check('T6 coeff barème « 20.00 » (chaîne Decimal)', formatCoeff(D('20.00')),
 
 function discipline(rows: Array<ApiBehaviorRow | null>, exemptedSteps: Set<string> = new Set()) {
   const st = steps(rows.length)
-  return buildDisciplineGroup({
+  // `exemptedSteps` ne fait plus partie du contrat (C2, Q-B) : il est passé par
+  // une variable, hors du contrôle de propriété en trop, pour vérifier qu'une
+  // dispense d'étape transmise quand même reste SANS effet sur la discipline.
+  const input = {
     steps: st,
     included: new Set(st.map((s) => s.id)),
     exemptedSteps,
     behaviorsByStep: new Map(rows.map((r, i) => [st[i].id, r])),
-  })
+  }
+  return buildDisciplineGroup(input)
 }
 {
   const d = discipline([{ retards: 2 }, { retards: null }, null, { retards: 1 }])
@@ -246,15 +250,15 @@ function discipline(rows: Array<ApiBehaviorRow | null>, exemptedSteps: Set<strin
   check('T9 uniforme [8,8,8,8]', discipline([u(8), u(8), u(8), u(8)]).lines[4].average.text, '8.00')
   const d = discipline([u(8), u(null), u(7), null])
   check('T9 uniforme [8, vide, 7, absente]', d.lines[4].average.text, '7.50')
-  check('T9 uniforme : cellules', d.lines[4].cells.map((c) => c.text).join('|'), '8|-|7|-')
+  check('T9 uniforme : cellules (C5, 2 décimales)', d.lines[4].cells.map((c) => c.text).join('|'), '8.00|-|7.00|-')
   const bands = d.lines.flatMap((l) => [...l.cells, l.average]).filter((c) => c.band !== null).length
   check('T9 aucune bande de couleur en discipline', bands, 0)
 }
 {
   const full = { retards: 1, absences: 2, devoirsManques: 3, leconsNonSues: 4, respectUniforme: 9 }
   const d = discipline([full, full, full, full], new Set(['st2']))
-  check('T9 étape dispensée : « - » en discipline aussi', d.lines[0].cells.map((c) => c.text).join('|'), '1|-|1|1')
-  check('T9 étape dispensée : total sans elle', d.lines[1].average.text, '6')
+  check('U6 étape dispensée : fiche comptée en discipline (Q-B)', d.lines[0].cells.map((c) => c.text).join('|'), '1|1|1|1')
+  check('U6 étape dispensée : total avec elle', d.lines[1].average.text, '8')
 }
 
 // ── T10 à T13 — étapes et période (R-REL-6) ─────────────────────────────────
@@ -293,7 +297,6 @@ function discipline(rows: Array<ApiBehaviorRow | null>, exemptedSteps: Set<strin
   const d = buildDisciplineGroup({
     steps: r.steps,
     included: r.included,
-    exemptedSteps: new Set(),
     behaviorsByStep: new Map([['st3', { retards: 5 }], ['st1', { retards: 1 }]]),
   })
   check('T12 discipline : étapes 3 et 4 « - »', d.lines[0].cells.map((c) => c.text).join('|'), '1|-|-|-')
@@ -372,11 +375,11 @@ function discipline(rows: Array<ApiBehaviorRow | null>, exemptedSteps: Set<strin
   check('T18 même pourcentage sur barème 20 : 10.25/20 = 51.25 %', cellFor(D('10.25'), D('20')).band, 'deficient')
   check('T18 cellule sans note : aucune bande', cellFor(null, D('20')).band, 'null')
   check('T18 cellule sans note : « - »', cellFor(null, D('20')).text, '-')
-  // Moy. Gnle colorée sur la valeur EXACTE ×10 : 41.375/60 ×10 = 6.8958…
-  // affichée 6.90 (≥ 69 % si on colorait le texte), bande « assez-bien ».
+  // Moy. Gnle colorée sur la valeur AFFICHÉE ×10 (Q-C) : 41.375/60 ×10 = 6.8958…
+  // affichée 6.90 → 69 % → bande « neutre » (aucune couleur).
   const m = averageCellFor([D('41.5'), D('41.25')], D('60'))
-  check('T18 Moy exacte 6.8958… : texte', m.text, '6.90')
-  check('T18 Moy exacte 6.8958… : bande sur la valeur exacte', m.band, 'assez-bien')
+  check('T18/U7 Moy exacte 6.8958… : texte', m.text, '6.90')
+  check('T18/U7 Moy exacte 6.8958… : bande sur l’affiché (aucune couleur)', m.band, 'neutre')
   check('T18 légende : 8 entrées reprises de GRADE_SCALE', legend().length, GRADE_SCALE.length)
   check('T18 légende : mentions', legend().map((e) => e.mention).join(','), 'E,D,C,C+,B,B+,A,A+')
   check('T18 légende : plages', legend()[1].range, GRADE_SCALE[1].range)
@@ -405,6 +408,98 @@ check('année « AAAA – AAAA » (demi-cadratin)', formatYearRange('2025 – 20
 check('nombre : 2 décimales, point', formatNumber(D('58')), '58.00')
 check('nombre : demi supérieur', formatNumber(D('0.125')), '0.13')
 check('nombre absent : tiret simple', formatNumber(null), '-')
+
+// ── Lot 1b — U1 à U5 : ligne globale (C1, Q-A) ──────────────────────────────
+
+/** Comme `groups`, mais rend la raison d'un refus au lieu de l'exception. */
+function tryGroups(over: Partial<SubjectGroupsInput>): { gr: ReleveGroup[] | null; err: string; msg: string } {
+  try {
+    return { gr: groups(over), err: 'aucune erreur', msg: '' }
+  } catch (e) {
+    return {
+      gr: null,
+      err: e instanceof ReleveUnavailableError ? e.reason : `autre : ${String(e)}`,
+      msg: e instanceof Error ? e.message : '',
+    }
+  }
+}
+const labels = (gr: ReleveGroup[] | null) => (gr ? gr[0].lines.map((l) => l.label).join(',') : 'refus')
+const lineCells = (gr: ReleveGroup[] | null, li: number) =>
+  gr ? (gr[0].lines[li]?.cells.map((c) => c.text).join('|') ?? 'absente') : 'refus'
+const csAB = () => sectioned('cs1', 'Matière A', [['sa', 'Sous-matière A', '10', 1], ['sb', 'Sous-matière B', '10', 2]])
+{
+  const r = tryGroups({ classSubjects: [csAB()], gradesByStep: new Map([['st1', [g('cs1', '15')]]]) })
+  check('U1 note globale seule : aucun refus', r.err, 'aucune erreur')
+  check('U1 3 lignes, la globale en dernier', labels(r.gr), 'Sous-matière A,Sous-matière B,Matière A')
+  check('U1 coeff ligne globale = barème matière 20 ÷ 10', r.gr?.[0].lines[2]?.coeff, '2')
+  check('U1 cellules ligne globale', lineCells(r.gr, 2), '15.00|-|-|-')
+  check('U1 Moy ligne globale 15/20 × 10', r.gr?.[0].lines[2]?.average.text, '7.50')
+  check('U1 bande cellule globale 75 %', r.gr?.[0].lines[2]?.cells[0].band, 'neutre')
+  check('U1 sous-matières sans note', lineCells(r.gr, 0), '-|-|-|-')
+}
+{
+  const r = tryGroups({
+    classSubjects: [csAB()],
+    gradesByStep: new Map([['st1', [g('cs1', '16'), g('cs1', '8', 'sa'), g('cs1', '6', 'sb')]]]),
+  })
+  check('U2 étape mixte : aucun refus', r.err, 'aucune erreur')
+  check('U2 sous-matière A', lineCells(r.gr, 0), '8.00|-|-|-')
+  check('U2 sous-matière B', lineCells(r.gr, 1), '6.00|-|-|-')
+  check('U2 ligne globale', lineCells(r.gr, 2), '16.00|-|-|-')
+}
+{
+  const r = tryGroups({ classSubjects: [csAB()], gradesByStep: new Map([['st1', [g('cs1', '8', 'sa')]]]) })
+  check('U3 aucune note globale : pas de ligne globale', labels(r.gr), 'Sous-matière A,Sous-matière B')
+  const etapeNonRetenue = tryGroups({
+    classSubjects: [csAB()],
+    included: new Set(['st1', 'st2']),
+    gradesByStep: new Map([['st3', [g('cs1', '15')]]]),
+  })
+  check('U3 note globale sur une étape NON retenue : pas de ligne', labels(etapeNonRetenue.gr), 'Sous-matière A,Sous-matière B')
+}
+{
+  const r = tryGroups({ classSubjects: [csAB()], gradesByStep: new Map([['st1', [g('cs1', '8', 'inconnue')]]]) })
+  check('U4 sous-matière inconnue : refus « indisponible »', r.err, 'indisponible')
+  check('U4 message sans nom de matière', r.msg.includes('Matière A'), false)
+}
+{
+  const notes = (n: string) => [g('cs1', n), g('cs1', n, 'sa'), g('cs1', n, 'sb')]
+  const r = tryGroups({
+    classSubjects: [csAB()],
+    gradesByStep: new Map([['st1', notes('6')], ['st2', notes('9')]]),
+    exclusionsByStep: new Map([['st2', [{ enrollmentId: 'e1', classSubjectId: 'cs1', sectionId: null }]]]),
+  })
+  check('U5 dispense matière entière étape 2 : ligne A', lineCells(r.gr, 0), '6.00|-|-|-')
+  check('U5 dispense matière entière étape 2 : ligne B', lineCells(r.gr, 1), '6.00|-|-|-')
+  check('U5 dispense matière entière étape 2 : ligne globale', lineCells(r.gr, 2), '6.00|-|-|-')
+}
+
+// ── Lot 1b — U7, U8 : couleurs (C3, Q-C) ────────────────────────────────────
+
+{
+  const cas: Array<[string, string, string]> = [
+    ['5.995', '6.00', 'assez-bien'],
+    ['5.9949', '5.99', 'deficient'],
+    ['4.996', '5.00', 'echec'],
+  ]
+  for (const [exact, texte, bande] of cas) {
+    const c = averageCellFor([D(exact)], D('10'))
+    check(`U7 Moy exacte ${exact} : texte`, c.text, texte)
+    check(`U7 Moy exacte ${exact} : bande sur l’affiché`, c.band, bande)
+  }
+  const cell = cellFor(D('34.4'), D('60'))
+  check('U8 cellule 34.4/60 (57.33 %) : bande exacte inchangée', cell.band, 'deficient')
+}
+
+// ── Lot 1b — U10 : uniforme et compteurs (C5) ───────────────────────────────
+
+{
+  const d = discipline([{ respectUniforme: 8, retards: 2 }, { respectUniforme: 7.5, retards: 0 }])
+  check('U10 uniforme [8, 7.5] : cellules', d.lines[4].cells.map((c) => c.text).join('|'), '8.00|7.50')
+  check('U10 uniforme [8, 7.5] : Moy', d.lines[4].average.text, '7.75')
+  check('U10 retards [2, 0] : cellules', d.lines[0].cells.map((c) => c.text).join('|'), '2|0')
+  check('U10 retards [2, 0] : total', d.lines[0].average.text, '2')
+}
 
 console.log(out.join('\n'))
 console.log(`\n${pass} OK, ${fail} ECHEC`)

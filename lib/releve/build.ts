@@ -121,6 +121,11 @@ export async function buildReleveData(studentId: string, enrollmentId: string): 
     ),
   ])
   if (!schoolInfo) throw new ReleveUnavailableError('ecole-non-renseignee')
+  // Q-D : adresse et téléphone sont imprimés au pied de page ; vides ou blancs,
+  // le relevé n'est pas imprimé. Le courriel est facultatif.
+  if (!text(schoolInfo.address) || !text(schoolInfo.phone)) {
+    throw new ReleveUnavailableError('ecole-incomplete')
+  }
 
   // 4. Assemblage.
   const trackId = enrollment.trackId ?? null
@@ -135,10 +140,10 @@ export async function buildReleveData(studentId: string, enrollmentId: string): 
     gradesByStep: new Map(perStep.map((p) => [p.stepId, p.grades])),
     exclusionsByStep: new Map(perStep.map((p) => [p.stepId, p.exclusions])),
   })
+  // Les dispenses d'étape ne s'appliquent pas à la discipline (Q-B).
   const discipline = buildDisciplineGroup({
     steps,
     included,
-    exemptedSteps,
     behaviorsByStep: new Map(perStep.map((p) => [p.stepId, p.behavior])),
   })
   const { left, right } = splitColumns(groups, discipline)

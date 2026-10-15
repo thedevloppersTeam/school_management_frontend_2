@@ -83,7 +83,7 @@ export type ReleveUnavailableReason =
   | 'aucune-etape-en-cours'
   | 'annee-en-preparation'
   | 'ecole-non-renseignee'
-  | 'notes-non-representables'
+  | 'ecole-incomplete'
 
 const MESSAGES: Record<ReleveUnavailableReason, string> = {
   'indisponible':
@@ -94,14 +94,14 @@ const MESSAGES: Record<ReleveUnavailableReason, string> = {
     'Relevé de notes indisponible : l’année scolaire est en préparation.',
   'ecole-non-renseignee':
     'Relevé de notes indisponible : informations de l’école non renseignées.',
-  'notes-non-representables':
-    'Relevé de notes indisponible : des notes globales sont saisies sur une matière à sous-matières',
+  'ecole-incomplete':
+    'Relevé de notes indisponible : informations de l’école incomplètes.',
 }
 
 /**
  * Le relevé n'est pas généré (R-REL-6, R-REL-7, G10). Le message est rédigé
  * pour l'écran et ne contient aucune donnée d'élève ; seul `detail` peut porter
- * un nom de matière.
+ * un nom de matière ou de sous-matière (barème ou note illisible).
  */
 export class ReleveUnavailableError extends Error {
   constructor(

@@ -62,10 +62,16 @@ interface Scenario {
   photos: Array<{ academicYearId: string; photoUrl: string }>
   profilePhoto: string | null
   letter: string
+  /** Réponse de /api/school-info quand elle n'est pas forcée en erreur. */
+  ecole: Record<string, string | null>
 }
 let sc: Scenario
 function reset(over: Partial<Scenario> = {}) {
-  sc = { trackId: 'filiere-smp', status: {}, photos: [], profilePhoto: null, letter: 'A', ...over }
+  sc = {
+    trackId: 'filiere-smp', status: {}, photos: [], profilePhoto: null, letter: 'A',
+    ecole: { name: 'École fictive', address: 'Adresse fictive', phone: '0000-0000', email: 'contact@exemple.test' },
+    ...over,
+  }
 }
 
 const json = (body: unknown, status = 200) =>
@@ -99,10 +105,12 @@ const ROUTES: Array<[string, RegExp, (m: RegExpMatchArray) => unknown]> = [
   ['comportement', /^\/api\/behaviors\?enrollmentId=([^&]+)&stepId=(.+)$/, (m) => {
     if (m[2] === 'st1') return { retards: 2, absences: 0, devoirsManques: null, leconsNonSues: 1, respectUniforme: 8 }
     if (m[2] === 'st2') return { retards: 1, absences: 0, devoirsManques: null, leconsNonSues: 0, respectUniforme: 7 }
+    // Étape 3 : dispensée pour l'élève (U6), mais sa fiche compte en discipline.
+    if (m[2] === 'st3') return { retards: 4, absences: 1, devoirsManques: null, leconsNonSues: null, respectUniforme: null }
     return { __status: 404 }
   }],
   ['photos', /^\/api\/promotion-photos\?studentId=(.+)$/, () => sc.photos],
-  ['ecole', /^\/api\/school-info$/, () => ({ name: 'École fictive', address: 'Adresse fictive', phone: '0000-0000', email: 'contact@exemple.test' })],
+  ['ecole', /^\/api\/school-info$/, () => sc.ecole],
 ]
 
 const appels: string[] = []
@@ -173,8 +181,10 @@ async function main() {
   // T19 — discipline en fin de colonne gauche ; T20 — fiche 404 → « - »
   const disc = d.left[d.left.length - 1]
   check('T19 Discipline en fin de colonne gauche', disc.kind, 'discipline')
-  check('T20 fiche 404 aux étapes 3-4 : cellules retards', disc.lines[0].cells.map((c) => c.text).join('|'), '2|1|-|-')
-  check('T9 retards : total des fiches', disc.lines[0].average.text, '3')
+  check('T20/U6 fiche 404 à l’étape 4, étape 3 dispensée comptée', disc.lines[0].cells.map((c) => c.text).join('|'), '2|1|4|-')
+  check('T9/U6 retards : total des fiches, étape dispensée comprise', disc.lines[0].average.text, '7')
+  check('U6 fiche de l’étape dispensée lue', appels.some((u) => u.includes('/api/behaviors?') && u.endsWith('stepId=st3')), true)
+  check('U6 notes de l’étape dispensée : « - »', find(d, 'ESSAI Beta')!.lines[0].cells[2].text, '-')
   check('T9 devoirs : champs vides → « - »', disc.lines[2].average.text, '-')
   check('T9 uniforme : moyenne', disc.lines[4].average.text, '7.50')
 
@@ -218,6 +228,27 @@ async function main() {
   check('T21 school_info 404 : refus dédié', reason(r), 'ecole-non-renseignee')
   check('T21 message « informations de l’école non renseignées »',
     r.error instanceof Error && r.error.message.includes('informations de l’école non renseignées'), true)
+
+  // ── U9 — school_info incomplète (C4, Q-D) ────────────────────────────────
+  const ecole = (over: Record<string, string | null>) =>
+    ({ name: 'École fictive', address: 'Adresse fictive', phone: '0000-0000', email: 'contact@exemple.test', ...over })
+  reset({ ecole: ecole({ address: '' }) })
+  r = await run()
+  check('U9 adresse vide : refus « ecole-incomplete »', reason(r), 'ecole-incomplete')
+  check('U9 message « informations de l’école incomplètes. »',
+    r.error instanceof Error && r.error.message, 'Relevé de notes indisponible : informations de l’école incomplètes.')
+  reset({ ecole: ecole({ address: null }) })
+  check('U9 adresse absente (null) : refus', reason(await run()), 'ecole-incomplete')
+  reset({ ecole: ecole({ phone: '' }) })
+  check('U9 téléphone « » : refus', reason(await run()), 'ecole-incomplete')
+  reset({ ecole: ecole({ phone: '  ' }) })
+  check('U9 téléphone « ␠␠ » : refus', reason(await run()), 'ecole-incomplete')
+  reset({ ecole: ecole({ email: '' }) })
+  r = await run()
+  check('U9 courriel vide : accepté', reason(r), 'aucune erreur')
+  check('U9 courriel vide : rendu vide', r.data?.footer.courriel, '')
+  reset({ ecole: ecole({ address: '' }), status: { ecole: 404 } })
+  check('U9 404 : toujours « ecole-non-renseignee »', reason(await run()), 'ecole-non-renseignee')
 
   // ── Garde : n'appelle jamais getCurrentStep ni de route par défaut ──────
   check('aucune route non simulée appelée', appels.filter((u) => !ROUTES.some(([, re]) => re.test(u))).length, 0)
