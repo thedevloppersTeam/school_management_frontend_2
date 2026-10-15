@@ -6,6 +6,7 @@
  * modifié, mot « année » jamais répété. Données fictives uniquement.
  */
 import {
+  calendarCardDescription,
   countTileValue,
   eventsCardDescription,
   eventsEmptyMessage,
@@ -55,6 +56,21 @@ const PERIODE = { startDate: '2025-09-01T00:00:00.000Z', endDate: '2026-07-10T00
     eventsCardDescription('2025-2026'),
     `Événements de «${NBSP}2025-2026${NBSP}»`)
   check('sans annee active : inchange', eventsCardDescription(null), 'Aucune année scolaire active')
+}
+
+// -- Lot 9. Calendrier : description de la carte -----------------------------
+{
+  check('calendrier, nom contenant « Annee » : pas de repetition',
+    calendarCardDescription('Année 2025-2026 (ESSAI)'),
+    `Jours fériés de «${NBSP}Année 2025-2026 (ESSAI)${NBSP}»`)
+  check('calendrier, nom de la forme 2025-2026',
+    calendarCardDescription('2025-2026'),
+    `Jours fériés de «${NBSP}2025-2026${NBSP}»`)
+  check('calendrier, nom avec des guillemets : inchange',
+    calendarCardDescription('Année « pilote » 2025'),
+    `Jours fériés de «${NBSP}Année « pilote » 2025${NBSP}»`)
+  check('calendrier, sans annee active : inchange',
+    calendarCardDescription(null), 'Aucune année scolaire active')
 }
 
 // -- C. Tuiles Matières et Bulletins archivés --------------------------------
