@@ -52,7 +52,8 @@ const CSS = `
 .rlv-table{width:100%;border-collapse:collapse;table-layout:fixed;}
 .rlv-table th,.rlv-table td{height:${px(SIZES.row)};padding:0 2px;border:0.75px solid ${INKS.trait};
   line-height:1;white-space:nowrap;overflow:hidden;}
-.rlv-table th{font-family:${FONT_STACKS.entetes};font-size:${px(SIZES.header)};font-weight:700;text-align:center;}
+.rlv-table th{font-family:${FONT_STACKS.entetes};font-size:${px(SIZES.columnHeader)};font-weight:700;text-align:center;
+  color:${INKS.manuscrit};white-space:nowrap;overflow:visible;text-overflow:clip;}
 .rlv-table th.rlv-label-col{width:${SIZES.labelColumn};}
 .rlv-num{font-family:${FONT_STACKS.nombres};font-size:${px(SIZES.cell)};text-align:center;}
 .rlv-line-label{font-family:${FONT_STACKS.libelles};font-size:${px(SIZES.cell)};text-align:left;text-overflow:ellipsis;}
@@ -79,7 +80,7 @@ function GroupRows({ group, stepCount }: { group: ReleveGroup; stepCount: number
   return (
     <tbody className={group.kind === 'discipline' ? 'rlv-discipline' : undefined}>
       <tr>
-        <td className="rlv-group-title" colSpan={stepCount + 4}>{group.title}</td>
+        <td className="rlv-group-title" colSpan={stepCount + 3}>{group.title}</td>
       </tr>
       {group.lines.map((line, i) => (
         <tr key={`${line.label}-${i}`}>
@@ -88,7 +89,6 @@ function GroupRows({ group, stepCount }: { group: ReleveGroup; stepCount: number
           {line.cells.map((cell, c) => (
             <td key={c} className={`rlv-num ${bandClass(cell.band)}`}>{cell.text}</td>
           ))}
-          <td className="rlv-num">{line.blank}</td>
           <td className={`rlv-num ${bandClass(line.average.band)}`}>{line.average.text}</td>
         </tr>
       ))}
@@ -104,7 +104,6 @@ function Column({ groups, stepHeaders }: { groups: ReleveGroup[]; stepHeaders: s
           <th className="rlv-label-col" />
           <th>Coeff</th>
           {stepHeaders.map((h, i) => <th key={`${h}-${i}`}>{h}</th>)}
-          <th>-</th>
           <th>Moy. Gnle</th>
         </tr>
       </thead>

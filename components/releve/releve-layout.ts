@@ -100,6 +100,8 @@ export const SIZES = {
   group: 9,
   /** Corps des en-têtes de colonnes, en px. */
   header: 7.5,
+  /** En-têtes de colonnes des tableaux (« Coeff », étapes, « - », « Moy. Gnle »), en px : une ligne, sans troncature. */
+  columnHeader: 4,
   /** Titre « Relevé de Notes », en px. */
   title: 18,
   /** Valeurs d'identité (manuscrites), en px. */
