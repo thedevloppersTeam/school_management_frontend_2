@@ -29,6 +29,7 @@ import {
   type ApiStepRow,
   type ApiYearRow,
   type ReleveCell,
+  type ReleveColumnChoice,
   type ReleveGroup,
   type ReleveLegendEntry,
   type ReleveLine,
@@ -292,8 +293,72 @@ function stepValues(
   return values
 }
 
+// ── Ordre, colonne et présence des matières (O1 à O6) ───────────────────────
+
+/** Réglages du relevé d'une matière, validés (O1). */
+interface ReleveSettings {
+  displayOrder: number | null
+  column: ReleveColumnChoice
+  visible: boolean
+}
+
+/**
+ * O1 — champ ABSENT (ancien serveur) : valeur par défaut, c'est-à-dire le
+ * comportement d'avant (visible, sans rang, colonne automatique). Champ
+ * PRÉSENT avec une valeur invalide : refus, jamais une valeur devinée.
+ */
+function releveSettings(cs: ApiClassSubjectRow): ReleveSettings {
+  const { displayOrder, releveColumn, showOnReleve } = cs.subject
+  const ordreOk = displayOrder === undefined || displayOrder === null ||
+    (typeof displayOrder === 'number' && Number.isInteger(displayOrder) && displayOrder >= 1)
+  const colonneOk = releveColumn === undefined || releveColumn === null || releveColumn === 'LEFT' || releveColumn === 'RIGHT'
+  const visibleOk = showOnReleve === undefined || typeof showOnReleve === 'boolean'
+  const sectionsOk = (cs.subject.sections ?? []).every(
+    (s) => s.showOnReleve === undefined || typeof s.showOnReleve === 'boolean',
+  )
+  if (!ordreOk || !colonneOk || !visibleOk || !sectionsOk) {
+    throw new ReleveUnavailableError('indisponible')
+  }
+  return {
+    displayOrder: typeof displayOrder === 'number' ? displayOrder : null,
+    column: releveColumn === 'LEFT' || releveColumn === 'RIGHT' ? releveColumn : null,
+    visible: showOnReleve !== false,
+  }
+}
+
+/**
+ * O2 — displayOrder croissant, null en dernier ; à rang égal : tronc commun
+ * (trackId null) avant filière, puis création de l'affectation, puis id.
+ * Une date absente ou illisible passe après les dates présentes.
+ */
+function compareAssignments(
+  a: { cs: ApiClassSubjectRow; settings: ReleveSettings },
+  b: { cs: ApiClassSubjectRow; settings: ReleveSettings },
+): number {
+  const rang = (s: ReleveSettings) => (s.displayOrder === null ? Number.POSITIVE_INFINITY : s.displayOrder)
+  const filiere = (cs: ApiClassSubjectRow) => (cs.trackId == null ? 0 : 1)
+  const cree = (cs: ApiClassSubjectRow) => {
+    const t = typeof cs.createdAt === 'string' ? Date.parse(cs.createdAt) : Number.NaN
+    return Number.isNaN(t) ? Number.POSITIVE_INFINITY : t
+  }
+  const byNumber = (x: number, y: number) => (x === y ? 0 : x < y ? -1 : 1)
+  return (
+    byNumber(rang(a.settings), rang(b.settings)) ||
+    byNumber(filiere(a.cs), filiere(b.cs)) ||
+    byNumber(cree(a.cs), cree(b.cs)) ||
+    (a.cs.id < b.cs.id ? -1 : a.cs.id > b.cs.id ? 1 : 0)
+  )
+}
+
 export function buildSubjectGroups(params: SubjectGroupsInput): ReleveGroup[] {
-  const { classSubjects, trackCode, enrollmentId, steps, included, exemptedSteps } = params
+  const { trackCode, enrollmentId, steps, included, exemptedSteps } = params
+
+  // O1, O2, O4 — réglages validés pour TOUTES les matières (une valeur
+  // invalide refuse le relevé, même sur une matière masquée), puis tri, puis
+  // retrait des matières masquées.
+  const classSubjects = params.classSubjects
+    .map((cs) => ({ cs, settings: releveSettings(cs) }))
+    .sort(compareAssignments)
 
   // K4 — une étape retenue absente d'une table d'entrée est une erreur de
   // l'appelant : la lire comme « sans note » ou « sans dispense » imprimerait
@@ -305,7 +370,7 @@ export function buildSubjectGroups(params: SubjectGroupsInput): ReleveGroup[] {
   }
 
   const assignments = new Map<string, number>()
-  for (const cs of classSubjects) assignments.set(cs.subject.id, (assignments.get(cs.subject.id) ?? 0) + 1)
+  for (const { cs } of classSubjects) assignments.set(cs.subject.id, (assignments.get(cs.subject.id) ?? 0) + 1)
 
   const exclusionsFor = new Map<string, Set<string>>()
   for (const step of steps) {
@@ -313,13 +378,19 @@ export function buildSubjectGroups(params: SubjectGroupsInput): ReleveGroup[] {
     exclusionsFor.set(step.id, buildExclusionSet(rows))
   }
 
-  return classSubjects.map((cs) => {
+  const groups: ReleveGroup[] = []
+  for (const { cs, settings } of classSubjects) {
+    if (!settings.visible) continue // O4 : matière masquée, ligne globale comprise
     const name = cs.subject.name
-    const sectionLines: LineDef[] = sortedSections(cs).map((s) => ({
+    const sections = sortedSections(cs)
+    // Toutes les sous-matières entrent dans le CALCUL (dispenses, ligne
+    // globale) : masquer une ligne ne change aucun autre chiffre (O7).
+    const sectionLines: LineDef[] = sections.map((s) => ({
       label: s.name,
       sectionId: s.id,
       bareme: requireBareme(s.maxScore, `barème de ${s.name}`),
     }))
+    const hidden = new Set(sections.filter((s) => s.showOnReleve === false).map((s) => s.id))
     // Ligne de la matière : la seule ligne d'une matière sans sous-matière ;
     // sinon, ligne globale en fin de groupe dès qu'une étape RETENUE porte une
     // note au niveau de la matière entière (Q-A).
@@ -346,10 +417,10 @@ export function buildSubjectGroups(params: SubjectGroupsInput): ReleveGroup[] {
     )
 
     const doubled = (assignments.get(cs.subject.id) ?? 0) > 1 && cs.trackId !== null && !!trackCode
-    return {
-      title: doubled ? `${name} (${trackCode})` : name,
-      kind: 'matiere' as const,
-      lines: lines.map((line, li): ReleveLine => {
+    // O3 : ligne de sous-matière masquée retirée ; la ligne globale reste.
+    const printed = lines
+      .map((line, li): ReleveLine | null => {
+        if (line.sectionId !== null && hidden.has(line.sectionId)) return null
         const cells = values.map((v) => v[li])
         return {
           label: line.label,
@@ -357,9 +428,17 @@ export function buildSubjectGroups(params: SubjectGroupsInput): ReleveGroup[] {
           cells: cells.map((c) => cellFor(c, line.bareme)),
           average: averageCellFor(cells, line.bareme),
         }
-      }),
-    }
-  })
+      })
+      .filter((l): l is ReleveLine => l !== null)
+    if (printed.length === 0) continue // O5 : plus aucune ligne à imprimer
+    groups.push({
+      title: doubled ? `${name} (${trackCode})` : name,
+      kind: 'matiere',
+      lines: printed,
+      column: settings.column,
+    })
+  }
+  return groups
 }
 
 // ── Discipline (R-REL-5) ────────────────────────────────────────────────────
@@ -392,6 +471,7 @@ export function buildDisciplineGroup(params: DisciplineInput): ReleveGroup {
   return {
     title: DISCIPLINE_TITLE,
     kind: 'discipline',
+    column: null,
     lines: DISCIPLINE_LINES.map(({ field, label, mode }): ReleveLine => {
       const values = steps.map((step) => {
         if (!included.has(step.id)) return null

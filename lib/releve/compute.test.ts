@@ -362,8 +362,13 @@ function discipline(rows: Array<ApiBehaviorRow | null>, exemptedSteps: Set<strin
 }
 {
   const cs = sectioned('cs1', 'Matière A', [['s3', 'Troisième', '5', 3], ['s1', 'Première', '5', 1], ['s2', 'Deuxième', '5', 2]])
-  const gr = groups({ classSubjects: [plain('cs-z', 'Matière Z', '10'), cs, plain('cs-b', 'Matière B', '10')] })
-  check('T17 matières dans l’ordre API', gr.map((x) => x.title).join(','), 'Matière Z,Matière A,Matière B')
+  const cree = (c: ApiClassSubjectRow, createdAt: string): ApiClassSubjectRow => ({ ...c, createdAt })
+  const gr = groups({ classSubjects: [
+    cree(plain('cs-z', 'Matière Z', '10'), '2024-01-01T00:00:00.000Z'),
+    cree(cs, '2024-01-02T00:00:00.000Z'),
+    cree(plain('cs-b', 'Matière B', '10'), '2024-01-03T00:00:00.000Z'),
+  ] })
+  check('T17 matières dans l’ordre de création de l’affectation (O2)', gr.map((x) => x.title).join(','), 'Matière Z,Matière A,Matière B')
   check('T17 sous-matières triées par displayOrder', gr[1].lines.map((l) => l.label).join(','), 'Première,Deuxième,Troisième')
   check('T17 coeff des sous-matières (barème 5)', gr[1].lines[0].coeff, '0.5')
 }
@@ -604,8 +609,8 @@ const csAB = () => sectioned('cs1', 'Matière A', [['sa', 'Sous-matière A', '10
   const tc = plain('cs-tc', 'Physique fictive', '10')
   const smp: ApiClassSubjectRow = { ...plain('cs-smp', 'Physique fictive', '10', 'track-smp'), subject: { ...tc.subject } }
   const r = tryGroups({ classSubjects: [smp, tc], trackCode: 'SMP' })
-  check('G-12 filière d’abord : suffixe sur le groupe de filière', r.gr?.map((x) => x.title).join(' / '),
-    'Physique fictive (SMP) / Physique fictive')
+  check('G-12 filière d’abord dans l’API : tronc commun d’abord (O2), suffixe sur la filière', r.gr?.map((x) => x.title).join(' / '),
+    'Physique fictive / Physique fictive (SMP)')
 }
 {
   // K4 : étape retenue ABSENTE d'une table d'entrée → refus, jamais « sans note ».
@@ -674,6 +679,112 @@ const csAB = () => sectioned('cs1', 'Matière A', [['sa', 'Sous-matière A', '10
   check('U10 uniforme [8, 7.5] : Moy', d.lines[4].average.text, '7.75')
   check('U10 retards [2, 0] : cellules', d.lines[0].cells.map((c) => c.text).join('|'), '2|0')
   check('U10 retards [2, 0] : total', d.lines[0].average.text, '2')
+}
+
+// ── F1 — ordre, colonne imposée et masquage (O1 à O8) ───────────────────────
+
+/** Copie d'une affectation avec des champs de matière et d'affectation changés. */
+function avec(cs: ApiClassSubjectRow, champs: Record<string, unknown>, extra: Record<string, unknown> = {}): ApiClassSubjectRow {
+  return { ...cs, ...extra, subject: { ...cs.subject, ...champs } as ApiClassSubjectRow['subject'] }
+}
+/** Copie d'une matière à sous-matières dont certaines sous-matières sont masquées. */
+function masquer(cs: ApiClassSubjectRow, ids: string[]): ApiClassSubjectRow {
+  return avec(cs, { sections: (cs.subject.sections ?? []).map((s) => (ids.includes(s.id) ? { ...s, showOnReleve: false } : s)) })
+}
+const titres = (gr: ReleveGroup[] | null) => (gr ? gr.map((x) => x.title).join(' / ') : 'refus')
+const notesF1 = new Map([
+  ['st1', [g('cs1', '15'), g('cs1', '8', 'sa'), g('cs1', '6', 'sb'), g('c-a', '7'), g('c-b', '4'), g('c-c', '9')]],
+  ['st2', [g('cs1', '9', 'sa'), g('cs1', '7', 'sb'), g('c-a', '5')]],
+])
+const t = (n: number) => `2024-01-0${n}T00:00:00.000Z`
+
+{
+  // T-O1 — champs absents (ancien serveur) = valeurs par défaut explicites.
+  const base = [avec(plain('c-a', 'Alpha', '10'), {}, { createdAt: t(1) }), avec(csAB(), {}, { createdAt: t(2) }),
+    avec(plain('c-b', 'Beta', '10'), {}, { createdAt: t(3) })]
+  const explicites = base.map((c) => avec(c, {
+    displayOrder: null, releveColumn: null, showOnReleve: true,
+    sections: (c.subject.sections ?? []).map((s) => ({ ...s, showOnReleve: true })),
+  }))
+  const absent = tryGroups({ classSubjects: base, gradesByStep: notesF1 })
+  const defaut = tryGroups({ classSubjects: explicites, gradesByStep: notesF1 })
+  check('T-O1 champs absents : aucun refus', absent.err, 'aucune erreur')
+  check('T-O1 champs absents : ordre de création conservé', titres(absent.gr), 'Alpha / Matière A / Beta')
+  check('T-O1 champs absents : toutes les lignes gardées', absent.gr?.[1].lines.map((l) => l.label).join(','),
+    'Sous-matière A,Sous-matière B,Matière A')
+  check('T-O1 champs absents ≡ valeurs par défaut explicites', JSON.stringify(absent.gr) === JSON.stringify(defaut.gr), true)
+  check('T-O1 colonne auto (null) sur chaque groupe', absent.gr?.map((x) => String(x.column ?? null)).join(','), 'null,null,null')
+}
+{
+  // T-O2 — displayOrder croissant, null en dernier.
+  const r = tryGroups({ classSubjects: [
+    avec(plain('c-a', 'Alpha', '10'), { displayOrder: null }, { createdAt: t(1) }),
+    avec(plain('c-b', 'Beta', '10'), { displayOrder: 2 }, { createdAt: t(2) }),
+    avec(plain('c-c', 'Gamma', '10'), { displayOrder: 1 }, { createdAt: t(3) }),
+    avec(plain('c-d', 'Delta', '10'), { displayOrder: null }, { createdAt: t(4) }),
+  ] })
+  check('T-O2 displayOrder croissant, null en dernier', titres(r.gr), 'Gamma / Beta / Alpha / Delta')
+}
+{
+  // T-O3 — égalité de rang : tronc commun avant filière, puis createdAt, puis id.
+  const r = tryGroups({ classSubjects: [
+    avec(plain('c-f', 'Filière tôt', '10', 'track-smp'), { displayOrder: 1 }, { createdAt: t(1) }),
+    avec(plain('c-t2', 'Tronc tard', '10'), { displayOrder: 1 }, { createdAt: t(3) }),
+    avec(plain('c-t1', 'Tronc tôt', '10'), { displayOrder: 1 }, { createdAt: t(2) }),
+  ], trackCode: 'SMP' })
+  check('T-O3 tronc commun avant filière, puis createdAt', titres(r.gr), 'Tronc tôt / Tronc tard / Filière tôt')
+  const r2 = tryGroups({ classSubjects: [
+    avec(plain('c-y', 'Id y', '10'), { displayOrder: 3 }, { createdAt: t(5) }),
+    avec(plain('c-x', 'Id x', '10'), { displayOrder: 3 }, { createdAt: t(5) }),
+  ] })
+  check('T-O3 même rang et même createdAt : id croissant', titres(r2.gr), 'Id x / Id y')
+}
+{
+  // T-O4 — matière masquée : groupe absent ; les autres groupes inchangés (O7).
+  const visibles = tryGroups({ classSubjects: [avec(plain('c-a', 'Alpha', '10'), {}, { createdAt: t(1) }), avec(plain('c-b', 'Beta', '10'), {}, { createdAt: t(2) })], gradesByStep: notesF1 })
+  const r = tryGroups({ classSubjects: [avec(plain('c-a', 'Alpha', '10'), { showOnReleve: false }, { createdAt: t(1) }), avec(plain('c-b', 'Beta', '10'), {}, { createdAt: t(2) })], gradesByStep: notesF1 })
+  check('T-O4 matière masquée : groupe absent', titres(r.gr), 'Beta')
+  check('T-O4 autre groupe inchangé (O7)', JSON.stringify(r.gr?.[0]) === JSON.stringify(visibles.gr?.[1]), true)
+  const glob = tryGroups({ classSubjects: [avec(csAB(), { showOnReleve: false })], gradesByStep: notesF1 })
+  check('T-O4 matière masquée avec ligne globale : groupe absent', titres(glob.gr), '')
+}
+{
+  // T-O5 — sous-matière masquée : ligne absente ; les autres lignes inchangées (O7).
+  const tout = tryGroups({ classSubjects: [csAB()], gradesByStep: notesF1 })
+  const r = tryGroups({ classSubjects: [masquer(csAB(), ['sb'])], gradesByStep: notesF1 })
+  check('T-O5 sous-matière masquée : ligne absente', labels(r.gr), 'Sous-matière A,Matière A')
+  check('T-O5 sous-matière A inchangée (O7)', JSON.stringify(r.gr?.[0].lines[0]) === JSON.stringify(tout.gr?.[0].lines[0]), true)
+  check('T-O5 ligne globale inchangée (O7)', JSON.stringify(r.gr?.[0].lines[1]) === JSON.stringify(tout.gr?.[0].lines[2]), true)
+}
+{
+  // T-O6 — toutes les sous-matières masquées.
+  const sansGlobale = new Map([['st1', [g('cs1', '8', 'sa'), g('cs1', '6', 'sb')]]])
+  const r = tryGroups({ classSubjects: [masquer(csAB(), ['sa', 'sb'])], gradesByStep: sansGlobale })
+  check('T-O6 toutes masquées, sans ligne globale : groupe absent', titres(r.gr), '')
+  const tout = tryGroups({ classSubjects: [csAB()], gradesByStep: notesF1 })
+  const r2 = tryGroups({ classSubjects: [masquer(csAB(), ['sa', 'sb'])], gradesByStep: notesF1 })
+  check('T-O6 toutes masquées, avec ligne globale : groupe gardé', labels(r2.gr), 'Matière A')
+  check('T-O6 ligne globale inchangée (O7)', JSON.stringify(r2.gr?.[0].lines[0]) === JSON.stringify(tout.gr?.[0].lines[2]), true)
+}
+{
+  // T-O7 (partie calcul) — la colonne imposée est portée par le groupe.
+  const r = tryGroups({ classSubjects: [
+    avec(plain('c-a', 'Alpha', '10'), { releveColumn: 'RIGHT' }, { createdAt: t(1) }),
+    avec(plain('c-b', 'Beta', '10'), { releveColumn: 'LEFT' }, { createdAt: t(2) }),
+    avec(plain('c-c', 'Gamma', '10'), { releveColumn: null }, { createdAt: t(3) }),
+  ] })
+  check('T-O7 colonne imposée portée par le groupe', r.gr?.map((x) => String(x.column ?? null)).join(','), 'RIGHT,LEFT,null')
+}
+{
+  // T-O8 — valeur présente mais invalide : refus « indisponible ».
+  const cas: Array<[string, ApiClassSubjectRow]> = [
+    ['releveColumn MIDDLE', avec(plain('c-a', 'Alpha', '10'), { releveColumn: 'MIDDLE' })],
+    ['displayOrder 0', avec(plain('c-a', 'Alpha', '10'), { displayOrder: 0 })],
+    ['displayOrder 1.5', avec(plain('c-a', 'Alpha', '10'), { displayOrder: 1.5 })],
+    ['showOnReleve « oui »', avec(plain('c-a', 'Alpha', '10'), { showOnReleve: 'oui' })],
+    ['sous-matière showOnReleve « oui »', avec(csAB(), { sections: (csAB().subject.sections ?? []).map((s) => ({ ...s, showOnReleve: 'oui' })) })],
+  ]
+  for (const [nom, cs] of cas) check(`T-O8 ${nom} : refus`, tryGroups({ classSubjects: [cs] }).err, 'indisponible')
 }
 
 console.log(out.join('\n'))

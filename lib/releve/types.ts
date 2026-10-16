@@ -27,10 +27,15 @@ export interface ReleveLine {
   average: ReleveCell
 }
 
+/** Colonne du relevé imposée à un groupe ; null = placement automatique. */
+export type ReleveColumnChoice = 'LEFT' | 'RIGHT' | null
+
 export interface ReleveGroup {
   title: string
   kind: 'matiere' | 'discipline'
   lines: ReleveLine[]
+  /** Colonne imposée par Subject.releveColumn ; null ou absent = automatique (O6). */
+  column?: ReleveColumnChoice
 }
 
 export interface ReleveIdentity {
@@ -123,12 +128,16 @@ export interface ApiSectionRow {
   displayOrder?: number | null
   /** Renvoyé par GET /api/class-subjects (sections: true) ; sert au départage (K3). */
   createdAt?: string | null
+  /** Présence sur le relevé (serveur feat/ordre-matieres-releve). Absent = visible (O1). */
+  showOnReleve?: unknown
 }
 
 export interface ApiClassSubjectRow {
   id: string
   /** null = tronc commun ; sinon matière de la filière portant cet id. */
   trackId: string | null
+  /** Création de l'affectation : départage de l'ordre des matières (O2). */
+  createdAt?: string | null
   track?: { code?: string | null } | null
   maxScoreOverride?: unknown
   subject: {
@@ -137,6 +146,13 @@ export interface ApiClassSubjectRow {
     maxScore: unknown
     rubric?: { code?: string | null } | null
     sections?: ApiSectionRow[] | null
+    /**
+     * Réglages du relevé (serveur feat/ordre-matieres-releve). Typés `unknown` :
+     * ils sont validés à la lecture (O1). Absents = comportement d'avant.
+     */
+    displayOrder?: unknown
+    releveColumn?: unknown
+    showOnReleve?: unknown
   }
 }
 
