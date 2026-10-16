@@ -89,6 +89,12 @@ export const INKS = {
   traitDirection: '#4a9bcc',
 } as const
 
+/** Fonds de la feuille. */
+export const FILLS = {
+  /** Rangée d'en-tête de chaque tableau de groupe (nom du groupe, « Coeff », étapes, « Moy. Gnle »). */
+  enteteGroupe: '#DEEBF7',
+} as const
+
 // ── Tailles (ajustables) ────────────────────────────────────────────────────
 
 export const SIZES = {
@@ -114,6 +120,8 @@ export const SIZES = {
   photo: { width: 100, height: 100 },
   /** Espace entre les deux colonnes de tableaux, en px. */
   columnGap: 5,
+  /** Espace vertical entre deux tableaux de groupe d'une même colonne, en px. */
+  groupGap: 5,
   /** Largeur de la colonne des libellés, en part de la colonne. */
   labelColumn: '38%',
 } as const

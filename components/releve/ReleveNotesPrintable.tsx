@@ -14,6 +14,7 @@ import { bandClass } from '@/lib/releve/present'
 import type { ReleveData, ReleveGroup } from '@/lib/releve/types'
 import {
   BAND_COLORS,
+  FILLS,
   FONT_STACKS,
   INKS,
   PAPER_PX,
@@ -49,6 +50,7 @@ const CSS = `
   text-align:center;margin:2px 0;}
 
 .rlv-cols{display:grid;grid-template-columns:1fr 1fr;column-gap:${px(SIZES.columnGap)};align-items:start;}
+.rlv-col{display:flex;flex-direction:column;gap:${px(SIZES.groupGap)};}
 .rlv-table{width:100%;border-collapse:collapse;table-layout:fixed;}
 .rlv-table th,.rlv-table td{height:${px(SIZES.row)};padding:0 2px;border:0.75px solid ${INKS.trait};
   line-height:1;white-space:nowrap;overflow:hidden;}
@@ -58,6 +60,9 @@ const CSS = `
 .rlv-num{font-family:${FONT_STACKS.nombres};font-size:${px(SIZES.cell)};text-align:center;}
 .rlv-line-label{font-family:${FONT_STACKS.libelles};font-size:${px(SIZES.cell)};text-align:left;text-overflow:ellipsis;}
 .rlv-group-title{font-family:${FONT_STACKS.libelles};font-size:${px(SIZES.group)};font-weight:700;text-align:left;}
+.rlv-table thead th{background-color:${FILLS.enteteGroupe};}
+.rlv-table th.rlv-group-title{font-family:${FONT_STACKS.libelles};font-size:${px(SIZES.group)};text-align:left;
+  color:${INKS.manuscrit};text-decoration:underline;overflow:hidden;}
 .rlv-discipline .rlv-line-label{text-align:right;font-style:italic;}
 .rlv-band-echec{color:${BAND_COLORS.echec};}
 .rlv-band-deficient{color:${BAND_COLORS.deficient};}
@@ -76,39 +81,44 @@ const CSS = `
 .rlv-direction-line{border-top:1.5px solid ${INKS.traitDirection};margin-bottom:3px;}
 `
 
-function GroupRows({ group, stepCount }: { group: ReleveGroup; stepCount: number }) {
+/**
+ * Un groupe (matière ou Discipline) = un petit tableau. Rangée d'en-tête :
+ * nom du groupe dans la colonne des libellés, puis « Coeff », les étapes et
+ * « Moy. Gnle ». Mêmes colonnes et même `table-layout:fixed` pour tous les
+ * tableaux d'une colonne : les chiffres restent alignés d'un groupe à l'autre.
+ */
+function GroupTable({ group, stepHeaders }: { group: ReleveGroup; stepHeaders: string[] }) {
   return (
-    <tbody className={group.kind === 'discipline' ? 'rlv-discipline' : undefined}>
-      <tr>
-        <td className="rlv-group-title" colSpan={stepCount + 3}>{group.title}</td>
-      </tr>
-      {group.lines.map((line, i) => (
-        <tr key={`${line.label}-${i}`}>
-          <td className="rlv-line-label">{line.label}</td>
-          <td className="rlv-num">{line.coeff}</td>
-          {line.cells.map((cell, c) => (
-            <td key={c} className={`rlv-num ${bandClass(cell.band)}`}>{cell.text}</td>
-          ))}
-          <td className={`rlv-num ${bandClass(line.average.band)}`}>{line.average.text}</td>
-        </tr>
-      ))}
-    </tbody>
-  )
-}
-
-function Column({ groups, stepHeaders }: { groups: ReleveGroup[]; stepHeaders: string[] }) {
-  return (
-    <table className="rlv-table">
+    <table className={group.kind === 'discipline' ? 'rlv-table rlv-discipline' : 'rlv-table'}>
       <thead>
         <tr>
-          <th className="rlv-label-col" />
+          <th className="rlv-label-col rlv-group-title">{group.title}</th>
           <th>Coeff</th>
           {stepHeaders.map((h, i) => <th key={`${h}-${i}`}>{h}</th>)}
           <th>Moy. Gnle</th>
         </tr>
       </thead>
-      {groups.map((g, i) => <GroupRows key={`${g.title}-${i}`} group={g} stepCount={stepHeaders.length} />)}
+      <tbody>
+        {group.lines.map((line, i) => (
+          <tr key={`${line.label}-${i}`}>
+            <td className="rlv-line-label">{line.label}</td>
+            <td className="rlv-num">{line.coeff}</td>
+            {line.cells.map((cell, c) => (
+              <td key={c} className={`rlv-num ${bandClass(cell.band)}`}>{cell.text}</td>
+            ))}
+            <td className={`rlv-num ${bandClass(line.average.band)}`}>{line.average.text}</td>
+          </tr>
+        ))}
+      </tbody>
     </table>
+  )
+}
+
+function Column({ groups, stepHeaders }: { groups: ReleveGroup[]; stepHeaders: string[] }) {
+  return (
+    <div className="rlv-col">
+      {groups.map((g, i) => <GroupTable key={`${g.title}-${i}`} group={g} stepHeaders={stepHeaders} />)}
+    </div>
   )
 }
 
