@@ -17,6 +17,46 @@ function waitTwoFrames(): Promise<void> {
   return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
 }
 
+const PHOTO_ILLISIBLE = 'Photo de l’élève illisible pour le PDF.'
+
+/** Lit une ressource et la rend en URL data:. */
+async function toDataUrl(src: string): Promise<string> {
+  const res = await fetch(src, { credentials: 'include' })
+  if (!res.ok) throw new Error(PHOTO_ILLISIBLE)
+  const blob = await res.blob()
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () =>
+      typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error(PHOTO_ILLISIBLE))
+    reader.onerror = () => reject(new Error(PHOTO_ILLISIBLE))
+    reader.readAsDataURL(blob)
+  })
+}
+
+/**
+ * COPIE capturée seulement : chaque image qui n'est pas déjà en data: y est
+ * remplacée par son contenu en data:. Le rendu foreignObject (SVG) ne charge
+ * pas les ressources externes : sans cela, la photo manquerait dans le PDF.
+ * Une image illisible ou non décodable refuse le PDF.
+ */
+async function inlineImages(root: HTMLElement): Promise<void> {
+  const images = Array.from(root.querySelectorAll('img'))
+  await Promise.all(
+    images.map(async (img) => {
+      const src = img.currentSrc || img.src
+      if (!src || src.startsWith('data:')) return
+      const dataUrl = await toDataUrl(src).catch(() => {
+        throw new Error(PHOTO_ILLISIBLE)
+      })
+      img.removeAttribute('srcset')
+      img.src = dataUrl
+      await img.decode().catch(() => {
+        throw new Error(PHOTO_ILLISIBLE)
+      })
+    }),
+  )
+}
+
 /** Attend les images et les polices de la copie : une image non chargée sortirait blanche. */
 async function waitForAssets(root: HTMLElement): Promise<void> {
   const images = Array.from(root.querySelectorAll('img'))
@@ -25,7 +65,7 @@ async function waitForAssets(root: HTMLElement): Promise<void> {
       img.complete && img.naturalWidth > 0
         ? Promise.resolve()
         : img.decode().catch(() => {
-            throw new Error('Photo de l’élève illisible pour le PDF.')
+            throw new Error(PHOTO_ILLISIBLE)
           }),
     ),
   )
@@ -56,6 +96,7 @@ export async function downloadRelevePdf(sheet: HTMLElement, fileName: string): P
   document.body.appendChild(host)
 
   try {
+    await inlineImages(copy)
     await waitForAssets(copy)
     await waitTwoFrames()
     const html2canvas = (await import('html2canvas')).default
