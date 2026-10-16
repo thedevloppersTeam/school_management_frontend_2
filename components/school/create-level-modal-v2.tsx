@@ -87,6 +87,10 @@ interface CreateLevelModalV2Props {
     name: string
     filieres?: string[]
     description?: string
+    /** Classe d'EXAMEN (examen blanc, bulletin d'examen). */
+    isTerminal: boolean
+    /** Niveau à FILIÈRE : filière obligatoire à l'inscription (RP-11c). */
+    hasTrack: boolean
   }) => void
   trigger?: React.ReactNode
   open?: boolean
@@ -106,6 +110,8 @@ export function CreateLevelModalV2({
   const [name, setName] = useState('')
   const [selectedFilieres, setSelectedFilieres] = useState<string[]>([])
   const [description, setDescription] = useState('')
+  const [isTerminal, setIsTerminal] = useState(false)
+  const [hasTrack, setHasTrack] = useState(false)
 
   const isControlled = controlledOpen !== undefined
   const open = isControlled ? controlledOpen : internalOpen
@@ -139,6 +145,8 @@ export function CreateLevelModalV2({
       setName('')
       setSelectedFilieres([])
       setDescription('')
+      setIsTerminal(false)
+      setHasTrack(false)
     }
   }, [open])
 
@@ -163,7 +171,9 @@ export function CreateLevelModalV2({
       niveau,
       name,
       filieres: niveau === 'Nouveau Secondaire' ? selectedFilieres : undefined,
-      description: description.trim() || undefined
+      description: description.trim() || undefined,
+      isTerminal,
+      hasTrack,
     })
 
     setOpen(false)
@@ -249,6 +259,30 @@ export function CreateLevelModalV2({
                 )}
               </SelectContent>
             </Select>
+          </div>
+
+          {/* Nature du niveau : deux drapeaux DISTINCTS (RP-11c). */}
+          <div className="space-y-3">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="level-is-terminal"
+                checked={isTerminal}
+                onCheckedChange={(v) => setIsTerminal(v === true)}
+              />
+              <Label htmlFor="level-is-terminal" className="cursor-pointer text-sm font-normal text-primary-800">
+                Classe d&apos;examen (examen blanc, bulletin d&apos;examen)
+              </Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="level-has-track"
+                checked={hasTrack}
+                onCheckedChange={(v) => setHasTrack(v === true)}
+              />
+              <Label htmlFor="level-has-track" className="cursor-pointer text-sm font-normal text-primary-800">
+                Niveau à filière (filière obligatoire à l&apos;inscription)
+              </Label>
+            </div>
           </div>
 
           {/* Filières Selection (only for Nouveau Secondaire)

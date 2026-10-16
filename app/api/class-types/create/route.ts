@@ -3,7 +3,7 @@
  * Proxy → POST https://apicpmsl.stelloud.cloud/api/class-types/create
  *
  * Crée un nouveau niveau scolaire (1ère AF, NS1, NS3, etc.).
- * Body : { name, isTerminal }
+ * Body : { name, isTerminal?, hasTrack? }
  * Note : le champ "code" envoyé par le frontend n'est PAS dans la doc Postman
  *        officielle — le backend l'ignore silencieusement.
  * Rôles autorisés : SYSTEM_ADMIN, ADMIN

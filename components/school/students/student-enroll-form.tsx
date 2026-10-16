@@ -47,7 +47,7 @@ import {
 export interface ClassSessionOption {
   id: string;
   name: string;
-  isTerminal: boolean; // classe terminale → filière obligatoire
+  hasTrack: boolean; // niveau à filière (ClassType.hasTrack) → filière obligatoire
 }
 
 interface TrackOption {
@@ -73,7 +73,7 @@ interface FormState {
   // le champ est optionnel et n'est alors pas envoye du tout.
   gender: "MALE" | "FEMALE" | "";
   classSessionId: string;
-  trackId: string; // filière — obligatoire si la classe est terminale
+  trackId: string; // filière — obligatoire si le niveau est à filière
   address: string;
   fatherName: string;
   motherName: string;
@@ -168,7 +168,7 @@ export function StudentEnrollForm({
           data: Array<{
             id: string;
             class: {
-              classType: { name: string; isTerminal?: boolean };
+              classType: { name: string; hasTrack?: boolean };
               letter: string;
               track?: { code: string } | null;
             };
@@ -179,7 +179,7 @@ export function StudentEnrollForm({
               .map((s) => ({
                 id: s.id,
                 name: `${s.class.classType.name} ${s.class.letter}`,
-                isTerminal: s.class.classType.isTerminal === true,
+                hasTrack: s.class.classType.hasTrack === true,
               }))
               .sort((a, b) => a.name.localeCompare(b.name)),
           );
@@ -189,7 +189,7 @@ export function StudentEnrollForm({
       .finally(() => setLoadingClasses(false));
   }, [open, academicYearId]);
 
-  // Filières disponibles (pour les classes terminales)
+  // Filières disponibles (pour les niveaux à filière)
   useEffect(() => {
     if (!open) return;
     fetch("/api/class-tracks", { credentials: "include" })
@@ -330,9 +330,10 @@ export function StudentEnrollForm({
   // ─── Validation ──────────────────────────────────────────────────────────
   const nisuValid = isNisuValid(form.nisu);
 
-  // La classe choisie est-elle terminale ? → filière obligatoire
-  const selectedClassIsTerminal =
-    classSessions.find((s) => s.id === form.classSessionId)?.isTerminal === true;
+  // Le niveau choisi est-il à filière ? → filière obligatoire. Ne pas lire
+  // isTerminal ici : il désigne une classe d'examen (RP-11c).
+  const selectedClassHasTrack =
+    classSessions.find((s) => s.id === form.classSessionId)?.hasTrack === true;
 
   const canSubmit =
     nisuValid &&
@@ -340,7 +341,7 @@ export function StudentEnrollForm({
     form.lastName.trim() !== "" &&
     form.birthDate !== "" &&
     form.classSessionId !== "" &&
-    (!selectedClassIsTerminal || form.trackId !== "") &&
+    (!selectedClassHasTrack || form.trackId !== "") &&
     form.fatherName.trim() !== "" &&
     form.motherName.trim() !== "" &&
     form.phone1.trim() !== "";
@@ -399,8 +400,8 @@ export function StudentEnrollForm({
           // Sexe : omis du payload quand il n'est pas renseigne.
           ...(form.gender && { gender: form.gender }),
           classSessionId: form.classSessionId,
-          // Filière : envoyée uniquement pour une classe terminale
-          trackId: selectedClassIsTerminal ? form.trackId : null,
+          // Filière : envoyée uniquement pour un niveau à filière
+          trackId: selectedClassHasTrack ? form.trackId : null,
           fatherName: form.fatherName.trim(),
           motherName: form.motherName.trim(),
           phone1: form.phone1.trim(),
@@ -899,8 +900,8 @@ export function StudentEnrollForm({
               </Select>
             </div>
 
-            {/* Filière — uniquement pour les classes terminales (obligatoire) */}
-            {selectedClassIsTerminal && (
+            {/* Filière — uniquement pour les niveaux à filière (obligatoire) */}
+            {selectedClassHasTrack && (
               <div className="space-y-1.5">
                 <Label htmlFor="enroll-track" className={FIELD_LABEL_CLASS}>
                   Filière{" "}
@@ -908,7 +909,7 @@ export function StudentEnrollForm({
                     *
                   </span>
                   <span className="ml-2 text-xs text-neutral-500 font-normal">
-                    — classe terminale
+                    — niveau à filière
                   </span>
                 </Label>
                 <Select
@@ -933,7 +934,7 @@ export function StudentEnrollForm({
                 {tracks.length === 0 && (
                   <p className="text-xs text-error">
                     Aucune filière définie. Créez-en une avant d&apos;inscrire un
-                    élève en classe terminale.
+                    élève dans un niveau à filière.
                   </p>
                 )}
               </div>

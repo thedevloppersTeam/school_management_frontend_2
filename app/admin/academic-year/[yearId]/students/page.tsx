@@ -92,10 +92,10 @@ interface StudentRow {
   classTypeName: string   // la CLASSE, ex. « 1e AF »
   salleLabel:    string   // la SALLE, ex. « A » — jamais une filiere
   status:        'ACTIVE' | 'TRANSFERRED' | 'DROPPED' | 'GRADUATED'
-  // Filière (portée par l'inscription) — obligatoire en classe terminale
+  // Filière (portée par l'inscription) — obligatoire sur un niveau à filière
   trackId?:      string | null
   trackCode?:    string | null
-  isTerminal?:   boolean
+  hasTrack?:     boolean
   address?:      string
   motherName?:   string
   fatherName?:   string
@@ -169,7 +169,7 @@ export default function StudentsManagementPage() {
   // Dispense d'étape
   const [exemptingStudent, setExemptingStudent] = useState<StudentRow | null>(null)
 
-  // Filière (classes terminales)
+  // Filière (niveaux à filière)
   const [trackStudent, setTrackStudent] = useState<StudentRow | null>(null)
 
   // Correction d affectation (erreur de saisie a l inscription, pas un transfert)
@@ -250,7 +250,7 @@ export default function StudentsManagementPage() {
               profilePhoto:  enr.student?.user?.profilePhoto,
               trackId:       enr.trackId ?? null,
               trackCode:     enr.track?.code ?? null,
-              isTerminal:    session.class.classType.isTerminal === true,
+              hasTrack:      session.class.classType.hasTrack === true,
               classSessionId: session.id,
               className,
               classTypeName: classe,
@@ -728,7 +728,7 @@ export default function StudentsManagementPage() {
                           <span className={cn(student.classTypeName ? "text-foreground" : "italic")}>
                             {student.classTypeName || "Aucune classe"}
                           </span>
-                          {student.isTerminal && (
+                          {student.hasTrack && (
                             student.trackCode ? (
                               <span className="text-2xs font-medium text-info-ink">
                                 Filière {student.trackCode}
@@ -786,7 +786,7 @@ export default function StudentsManagementPage() {
                                     <WrenchIcon className="mr-2 h-4 w-4" />
                                     Corriger l&apos;affectation
                                   </DropdownMenuItem>
-                                  {student.isTerminal && (
+                                  {student.hasTrack && (
                                     <DropdownMenuItem onClick={() => setTrackStudent(student)}>
                                       <GraduationCapIcon className="mr-2 h-4 w-4" />
                                       {student.trackId ? 'Changer la filière' : 'Définir la filière'}
@@ -994,7 +994,7 @@ export default function StudentsManagementPage() {
         />
       )}
 
-      {/* Modal filière (classes terminales) */}
+      {/* Modal filière (niveaux à filière) */}
       {trackStudent && (
         <StudentTrackModal
           open={!!trackStudent}
