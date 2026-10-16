@@ -20,7 +20,7 @@ export const PAPER_PX = { width: PAPER_IN.width * CSS_DPI, height: PAPER_IN.heig
  * Réserves de la feuille à EN-TÊTE préimprimée (estimées depuis le scan,
  * ajustables). Rien n'est imprimé dedans.
  */
-export const RESERVES_IN = { top: 1.95, bottom: 1.95, left: 0.7, right: 0.3 } as const
+export const RESERVES_IN = { top: 1.95, bottom: 1.95, left: 0.7, right: 0.70 } as const
 
 export const RESERVES_PX = {
   top: RESERVES_IN.top * CSS_DPI,
