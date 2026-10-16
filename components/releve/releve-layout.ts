@@ -113,7 +113,7 @@ export const SIZES = {
   /** Cadre photo, en px (≈ 0.85 × 1.05 in). */
   photo: { width: 100, height: 100 },
   /** Espace entre les deux colonnes de tableaux, en px. */
-  columnGap: 10,
+  columnGap: 5,
   /** Largeur de la colonne des libellés, en part de la colonne. */
   labelColumn: '38%',
 } as const
