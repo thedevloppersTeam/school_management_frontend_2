@@ -372,6 +372,23 @@ async function main() {
   reset({ mutate: { eleve: eleve(undefined) } })
   check('K5 utilisateur absent : refus', reason(await run()), 'indisponible')
 
+  // ── F1 — de bout en bout : matière masquée, colonne imposée, valeur invalide
+  const changerMatieres = (f: (cs: Record<string, unknown>) => Record<string, unknown>) =>
+    (b: Record<string, unknown>) => (b as unknown as Record<string, unknown>[]).map(f)
+  reset({ mutate: { matieres: changerMatieres((cs) => {
+    const s = cs.subject as Record<string, unknown>
+    if (s.name === 'ESSAI Beta') return { ...cs, subject: { ...s, showOnReleve: false } }
+    if (s.name === 'ESSAI Alpha') return { ...cs, subject: { ...s, releveColumn: 'RIGHT' } }
+    return cs
+  }) } })
+  r = await run()
+  check('T-O4 build : matière masquée absente', r.data ? subjectGroups(r.data).map((x) => x.title).join(' / ') : reason(r),
+    'ESSAI Alpha / ESSAI Gamma / ESSAI Gamma (SMP)')
+  check('T-O7 build : colonne imposée à droite', r.data?.right.map((x) => x.title).includes('ESSAI Alpha'), true)
+  check('T-O7 build : Discipline en fin de gauche', r.data?.left[r.data.left.length - 1].kind, 'discipline')
+  reset({ mutate: { matieres: changerMatieres((cs) => ({ ...cs, subject: { ...(cs.subject as object), releveColumn: 'MIDDLE' } })) } })
+  check('T-O8 build : releveColumn invalide → indisponible', reason(await run()), 'indisponible')
+
   // ── Garde : n'appelle jamais getCurrentStep ni de route par défaut ──────
   check('aucune route non simulée appelée', appels.filter((u) => !ROUTES.some(([, re]) => re.test(u))).length, 0)
 

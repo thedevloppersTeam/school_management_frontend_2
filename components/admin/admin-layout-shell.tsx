@@ -58,6 +58,7 @@ import {
   BuildingIcon,
   UserIcon,
   LockIcon,
+  ListOrderedIcon,
   ArchiveIcon,
   UserPlusIcon,
   HistoryIcon,
@@ -65,6 +66,7 @@ import {
 
 import { getMe, logout, type AuthUser } from "@/lib/data/auth-data";
 import { cn } from "@/lib/utils";
+import { activeHref } from "@/lib/admin-nav/active-item";
 import { useAcademicYearContext } from "@/lib/contexts/academic-year-context";
 import { SchoolLogo } from "@/components/school/school-logo";
 import { ProfileDialog } from "@/components/school/profile-dialog";
@@ -156,6 +158,11 @@ const navItems: NavItem[] = [
         icon: BuildingIcon,
       },
       {
+        label: "Relevé de notes",
+        href: "/admin/settings/releve",
+        icon: ListOrderedIcon,
+      },
+      {
         label: "Années Scolaires",
         href: "/admin/academic-years",
         icon: CalendarIcon,
@@ -178,6 +185,7 @@ const breadcrumbMap: Record<string, string> = {
   "/admin/subjects": "Matières",
   "/admin/academic-years": "Années Scolaires",
   "/admin/settings": "Établissement",
+  "/admin/settings/releve": "Relevé de notes",
   "/admin/archives": "Bulletins archivés",
   "/admin/journal": "Journal",
 };
@@ -252,11 +260,17 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
     return href;
   };
 
+  // Un seul lien actif dans tout le menu : le plus long qui correspond à
+  // l'adresse (lib/admin-nav/active-item.ts).
+  const currentHref = activeHref(
+    pathname,
+    navItems.flatMap((item) =>
+      isNavGroup(item) ? item.children.map((c) => getNavHref(c.href)) : [item.href],
+    ),
+  );
+
   const isChildActive = (children: NavChild[]) =>
-    children.some((c) => {
-      const href = getNavHref(c.href);
-      return pathname === href || pathname.startsWith(href.split("?")[0]);
-    });
+    children.some((c) => getNavHref(c.href) === currentHref);
 
   const initials = `${currentUser?.firstname?.[0] ?? ""}${
     currentUser?.lastname?.[0] ?? ""
@@ -336,7 +350,7 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
               {navItems.map((item) => {
                 if (!isNavGroup(item)) {
                   const Icon = item.icon;
-                  const isActive = pathname === item.href;
+                  const isActive = item.href === currentHref;
 
                   return (
                     <SidebarMenuItem key={item.href}>
@@ -391,9 +405,7 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
                         <SidebarMenuSub>
                           {item.children.map((child) => {
                             const childHref = getNavHref(child.href);
-                            const childActive =
-                              pathname === childHref ||
-                              pathname.startsWith(childHref.split("?")[0]);
+                            const childActive = childHref === currentHref;
 
                             const ChildIcon = child.icon;
 
