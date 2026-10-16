@@ -7,11 +7,17 @@
  * (jamais de défilement horizontal) ; le PDF capture la même feuille à
  * l'échelle 1. Si le contenu dépasse la zone utile de la feuille à en-tête, le
  * PDF est bloqué : pas de réduction silencieuse, pas de seconde page.
+ *
+ * Impression native (« Imprimer », window.print) : une copie de la feuille, à
+ * l'échelle 1, est posée directement sous <body> et ne s'affiche qu'à
+ * l'impression ; tout le reste de la page est masqué. Sans données chargées, ou
+ * en cas de dépassement, il n'y a pas de copie : la page imprimée est blanche.
  */
 import { useEffect, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import Link from "next/link"
 import { useParams } from "next/navigation"
-import { ArrowLeftIcon, DownloadIcon } from "lucide-react"
+import { ArrowLeftIcon, DownloadIcon, PrinterIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -24,6 +30,23 @@ import { overflowsUsableArea, previewScale, releveFileName } from "@/lib/releve/
 import { ReleveUnavailableError, type ReleveData } from "@/lib/releve/types"
 
 const GENERIC_ERROR = "Relevé de notes indisponible."
+
+/**
+ * Styles d'impression. Seule la copie `.rlv-print-only` (enfant direct de
+ * <body>) s'imprime, à l'échelle 1, en haut à gauche, sur une page Letter sans
+ * marge. Couleurs et fonds conservés.
+ */
+const PRINT_CSS = `
+.rlv-print-only{display:none;}
+@page{size:letter portrait;margin:0;}
+@media print{
+  html,body{margin:0 !important;padding:0 !important;background:#fff !important;}
+  body > *:not(.rlv-print-only){display:none !important;}
+  .rlv-print-only{display:block !important;position:absolute;left:0;top:0;
+    width:${PAPER_PX.width}px;height:${PAPER_PX.height}px;overflow:hidden;transform:none !important;}
+  .rlv-print-only,.rlv-print-only *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
+}
+`
 
 type State =
   | { status: "loading" }
@@ -120,9 +143,19 @@ export default function RelevePreviewPage() {
   }
 
   const backHref = `/admin/all-students/${studentId}/transcript`
+  // Imprimable seulement si la feuille est complète et tient dans la zone utile.
+  const printable = state.status === "ready" && !overflow
 
   return (
     <div className="space-y-4">
+      <style>{PRINT_CSS}</style>
+      {printable &&
+        createPortal(
+          <div className="rlv-print-only" aria-hidden="true">
+            <ReleveNotesPrintable data={state.data} />
+          </div>,
+          document.body,
+        )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Button asChild variant="outline" size="sm">
           <Link href={backHref}>
@@ -130,14 +163,20 @@ export default function RelevePreviewPage() {
             Retour
           </Link>
         </Button>
-        <Button
-          size="sm"
-          onClick={onDownload}
-          disabled={state.status !== "ready" || overflow || downloading}
-        >
-          <DownloadIcon className="mr-2 h-4 w-4" />
-          {downloading ? "Génération du PDF…" : "Télécharger le PDF"}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => window.print()} disabled={!printable}>
+            <PrinterIcon className="mr-2 h-4 w-4" />
+            Imprimer
+          </Button>
+          <Button
+            size="sm"
+            onClick={onDownload}
+            disabled={state.status !== "ready" || overflow || downloading}
+          >
+            <DownloadIcon className="mr-2 h-4 w-4" />
+            {downloading ? "Génération du PDF…" : "Télécharger le PDF"}
+          </Button>
+        </div>
       </div>
 
       {state.status === "ready" && overflow && (

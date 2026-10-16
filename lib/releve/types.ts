@@ -23,8 +23,6 @@ export interface ReleveLine {
   coeff: string
   /** Une cellule par étape de l'année, dans l'ordre des en-têtes. */
   cells: ReleveCell[]
-  /** Colonne sans titre : toujours « - », hors de tout calcul (gabarit §3). */
-  blank: string
   /** Colonne « Moy. Gnle » (pour la discipline : total ou moyenne, R-REL-5). */
   average: ReleveCell
 }

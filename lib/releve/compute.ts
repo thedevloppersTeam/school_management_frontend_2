@@ -355,7 +355,6 @@ export function buildSubjectGroups(params: SubjectGroupsInput): ReleveGroup[] {
           label: line.label,
           coeff: formatCoeff(line.bareme),
           cells: cells.map((c) => cellFor(c, line.bareme)),
-          blank: TIRET,
           average: averageCellFor(cells, line.bareme),
         }
       }),
@@ -414,7 +413,6 @@ export function buildDisciplineGroup(params: DisciplineInput): ReleveGroup {
           text: v === null ? TIRET : mode === 'total' ? v.toString() : formatNumber(v),
           band: null,
         })),
-        blank: TIRET,
         average: { text: average, band: null },
       }
     }),

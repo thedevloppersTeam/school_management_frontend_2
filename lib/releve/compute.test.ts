@@ -630,6 +630,25 @@ const csAB = () => sectioned('cs1', 'Matière A', [['sa', 'Sous-matière A', '10
     disc(new Map([['st1', null], ['st2', null], ['st3', null], ['st4', null]])), 'aucune erreur')
 }
 
+// ── Colonne sans titre supprimée (décision du 2026-10-15) : X1 à X3 ─────────
+
+{
+  // Ligne de sous-matière, ligne globale et discipline : aucune ne porte `blank`.
+  const r = tryGroups({ classSubjects: [csAB()], gradesByStep: new Map([['st1', [g('cs1', '15'), g('cs1', '8', 'sa')]]]) })
+  const lignes = [...(r.gr?.[0].lines ?? []), ...discipline([{ retards: 1 }, null, null, null]).lines]
+  check('X1 lignes testées : 2 sous-matières + globale + 5 discipline', lignes.length, 8)
+  check('X1 aucune ligne ne porte « blank »', lignes.filter((l) => 'blank' in l).length, 0)
+  for (const n of [4, 5]) {
+    const st = steps(n)
+    const gr = tryGroups({ steps: st, included: new Set(st.map((x) => x.id)), classSubjects: [csAB()],
+      gradesByStep: new Map([['st1', [g('cs1', '15')]]]) }).gr
+    check(`X${n === 4 ? 2 : 3} année à ${n} étapes : ${n} cellules par ligne (sous-matières et globale)`,
+      gr ? gr[0].lines.every((l) => l.cells.length === n) : 'refus', true)
+    check(`X${n === 4 ? 2 : 3} année à ${n} étapes : ${n} cellules en discipline`,
+      discipline(Array.from({ length: n }, () => null)).lines.every((l) => l.cells.length === n), true)
+  }
+}
+
 // ── Lot 1b — U7, U8 : couleurs (C3, Q-C) ────────────────────────────────────
 
 {

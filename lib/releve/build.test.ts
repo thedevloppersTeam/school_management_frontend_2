@@ -185,7 +185,6 @@ async function main() {
   check('T6 coeff barème 60', beta.coeff, '6')
   check('T8 étape 3 dispensée : « - »', beta.cells[2].text, '-')
   check('Moy Beta (48.75 + 30) / 2 / 60 × 10', beta.average.text, '6.56')
-  check('colonne sans titre : « - »', beta.blank, '-')
   check('ligne SMP notée à l’étape 1', find(d, 'ESSAI Gamma (SMP)')!.lines[0].cells[0].text, '12.00')
 
   // T19 — discipline en fin de colonne gauche ; T20 — fiche 404 → « - »
@@ -278,6 +277,31 @@ async function main() {
   r = await run()
   check('K1 fiche 200 aux 5 champs null : admise', reason(r), 'aucune erreur')
   check('K1 champs null : « - » à l’étape 1', r.data?.left[r.data.left.length - 1].lines[0].cells[0].text, '-')
+
+  // ── Colonne sans titre supprimée (décision du 2026-10-15) : X1 à X4 ───────
+  const toutesLignes = (x: ReleveData) => [...x.left, ...x.right].flatMap((g) => g.lines)
+  reset()
+  r = await run()
+  check('X1 aucune ligne (matière, globale, discipline) ne porte « blank »',
+    r.data ? toutesLignes(r.data).filter((l) => 'blank' in l).length : 'refus', 0)
+  check('X2 année à 4 étapes : 4 en-têtes = noms en base',
+    r.data?.stepHeaders.join(' | '), 'Étape 1 | Étape 2 | Étape 3 | Étape 4 & 5')
+  check('X2 année à 4 étapes : 4 cellules par ligne',
+    r.data ? toutesLignes(r.data).every((l) => l.cells.length === 4) : 'refus', true)
+  check('X4 4e étape « Étape 4 & 5 » : en-tête repris tel quel', r.data?.stepHeaders[3], 'Étape 4 & 5')
+  reset({
+    mutate: {
+      annee: (b) => ({ ...b, steps: [...steps, { id: 'st5', name: 'Étape 5 (essai)', stepNumber: 5, isCurrent: false }] }),
+    },
+  })
+  r = await run()
+  check('X3 année à 5 étapes : pas d’erreur', reason(r), 'aucune erreur')
+  check('X3 année à 5 étapes : 5 en-têtes = noms en base',
+    r.data?.stepHeaders.join(' | '), 'Étape 1 | Étape 2 | Étape 3 | Étape 4 & 5 | Étape 5 (essai)')
+  check('X3 année à 5 étapes : 5 cellules par ligne, discipline comprise',
+    r.data ? toutesLignes(r.data).every((l) => l.cells.length === 5) : 'refus', true)
+  check('X1 année à 5 étapes : aucune ligne ne porte « blank »',
+    r.data ? toutesLignes(r.data).filter((l) => 'blank' in l).length : 'refus', 0)
 
   // ── Lot 1c — G-8 : année ACTIVE, étape 2 en cours ─────────────────────────
   const active = (current: string | null) => (b: Record<string, unknown>) => ({

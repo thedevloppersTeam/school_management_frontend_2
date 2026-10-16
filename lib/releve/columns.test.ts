@@ -22,7 +22,6 @@ function group(title: string, lines: number, kind: ReleveGroup['kind'] = 'matier
       label: `${title}-${i + 1}`,
       coeff: '1',
       cells: [],
-      blank: '-',
       average: { text: '-', band: null },
     })),
   }

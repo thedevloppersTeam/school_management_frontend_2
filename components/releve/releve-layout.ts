@@ -20,7 +20,7 @@ export const PAPER_PX = { width: PAPER_IN.width * CSS_DPI, height: PAPER_IN.heig
  * Réserves de la feuille à EN-TÊTE préimprimée (estimées depuis le scan,
  * ajustables). Rien n'est imprimé dedans.
  */
-export const RESERVES_IN = { top: 1.95, bottom: 1.95, left: 0.7, right: 0.3 } as const
+export const RESERVES_IN = { top: 1.95, bottom: 1.95, left: 0.7, right: 0.70 } as const
 
 export const RESERVES_PX = {
   top: RESERVES_IN.top * CSS_DPI,
@@ -48,7 +48,7 @@ export const USABLE_PX = {
  */
 export const FONT_STACKS = {
   /** Valeurs d'identité (prénom, nom, date, niveau, année). */
-  identite: '"Segoe Print", var(--font-releve-identite), cursive',
+  identite: '"Lucida Handwriting", var(--font-releve-identite), cursive',
   /** Texte de la remarque. */
   remarque: '"French Script MT", var(--font-releve-remarque), cursive',
   /** Titre « Relevé de Notes ». */
@@ -89,6 +89,12 @@ export const INKS = {
   traitDirection: '#4a9bcc',
 } as const
 
+/** Fonds de la feuille. */
+export const FILLS = {
+  /** Rangée d'en-tête de chaque tableau de groupe (nom du groupe, « Coeff », étapes, « Moy. Gnle »). */
+  enteteGroupe: '#DEEBF7',
+} as const
+
 // ── Tailles (ajustables) ────────────────────────────────────────────────────
 
 export const SIZES = {
@@ -100,18 +106,22 @@ export const SIZES = {
   group: 9,
   /** Corps des en-têtes de colonnes, en px. */
   header: 7.5,
+  /** En-têtes de colonnes des tableaux (« Coeff », étapes, « - », « Moy. Gnle »), en px : une ligne, sans troncature. */
+  columnHeader: 4,
   /** Titre « Relevé de Notes », en px. */
   title: 18,
   /** Valeurs d'identité (manuscrites), en px. */
-  identity: 14,
+  identity: 13,
   /** Libellés d'identité, en px. */
   identityLabel: 10,
   /** Pied de page, en px. */
   footer: 8.5,
   /** Cadre photo, en px (≈ 0.85 × 1.05 in). */
-  photo: { width: 82, height: 100 },
+  photo: { width: 100, height: 100 },
   /** Espace entre les deux colonnes de tableaux, en px. */
-  columnGap: 10,
+  columnGap: 5,
+  /** Espace vertical entre deux tableaux de groupe d'une même colonne, en px. */
+  groupGap: 5,
   /** Largeur de la colonne des libellés, en part de la colonne. */
   labelColumn: '38%',
 } as const

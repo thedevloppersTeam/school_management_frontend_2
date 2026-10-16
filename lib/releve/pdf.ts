@@ -63,6 +63,9 @@ export async function downloadRelevePdf(sheet: HTMLElement, fileName: string): P
       scale: CAPTURE_SCALE,
       useCORS: true,
       allowTaint: false,
+      // Rendu par le navigateur (SVG foreignObject) plutôt que par le moteur
+      // de dessin de html2canvas : texte et bordures de tableau comme à l'écran.
+      foreignObjectRendering: true,
       logging: false,
       backgroundColor: '#ffffff',
       width: PAPER_PX.width,

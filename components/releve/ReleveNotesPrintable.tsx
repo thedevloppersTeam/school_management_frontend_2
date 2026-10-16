@@ -14,6 +14,7 @@ import { bandClass } from '@/lib/releve/present'
 import type { ReleveData, ReleveGroup } from '@/lib/releve/types'
 import {
   BAND_COLORS,
+  FILLS,
   FONT_STACKS,
   INKS,
   PAPER_PX,
@@ -38,35 +39,44 @@ const CSS = `
   display:flex;align-items:center;justify-content:center;overflow:hidden;}
 .rlv-photo img{width:100%;height:100%;object-fit:cover;display:block;}
 .rlv-id-fields{display:grid;grid-template-columns:auto 1fr;column-gap:8px;row-gap:2px;align-items:baseline;}
-.rlv-id-label{font-family:${FONT_STACKS.calibri};font-size:${px(SIZES.identityLabel)};color:${INKS.libelleClair};}
+.rlv-id-label{font-family:${FONT_STACKS.calibri};font-size:${px(SIZES.identityLabel)};color:${INKS.texte};
+  white-space:nowrap;}
+.rlv-id-label.rlv-id-label-clair{color:${INKS.libelleClair};}
 .rlv-id-value{font-family:${FONT_STACKS.identite};font-size:${px(SIZES.identity)};color:${INKS.manuscrit};
   line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:clip;}
 .rlv-id-right{display:grid;grid-template-columns:auto auto;column-gap:8px;row-gap:2px;align-items:baseline;}
 .rlv-id-right .rlv-id-label{font-family:${FONT_STACKS.cambria};}
 
-.rlv-title{font-family:${FONT_STACKS.titre};font-weight:700;font-size:${px(SIZES.title)};color:${INKS.titre};
+.rlv-title{font-family:${FONT_STACKS.titre};font-weight:700;font-size:${px(SIZES.title)};color:${INKS.manuscrit};
   text-align:center;margin:2px 0;}
 
 .rlv-cols{display:grid;grid-template-columns:1fr 1fr;column-gap:${px(SIZES.columnGap)};align-items:start;}
+.rlv-col{display:flex;flex-direction:column;gap:${px(SIZES.groupGap)};}
 .rlv-table{width:100%;border-collapse:collapse;table-layout:fixed;}
 .rlv-table th,.rlv-table td{height:${px(SIZES.row)};padding:0 2px;border:0.75px solid ${INKS.trait};
   line-height:1;white-space:nowrap;overflow:hidden;}
-.rlv-table th{font-family:${FONT_STACKS.entetes};font-size:${px(SIZES.header)};font-weight:700;text-align:center;}
+.rlv-table th{font-family:${FONT_STACKS.entetes};font-size:${px(SIZES.columnHeader)};font-weight:700;text-align:center;
+  color:${INKS.manuscrit};white-space:nowrap;overflow:visible;text-overflow:clip;}
 .rlv-table th.rlv-label-col{width:${SIZES.labelColumn};}
 .rlv-num{font-family:${FONT_STACKS.nombres};font-size:${px(SIZES.cell)};text-align:center;}
 .rlv-line-label{font-family:${FONT_STACKS.libelles};font-size:${px(SIZES.cell)};text-align:left;text-overflow:ellipsis;}
 .rlv-group-title{font-family:${FONT_STACKS.libelles};font-size:${px(SIZES.group)};font-weight:700;text-align:left;}
+.rlv-table thead th{background-color:${FILLS.enteteGroupe};}
+.rlv-table th.rlv-group-title{font-family:${FONT_STACKS.libelles};font-size:${px(SIZES.group)};text-align:left;
+  color:${INKS.manuscrit};text-decoration:underline;overflow:hidden;}
 .rlv-discipline .rlv-line-label{text-align:right;font-style:italic;}
 .rlv-band-echec{color:${BAND_COLORS.echec};}
 .rlv-band-deficient{color:${BAND_COLORS.deficient};}
 .rlv-band-assez-bien{color:${BAND_COLORS['assez-bien']};}
 
-.rlv-foot{display:grid;grid-template-columns:1fr auto;column-gap:16px;align-items:end;font-size:${px(SIZES.footer)};}
+.rlv-foot{display:flex;flex-direction:column;font-size:${px(SIZES.footer)};}
+.rlv-foot-bottom{display:grid;grid-template-columns:1fr auto;column-gap:16px;align-items:end;}
 .rlv-remarque-title{font-family:${FONT_STACKS.titre};font-weight:700;text-decoration:underline;}
 .rlv-remarque{font-family:${FONT_STACKS.remarque};color:${INKS.manuscrit};font-size:${px(SIZES.footer + 4)};}
 .rlv-legend-title{font-family:${FONT_STACKS.calibri};text-decoration:underline;margin-top:3px;}
 .rlv-legend{display:grid;grid-template-columns:repeat(4,auto);column-gap:10px;row-gap:1px;
   font-family:${FONT_STACKS.calibri};justify-content:start;}
+.rlv-legend > span{white-space:nowrap;}
 .rlv-seuil{font-family:${FONT_STACKS.titre};font-weight:700;text-decoration:underline;margin-top:3px;}
 .rlv-address{font-family:${FONT_STACKS.cambria};margin-top:3px;line-height:1.3;}
 .rlv-direction{width:170px;text-align:center;font-family:${FONT_STACKS.cambria};font-weight:700;
@@ -74,41 +84,44 @@ const CSS = `
 .rlv-direction-line{border-top:1.5px solid ${INKS.traitDirection};margin-bottom:3px;}
 `
 
-function GroupRows({ group, stepCount }: { group: ReleveGroup; stepCount: number }) {
+/**
+ * Un groupe (matière ou Discipline) = un petit tableau. Rangée d'en-tête :
+ * nom du groupe dans la colonne des libellés, puis « Coeff », les étapes et
+ * « Moy. Gnle ». Mêmes colonnes et même `table-layout:fixed` pour tous les
+ * tableaux d'une colonne : les chiffres restent alignés d'un groupe à l'autre.
+ */
+function GroupTable({ group, stepHeaders }: { group: ReleveGroup; stepHeaders: string[] }) {
   return (
-    <tbody className={group.kind === 'discipline' ? 'rlv-discipline' : undefined}>
-      <tr>
-        <td className="rlv-group-title" colSpan={stepCount + 4}>{group.title}</td>
-      </tr>
-      {group.lines.map((line, i) => (
-        <tr key={`${line.label}-${i}`}>
-          <td className="rlv-line-label">{line.label}</td>
-          <td className="rlv-num">{line.coeff}</td>
-          {line.cells.map((cell, c) => (
-            <td key={c} className={`rlv-num ${bandClass(cell.band)}`}>{cell.text}</td>
-          ))}
-          <td className="rlv-num">{line.blank}</td>
-          <td className={`rlv-num ${bandClass(line.average.band)}`}>{line.average.text}</td>
+    <table className={group.kind === 'discipline' ? 'rlv-table rlv-discipline' : 'rlv-table'}>
+      <thead>
+        <tr>
+          <th className="rlv-label-col rlv-group-title">{group.title}</th>
+          <th>Coeff</th>
+          {stepHeaders.map((h, i) => <th key={`${h}-${i}`}>{h}</th>)}
+          <th>Moy. Gnle</th>
         </tr>
-      ))}
-    </tbody>
+      </thead>
+      <tbody>
+        {group.lines.map((line, i) => (
+          <tr key={`${line.label}-${i}`}>
+            <td className="rlv-line-label">{line.label}</td>
+            <td className="rlv-num">{line.coeff}</td>
+            {line.cells.map((cell, c) => (
+              <td key={c} className={`rlv-num ${bandClass(cell.band)}`}>{cell.text}</td>
+            ))}
+            <td className={`rlv-num ${bandClass(line.average.band)}`}>{line.average.text}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   )
 }
 
 function Column({ groups, stepHeaders }: { groups: ReleveGroup[]; stepHeaders: string[] }) {
   return (
-    <table className="rlv-table">
-      <thead>
-        <tr>
-          <th className="rlv-label-col" />
-          <th>Coeff</th>
-          {stepHeaders.map((h, i) => <th key={`${h}-${i}`}>{h}</th>)}
-          <th>-</th>
-          <th>Moy. Gnle</th>
-        </tr>
-      </thead>
-      {groups.map((g, i) => <GroupRows key={`${g.title}-${i}`} group={g} stepCount={stepHeaders.length} />)}
-    </table>
+    <div className="rlv-col">
+      {groups.map((g, i) => <GroupTable key={`${g.title}-${i}`} group={g} stepHeaders={stepHeaders} />)}
+    </div>
   )
 }
 
@@ -144,7 +157,7 @@ export const ReleveNotesPrintable = forwardRef<HTMLDivElement, ReleveNotesPrinta
                 <span className="rlv-id-value">{identity.prenom}</span>
                 <span className="rlv-id-label">Nom</span>
                 <span className="rlv-id-value">{identity.nom}</span>
-                <span className="rlv-id-label">Date de naissance</span>
+                <span className="rlv-id-label rlv-id-label-clair">Date de naissance</span>
                 <span className="rlv-id-value">{identity.dateNaissance}</span>
               </div>
               <div className="rlv-id-right">
@@ -165,29 +178,31 @@ export const ReleveNotesPrintable = forwardRef<HTMLDivElement, ReleveNotesPrinta
 
             {/* §6 — pied de page */}
             <div className="rlv-foot">
-              <div>
-                <div className="rlv-remarque-title">Remarque</div>
-                <div className="rlv-remarque">{footer.remarque}</div>
-                <div className="rlv-legend-title">Légende des notes et des couleurs</div>
-                <div className="rlv-legend">
-                  {footer.legende.map((e) => (
-                    <span key={e.mention} className={bandClass(e.band)}>
-                      {e.range} : {e.mention} = {e.label}
-                    </span>
-                  ))}
-                </div>
-                <div className="rlv-seuil">
-                  Seuil de réussite pour promotion automatique en classe supérieure {footer.seuil}
-                </div>
-                <div className="rlv-address">
-                  <div>{footer.adresse}</div>
-                  <div>{footer.telephone}</div>
-                  {footer.courriel ? <div>{footer.courriel}</div> : null}
-                </div>
+              <div className="rlv-remarque-title">Remarque</div>
+              <div className="rlv-remarque">{footer.remarque}</div>
+              <div className="rlv-legend-title">Légende des notes et des couleurs</div>
+              <div className="rlv-legend">
+                {footer.legende.map((e) => (
+                  <span key={e.mention} className={bandClass(e.band)}>
+                    {e.range} : {e.mention} = {e.label}
+                  </span>
+                ))}
               </div>
-              <div className="rlv-direction">
-                <div className="rlv-direction-line" />
-                Direction
+              <div className="rlv-foot-bottom">
+                <div>
+                  <div className="rlv-seuil">
+                    Seuil de réussite pour promotion automatique en classe supérieure {footer.seuil}
+                  </div>
+                  <div className="rlv-address">
+                    <div>{footer.adresse}</div>
+                    <div>{footer.telephone}</div>
+                    {footer.courriel ? <div>{footer.courriel}</div> : null}
+                  </div>
+                </div>
+                <div className="rlv-direction">
+                  <div className="rlv-direction-line" />
+                  Direction
+                </div>
               </div>
             </div>
           </div>
