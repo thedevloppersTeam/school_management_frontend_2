@@ -99,7 +99,7 @@ export const FILLS = {
 
 export const SIZES = {
   /** Hauteur d'une rangée de tableau, en px. */
-  row: 12.5,
+  row: 11.5,
   /** Corps des nombres et des libellés de lignes, en px. */
   cell: 8.5,
   /** Corps des titres de groupes, en px. */
