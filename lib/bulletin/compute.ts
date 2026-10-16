@@ -451,13 +451,19 @@ export function computeGeneralAverage(stepAverages: Decimal[]): Decimal | null {
 }
 
 /**
- * Moyenne d'une etape, ou `null` quand l'etape n'a rien d'exploitable.
+ * Moyenne d'une etape, ou `null` quand AUCUNE de ses trois rubriques n'a de
+ * denominateur.
  *
  * `computeStepAverage` ne renvoie jamais null : trois rubriques sans
  * denominateur donnent trois contributions nulles, donc 0 — un chiffre, pas
- * une absence. La distinction compte des qu'on agrege PLUSIEURS etapes : une
- * etape jamais notee doit sortir du calcul, pas y entrer comme un zero, sinon
- * une annee saisie a moitie ecrase la moyenne de l'eleve.
+ * une absence. `null` n'est rendu que si les trois rubriques ont un
+ * denominateur nul : toutes les matieres de l'etape dispensees, ou etape sans
+ * matiere. Cette etape sort alors de la moyenne annuelle.
+ *
+ * Une etape SANS AUCUNE NOTE saisie n'est PAS ecartee (RP-24) : une note
+ * manquante garde son bareme au denominateur et compte 0 au numerateur
+ * (computeSubject), l'etape vaut donc 0 et entre dans la moyenne annuelle.
+ * Verrouille par le vecteur A2 de annual.vectors.json.
  *
  * La regle vivait chez l'appelant (`calculateBulletinAverages`) et s'arretait
  * donc au bulletin. Elle appartient ici : c'est elle qui decide ce qui entre
