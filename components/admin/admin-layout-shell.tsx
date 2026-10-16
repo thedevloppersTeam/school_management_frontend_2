@@ -58,6 +58,7 @@ import {
   BuildingIcon,
   UserIcon,
   LockIcon,
+  ListOrderedIcon,
   ArchiveIcon,
   UserPlusIcon,
   HistoryIcon,
@@ -156,6 +157,11 @@ const navItems: NavItem[] = [
         icon: BuildingIcon,
       },
       {
+        label: "Relevé de notes",
+        href: "/admin/settings/releve",
+        icon: ListOrderedIcon,
+      },
+      {
         label: "Années Scolaires",
         href: "/admin/academic-years",
         icon: CalendarIcon,
@@ -178,6 +184,7 @@ const breadcrumbMap: Record<string, string> = {
   "/admin/subjects": "Matières",
   "/admin/academic-years": "Années Scolaires",
   "/admin/settings": "Établissement",
+  "/admin/settings/releve": "Relevé de notes",
   "/admin/archives": "Bulletins archivés",
   "/admin/journal": "Journal",
 };
