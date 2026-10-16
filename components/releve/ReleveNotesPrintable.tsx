@@ -38,13 +38,14 @@ const CSS = `
   display:flex;align-items:center;justify-content:center;overflow:hidden;}
 .rlv-photo img{width:100%;height:100%;object-fit:cover;display:block;}
 .rlv-id-fields{display:grid;grid-template-columns:auto 1fr;column-gap:8px;row-gap:2px;align-items:baseline;}
-.rlv-id-label{font-family:${FONT_STACKS.calibri};font-size:${px(SIZES.identityLabel)};color:${INKS.libelleClair};}
+.rlv-id-label{font-family:${FONT_STACKS.calibri};font-size:${px(SIZES.identityLabel)};color:${INKS.texte};}
+.rlv-id-label.rlv-id-label-clair{color:${INKS.libelleClair};}
 .rlv-id-value{font-family:${FONT_STACKS.identite};font-size:${px(SIZES.identity)};color:${INKS.manuscrit};
   line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:clip;}
 .rlv-id-right{display:grid;grid-template-columns:auto auto;column-gap:8px;row-gap:2px;align-items:baseline;}
 .rlv-id-right .rlv-id-label{font-family:${FONT_STACKS.cambria};}
 
-.rlv-title{font-family:${FONT_STACKS.titre};font-weight:700;font-size:${px(SIZES.title)};color:${INKS.titre};
+.rlv-title{font-family:${FONT_STACKS.titre};font-weight:700;font-size:${px(SIZES.title)};color:${INKS.manuscrit};
   text-align:center;margin:2px 0;}
 
 .rlv-cols{display:grid;grid-template-columns:1fr 1fr;column-gap:${px(SIZES.columnGap)};align-items:start;}
@@ -144,7 +145,7 @@ export const ReleveNotesPrintable = forwardRef<HTMLDivElement, ReleveNotesPrinta
                 <span className="rlv-id-value">{identity.prenom}</span>
                 <span className="rlv-id-label">Nom</span>
                 <span className="rlv-id-value">{identity.nom}</span>
-                <span className="rlv-id-label">Date de naissance</span>
+                <span className="rlv-id-label rlv-id-label-clair">Date de naissance</span>
                 <span className="rlv-id-value">{identity.dateNaissance}</span>
               </div>
               <div className="rlv-id-right">
