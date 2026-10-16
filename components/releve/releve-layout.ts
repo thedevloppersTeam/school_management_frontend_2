@@ -111,7 +111,7 @@ export const SIZES = {
   /** Titre « Relevé de Notes », en px. */
   title: 18,
   /** Valeurs d'identité (manuscrites), en px. */
-  identity: 14,
+  identity: 13,
   /** Libellés d'identité, en px. */
   identityLabel: 10,
   /** Pied de page, en px. */

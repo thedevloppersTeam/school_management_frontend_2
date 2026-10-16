@@ -39,7 +39,8 @@ const CSS = `
   display:flex;align-items:center;justify-content:center;overflow:hidden;}
 .rlv-photo img{width:100%;height:100%;object-fit:cover;display:block;}
 .rlv-id-fields{display:grid;grid-template-columns:auto 1fr;column-gap:8px;row-gap:2px;align-items:baseline;}
-.rlv-id-label{font-family:${FONT_STACKS.calibri};font-size:${px(SIZES.identityLabel)};color:${INKS.texte};}
+.rlv-id-label{font-family:${FONT_STACKS.calibri};font-size:${px(SIZES.identityLabel)};color:${INKS.texte};
+  white-space:nowrap;}
 .rlv-id-label.rlv-id-label-clair{color:${INKS.libelleClair};}
 .rlv-id-value{font-family:${FONT_STACKS.identite};font-size:${px(SIZES.identity)};color:${INKS.manuscrit};
   line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:clip;}
@@ -68,12 +69,14 @@ const CSS = `
 .rlv-band-deficient{color:${BAND_COLORS.deficient};}
 .rlv-band-assez-bien{color:${BAND_COLORS['assez-bien']};}
 
-.rlv-foot{display:grid;grid-template-columns:1fr auto;column-gap:16px;align-items:end;font-size:${px(SIZES.footer)};}
+.rlv-foot{display:flex;flex-direction:column;font-size:${px(SIZES.footer)};}
+.rlv-foot-bottom{display:grid;grid-template-columns:1fr auto;column-gap:16px;align-items:end;}
 .rlv-remarque-title{font-family:${FONT_STACKS.titre};font-weight:700;text-decoration:underline;}
 .rlv-remarque{font-family:${FONT_STACKS.remarque};color:${INKS.manuscrit};font-size:${px(SIZES.footer + 4)};}
 .rlv-legend-title{font-family:${FONT_STACKS.calibri};text-decoration:underline;margin-top:3px;}
 .rlv-legend{display:grid;grid-template-columns:repeat(4,auto);column-gap:10px;row-gap:1px;
   font-family:${FONT_STACKS.calibri};justify-content:start;}
+.rlv-legend > span{white-space:nowrap;}
 .rlv-seuil{font-family:${FONT_STACKS.titre};font-weight:700;text-decoration:underline;margin-top:3px;}
 .rlv-address{font-family:${FONT_STACKS.cambria};margin-top:3px;line-height:1.3;}
 .rlv-direction{width:170px;text-align:center;font-family:${FONT_STACKS.cambria};font-weight:700;
@@ -175,29 +178,31 @@ export const ReleveNotesPrintable = forwardRef<HTMLDivElement, ReleveNotesPrinta
 
             {/* §6 — pied de page */}
             <div className="rlv-foot">
-              <div>
-                <div className="rlv-remarque-title">Remarque</div>
-                <div className="rlv-remarque">{footer.remarque}</div>
-                <div className="rlv-legend-title">Légende des notes et des couleurs</div>
-                <div className="rlv-legend">
-                  {footer.legende.map((e) => (
-                    <span key={e.mention} className={bandClass(e.band)}>
-                      {e.range} : {e.mention} = {e.label}
-                    </span>
-                  ))}
-                </div>
-                <div className="rlv-seuil">
-                  Seuil de réussite pour promotion automatique en classe supérieure {footer.seuil}
-                </div>
-                <div className="rlv-address">
-                  <div>{footer.adresse}</div>
-                  <div>{footer.telephone}</div>
-                  {footer.courriel ? <div>{footer.courriel}</div> : null}
-                </div>
+              <div className="rlv-remarque-title">Remarque</div>
+              <div className="rlv-remarque">{footer.remarque}</div>
+              <div className="rlv-legend-title">Légende des notes et des couleurs</div>
+              <div className="rlv-legend">
+                {footer.legende.map((e) => (
+                  <span key={e.mention} className={bandClass(e.band)}>
+                    {e.range} : {e.mention} = {e.label}
+                  </span>
+                ))}
               </div>
-              <div className="rlv-direction">
-                <div className="rlv-direction-line" />
-                Direction
+              <div className="rlv-foot-bottom">
+                <div>
+                  <div className="rlv-seuil">
+                    Seuil de réussite pour promotion automatique en classe supérieure {footer.seuil}
+                  </div>
+                  <div className="rlv-address">
+                    <div>{footer.adresse}</div>
+                    <div>{footer.telephone}</div>
+                    {footer.courriel ? <div>{footer.courriel}</div> : null}
+                  </div>
+                </div>
+                <div className="rlv-direction">
+                  <div className="rlv-direction-line" />
+                  Direction
+                </div>
               </div>
             </div>
           </div>
