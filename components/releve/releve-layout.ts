@@ -48,7 +48,7 @@ export const USABLE_PX = {
  */
 export const FONT_STACKS = {
   /** Valeurs d'identité (prénom, nom, date, niveau, année). */
-  identite: '"Segoe Print", var(--font-releve-identite), cursive',
+  identite: '"Lucida Handwriting", var(--font-releve-identite), cursive',
   /** Texte de la remarque. */
   remarque: '"French Script MT", var(--font-releve-remarque), cursive',
   /** Titre « Relevé de Notes ». */
@@ -109,7 +109,7 @@ export const SIZES = {
   /** Pied de page, en px. */
   footer: 8.5,
   /** Cadre photo, en px (≈ 0.85 × 1.05 in). */
-  photo: { width: 82, height: 100 },
+  photo: { width: 100, height: 100 },
   /** Espace entre les deux colonnes de tableaux, en px. */
   columnGap: 10,
   /** Largeur de la colonne des libellés, en part de la colonne. */
