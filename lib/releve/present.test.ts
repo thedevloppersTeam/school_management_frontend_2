@@ -2,7 +2,7 @@
  * Relevé de notes — présentation : nom du PDF, échelle d'aperçu, couleur de
  * bande, dépassement de la zone utile. Données entièrement fictives.
  */
-import { USABLE_PX } from '@/components/releve/releve-layout'
+import { RESERVES_IN, USABLE_PX } from '@/components/releve/releve-layout'
 import { bandClass, overflowsUsableArea, previewScale, releveFileName } from './present'
 
 let pass = 0, fail = 0
@@ -46,8 +46,11 @@ check('P3 null : aucune classe', bandClass(null), '')
 
 // ── P4 — dépassement de la zone utile ───────────────────────────────────────
 
-const ZONE = 1056 - (1.95 + 1.95) * 96
-check('P4 zone utile = 1056 − (1.95 + 1.95) × 96', Math.abs(USABLE_PX.height - ZONE) < 1e-9, true)
+// Attendu calculé depuis les réserves (et non écrit en dur) : 1056 px de feuille
+// Letter à 96 px/in, moins les réserves haute et basse.
+const ZONE = 1056 - (RESERVES_IN.top + RESERVES_IN.bottom) * 96
+check('P4 zone utile = 1056 − (haut + bas) × 96', Math.abs(USABLE_PX.height - ZONE) < 1e-9, true)
+check('P4 zone utile avec les réserves actuelles (1.95 / 1.5) = 724.8 px', Math.abs(USABLE_PX.height - 724.8) < 1e-9, true)
 check('P4 contenu = zone : pas de dépassement', overflowsUsableArea(ZONE), false)
 check('P4 contenu < zone : pas de dépassement', overflowsUsableArea(ZONE - 100), false)
 check('P4 contenu > zone : dépassement', overflowsUsableArea(ZONE + 1), true)
