@@ -1,0 +1,50 @@
+name: CPMSL Frontend CI
+
+# Contrôles de base du frontend : dépendances, types, tests vitest.
+# Les tests vitest sont ceux de lib/**/__tests__/ (vitest.config.mts) ; ils
+# ne parlent à aucun serveur ni à aucune base. Les audits UI / UX restent dans
+# ui-audit.yml et ux-audit.yml.
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - main
+
+  push:
+    branches:
+      - develop
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cpmsl-frontend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate Frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          # Même version majeure que le poste de développement (node -v : v24).
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Unit tests
+        run: npx vitest run
