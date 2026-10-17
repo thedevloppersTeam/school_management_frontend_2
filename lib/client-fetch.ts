@@ -36,7 +36,9 @@ export class ApiError extends Error {
   constructor(
     public readonly status: number,
     public readonly path: string,
-    message: string
+    message: string,
+    /** Corps JSON de la réponse d'erreur, quand il porte plus qu'un message (ex. errors[]). */
+    public readonly body?: unknown
   ) {
     super(message)
     this.name = 'ApiError'
@@ -103,7 +105,8 @@ export async function clientFetch<T>(
     throw new ApiError(
       res.status,
       path,
-      backendMessage ?? `API error ${res.status}`
+      backendMessage ?? `API error ${res.status}`,
+      data
     )
   }
 
