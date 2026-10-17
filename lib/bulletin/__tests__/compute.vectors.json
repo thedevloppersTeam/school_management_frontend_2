@@ -1,0 +1,157 @@
+{
+  "description": "Vecteurs communs du moteur de calcul du bulletin (lib/bulletin/compute.ts). Fichier IDENTIQUE octet pour octet dans school_management_frontend_2/lib/bulletin/__tests__/ et school_management_server/src/lib/bulletin/__tests__/. Nombres en chaînes (Decimal), null = absence de valeur. Données fictives.",
+  "version": 1,
+  "vectors": [
+    {
+      "id": "V1-etape-r1-seule",
+      "kind": "step",
+      "regle": "Étape notée seulement en R1 : aucune renormalisation, R2 et R3 comptent zéro (BR-001, compute.ts computeStepAverage).",
+      "calcul": "R1 = 12 / 20 × 10 = 6 ; R2 = R3 = null → 0 ; étape = 6 × 0,70 + 0 × 0,25 + 0 × 0,05 = 4,2 (et non 6, qui serait la valeur renormalisée).",
+      "subjects": [
+        { "classSubjectId": "cs-r1", "name": "Matière R1", "rubrique": "R1", "maxScore": "20", "maxScoreOverride": null, "sections": [], "globalScores": ["12"], "exempted": false }
+      ],
+      "expect": { "r1": "6", "r2": null, "r3": null, "average": "4.2", "passing": false }
+    },
+    {
+      "id": "V2-note-manquante",
+      "kind": "step",
+      "regle": "Note manquante : compte zéro, le barème reste au dénominateur.",
+      "calcul": "R1 : A = 16/20 notée, B = sans note (0/20) → (16 + 0) / (20 + 20) × 10 = 16 / 40 × 10 = 4 ; étape = 4 × 0,70 = 2,8.",
+      "subjects": [
+        { "classSubjectId": "cs-a", "name": "Matière A", "rubrique": "R1", "maxScore": "20", "maxScoreOverride": null, "sections": [], "globalScores": ["16"], "exempted": false },
+        { "classSubjectId": "cs-b", "name": "Matière B", "rubrique": "R1", "maxScore": "20", "maxScoreOverride": null, "sections": [], "globalScores": [], "exempted": false }
+      ],
+      "expect": { "r1": "4", "r2": null, "r3": null, "average": "2.8", "passing": false }
+    },
+    {
+      "id": "V2b-note-manquante-matiere",
+      "kind": "subject",
+      "regle": "Matière sans note : état missing, numérateur 0, barème conservé au dénominateur.",
+      "calcul": "Mode global, aucune note : numérateur = 0 ; dénominateur = barème 20 ; moyenne = 0 / 20 × 10 = 0.",
+      "subject": { "classSubjectId": "cs-b", "name": "Matière B", "rubrique": "R1", "maxScore": "20", "maxScoreOverride": null, "sections": [], "globalScores": [], "exempted": false },
+      "expect": { "state": "missing", "numerator": "0", "denominator": "20", "average": "0" }
+    },
+    {
+      "id": "V3-sous-matiere-dispensee",
+      "kind": "subject",
+      "regle": "Sous-matière dispensée : sort du numérateur ET du dénominateur.",
+      "calcul": "S1 = 8/10 notée ; S2 = 2/10 mais dispensée → exclue. Numérateur = 8 ; dénominateur = 10 ; moyenne = 8 / 10 × 10 = 8.",
+      "subject": {
+        "classSubjectId": "cs-s", "name": "Matière à sous-matières", "rubrique": "R1", "maxScore": "20", "maxScoreOverride": null,
+        "sections": [
+          { "sectionId": "s1", "name": "Sous-matière 1", "maxScore": "10", "scores": ["8"], "exempted": false },
+          { "sectionId": "s2", "name": "Sous-matière 2", "maxScore": "10", "scores": ["2"], "exempted": true }
+        ],
+        "globalScores": [], "exempted": false
+      },
+      "expect": {
+        "state": "noted", "numerator": "8", "denominator": "10", "average": "8",
+        "sections": [ { "sectionId": "s1", "state": "noted", "score": "8" }, { "sectionId": "s2", "state": "exempted", "score": null } ]
+      }
+    },
+    {
+      "id": "V4-matiere-dispensee-mode-global",
+      "kind": "step",
+      "regle": "Matière dispensée (mode global) : sort du numérateur ET du dénominateur de la rubrique.",
+      "calcul": "R1 : A dispensée (sa note 10/20 est ignorée) ; B = 14/20 → 14 / 20 × 10 = 7 ; étape = 7 × 0,70 = 4,9.",
+      "subjects": [
+        { "classSubjectId": "cs-a", "name": "Matière A", "rubrique": "R1", "maxScore": "20", "maxScoreOverride": null, "sections": [], "globalScores": ["10"], "exempted": true },
+        { "classSubjectId": "cs-b", "name": "Matière B", "rubrique": "R1", "maxScore": "20", "maxScoreOverride": null, "sections": [], "globalScores": ["14"], "exempted": false }
+      ],
+      "expect": { "r1": "7", "r2": null, "r3": null, "average": "4.9", "passing": false }
+    },
+    {
+      "id": "V4b-matiere-dispensee-mode-global-detail",
+      "kind": "subject",
+      "regle": "Détail de la matière dispensée de V4 : état exempted, 0/0, moyenne null.",
+      "calcul": "Dispense de la matière entière : numérateur = 0 ; dénominateur = 0 ; moyenne = null (dénominateur nul).",
+      "subject": { "classSubjectId": "cs-a", "name": "Matière A", "rubrique": "R1", "maxScore": "20", "maxScoreOverride": null, "sections": [], "globalScores": ["10"], "exempted": true },
+      "expect": { "state": "exempted", "numerator": "0", "denominator": "0", "average": null }
+    },
+    {
+      "id": "V4c-toutes-sous-matieres-dispensees-note-globale",
+      "kind": "subject",
+      "regle": "Mode global : la dispense de TOUTES les sous-matières vaut dispense de la matière et l'emporte sur la note globale (develop, allSectionsExempted).",
+      "calcul": "Note globale 15/20 présente, mais S1 et S2 dispensées → matière dispensée : numérateur = 0 ; dénominateur = 0 ; moyenne = null.",
+      "subject": {
+        "classSubjectId": "cs-g", "name": "Matière globale", "rubrique": "R1", "maxScore": "20", "maxScoreOverride": null,
+        "sections": [
+          { "sectionId": "g1", "name": "Sous-matière 1", "maxScore": "10", "scores": [], "exempted": true },
+          { "sectionId": "g2", "name": "Sous-matière 2", "maxScore": "10", "scores": [], "exempted": true }
+        ],
+        "globalScores": ["15"], "exempted": false
+      },
+      "expect": { "state": "exempted", "numerator": "0", "denominator": "0", "average": null }
+    },
+    {
+      "id": "V5-moyenne-annuelle-4-etapes",
+      "kind": "annual",
+      "regle": "Moyenne annuelle = moyenne arithmétique des 4 moyennes d'étape (BR-002), sans pondération entre étapes.",
+      "calcul": "Chaque étape : R1, R2, R3 notés sur 10. E1 (8, 6, 10) = 5,6 + 1,5 + 0,5 = 7,6 ; E2 (7, 7, 7) = 4,9 + 1,75 + 0,35 = 7 ; E3 (6, 8, 4) = 4,2 + 2 + 0,2 = 6,4 ; E4 (9, 5, 6) = 6,3 + 1,25 + 0,3 = 7,85. Année = (7,6 + 7 + 6,4 + 7,85) / 4 = 28,85 / 4 = 7,2125.",
+      "steps": [
+        [
+          { "classSubjectId": "e1-r1", "name": "R1", "rubrique": "R1", "maxScore": "10", "maxScoreOverride": null, "sections": [], "globalScores": ["8"], "exempted": false },
+          { "classSubjectId": "e1-r2", "name": "R2", "rubrique": "R2", "maxScore": "10", "maxScoreOverride": null, "sections": [], "globalScores": ["6"], "exempted": false },
+          { "classSubjectId": "e1-r3", "name": "R3", "rubrique": "R3", "maxScore": "10", "maxScoreOverride": null, "sections": [], "globalScores": ["10"], "exempted": false }
+        ],
+        [
+          { "classSubjectId": "e2-r1", "name": "R1", "rubrique": "R1", "maxScore": "10", "maxScoreOverride": null, "sections": [], "globalScores": ["7"], "exempted": false },
+          { "classSubjectId": "e2-r2", "name": "R2", "rubrique": "R2", "maxScore": "10", "maxScoreOverride": null, "sections": [], "globalScores": ["7"], "exempted": false },
+          { "classSubjectId": "e2-r3", "name": "R3", "rubrique": "R3", "maxScore": "10", "maxScoreOverride": null, "sections": [], "globalScores": ["7"], "exempted": false }
+        ],
+        [
+          { "classSubjectId": "e3-r1", "name": "R1", "rubrique": "R1", "maxScore": "10", "maxScoreOverride": null, "sections": [], "globalScores": ["6"], "exempted": false },
+          { "classSubjectId": "e3-r2", "name": "R2", "rubrique": "R2", "maxScore": "10", "maxScoreOverride": null, "sections": [], "globalScores": ["8"], "exempted": false },
+          { "classSubjectId": "e3-r3", "name": "R3", "rubrique": "R3", "maxScore": "10", "maxScoreOverride": null, "sections": [], "globalScores": ["4"], "exempted": false }
+        ],
+        [
+          { "classSubjectId": "e4-r1", "name": "R1", "rubrique": "R1", "maxScore": "10", "maxScoreOverride": null, "sections": [], "globalScores": ["9"], "exempted": false },
+          { "classSubjectId": "e4-r2", "name": "R2", "rubrique": "R2", "maxScore": "10", "maxScoreOverride": null, "sections": [], "globalScores": ["5"], "exempted": false },
+          { "classSubjectId": "e4-r3", "name": "R3", "rubrique": "R3", "maxScore": "10", "maxScoreOverride": null, "sections": [], "globalScores": ["6"], "exempted": false }
+        ]
+      ],
+      "expect": { "average": "7.2125", "passing": true }
+    },
+    {
+      "id": "V5b-moyenne-annuelle-etape-vide-ecartee",
+      "kind": "annual",
+      "regle": "Une étape sans rien d'exploitable (aucune rubrique calculable) sort de la moyenne annuelle ; elle n'y entre pas comme un zéro.",
+      "calcul": "E1 = 7,6 ; E2 = 7 ; E3 = 6,4 (comme V5) ; E4 sans aucune matière → R1 = R2 = R3 = null → écartée. Année = (7,6 + 7 + 6,4) / 3 = 21 / 3 = 7.",
+      "steps": [
+        [
+          { "classSubjectId": "e1-r1", "name": "R1", "rubrique": "R1", "maxScore": "10", "maxScoreOverride": null, "sections": [], "globalScores": ["8"], "exempted": false },
+          { "classSubjectId": "e1-r2", "name": "R2", "rubrique": "R2", "maxScore": "10", "maxScoreOverride": null, "sections": [], "globalScores": ["6"], "exempted": false },
+          { "classSubjectId": "e1-r3", "name": "R3", "rubrique": "R3", "maxScore": "10", "maxScoreOverride": null, "sections": [], "globalScores": ["10"], "exempted": false }
+        ],
+        [
+          { "classSubjectId": "e2-r1", "name": "R1", "rubrique": "R1", "maxScore": "10", "maxScoreOverride": null, "sections": [], "globalScores": ["7"], "exempted": false },
+          { "classSubjectId": "e2-r2", "name": "R2", "rubrique": "R2", "maxScore": "10", "maxScoreOverride": null, "sections": [], "globalScores": ["7"], "exempted": false },
+          { "classSubjectId": "e2-r3", "name": "R3", "rubrique": "R3", "maxScore": "10", "maxScoreOverride": null, "sections": [], "globalScores": ["7"], "exempted": false }
+        ],
+        [
+          { "classSubjectId": "e3-r1", "name": "R1", "rubrique": "R1", "maxScore": "10", "maxScoreOverride": null, "sections": [], "globalScores": ["6"], "exempted": false },
+          { "classSubjectId": "e3-r2", "name": "R2", "rubrique": "R2", "maxScore": "10", "maxScoreOverride": null, "sections": [], "globalScores": ["8"], "exempted": false },
+          { "classSubjectId": "e3-r3", "name": "R3", "rubrique": "R3", "maxScore": "10", "maxScoreOverride": null, "sections": [], "globalScores": ["4"], "exempted": false }
+        ],
+        []
+      ],
+      "expect": { "average": "7", "passing": true }
+    },
+    {
+      "id": "V6a-seuil-7-00",
+      "kind": "passing",
+      "regle": "BR-002 : réussi si la moyenne est supérieure ou égale à 7,00.",
+      "calcul": "7,00 ≥ 7,00 → vrai.",
+      "value": "7.00",
+      "expect": { "passing": true }
+    },
+    {
+      "id": "V6b-seuil-6-99",
+      "kind": "passing",
+      "regle": "BR-002 : sous 7,00, non réussi.",
+      "calcul": "6,99 < 7,00 → faux.",
+      "value": "6.99",
+      "expect": { "passing": false }
+    }
+  ]
+}

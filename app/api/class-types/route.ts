@@ -4,7 +4,8 @@
  *
  * Retourne la liste de tous les niveaux scolaires.
  * Niveaux CPMSL : 1ère AF → 9ème AF (Fondamental) + NS1 → NS4 (Secondaire).
- * isTerminal = true pour NS3 et NS4 (filière obligatoire).
+ * isTerminal = classe d'EXAMEN (9ème AF, NS4) ; hasTrack = niveau à FILIÈRE,
+ * filière obligatoire à l'inscription (NS3, NS4). Deux drapeaux distincts (RP-11c).
  * Rôles autorisés : SYSTEM_ADMIN, ADMIN
  */
 

@@ -88,14 +88,16 @@ interface Subject {
   classTypeName?: string | null
   sections?: Section[]
 }
-interface ClassType   { id: string; name: string; code?: string; isTerminal: boolean }
+interface ClassType   { id: string; name: string; code?: string; isTerminal: boolean; hasTrack?: boolean }
 interface ApiClass    { id: string; classTypeId: string; letter: string; maxStudents?: number }
 interface Class       { id: string; classTypeId: string; classType?: ClassType; letter: string; maxStudents?: number }
 interface Attitude    { id: string; label: string; academicYearId: string }
 interface RubricForm  { name: string; code: string; description: string }
 interface SubjectForm { name: string; code: string; maxScore: string; coefficient: string; hasSections: boolean; rubricId: string; classTypeId: string }
 interface SectionForm { name: string; code: string; maxScore: string; cycles: string[] }
-interface ClassForm   { maxStudents: string }
+// Le niveau porte deux drapeaux DISTINCTS (RP-11c) : classe d'examen
+// (isTerminal) et niveau à filière (hasTrack).
+interface ClassForm   { maxStudents: string; isTerminal: boolean; hasTrack: boolean }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -116,6 +118,9 @@ const CLASS_TYPES_SEED = [
   { name: 'NS3',     code: 'NS3', isTerminal: false },
   { name: 'NS4',     code: 'NS4', isTerminal: true  },
 ]
+
+/** Niveaux à filière de la graine (RP-11c) : filière obligatoire à l'inscription. */
+const SEED_LEVELS_WITH_TRACK = new Set(['NS3', 'NS4'])
 
 const DEFAULT_SCHOOL_INFO: SchoolInfo = {
   name: "Cours Privé Mixte Saint Léonard",
@@ -277,7 +282,7 @@ function useSchoolSettings() {
   const [rubricForm, setRubricForm] = useState<RubricForm>({ name: "", code: "", description: "" })
   const [subjectForm, setSubjectForm] = useState<SubjectForm>({ name: "", code: "", maxScore: "100", coefficient: "1", hasSections: false, rubricId: "", classTypeId: NONE_CLASSTYPE })
   const [sectionForm, setSectionForm] = useState<SectionForm>({ name: "", code: "", maxScore: "100", cycles: [] })
-  const [classForm, setClassForm] = useState<ClassForm>({ maxStudents: "30" })
+  const [classForm, setClassForm] = useState<ClassForm>({ maxStudents: "30", isTerminal: false, hasTrack: false })
   const [attitudeLabel, setAttitudeLabel] = useState("")
 
   // ── Loaders ────────────────────────────────────────────────────────────────
@@ -828,7 +833,7 @@ function useSchoolSettings() {
         const res = await apiFetch<{ classType?: { id: string }; id?: string }>("/api/class-types/create", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(ct),
+          body: JSON.stringify({ ...ct, hasTrack: SEED_LEVELS_WITH_TRACK.has(ct.name) }),
         })
         createdTypes.push(res)
       }
@@ -857,7 +862,15 @@ function useSchoolSettings() {
     }
   }
 
-  const openEditClass = (c: Class) => { setEditingClass(c); setClassForm({ maxStudents: String(c.maxStudents || 30) }); setClassModal(true) }
+  const openEditClass = (c: Class) => {
+    setEditingClass(c)
+    setClassForm({
+      maxStudents: String(c.maxStudents || 30),
+      isTerminal: c.classType?.isTerminal === true,
+      hasTrack: c.classType?.hasTrack === true,
+    })
+    setClassModal(true)
+  }
 
   const handleSaveClass = async () => {
     if (!editingClass) return
@@ -868,6 +881,14 @@ function useSchoolSettings() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ maxStudents: parseInt(classForm.maxStudents) || undefined }),
       })
+      const ct = editingClass.classType
+      if (ct && (ct.isTerminal !== classForm.isTerminal || (ct.hasTrack === true) !== classForm.hasTrack)) {
+        await apiFetch(`/api/class-types/update/${ct.id}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isTerminal: classForm.isTerminal, hasTrack: classForm.hasTrack }),
+        })
+      }
       toast({ title: "Classe modifiée" })
       setClassModal(false)
       setClassesLoaded(false)
@@ -1373,6 +1394,11 @@ function ClassesTab({
                         Standard
                       </Badge>
                     )}
+                    {ct.hasTrack && (
+                      <Badge variant="outline" className="ml-1.5 border-border bg-muted text-foreground">
+                        Filière
+                      </Badge>
+                    )}
                   </TableCell>
                   <TableCell className="text-right text-sm tabular-nums text-muted-foreground">
                     {cls?.maxStudents ?? "—"}
@@ -1864,7 +1890,7 @@ function ClassModal({ open, onOpenChange, form, onChange, editing, submitting, o
       <DialogContent className="sm:max-w-[420px]">
         <DialogHeader>
           <DialogTitle>Modifier la classe</DialogTitle>
-          <DialogDescription>Ajustez la capacité d&apos;accueil de la classe.</DialogDescription>
+          <DialogDescription>Ajustez la capacité d&apos;accueil de la classe et la nature de son niveau.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="rounded-md border bg-muted/30 px-3 py-2">
@@ -1880,6 +1906,32 @@ function ClassModal({ open, onOpenChange, form, onChange, editing, submitting, o
               value={form.maxStudents}
               onChange={(e) => onChange({ ...form, maxStudents: e.target.value })}
             />
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-foreground">
+              Niveau {editing?.classType?.name}
+              <span className="ml-1 font-normal text-muted-foreground">— s&apos;applique à toutes ses salles</span>
+            </p>
+            <div className="flex items-center gap-3 rounded-md border bg-muted/30 px-3 py-2">
+              <Switch
+                id="level-exam"
+                checked={form.isTerminal}
+                onCheckedChange={(v) => onChange({ ...form, isTerminal: v })}
+              />
+              <Label htmlFor="level-exam" className="cursor-pointer text-sm">
+                Classe d&apos;examen <span className="text-muted-foreground">(examen blanc, bulletin d&apos;examen)</span>
+              </Label>
+            </div>
+            <div className="flex items-center gap-3 rounded-md border bg-muted/30 px-3 py-2">
+              <Switch
+                id="level-track"
+                checked={form.hasTrack}
+                onCheckedChange={(v) => onChange({ ...form, hasTrack: v })}
+              />
+              <Label htmlFor="level-track" className="cursor-pointer text-sm">
+                Niveau à filière <span className="text-muted-foreground">(filière obligatoire à l&apos;inscription)</span>
+              </Label>
+            </div>
           </div>
         </div>
         <DialogFooter>

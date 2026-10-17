@@ -33,7 +33,7 @@ export interface ClassSession {
   class: {
     id: string
     letter: string
-    classType: { id: string; name: string; isTerminal: boolean }
+    classType: { id: string; name: string; isTerminal: boolean; hasTrack: boolean; levelOrder?: number | null }
     // Pas de `track` ici : une SALLE n'a pas de filiere. Le modele ne la porte
     // ni sur `Class` ni sur `ClassSession` — elle vit sur l'inscription de
     // chaque eleve (`Enrollment.trackId`) et sur la matiere

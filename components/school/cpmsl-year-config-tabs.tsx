@@ -96,7 +96,8 @@ interface Level {
   // (`ClassSubject.trackId`). Retiré le 2026-09-19 : ni écrivain, ni lecteur.
   description?: string;
   category?: "fondamental" | "ns-tronc" | "ns-filiere";
-  isTerminal?: boolean; // classe terminale → matières d'examen par filière
+  isTerminal?: boolean; // classe d'EXAMEN (examen blanc, bulletin d'examen)
+  hasTrack?: boolean; // niveau à FILIÈRE → matières rattachables à une filière (RP-11c)
 }
 interface Classroom {
   id: string;
@@ -1117,9 +1118,11 @@ export function CPMSLYearConfigTabs({
   const assignSelectedClassroom = classrooms.find(
     (c) => c.id === assignClassSessionId,
   );
-  // Classe terminale → on peut rattacher les matières à une filière (examen officiel)
-  const assignClassIsTerminal =
-    levels.find((l) => l.id === assignSelectedClassroom?.levelId)?.isTerminal ===
+  // Niveau à filière → on peut rattacher les matières à une filière. Une
+  // matière de filière ne concerne que les élèves de cette filière : sans
+  // filière au niveau, aucun élève ne la verrait (RP-11c, hasTrack).
+  const assignClassHasTrack =
+    levels.find((l) => l.id === assignSelectedClassroom?.levelId)?.hasTrack ===
     true;
   const assignableSubjects = !assignSelectedClassroom
     ? []
@@ -2370,13 +2373,13 @@ export function CPMSLYearConfigTabs({
               </select>
             </div>
 
-            {/* Rattachement filière — uniquement pour les classes terminales */}
-            {assignClassIsTerminal && (
+            {/* Rattachement filière — uniquement pour les niveaux à filière */}
+            {assignClassHasTrack && (
               <div className="space-y-1.5">
                 <Label htmlFor="assign-track-select" className={FIELD_LABEL_CLASS}>
                   Rattachement
                   <span className="ml-2 text-xs text-neutral-500 font-normal">
-                    — classe terminale
+                    — niveau à filière
                   </span>
                 </Label>
                 <select

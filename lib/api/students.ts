@@ -15,7 +15,7 @@ export interface ApiClassSession {
   class: {
     id: string
     letter: string
-    classType: { id: string; name: string; isTerminal: boolean }
+    classType: { id: string; name: string; isTerminal: boolean; hasTrack: boolean }
   }
   academicYear: { id: string; name: string }
   displayName?: string

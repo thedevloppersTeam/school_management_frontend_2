@@ -45,7 +45,7 @@ interface EnrollmentPayload {
   track?: { id: string; code: string; name: string } | null
   student?: { user?: { firstname?: string; lastname?: string }; studentCode?: string }
   classSession?: {
-    class?: { letter?: string; classType?: { name?: string; isTerminal?: boolean } }
+    class?: { letter?: string; classType?: { name?: string; isTerminal?: boolean; hasTrack?: boolean } }
     academicYear?: { steps?: Step[] }
   }
 }
@@ -234,8 +234,10 @@ export default function StudentGradesPage() {
     () => filterSubjectsByScope(classSubjects, 'exam', enrollment?.trackId).length > 0,
     [classSubjects, enrollment],
   )
-  // Classe terminale mais filière non configurée → on l'explique à l'utilisateur.
-  const isTerminal = enrollment?.classSession?.class?.classType?.isTerminal === true
+  // Deux drapeaux distincts (RP-11c) : classe d'EXAMEN (isTerminal) et niveau à
+  // FILIÈRE (hasTrack). Chaque aide ci-dessous lit celui qui la concerne.
+  const isExamClass = enrollment?.classSession?.class?.classType?.isTerminal === true
+  const hasTrack = enrollment?.classSession?.class?.classType?.hasTrack === true
   const anyExamSubjectInClass = useMemo(
     () => classSubjects.some(cs => cs.trackId != null),
     [classSubjects],
@@ -495,15 +497,15 @@ export default function StudentGradesPage() {
             </div>
           )}
 
-          {/* Aide filière : classe terminale mais configuration incomplète */}
-          {isTerminal && !enrollment?.trackId && (
+          {/* Aide filière : niveau à filière mais filière de l'élève absente */}
+          {hasTrack && !enrollment?.trackId && (
             <div className="mt-2 rounded-lg border border-warning-border bg-warning-soft px-3 py-2 text-xs text-warning-ink">
               Cet élève n&apos;a pas de filière définie pour cette année : ses matières
               d&apos;examen officiel ne peuvent pas s&apos;afficher. Définissez sa filière
               depuis la page <span className="font-medium">Élèves inscrits</span> (menu ⋮ → Définir la filière).
             </div>
           )}
-          {isTerminal && enrollment?.trackId && !anyExamSubjectInClass && (
+          {isExamClass && hasTrack && enrollment?.trackId && !anyExamSubjectInClass && (
             <div className="mt-2 rounded-lg border border-warning-border bg-warning-soft px-3 py-2 text-xs text-warning-ink">
               Aucune matière d&apos;examen officiel n&apos;est encore rattachée à une filière
               dans cette classe. Assignez-en depuis <span className="font-medium">Configuration → Matières →

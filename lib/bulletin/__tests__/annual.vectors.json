@@ -1,0 +1,1518 @@
+{
+  "description": "Vecteurs communs de la moyenne annuelle de deliberation, calculee depuis des lignes (grades, exclusions, dispenses d'etape). Identique octet pour octet dans les deux depots. Serveur : src/lib/promotion/fromRows.ts. Frontend : chemin de calculateGeneralAverageForEnrollment (lib/api/bulletin.ts) rejoue avec from-api.ts. missingCount est verifie cote serveur seulement (RP-09, notion de deliberation).",
+  "vectors": [
+    {
+      "id": "A1-quatre-etapes",
+      "calcul": "(7.35 + 6.20 + 7.60 + 7.90) / 4 = 7.2625 -> 7.26",
+      "enrollmentId": "enr-v",
+      "steps": [
+        {
+          "id": "st-1",
+          "name": "Etape 1",
+          "stepNumber": 1
+        },
+        {
+          "id": "st-2",
+          "name": "Etape 2",
+          "stepNumber": 2
+        },
+        {
+          "id": "st-3",
+          "name": "Etape 3",
+          "stepNumber": 3
+        },
+        {
+          "id": "st-4",
+          "name": "Etape 4",
+          "stepNumber": 4
+        }
+      ],
+      "exemptedStepIds": [],
+      "classSubjects": [
+        {
+          "id": "cs-r1",
+          "trackId": null,
+          "maxScoreOverride": null,
+          "subject": {
+            "id": "sub-r1",
+            "name": "R1 sur 20",
+            "maxScore": "20",
+            "rubric": {
+              "id": "rub-R1",
+              "code": "R1"
+            },
+            "sections": []
+          }
+        },
+        {
+          "id": "cs-r2",
+          "trackId": null,
+          "maxScoreOverride": null,
+          "subject": {
+            "id": "sub-r2",
+            "name": "R2 sur 10",
+            "maxScore": "10",
+            "rubric": {
+              "id": "rub-R2",
+              "code": "R2"
+            },
+            "sections": []
+          }
+        },
+        {
+          "id": "cs-r3",
+          "trackId": null,
+          "maxScoreOverride": null,
+          "subject": {
+            "id": "sub-r3",
+            "name": "R3 sur 10",
+            "maxScore": "10",
+            "rubric": {
+              "id": "rub-R3",
+              "code": "R3"
+            },
+            "sections": []
+          }
+        }
+      ],
+      "exclusions": [],
+      "grades": [
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r1",
+          "sectionId": null,
+          "stepId": "st-1",
+          "studentScore": "14"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r2",
+          "sectionId": null,
+          "stepId": "st-1",
+          "studentScore": "8"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r3",
+          "sectionId": null,
+          "stepId": "st-1",
+          "studentScore": "9"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r1",
+          "sectionId": null,
+          "stepId": "st-2",
+          "studentScore": "12"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r2",
+          "sectionId": null,
+          "stepId": "st-2",
+          "studentScore": "6"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r3",
+          "sectionId": null,
+          "stepId": "st-2",
+          "studentScore": "10"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r1",
+          "sectionId": null,
+          "stepId": "st-3",
+          "studentScore": "16"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r2",
+          "sectionId": null,
+          "stepId": "st-3",
+          "studentScore": "7"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r3",
+          "sectionId": null,
+          "stepId": "st-3",
+          "studentScore": "5"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r1",
+          "sectionId": null,
+          "stepId": "st-4",
+          "studentScore": "15"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r2",
+          "sectionId": null,
+          "stepId": "st-4",
+          "studentScore": "9"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r3",
+          "sectionId": null,
+          "stepId": "st-4",
+          "studentScore": "8"
+        }
+      ],
+      "expect": {
+        "exact": "7.2625",
+        "printed": "7.26",
+        "passing": true,
+        "missingCount": 0
+      }
+    },
+    {
+      "id": "A2-etape-sans-aucune-note",
+      "calcul": "etape 3 sans note : baremes gardes, compte 0, NON ecartee. (7.35 + 6.20 + 0 + 7.90) / 4 = 5.3625 -> 5.36",
+      "enrollmentId": "enr-v",
+      "steps": [
+        {
+          "id": "st-1",
+          "name": "Etape 1",
+          "stepNumber": 1
+        },
+        {
+          "id": "st-2",
+          "name": "Etape 2",
+          "stepNumber": 2
+        },
+        {
+          "id": "st-3",
+          "name": "Etape 3",
+          "stepNumber": 3
+        },
+        {
+          "id": "st-4",
+          "name": "Etape 4",
+          "stepNumber": 4
+        }
+      ],
+      "exemptedStepIds": [],
+      "classSubjects": [
+        {
+          "id": "cs-r1",
+          "trackId": null,
+          "maxScoreOverride": null,
+          "subject": {
+            "id": "sub-r1",
+            "name": "R1 sur 20",
+            "maxScore": "20",
+            "rubric": {
+              "id": "rub-R1",
+              "code": "R1"
+            },
+            "sections": []
+          }
+        },
+        {
+          "id": "cs-r2",
+          "trackId": null,
+          "maxScoreOverride": null,
+          "subject": {
+            "id": "sub-r2",
+            "name": "R2 sur 10",
+            "maxScore": "10",
+            "rubric": {
+              "id": "rub-R2",
+              "code": "R2"
+            },
+            "sections": []
+          }
+        },
+        {
+          "id": "cs-r3",
+          "trackId": null,
+          "maxScoreOverride": null,
+          "subject": {
+            "id": "sub-r3",
+            "name": "R3 sur 10",
+            "maxScore": "10",
+            "rubric": {
+              "id": "rub-R3",
+              "code": "R3"
+            },
+            "sections": []
+          }
+        }
+      ],
+      "exclusions": [],
+      "grades": [
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r1",
+          "sectionId": null,
+          "stepId": "st-1",
+          "studentScore": "14"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r2",
+          "sectionId": null,
+          "stepId": "st-1",
+          "studentScore": "8"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r3",
+          "sectionId": null,
+          "stepId": "st-1",
+          "studentScore": "9"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r1",
+          "sectionId": null,
+          "stepId": "st-2",
+          "studentScore": "12"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r2",
+          "sectionId": null,
+          "stepId": "st-2",
+          "studentScore": "6"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r3",
+          "sectionId": null,
+          "stepId": "st-2",
+          "studentScore": "10"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r1",
+          "sectionId": null,
+          "stepId": "st-4",
+          "studentScore": "15"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r2",
+          "sectionId": null,
+          "stepId": "st-4",
+          "studentScore": "9"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r3",
+          "sectionId": null,
+          "stepId": "st-4",
+          "studentScore": "8"
+        }
+      ],
+      "expect": {
+        "exact": "5.3625",
+        "printed": "5.36",
+        "passing": false,
+        "missingCount": 3
+      }
+    },
+    {
+      "id": "A3-etape-entierement-dispensee",
+      "calcul": "etape 3 : les 3 matieres dispensees -> denominateurs nuls -> etape ecartee. (7.35 + 6.20 + 7.90) / 3 = 7.15",
+      "enrollmentId": "enr-v",
+      "steps": [
+        {
+          "id": "st-1",
+          "name": "Etape 1",
+          "stepNumber": 1
+        },
+        {
+          "id": "st-2",
+          "name": "Etape 2",
+          "stepNumber": 2
+        },
+        {
+          "id": "st-3",
+          "name": "Etape 3",
+          "stepNumber": 3
+        },
+        {
+          "id": "st-4",
+          "name": "Etape 4",
+          "stepNumber": 4
+        }
+      ],
+      "exemptedStepIds": [],
+      "classSubjects": [
+        {
+          "id": "cs-r1",
+          "trackId": null,
+          "maxScoreOverride": null,
+          "subject": {
+            "id": "sub-r1",
+            "name": "R1 sur 20",
+            "maxScore": "20",
+            "rubric": {
+              "id": "rub-R1",
+              "code": "R1"
+            },
+            "sections": []
+          }
+        },
+        {
+          "id": "cs-r2",
+          "trackId": null,
+          "maxScoreOverride": null,
+          "subject": {
+            "id": "sub-r2",
+            "name": "R2 sur 10",
+            "maxScore": "10",
+            "rubric": {
+              "id": "rub-R2",
+              "code": "R2"
+            },
+            "sections": []
+          }
+        },
+        {
+          "id": "cs-r3",
+          "trackId": null,
+          "maxScoreOverride": null,
+          "subject": {
+            "id": "sub-r3",
+            "name": "R3 sur 10",
+            "maxScore": "10",
+            "rubric": {
+              "id": "rub-R3",
+              "code": "R3"
+            },
+            "sections": []
+          }
+        }
+      ],
+      "exclusions": [
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r1",
+          "sectionId": null,
+          "stepId": "st-3"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r2",
+          "sectionId": null,
+          "stepId": "st-3"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r3",
+          "sectionId": null,
+          "stepId": "st-3"
+        }
+      ],
+      "grades": [
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r1",
+          "sectionId": null,
+          "stepId": "st-1",
+          "studentScore": "14"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r2",
+          "sectionId": null,
+          "stepId": "st-1",
+          "studentScore": "8"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r3",
+          "sectionId": null,
+          "stepId": "st-1",
+          "studentScore": "9"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r1",
+          "sectionId": null,
+          "stepId": "st-2",
+          "studentScore": "12"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r2",
+          "sectionId": null,
+          "stepId": "st-2",
+          "studentScore": "6"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r3",
+          "sectionId": null,
+          "stepId": "st-2",
+          "studentScore": "10"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r1",
+          "sectionId": null,
+          "stepId": "st-4",
+          "studentScore": "15"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r2",
+          "sectionId": null,
+          "stepId": "st-4",
+          "studentScore": "9"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r3",
+          "sectionId": null,
+          "stepId": "st-4",
+          "studentScore": "8"
+        }
+      ],
+      "expect": {
+        "exact": "7.15",
+        "printed": "7.15",
+        "passing": true,
+        "missingCount": 0
+      }
+    },
+    {
+      "id": "A4-note-manquante",
+      "calcul": "etape 4 : R3 manquante, bareme garde -> 5.25 + 2.25 + 0 = 7.50. (7.35 + 6.20 + 7.60 + 7.50) / 4 = 7.1625 -> 7.16",
+      "enrollmentId": "enr-v",
+      "steps": [
+        {
+          "id": "st-1",
+          "name": "Etape 1",
+          "stepNumber": 1
+        },
+        {
+          "id": "st-2",
+          "name": "Etape 2",
+          "stepNumber": 2
+        },
+        {
+          "id": "st-3",
+          "name": "Etape 3",
+          "stepNumber": 3
+        },
+        {
+          "id": "st-4",
+          "name": "Etape 4",
+          "stepNumber": 4
+        }
+      ],
+      "exemptedStepIds": [],
+      "classSubjects": [
+        {
+          "id": "cs-r1",
+          "trackId": null,
+          "maxScoreOverride": null,
+          "subject": {
+            "id": "sub-r1",
+            "name": "R1 sur 20",
+            "maxScore": "20",
+            "rubric": {
+              "id": "rub-R1",
+              "code": "R1"
+            },
+            "sections": []
+          }
+        },
+        {
+          "id": "cs-r2",
+          "trackId": null,
+          "maxScoreOverride": null,
+          "subject": {
+            "id": "sub-r2",
+            "name": "R2 sur 10",
+            "maxScore": "10",
+            "rubric": {
+              "id": "rub-R2",
+              "code": "R2"
+            },
+            "sections": []
+          }
+        },
+        {
+          "id": "cs-r3",
+          "trackId": null,
+          "maxScoreOverride": null,
+          "subject": {
+            "id": "sub-r3",
+            "name": "R3 sur 10",
+            "maxScore": "10",
+            "rubric": {
+              "id": "rub-R3",
+              "code": "R3"
+            },
+            "sections": []
+          }
+        }
+      ],
+      "exclusions": [],
+      "grades": [
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r1",
+          "sectionId": null,
+          "stepId": "st-1",
+          "studentScore": "14"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r2",
+          "sectionId": null,
+          "stepId": "st-1",
+          "studentScore": "8"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r3",
+          "sectionId": null,
+          "stepId": "st-1",
+          "studentScore": "9"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r1",
+          "sectionId": null,
+          "stepId": "st-2",
+          "studentScore": "12"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r2",
+          "sectionId": null,
+          "stepId": "st-2",
+          "studentScore": "6"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r3",
+          "sectionId": null,
+          "stepId": "st-2",
+          "studentScore": "10"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r1",
+          "sectionId": null,
+          "stepId": "st-3",
+          "studentScore": "16"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r2",
+          "sectionId": null,
+          "stepId": "st-3",
+          "studentScore": "7"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r3",
+          "sectionId": null,
+          "stepId": "st-3",
+          "studentScore": "5"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r1",
+          "sectionId": null,
+          "stepId": "st-4",
+          "studentScore": "15"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r2",
+          "sectionId": null,
+          "stepId": "st-4",
+          "studentScore": "9"
+        }
+      ],
+      "expect": {
+        "exact": "7.1625",
+        "printed": "7.16",
+        "passing": true,
+        "missingCount": 1
+      }
+    },
+    {
+      "id": "A5-dispense-d-etape",
+      "calcul": "etape 4 dispensee pour l'eleve (step exemption) -> retiree avant calcul. (7.35 + 6.20 + 7.60) / 3 = 7.05",
+      "enrollmentId": "enr-v",
+      "steps": [
+        {
+          "id": "st-1",
+          "name": "Etape 1",
+          "stepNumber": 1
+        },
+        {
+          "id": "st-2",
+          "name": "Etape 2",
+          "stepNumber": 2
+        },
+        {
+          "id": "st-3",
+          "name": "Etape 3",
+          "stepNumber": 3
+        },
+        {
+          "id": "st-4",
+          "name": "Etape 4",
+          "stepNumber": 4
+        }
+      ],
+      "exemptedStepIds": [
+        "st-4"
+      ],
+      "classSubjects": [
+        {
+          "id": "cs-r1",
+          "trackId": null,
+          "maxScoreOverride": null,
+          "subject": {
+            "id": "sub-r1",
+            "name": "R1 sur 20",
+            "maxScore": "20",
+            "rubric": {
+              "id": "rub-R1",
+              "code": "R1"
+            },
+            "sections": []
+          }
+        },
+        {
+          "id": "cs-r2",
+          "trackId": null,
+          "maxScoreOverride": null,
+          "subject": {
+            "id": "sub-r2",
+            "name": "R2 sur 10",
+            "maxScore": "10",
+            "rubric": {
+              "id": "rub-R2",
+              "code": "R2"
+            },
+            "sections": []
+          }
+        },
+        {
+          "id": "cs-r3",
+          "trackId": null,
+          "maxScoreOverride": null,
+          "subject": {
+            "id": "sub-r3",
+            "name": "R3 sur 10",
+            "maxScore": "10",
+            "rubric": {
+              "id": "rub-R3",
+              "code": "R3"
+            },
+            "sections": []
+          }
+        }
+      ],
+      "exclusions": [],
+      "grades": [
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r1",
+          "sectionId": null,
+          "stepId": "st-1",
+          "studentScore": "14"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r2",
+          "sectionId": null,
+          "stepId": "st-1",
+          "studentScore": "8"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r3",
+          "sectionId": null,
+          "stepId": "st-1",
+          "studentScore": "9"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r1",
+          "sectionId": null,
+          "stepId": "st-2",
+          "studentScore": "12"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r2",
+          "sectionId": null,
+          "stepId": "st-2",
+          "studentScore": "6"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r3",
+          "sectionId": null,
+          "stepId": "st-2",
+          "studentScore": "10"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r1",
+          "sectionId": null,
+          "stepId": "st-3",
+          "studentScore": "16"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r2",
+          "sectionId": null,
+          "stepId": "st-3",
+          "studentScore": "7"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r3",
+          "sectionId": null,
+          "stepId": "st-3",
+          "studentScore": "5"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r1",
+          "sectionId": null,
+          "stepId": "st-4",
+          "studentScore": "15"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r2",
+          "sectionId": null,
+          "stepId": "st-4",
+          "studentScore": "9"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r3",
+          "sectionId": null,
+          "stepId": "st-4",
+          "studentScore": "8"
+        }
+      ],
+      "expect": {
+        "exact": "7.05",
+        "printed": "7.05",
+        "passing": true,
+        "missingCount": 0
+      }
+    },
+    {
+      "id": "A6-dispense-sans-etape-ignoree",
+      "calcul": "dispense a stepId nul : ignoree (filtre stepId exact du bulletin). Identique a A1",
+      "enrollmentId": "enr-v",
+      "steps": [
+        {
+          "id": "st-1",
+          "name": "Etape 1",
+          "stepNumber": 1
+        },
+        {
+          "id": "st-2",
+          "name": "Etape 2",
+          "stepNumber": 2
+        },
+        {
+          "id": "st-3",
+          "name": "Etape 3",
+          "stepNumber": 3
+        },
+        {
+          "id": "st-4",
+          "name": "Etape 4",
+          "stepNumber": 4
+        }
+      ],
+      "exemptedStepIds": [],
+      "classSubjects": [
+        {
+          "id": "cs-r1",
+          "trackId": null,
+          "maxScoreOverride": null,
+          "subject": {
+            "id": "sub-r1",
+            "name": "R1 sur 20",
+            "maxScore": "20",
+            "rubric": {
+              "id": "rub-R1",
+              "code": "R1"
+            },
+            "sections": []
+          }
+        },
+        {
+          "id": "cs-r2",
+          "trackId": null,
+          "maxScoreOverride": null,
+          "subject": {
+            "id": "sub-r2",
+            "name": "R2 sur 10",
+            "maxScore": "10",
+            "rubric": {
+              "id": "rub-R2",
+              "code": "R2"
+            },
+            "sections": []
+          }
+        },
+        {
+          "id": "cs-r3",
+          "trackId": null,
+          "maxScoreOverride": null,
+          "subject": {
+            "id": "sub-r3",
+            "name": "R3 sur 10",
+            "maxScore": "10",
+            "rubric": {
+              "id": "rub-R3",
+              "code": "R3"
+            },
+            "sections": []
+          }
+        }
+      ],
+      "exclusions": [
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r3",
+          "sectionId": null,
+          "stepId": null
+        }
+      ],
+      "grades": [
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r1",
+          "sectionId": null,
+          "stepId": "st-1",
+          "studentScore": "14"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r2",
+          "sectionId": null,
+          "stepId": "st-1",
+          "studentScore": "8"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r3",
+          "sectionId": null,
+          "stepId": "st-1",
+          "studentScore": "9"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r1",
+          "sectionId": null,
+          "stepId": "st-2",
+          "studentScore": "12"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r2",
+          "sectionId": null,
+          "stepId": "st-2",
+          "studentScore": "6"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r3",
+          "sectionId": null,
+          "stepId": "st-2",
+          "studentScore": "10"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r1",
+          "sectionId": null,
+          "stepId": "st-3",
+          "studentScore": "16"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r2",
+          "sectionId": null,
+          "stepId": "st-3",
+          "studentScore": "7"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r3",
+          "sectionId": null,
+          "stepId": "st-3",
+          "studentScore": "5"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r1",
+          "sectionId": null,
+          "stepId": "st-4",
+          "studentScore": "15"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r2",
+          "sectionId": null,
+          "stepId": "st-4",
+          "studentScore": "9"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r3",
+          "sectionId": null,
+          "stepId": "st-4",
+          "studentScore": "8"
+        }
+      ],
+      "expect": {
+        "exact": "7.2625",
+        "printed": "7.26",
+        "passing": true,
+        "missingCount": 0
+      }
+    },
+    {
+      "id": "A7-arrondi-6995",
+      "calcul": "notes identiques sur 3 matieres /10 : (7 + 7 + 7 + 6.98) / 4 = 6.995 -> formatAverage 7.00 -> admis (RP-18)",
+      "enrollmentId": "enr-v",
+      "steps": [
+        {
+          "id": "st-1",
+          "name": "Etape 1",
+          "stepNumber": 1
+        },
+        {
+          "id": "st-2",
+          "name": "Etape 2",
+          "stepNumber": 2
+        },
+        {
+          "id": "st-3",
+          "name": "Etape 3",
+          "stepNumber": 3
+        },
+        {
+          "id": "st-4",
+          "name": "Etape 4",
+          "stepNumber": 4
+        }
+      ],
+      "exemptedStepIds": [],
+      "classSubjects": [
+        {
+          "id": "cs-r1",
+          "trackId": null,
+          "maxScoreOverride": null,
+          "subject": {
+            "id": "sub-r1",
+            "name": "R1 sur 20",
+            "maxScore": "20",
+            "rubric": {
+              "id": "rub-R1",
+              "code": "R1"
+            },
+            "sections": []
+          }
+        },
+        {
+          "id": "cs-r2",
+          "trackId": null,
+          "maxScoreOverride": null,
+          "subject": {
+            "id": "sub-r2",
+            "name": "R2 sur 10",
+            "maxScore": "10",
+            "rubric": {
+              "id": "rub-R2",
+              "code": "R2"
+            },
+            "sections": []
+          }
+        },
+        {
+          "id": "cs-r3",
+          "trackId": null,
+          "maxScoreOverride": null,
+          "subject": {
+            "id": "sub-r3",
+            "name": "R3 sur 10",
+            "maxScore": "10",
+            "rubric": {
+              "id": "rub-R3",
+              "code": "R3"
+            },
+            "sections": []
+          }
+        }
+      ],
+      "exclusions": [],
+      "grades": [
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r1",
+          "sectionId": null,
+          "stepId": "st-1",
+          "studentScore": "14"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r2",
+          "sectionId": null,
+          "stepId": "st-1",
+          "studentScore": "7"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r3",
+          "sectionId": null,
+          "stepId": "st-1",
+          "studentScore": "7"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r1",
+          "sectionId": null,
+          "stepId": "st-2",
+          "studentScore": "14"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r2",
+          "sectionId": null,
+          "stepId": "st-2",
+          "studentScore": "7"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r3",
+          "sectionId": null,
+          "stepId": "st-2",
+          "studentScore": "7"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r1",
+          "sectionId": null,
+          "stepId": "st-3",
+          "studentScore": "14"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r2",
+          "sectionId": null,
+          "stepId": "st-3",
+          "studentScore": "7"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r3",
+          "sectionId": null,
+          "stepId": "st-3",
+          "studentScore": "7"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r1",
+          "sectionId": null,
+          "stepId": "st-4",
+          "studentScore": "13.96"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r2",
+          "sectionId": null,
+          "stepId": "st-4",
+          "studentScore": "6.98"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r3",
+          "sectionId": null,
+          "stepId": "st-4",
+          "studentScore": "6.98"
+        }
+      ],
+      "expect": {
+        "exact": "6.995",
+        "printed": "7.00",
+        "passing": true,
+        "missingCount": 0
+      }
+    },
+    {
+      "id": "A8-matiere-de-filiere-hors-portee",
+      "calcul": "matiere d'examen (trackId non nul) sans note : hors portee tronc commun, n'entre pas. Identique a A1",
+      "enrollmentId": "enr-v",
+      "steps": [
+        {
+          "id": "st-1",
+          "name": "Etape 1",
+          "stepNumber": 1
+        },
+        {
+          "id": "st-2",
+          "name": "Etape 2",
+          "stepNumber": 2
+        },
+        {
+          "id": "st-3",
+          "name": "Etape 3",
+          "stepNumber": 3
+        },
+        {
+          "id": "st-4",
+          "name": "Etape 4",
+          "stepNumber": 4
+        }
+      ],
+      "exemptedStepIds": [],
+      "classSubjects": [
+        {
+          "id": "cs-r1",
+          "trackId": null,
+          "maxScoreOverride": null,
+          "subject": {
+            "id": "sub-r1",
+            "name": "R1 sur 20",
+            "maxScore": "20",
+            "rubric": {
+              "id": "rub-R1",
+              "code": "R1"
+            },
+            "sections": []
+          }
+        },
+        {
+          "id": "cs-r2",
+          "trackId": null,
+          "maxScoreOverride": null,
+          "subject": {
+            "id": "sub-r2",
+            "name": "R2 sur 10",
+            "maxScore": "10",
+            "rubric": {
+              "id": "rub-R2",
+              "code": "R2"
+            },
+            "sections": []
+          }
+        },
+        {
+          "id": "cs-r3",
+          "trackId": null,
+          "maxScoreOverride": null,
+          "subject": {
+            "id": "sub-r3",
+            "name": "R3 sur 10",
+            "maxScore": "10",
+            "rubric": {
+              "id": "rub-R3",
+              "code": "R3"
+            },
+            "sections": []
+          }
+        },
+        {
+          "id": "cs-exam",
+          "trackId": "track-x",
+          "maxScoreOverride": null,
+          "subject": {
+            "id": "sub-exam",
+            "name": "Examen de filiere",
+            "maxScore": "10",
+            "rubric": {
+              "id": "rub-R1",
+              "code": "R1"
+            },
+            "sections": []
+          }
+        }
+      ],
+      "exclusions": [],
+      "grades": [
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r1",
+          "sectionId": null,
+          "stepId": "st-1",
+          "studentScore": "14"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r2",
+          "sectionId": null,
+          "stepId": "st-1",
+          "studentScore": "8"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r3",
+          "sectionId": null,
+          "stepId": "st-1",
+          "studentScore": "9"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r1",
+          "sectionId": null,
+          "stepId": "st-2",
+          "studentScore": "12"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r2",
+          "sectionId": null,
+          "stepId": "st-2",
+          "studentScore": "6"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r3",
+          "sectionId": null,
+          "stepId": "st-2",
+          "studentScore": "10"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r1",
+          "sectionId": null,
+          "stepId": "st-3",
+          "studentScore": "16"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r2",
+          "sectionId": null,
+          "stepId": "st-3",
+          "studentScore": "7"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r3",
+          "sectionId": null,
+          "stepId": "st-3",
+          "studentScore": "5"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r1",
+          "sectionId": null,
+          "stepId": "st-4",
+          "studentScore": "15"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r2",
+          "sectionId": null,
+          "stepId": "st-4",
+          "studentScore": "9"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r3",
+          "sectionId": null,
+          "stepId": "st-4",
+          "studentScore": "8"
+        }
+      ],
+      "expect": {
+        "exact": "7.2625",
+        "printed": "7.26",
+        "passing": true,
+        "missingCount": 0
+      }
+    },
+    {
+      "id": "A9-autre-eleve-ignore",
+      "calcul": "notes d'une autre inscription presentes dans les lignes : ignorees. Identique a A1",
+      "enrollmentId": "enr-v",
+      "steps": [
+        {
+          "id": "st-1",
+          "name": "Etape 1",
+          "stepNumber": 1
+        },
+        {
+          "id": "st-2",
+          "name": "Etape 2",
+          "stepNumber": 2
+        },
+        {
+          "id": "st-3",
+          "name": "Etape 3",
+          "stepNumber": 3
+        },
+        {
+          "id": "st-4",
+          "name": "Etape 4",
+          "stepNumber": 4
+        }
+      ],
+      "exemptedStepIds": [],
+      "classSubjects": [
+        {
+          "id": "cs-r1",
+          "trackId": null,
+          "maxScoreOverride": null,
+          "subject": {
+            "id": "sub-r1",
+            "name": "R1 sur 20",
+            "maxScore": "20",
+            "rubric": {
+              "id": "rub-R1",
+              "code": "R1"
+            },
+            "sections": []
+          }
+        },
+        {
+          "id": "cs-r2",
+          "trackId": null,
+          "maxScoreOverride": null,
+          "subject": {
+            "id": "sub-r2",
+            "name": "R2 sur 10",
+            "maxScore": "10",
+            "rubric": {
+              "id": "rub-R2",
+              "code": "R2"
+            },
+            "sections": []
+          }
+        },
+        {
+          "id": "cs-r3",
+          "trackId": null,
+          "maxScoreOverride": null,
+          "subject": {
+            "id": "sub-r3",
+            "name": "R3 sur 10",
+            "maxScore": "10",
+            "rubric": {
+              "id": "rub-R3",
+              "code": "R3"
+            },
+            "sections": []
+          }
+        }
+      ],
+      "exclusions": [],
+      "grades": [
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r1",
+          "sectionId": null,
+          "stepId": "st-1",
+          "studentScore": "14"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r2",
+          "sectionId": null,
+          "stepId": "st-1",
+          "studentScore": "8"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r3",
+          "sectionId": null,
+          "stepId": "st-1",
+          "studentScore": "9"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r1",
+          "sectionId": null,
+          "stepId": "st-2",
+          "studentScore": "12"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r2",
+          "sectionId": null,
+          "stepId": "st-2",
+          "studentScore": "6"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r3",
+          "sectionId": null,
+          "stepId": "st-2",
+          "studentScore": "10"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r1",
+          "sectionId": null,
+          "stepId": "st-3",
+          "studentScore": "16"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r2",
+          "sectionId": null,
+          "stepId": "st-3",
+          "studentScore": "7"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r3",
+          "sectionId": null,
+          "stepId": "st-3",
+          "studentScore": "5"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r1",
+          "sectionId": null,
+          "stepId": "st-4",
+          "studentScore": "15"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r2",
+          "sectionId": null,
+          "stepId": "st-4",
+          "studentScore": "9"
+        },
+        {
+          "enrollmentId": "enr-v",
+          "classSubjectId": "cs-r3",
+          "sectionId": null,
+          "stepId": "st-4",
+          "studentScore": "8"
+        },
+        {
+          "enrollmentId": "enr-autre",
+          "classSubjectId": "cs-r1",
+          "sectionId": null,
+          "stepId": "st-1",
+          "studentScore": "0"
+        }
+      ],
+      "expect": {
+        "exact": "7.2625",
+        "printed": "7.26",
+        "passing": true,
+        "missingCount": 0
+      }
+    }
+  ]
+}

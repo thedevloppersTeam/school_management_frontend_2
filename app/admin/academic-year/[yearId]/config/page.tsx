@@ -37,6 +37,7 @@ interface Level {
   // (`ClassSubject.trackId`). Retire le 2026-09-19 : ni ecrivain, ni lecteur.
   category: 'fondamental' | 'ns-tronc' | 'ns-filiere'
   isTerminal: boolean
+  hasTrack: boolean
 }
 
 interface Classroom {
@@ -204,7 +205,7 @@ export default function AcademicYearConfigPage() {
         const typesRes = await fetch('/api/class-types', { credentials: 'include' })
         if (!typesRes.ok) { failures.push('les niveaux'); return }
         const types = await typesRes.json()
-        setLevels(types.map((t: { id: string; name: string; isTerminal: boolean }) => {
+        setLevels(types.map((t: { id: string; name: string; isTerminal: boolean; hasTrack?: boolean }) => {
           let category: Level['category'] = 'fondamental'
           if (t.name === 'NS3' || t.name === 'NS4') category = 'ns-filiere'
           else if (t.name === 'NS1' || t.name === 'NS2') category = 'ns-tronc'
@@ -214,6 +215,7 @@ export default function AcademicYearConfigPage() {
             niveau:     t.name.startsWith('NS') ? 'Nouveau Secondaire' : 'Fondamentale',
             category,
             isTerminal: t.isTerminal,
+            hasTrack:   t.hasTrack === true,
           }
         }))
       }

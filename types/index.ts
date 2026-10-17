@@ -97,7 +97,10 @@ export interface ClassTrack {
 export interface ClassType {
   id: string;
   name: string;
+  /** Classe d'EXAMEN (examen blanc, bulletin d'examen). */
   isTerminal: boolean;
+  /** Niveau à FILIÈRE : filière obligatoire à l'inscription (RP-11c). */
+  hasTrack: boolean;
 }
 
 export interface Class {

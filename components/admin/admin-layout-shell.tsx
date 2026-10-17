@@ -62,6 +62,8 @@ import {
   ArchiveIcon,
   UserPlusIcon,
   HistoryIcon,
+  GraduationCapIcon,
+  CalendarCheckIcon,
 } from "lucide-react";
 
 import { getMe, logout, type AuthUser } from "@/lib/data/auth-data";
@@ -132,6 +134,20 @@ const navItems: NavItem[] = [
       },
     ],
   },
+  // Fin d'année — repris de la branche Transfer (SPEC-PROMOTION § 7). Seule la
+  // promotion : « Reprendre une année » appelait une copie de configuration
+  // que la spec écarte (§ 8) et qui n'a pas d'endpoint au § 5.
+  {
+    label: "Fin d'année",
+    icon: CalendarCheckIcon,
+    children: [
+      {
+        label: "Promotion des élèves",
+        href: "/admin/fin-annee/promotion",
+        icon: GraduationCapIcon,
+      },
+    ],
+  },
   {
     label: "Archives",
     icon: ArchiveIcon,
@@ -188,6 +204,7 @@ const breadcrumbMap: Record<string, string> = {
   "/admin/settings/releve": "Relevé de notes",
   "/admin/archives": "Bulletins archivés",
   "/admin/journal": "Journal",
+  "/admin/fin-annee/promotion": "Promotion des élèves",
 };
 
 function getBreadcrumbLabel(pathname: string): string {
