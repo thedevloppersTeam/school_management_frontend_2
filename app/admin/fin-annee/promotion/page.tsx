@@ -45,7 +45,7 @@ import {
   type DecisionInput, type ExecuteResult, type Outcome, type PreviewStudent, type PromotionPreview,
 } from "@/lib/api/promotions"
 import {
-  destinationFor, needsTrackChoice, nextYearOf, requiredFields,
+  destinationFor, needsTrackChoice, nextYearOf, requiredFields, serverMessage,
   type LevelInfo, type SessionInfo,
 } from "@/lib/promotion/screen"
 
@@ -171,9 +171,11 @@ export default function PromotionPage() {
       setDrafts(Object.fromEntries(data.students.map((s) => [s.enrollmentId, draftFrom(s)])))
       setExecDrafts(Object.fromEntries(data.students.map((s) => [s.enrollmentId, { selected: false, targetClassSessionId: "", trackId: "" }])))
     } catch (err) {
-      // RP-08 (étapes non closes) arrive ici en 409 : message du serveur tel quel.
+      // RP-08 (étapes non closes) arrive ici en 409. Si le corps porte un
+      // message (ou error) non vide, il est affiché tel quel ; sinon, texte
+      // générique de toMessage (serverMessage, lib/promotion/screen.ts).
       setPreview(null)
-      setPreviewError(toMessage(err, "lors du chargement de la délibération"))
+      setPreviewError(serverMessage(err, "lors du chargement de la délibération"))
     } finally {
       setLoadingPreview(false)
     }
@@ -228,7 +230,7 @@ export default function PromotionPage() {
       toast({ title: "Décisions enregistrées", description: `${res.decisions.length} décision(s).` })
       await loadPreview(preview.classSessionId)
     } catch (err) {
-      toast({ title: "Erreur", description: toMessage(err, "lors de l'enregistrement"), variant: "destructive" })
+      toast({ title: "Erreur", description: serverMessage(err, "lors de l'enregistrement"), variant: "destructive" })
     } finally {
       setBusy(false)
     }
@@ -256,7 +258,7 @@ export default function PromotionPage() {
       await loadPreview(preview.classSessionId)
       setExecResult(res) // posé APRÈS le rechargement, qui l'efface
     } catch (err) {
-      toast({ title: "Erreur", description: toMessage(err, "lors de l'exécution"), variant: "destructive" })
+      toast({ title: "Erreur", description: serverMessage(err, "lors de l'exécution"), variant: "destructive" })
     } finally {
       setBusy(false)
     }
@@ -273,7 +275,7 @@ export default function PromotionPage() {
       await loadPreview(preview.classSessionId)
     } catch (err) {
       // RP-14 / RP-21 / RP-22 : refus 409 avec la raison du serveur.
-      toast({ title: "Annulation refusée", description: toMessage(err, "lors de l'annulation"), variant: "destructive" })
+      toast({ title: "Annulation refusée", description: serverMessage(err, "lors de l'annulation"), variant: "destructive" })
     } finally {
       setBusy(false)
       setCancelReason("")
