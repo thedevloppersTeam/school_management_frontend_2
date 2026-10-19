@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback } from "react"
 import { useParams } from "next/navigation"
 import Link from "next/link"
 import { CPMSLYearConfigTabs } from "@/components/school/cpmsl-year-config-tabs"
+import { ExamWarningsBanner } from "@/components/school/exam-warnings-banner"
+import type { ExamWarning } from "@/lib/exam-markers/markers"
 import { useToast } from "@/components/ui/use-toast"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ArrowLeftIcon } from "lucide-react"
@@ -26,6 +28,7 @@ interface Period {
   id: string
   name: string
   status: 'open' | 'closed'
+  isExamBlanc?: boolean
 }
 
 interface Level {
@@ -76,6 +79,8 @@ interface SubjectChild {
   name: string
   type: 'L' | 'C' | 'N' | 'P' | 'T'
   coefficient: number
+  /** Sous-matière d'examen (référentiel) — affichée en lecture seule ici (M1). */
+  isExam?: boolean
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -105,6 +110,8 @@ export default function AcademicYearConfigPage() {
   // laissait `levels` a [] sans un mot : « l'ecole n'a aucun niveau » et « le
   // serveur n'a pas repondu » produisaient exactement le meme ecran.
   const [loadErrors,      setLoadErrors]      = useState<string[]>([])
+  // Avertissements RS-07 de l'année (marqueurs d'examen, lot M1).
+  const [examWarnings,    setExamWarnings]    = useState<ExamWarning[]>([])
   const [notFound,        setNotFound]        = useState(false)
 
   // ── Chargement ─────────────────────────────────────────────────────────────
@@ -141,7 +148,8 @@ export default function AcademicYearConfigPage() {
         setPeriods(stepsData.map(s => ({
           id:     s.id,
           name:   s.name,
-          status: deriveStepStatus(s)
+          status: deriveStepStatus(s),
+          isExamBlanc: s.isExamBlanc === true,
         })))
       }
 
@@ -278,7 +286,7 @@ export default function AcademicYearConfigPage() {
                   const sections = await sectionsRes.json()
                   sections.forEach((sec: {
                     id: string; code: string; name: string
-                    displayOrder: number; coefficient?: number
+                    displayOrder: number; coefficient?: number; isExam?: boolean
                   }) => {
                     children.push({
                       id:          sec.id,
@@ -286,7 +294,8 @@ export default function AcademicYearConfigPage() {
                       parentId:    s.id,
                       name:        sec.name,
                       type:        'N',
-                      coefficient: Number(sec.coefficient) || 1
+                      coefficient: Number(sec.coefficient) || 1,
+                      isExam:      sec.isExam === true,
                     })
                   })
                 }
@@ -296,12 +305,21 @@ export default function AcademicYearConfigPage() {
         setSubjectChildren(children)
       }
 
+      // RS-07 : avertissements de l'année. Leur échec n'empêche rien d'autre.
+      const loadExamWarnings = async () => {
+        const res = await fetch(`/api/academic-years/${yearId}/exam-warnings`, { credentials: 'include' })
+        if (!res.ok) { failures.push("les avertissements d'examen"); return }
+        const data = await res.json() as { warnings?: ExamWarning[] }
+        setExamWarnings(data.warnings ?? [])
+      }
+
       await Promise.all([
         loadPeriods(),
         loadClassroomsAndStudents(),
         loadLevels(),
         loadTracks(),
         loadSubjects(),
+        loadExamWarnings(),
       ])
 
       setLoadErrors(failures)
@@ -682,6 +700,9 @@ export default function AcademicYearConfigPage() {
           </div>
         </div>
 
+        {/* RS-07 : configuration d'examen incomplète, dite en tête de l'écran. */}
+        <ExamWarningsBanner warnings={examWarnings} />
+
         {/* Un echec partiel n'est pas un ecran vide : il se nomme, et il se
             reessaie. Bandeau persistant plutot que toast ephemere — au moment
             ou l'administratrice comprend que quelque chose manque, le toast a
@@ -747,6 +768,7 @@ export default function AcademicYearConfigPage() {
           onEditSubjectChild={handleEditSubjectChild}
           onAddClassroom={handleAddClassroom}
           onDeleteClassroom={handleDeleteClassroom}
+          onExamMarkerChanged={() => loadData()}
         />
     </div>
   )

@@ -65,12 +65,13 @@ import { CatalogImportModal } from "@/components/school/catalog-import-modal"
 import { parseScore } from "@/lib/grades/score-input"
 import { RUBRIQUE_BADGE_CLASS, rubriqueShare } from "@/lib/cpmsl-classes"
 import { Pagination } from "@/components/ui/table-pagination"
+import { useExamMarkerChange } from "@/components/school/exam-marker-confirm"
 
 interface SchoolInfo  { name: string; motto?: string; foundedYear?: number; logo?: string; address?: string; phone?: string; email?: string }
 interface Holiday     { id: string; name: string; date: string }
 interface SchoolEvent { id: string; title: string; date: string; type: 'exam'|'holiday'|'meeting'|'other'|'ceremony'|'trip'; academicYearId: string }
 interface Rubric      { id: string; name: string; code: string; description?: string }
-interface Section     { id: string; name: string; code: string; maxScore: unknown; displayOrder: number }
+interface Section     { id: string; name: string; code: string; maxScore: unknown; displayOrder: number; isExam?: boolean }
 interface ApiSubject  {
   id: string; name: string; code: string
   maxScore: unknown; coefficient: unknown
@@ -94,7 +95,7 @@ interface Class       { id: string; classTypeId: string; classType?: ClassType; 
 interface Attitude    { id: string; label: string; academicYearId: string }
 interface RubricForm  { name: string; code: string; description: string }
 interface SubjectForm { name: string; code: string; maxScore: string; coefficient: string; hasSections: boolean; rubricId: string; classTypeId: string }
-interface SectionForm { name: string; code: string; maxScore: string; cycles: string[] }
+interface SectionForm { name: string; code: string; maxScore: string; cycles: string[]; isExam: boolean }
 // Le niveau porte deux drapeaux DISTINCTS (RP-11c) : classe d'examen
 // (isTerminal) et niveau à filière (hasTrack).
 interface ClassForm   { maxStudents: string; isTerminal: boolean; hasTrack: boolean }
@@ -281,7 +282,9 @@ function useSchoolSettings() {
   const [deleteAttitudeTarget, setDeleteAttitudeTarget] = useState<Attitude | null>(null)
   const [rubricForm, setRubricForm] = useState<RubricForm>({ name: "", code: "", description: "" })
   const [subjectForm, setSubjectForm] = useState<SubjectForm>({ name: "", code: "", maxScore: "100", coefficient: "1", hasSections: false, rubricId: "", classTypeId: NONE_CLASSTYPE })
-  const [sectionForm, setSectionForm] = useState<SectionForm>({ name: "", code: "", maxScore: "100", cycles: [] })
+  const [sectionForm, setSectionForm] = useState<SectionForm>({ name: "", code: "", maxScore: "100", cycles: [], isExam: false })
+  // Sous-matière d'examen (lot M1) : décompte des notes par année, confirmation, journal serveur.
+  const examMarker = useExamMarkerChange()
   const [classForm, setClassForm] = useState<ClassForm>({ maxStudents: "30", isTerminal: false, hasTrack: false })
   const [attitudeLabel, setAttitudeLabel] = useState("")
 
@@ -653,7 +656,7 @@ function useSchoolSettings() {
   const openCreateSection = (subjectId: string) => {
     setSectionParentId(subjectId)
     setEditingSection(null)
-    setSectionForm({ name: "", code: "", maxScore: "100", cycles: [] })
+    setSectionForm({ name: "", code: "", maxScore: "100", cycles: [], isExam: false })
     setSectionModal(true)
   }
 
@@ -665,6 +668,7 @@ function useSchoolSettings() {
       code: section.code,
       maxScore: String(parseDecimal(section.maxScore) ?? 0),
       cycles: getSectionCycles(section.id),
+      isExam: section.isExam === true,
     })
     setSectionModal(true)
   }
@@ -695,6 +699,15 @@ function useSchoolSettings() {
         // Cycles are stored client-side (localStorage). Persist the new list.
         saveSectionCycles(editingSection.id, sectionForm.cycles)
         toast({ title: "Sous-matière modifiée" })
+        // Marqueur d'examen : geste à part, après les autres champs. La
+        // sous-matière appartient au référentiel du niveau : le changement vaut
+        // pour TOUTES les années ; confirmation si des notes sont touchées.
+        if (sectionForm.isExam !== (editingSection.isExam === true)) {
+          void examMarker.request(
+            { kind: "section", id: editingSection.id, label: sectionForm.name, next: sectionForm.isExam },
+            () => void loadReferentiel(),
+          )
+        }
       } else {
         // ── CREATE path ──
         const parent = subjects.find((s) => s.id === sectionParentId)
@@ -911,6 +924,7 @@ function useSchoolSettings() {
     loadingRef, rubrics, subjects, expandedSubjects, toggleExpand, loadReferentiel,
     openCreateRubric, openEditRubric, openCreateSubject, openEditSubject, openCreateSection, openEditSection,
     editingSection, deletingSection, setDeletingSection, handleDeleteSection,
+    examMarkerDialog: examMarker.dialog,
     loadingClasses, classTypes, classes, initializing, handleInitializeClasses, openEditClass,
     loadingAttitudes, attitudes, currentYearId, openCreateAttitude, openEditAttitude,
     deleteAttitudeTarget, setDeleteAttitudeTarget, confirmDeleteAttitude,
@@ -1244,7 +1258,16 @@ function ReferentielTab({
                                 {section.code}
                               </code>
                             </TableCell>
-                            <TableCell className="text-sm">{section.name}</TableCell>
+                            <TableCell className="text-sm">
+                              <span className="inline-flex items-center gap-2">
+                                {section.name}
+                                {section.isExam && (
+                                  <span className="rounded border border-info-border bg-info-soft px-1.5 py-0.5 text-2xs font-semibold uppercase text-info-ink">
+                                    examen
+                                  </span>
+                                )}
+                              </span>
+                            </TableCell>
                             <TableCell></TableCell>
                             <TableCell>
                               <div className="flex flex-wrap gap-1">
@@ -1762,6 +1785,24 @@ function SectionModal({ open, onOpenChange, form, onChange, onNameChange, onTogg
               <Input id="sec-code" value={form.code} readOnly disabled />
               <p className="text-2xs text-muted-foreground">{editing ? "Immuable" : "Généré automatiquement"}</p>
             </div>
+            {editing && (
+              <div className="space-y-1 sm:col-span-2">
+                <label className="flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2.5">
+                  <Checkbox
+                    id="sec-exam"
+                    checked={form.isExam}
+                    onCheckedChange={(v) => onChange({ ...form, isExam: v === true })}
+                  />
+                  <span className="space-y-0.5">
+                    <span className="block text-sm font-medium">Sous-matière d&apos;examen</span>
+                    <span className="block text-2xs text-muted-foreground">
+                      Retenue seule à l&apos;étape d&apos;examen blanc des classes d&apos;examen, écartée des étapes
+                      ordinaires (RS-03). Vaut pour toutes les années de ce niveau.
+                    </span>
+                  </span>
+                </label>
+              </div>
+            )}
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="sec-max">Note max</Label>
               <Input
@@ -2081,6 +2122,7 @@ export default function SchoolSettingsPage() {
         onSave={s.handleSaveSection}
         editing={s.editingSection}
       />
+      {s.examMarkerDialog}
 
       {/* Delete confirmation for sub-subjects */}
       <AlertDialog open={!!s.deletingSection} onOpenChange={(o) => !o && s.setDeletingSection(null)}>
