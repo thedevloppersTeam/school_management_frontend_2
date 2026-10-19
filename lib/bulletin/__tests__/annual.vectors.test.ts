@@ -2,10 +2,14 @@
  * Vecteurs communs de la moyenne annuelle (« Moy. générale » du bulletin).
  *
  * annual.vectors.json existe, identique octet pour octet, dans les DEUX dépôts.
- * Côté serveur, il est exécuté contre la copie de délibération ; ici, contre le
- * VRAI chemin du bulletin : buildBulletinData({ includeGeneralAverage: true })
- * → calculateGeneralAverageForEnrollment → from-api → compute. Les deux
- * doivent imprimer le même chiffre au centième.
+ * Côté serveur, il est la non-régression du service de résultats (RS-05).
+ * Ici, il garde le moteur CLIENT (lib/bulletin/compute.ts + from-api) aligné sur
+ * le serveur tant que le rapport et l'écran de consultation l'utilisent (lot
+ * L4). Depuis la bascule du bulletin sur le service (lot L3), ce chemin client
+ * n'est plus celui du bulletin : il est joué par la COPIE FIGÉE de l'ancien
+ * bulletin (lib/api/__tests__/legacy/bulletin.legacy.ts), qui l'appelle
+ * exactement comme avant : buildBulletinData({ includeGeneralAverage: true })
+ * → calculateGeneralAverageForEnrollment → from-api → compute.
  *
  * Les requêtes passent par un `fetch` simulé qui sert les lignes du vecteur ;
  * il reproduit le filtre du serveur sur les dispenses (stepId EXACT,
@@ -17,7 +21,7 @@
 import { readFileSync } from 'fs'
 import { join } from 'path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { buildBulletinData } from '@/lib/api/bulletin'
+import { buildBulletinData } from '@/lib/api/__tests__/legacy/bulletin.legacy'
 
 interface Vector {
   id: string
