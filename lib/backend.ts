@@ -87,6 +87,10 @@ export async function backendFetch(
 
   const headers: Record<string, string> = {
     accept: "application/json",
+    // B-3 : une requête relayée n'est jamais conditionnelle. Avec no-cache,
+    // Express ne la juge jamais « fraîche » et ne répond jamais 304 sans corps,
+    // même si un intermédiaire ajoute If-None-Match.
+    "cache-control": "no-cache",
   };
 
   const cookie = request.headers.get("cookie");
@@ -124,101 +128,153 @@ export async function backendFetch(
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), BACKEND_TIMEOUT_MS);
 
+  // 1. Transmission. Seul un échec ICI veut dire « serveur injoignable » (ou
+  //    délai dépassé). Avant B-3, tout incident ultérieur — réponse sans corps,
+  //    corps interrompu — tombait dans le même `catch` et s'affichait
+  //    « Backend unreachable », alors que le serveur avait répondu.
+  let backendRes: Response;
   try {
-    const backendRes = await fetch(targetUrl.toString(), {
+    backendRes = await fetch(targetUrl.toString(), {
       method,
       headers,
       body,
       redirect: "manual",
       signal: controller.signal,
+      // Jamais de cache de données Next.js sur un relais d'API.
+      cache: "no-store",
     });
+  } catch (error: unknown) {
+    clearTimeout(timeoutId);
+    return transportFailure(error, method, path);
+  }
 
-    const raw = await backendRes.text();
-    let data: unknown = null;
-
-    if (raw) {
-      try {
-        data = JSON.parse(raw);
-      } catch {
-        data = null;
-      }
-    }
-
-    // Protection contre le backend stale : certains backends Express renvoient
-    // 200 + "Ok" sur une route non montée. Sans ce contrôle, le frontend peut
-    // croire qu'une opération a réussi alors que l'endpoint n'existe pas.
-    if (backendRes.ok && data === null && raw.trim() === "Ok") {
-      logger.error(
-        {
-          event: "backend_fetch_stale_backend",
-          method,
-          path,
-          status: backendRes.status,
-        },
-        "Backend stale route fallback detected",
-      );
-
-      return NextResponse.json(
-        {
-          message:
-            "Backend stale: the requested route is not mounted on the API server. Rebuild and restart the backend.",
-        },
-        { status: 502 },
-      );
-    }
-
-    if (env.NODE_ENV === "development" && !backendRes.ok) {
-      logger.debug(
-        {
-          event: "backend_fetch_response_error",
-          method,
-          path,
-          status: backendRes.status,
-        },
-        "backendFetch non-OK response",
-      );
-    }
-
-    const response = NextResponse.json(data, { status: backendRes.status });
-
-    if (options.forwardSetCookie) {
-      appendBackendSetCookie(response, backendRes.headers);
-    }
-
-    return response;
+  // 2. Lecture du corps : le serveur a répondu ; une coupure ici n'est pas
+  //    une panne de joignabilité, et le statut reçu est dit.
+  let raw: string;
+  try {
+    raw = await backendRes.text();
   } catch (error: unknown) {
     const err = error as { name?: string; message?: string };
-
-    if (err.name === "AbortError") {
-      logger.error(
-        {
-          event: "backend_fetch_timeout",
-          method,
-          path,
-          timeoutMs: BACKEND_TIMEOUT_MS,
-        },
-        "Backend timeout",
-      );
-
-      return NextResponse.json({ message: "Backend timeout" }, { status: 504 });
-    }
-
+    if (err.name === "AbortError") return transportFailure(error, method, path);
     logger.error(
       {
-        event: "backend_fetch_error",
+        event: "backend_fetch_body_error",
         method,
         path,
+        status: backendRes.status,
         errorName: err.name,
         errorMessage: err.message,
       },
-      "Backend unreachable",
+      "Backend response interrupted",
     );
-
     return NextResponse.json(
-      { message: "Backend unreachable" },
-      { status: 503 },
+      { message: `Réponse du serveur interrompue (statut ${backendRes.status}). Réessayez.` },
+      { status: 502 },
     );
   } finally {
     clearTimeout(timeoutId);
   }
+
+  // 3. Réponse sans corps (204, 304…) : relayée telle quelle. NextResponse.json
+  //    lève une exception sur ces statuts — c'était l'une des sources du faux
+  //    « Backend unreachable » (B-3).
+  if (NULL_BODY_STATUSES.has(backendRes.status)) {
+    const empty = new NextResponse(null, { status: backendRes.status });
+    if (options.forwardSetCookie) appendBackendSetCookie(empty, backendRes.headers);
+    return empty;
+  }
+
+  let data: unknown = null;
+
+  if (raw) {
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      data = null;
+    }
+  }
+
+  // Protection contre le backend stale : certains backends Express renvoient
+  // 200 + "Ok" sur une route non montée. Sans ce contrôle, le frontend peut
+  // croire qu'une opération a réussi alors que l'endpoint n'existe pas.
+  if (backendRes.ok && data === null && raw.trim() === "Ok") {
+    logger.error(
+      {
+        event: "backend_fetch_stale_backend",
+        method,
+        path,
+        status: backendRes.status,
+      },
+      "Backend stale route fallback detected",
+    );
+
+    return NextResponse.json(
+      {
+        message:
+          "Backend stale: the requested route is not mounted on the API server. Rebuild and restart the backend.",
+      },
+      { status: 502 },
+    );
+  }
+
+  if (env.NODE_ENV === "development" && !backendRes.ok) {
+    logger.debug(
+      {
+        event: "backend_fetch_response_error",
+        method,
+        path,
+        status: backendRes.status,
+      },
+      "backendFetch non-OK response",
+    );
+  }
+
+  const response = NextResponse.json(data, { status: backendRes.status });
+
+  if (options.forwardSetCookie) {
+    appendBackendSetCookie(response, backendRes.headers);
+  }
+
+  return response;
+}
+
+/** Statuts HTTP qui ne portent jamais de corps (Fetch : « null body status »). */
+const NULL_BODY_STATUSES = new Set([101, 103, 204, 205, 304]);
+
+/** Échec de TRANSMISSION : délai dépassé (504) ou serveur injoignable (503). */
+function transportFailure(error: unknown, method: string, path: string): NextResponse {
+  const err = error as { name?: string; message?: string };
+
+  if (err.name === "AbortError") {
+    logger.error(
+      {
+        event: "backend_fetch_timeout",
+        method,
+        path,
+        timeoutMs: BACKEND_TIMEOUT_MS,
+      },
+      "Backend timeout",
+    );
+
+    return NextResponse.json({ message: "Backend timeout" }, { status: 504 });
+  }
+
+  logger.error(
+    {
+      event: "backend_fetch_error",
+      method,
+      path,
+      errorName: err.name,
+      errorMessage: err.message,
+    },
+    "Backend unreachable",
+  );
+
+  return NextResponse.json(
+    {
+      message: "Serveur injoignable : la requête n'a pas pu lui être transmise. Réessayez dans un instant.",
+      code: "BACKEND_UNREACHABLE",
+    },
+    { status: 503 },
+  );
 }
