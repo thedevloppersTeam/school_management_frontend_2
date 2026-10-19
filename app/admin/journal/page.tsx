@@ -258,7 +258,7 @@ export default function JournalPage() {
             compact
             emptyLabel={
               hasFilters
-                ? "Aucun mouvement ne correspond à ces filtres."
+                ? "Aucun mouvement pour ce filtre."
                 : "Aucun mouvement enregistré à ce jour."
             }
           />
