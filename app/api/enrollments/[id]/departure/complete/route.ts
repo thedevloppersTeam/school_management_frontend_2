@@ -1,6 +1,6 @@
 // POST /api/enrollments/:id/departure/complete — compléter un départ ancien
-// (SPEC-RESULTATS RS-12, D-20) : inscription DROPPED ou TRANSFERRED sans
-// dernière étape suivie → DROPPED avec date, dernière étape, motif, commentaire.
+// (SPEC-RESULTATS RS-12, D-20, D-21) : inscription DROPPED sans dernière étape
+// suivie, complétée avec date, dernière étape, motif, commentaire.
 // Corps : { leftAt, lastAttendedStepId, reason, note? }. Journalisé
 // STUDENT_LEFT_COMPLETED. ADMIN.
 

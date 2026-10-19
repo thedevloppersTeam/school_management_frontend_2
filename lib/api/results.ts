@@ -95,7 +95,7 @@ export interface ResultStudent {
   trackId: string | null
   /** D-17 / RS-11 : le service renvoie TOUTES les inscriptions de la salle, chacune avec ses résultats. */
   status: EnrollmentStatus
-  /** Départ (DROPPED / TRANSFERRED), null sinon ; complete = false : départ à compléter (RS-12). */
+  /** Départ (DROPPED), null sinon — TRANSFERRED n'est jamais un départ (D-21) ; complete = false : à compléter (RS-12). */
   departure: ResultDeparture | null
   /** Compté dans les moyennes de classe à l'étape demandée (RS-10, D-18). */
   countedInClassAverage: boolean
