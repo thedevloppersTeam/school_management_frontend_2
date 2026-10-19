@@ -116,6 +116,12 @@ export function toMessage(err: unknown, context?: string): string {
     return err.message
   }
 
+  // Bulletin d'une étape postérieure au départ (lib/bulletin/from-results.ts,
+  // RS-09) : message complet, rédigé pour l'écran, rendu tel quel.
+  if (err instanceof Error && err.name === "StepAfterDepartureError") {
+    return err.message
+  }
+
   const base = resolveBaseMessage(err)
 
   if (!context?.trim()) {

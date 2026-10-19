@@ -29,14 +29,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
@@ -64,6 +56,8 @@ import { StepExemptionModal } from "@/components/school/step-exemption-modal"
 import { StudentTrackModal } from "@/components/school/student-track-modal"
 import { CorrectAssignmentModal } from "@/components/school/correct-assignment-modal"
 import { CorrectAssignmentBatchModal } from "@/components/school/correct-assignment-batch-modal"
+import { DeclareDepartureModal, CancelDepartureModal } from "@/components/school/departure-modals"
+import { formatFrenchLongDate } from "@/lib/date-format"
 import { Checkbox } from "@/components/ui/checkbox"
 import { StatCard } from "@/components/school/stat-card"
 import { fetchClassSessions, getClassSessionName, type AcademicYear, type ClassSession } from "@/lib/api/dashboard"
@@ -92,6 +86,9 @@ interface StudentRow {
   classTypeName: string   // la CLASSE, ex. « 1e AF »
   salleLabel:    string   // la SALLE, ex. « A » — jamais une filiere
   status:        'ACTIVE' | 'TRANSFERRED' | 'DROPPED' | 'GRADUATED'
+  // Départ en cours d'année (RS-08) ; DROPPED sans dernière étape = à compléter (RS-12)
+  leftAt?:             string | null
+  lastAttendedStepId?: string | null
   // Filière (portée par l'inscription) — obligatoire sur un niveau à filière
   trackId?:      string | null
   trackCode?:    string | null
@@ -153,12 +150,11 @@ export default function StudentsManagementPage() {
   const [itemsPerPage, setItemsPerPage] = useState(15)
   const PAGE_SIZE_OPTIONS = [15, 25, 50, 100]
 
-  // Départ / annulation du départ. Un seul état pour les deux sens : ils
-  // appellent le même endpoint, exigent le même motif, et ne diffèrent que
-  // par le statut visé et les libellés.
-  const [movement, setMovement] = useState<{ enrollmentId: string; to: 'DROPPED' | 'ACTIVE' } | null>(null)
-  const [movementReason, setMovementReason] = useState("")
-  const [movementSubmitting, setMovementSubmitting] = useState(false)
+  // Départ en cours d'année (SPEC-RESULTATS RS-08) : déclaration et annulation
+  // passent par les endpoints dédiés /departure et /departure/cancel, qui
+  // posent ou effacent la date, la dernière étape suivie et le motif.
+  const [declaring, setDeclaring]   = useState<StudentRow | null>(null)
+  const [cancelling, setCancelling] = useState<StudentRow | null>(null)
 
   // Modification profil
   const [editingStudent, setEditingStudent]     = useState<StudentRow | null>(null)
@@ -206,6 +202,8 @@ export default function StudentsManagementPage() {
             studentId: string
             classSessionId: string
             status: 'ACTIVE' | 'TRANSFERRED' | 'DROPPED' | 'GRADUATED'
+            leftAt?: string | null
+            lastAttendedStepId?: string | null
             trackId?: string | null
             track?: { id: string; code: string; name: string } | null
             student?: {
@@ -256,6 +254,8 @@ export default function StudentsManagementPage() {
               classTypeName: classe,
               salleLabel:    salle,
               status:        enr.status,
+              leftAt:        enr.leftAt ?? null,
+              lastAttendedStepId: enr.lastAttendedStepId ?? null,
               address:       enr.student?.address || '',
               motherName:    enr.student?.motherName || '',
               fatherName:    enr.student?.fatherName || '',
@@ -345,43 +345,6 @@ export default function StudentsManagementPage() {
     return sortDir === 'asc'
       ? <ArrowUpIcon className="h-3 w-3 inline ml-1" />
       : <ArrowDownIcon className="h-3 w-3 inline ml-1" />
-  }
-
-  // ── Départ et annulation du départ ───────────────────────────────────────────
-  // Les deux sens passent par le même modal : le backend journalise le geste
-  // et refuse un motif vide (400), donc l'annulation ne peut plus être un
-  // simple clic dans le menu.
-  const handleMovement = async () => {
-    if (!movement) return
-    const reason = movementReason.trim()
-    if (!reason) return
-    setMovementSubmitting(true)
-    try {
-      const res = await fetch(`/api/enrollments/status-update/${movement.enrollmentId}`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: movement.to, reason })
-      })
-      const payload = await res.json().catch(() => null)
-      if (!res.ok) throw new Error(payload?.message || undefined)
-      toast({ title: movement.to === 'DROPPED' ? "Départ enregistré" : "Départ annulé" })
-      setMovement(null)
-      loadStudents()
-    } catch (err) {
-      toast({
-        title: "Erreur",
-        description:
-          err instanceof Error && err.message
-            ? err.message
-            : movement.to === 'DROPPED'
-              ? "Impossible d'enregistrer le départ"
-              : "Impossible d'annuler le départ",
-        variant: "destructive",
-      })
-    } finally {
-      setMovementSubmitting(false)
-    }
   }
 
   // ── Modification profil ────────────────────────────────────────────────────
@@ -751,7 +714,18 @@ export default function StudentsManagementPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <StatusBadge status={student.status} />
+                        <div className="flex flex-col items-start gap-0.5">
+                          <StatusBadge status={student.status} />
+                          {student.status === 'DROPPED' && (
+                            student.lastAttendedStepId ? (
+                              <span className="text-2xs text-muted-foreground">
+                                {student.leftAt ? `Parti le ${formatFrenchLongDate(student.leftAt)}` : 'Départ déclaré'}
+                              </span>
+                            ) : (
+                              <span className="text-2xs font-medium text-warning-ink">Départ à compléter</span>
+                            )
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="pr-6 text-right">
                         {!isArchived && (
@@ -766,16 +740,21 @@ export default function StudentsManagementPage() {
                               <DropdownMenuLabel>Actions</DropdownMenuLabel>
                               <DropdownMenuSeparator />
                               {isInactive ? (
-                                <DropdownMenuItem
-                                  onClick={() => {
-                                    setMovement({ enrollmentId: student.enrollmentId, to: 'ACTIVE' })
-                                    setMovementReason('')
-                                  }}
-                                  className="text-success-ink focus:text-success-ink"
-                                >
-                                  <UserRoundCheckIcon className="mr-2 h-4 w-4" />
-                                  Annuler le départ
-                                </DropdownMenuItem>
+                                student.status === 'DROPPED' ? (
+                                  <DropdownMenuItem
+                                    onClick={() => setCancelling(student)}
+                                    className="text-success-ink focus:text-success-ink"
+                                  >
+                                    <UserRoundCheckIcon className="mr-2 h-4 w-4" />
+                                    Annuler le départ
+                                  </DropdownMenuItem>
+                                ) : (
+                                  // TRANSFERRED (historique de correction d'affectation) et
+                                  // GRADUATED ne sont pas des départs : rien à annuler ici.
+                                  <DropdownMenuItem disabled>
+                                    Aucune action sur cette inscription
+                                  </DropdownMenuItem>
+                                )
                               ) : (
                                 <>
                                   <DropdownMenuItem onClick={() => setEditingStudent(student)}>
@@ -798,14 +777,11 @@ export default function StudentsManagementPage() {
                                   </DropdownMenuItem>
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem
-                                    onClick={() => {
-                                      setMovement({ enrollmentId: student.enrollmentId, to: 'DROPPED' })
-                                      setMovementReason('')
-                                    }}
+                                    onClick={() => setDeclaring(student)}
                                     className="text-destructive focus:text-destructive"
                                   >
                                     <UserRoundXIcon className="mr-2 h-4 w-4" />
-                                    Enregistrer un départ
+                                    Déclarer un départ
                                   </DropdownMenuItem>
                                 </>
                               )}
@@ -906,68 +882,27 @@ export default function StudentsManagementPage() {
         )}
       </Card>
 
-      {/* ── Modal départ / annulation du départ ── */}
-      <Dialog open={!!movement} onOpenChange={open => !open && setMovement(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {movement?.to === 'ACTIVE'
-                ? "Annuler le départ de cet élève"
-                : "Enregistrer le départ de cet élève"}
-            </DialogTitle>
-            <DialogDescription>
-              {movement?.to === 'ACTIVE' ? (
-                <>
-                  L&apos;élève redevient actif : il réapparaît dans les listes et compte de
-                  nouveau dans les effectifs. Le motif porte la seule distinction que le
-                  bouton ne peut pas dire — un départ saisi par erreur, ou un élève
-                  réellement revenu.
-                </>
-              ) : (
-                <>
-                  L&apos;élève ne sera plus visible dans les listes actives, et ne comptera
-                  plus dans les effectifs. Son inscription et ses notes sont conservées.
-                  L&apos;action se défait par &laquo;&nbsp;Annuler le départ&nbsp;&raquo;.
-                </>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2 py-2">
-            <Label htmlFor="movement-reason" className="text-sm font-medium">
-              Motif <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="movement-reason"
-              placeholder={
-                movement?.to === 'ACTIVE'
-                  ? "Ex : départ saisi par erreur — ou élève de retour depuis le 12 janvier"
-                  : "Ex : déménagement, transfert vers une autre école"
-              }
-              value={movementReason}
-              onChange={e => setMovementReason(e.target.value)}
-            />
-            <p className="text-xs text-muted-foreground">
-              Consigné au journal d&apos;audit, avec votre nom et la date.
-            </p>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setMovement(null)}>
-              Annuler
-            </Button>
-            <Button
-              variant={movement?.to === 'ACTIVE' ? 'default' : 'destructive'}
-              onClick={handleMovement}
-              disabled={movementSubmitting || movementReason.trim().length === 0}
-            >
-              {movementSubmitting
-                ? 'Enregistrement…'
-                : movement?.to === 'ACTIVE'
-                  ? 'Annuler le départ'
-                  : 'Enregistrer le départ'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* ── Départ en cours d'année : déclaration / annulation ── */}
+      {declaring && (
+        <DeclareDepartureModal
+          open={!!declaring}
+          onOpenChange={open => !open && setDeclaring(null)}
+          enrollmentId={declaring.enrollmentId}
+          studentName={`${declaring.firstname} ${declaring.lastname}`}
+          steps={year?.steps ?? []}
+          year={year}
+          onDone={loadStudents}
+        />
+      )}
+      {cancelling && (
+        <CancelDepartureModal
+          open={!!cancelling}
+          onOpenChange={open => !open && setCancelling(null)}
+          enrollmentId={cancelling.enrollmentId}
+          studentName={`${cancelling.firstname} ${cancelling.lastname}`}
+          onDone={loadStudents}
+        />
+      )}
 
       {/* Modal modification profil */}
       {editingStudent && (

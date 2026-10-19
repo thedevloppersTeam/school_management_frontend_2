@@ -40,6 +40,9 @@ import {
   type SubjectOutput,
 } from '@/lib/bulletin/compute'
 import { calculateRubriqueTotals } from '@/lib/bulletin-calculations'
+import { StepAfterDepartureError } from '@/lib/bulletin/from-results'
+import { toMessage } from '@/lib/errors'
+import { formatFrenchLongDate } from '@/lib/date-format'
 
 // ── Données de salle (fictives) ──────────────────────────────────────────────
 
@@ -461,5 +464,69 @@ describe("L3-bis / D-17 — bulletin d'un élève parti", () => {
     current = room('salle-d17-t-sans')
     const ref = await buildBulletinData(params(current, 'e1', 's1'))
     expect(classFigures(d as unknown as Record<string, unknown>)).toEqual(classFigures(ref as unknown as Record<string, unknown>))
+  })
+})
+
+// ── 5. L5 / RS-09 : étape postérieure au départ ─────────────────────────────
+
+/**
+ * Réponse du service pour une salle où e5 est parti après l'étape 1 (forme
+ * serveur, départ déclaré) : à l'étape 2, e5 n'a que l'étape 1 et un motif.
+ */
+function withDeparture(r: TRoom, stepId: string): RoomResults {
+  const base = simulate(r, stepId, 'common')
+  const after = stepId === 'st-2'
+  const students = base.students.map((st) => {
+    if (st.enrollmentId !== 'e5') return { ...st, departure: null, countedInClassAverage: true, unavailable: null }
+    return {
+      ...st,
+      departure: { leftAt: '2026-01-20', lastAttendedStepId: 'st-1', reason: 'DROPOUT' as const, complete: true },
+      countedInClassAverage: !after,
+      unavailable: after
+        ? { code: 'ETAPE_APRES_DEPART' as const, message: 'motif serveur', lastAttendedStepId: 'st-1', lastAttendedStepName: 'Etape 1' }
+        : null,
+      steps: st.steps.filter((x) => x.stepId === 'st-1'),
+    }
+  })
+  return { ...base, students }
+}
+
+describe("L5 — bulletin d'une étape postérieure au départ (RS-09)", () => {
+  it('message clair à la place du bulletin : StepAfterDepartureError, rendu tel quel par toMessage', async () => {
+    current = roomWithDropped('salle-l5-a')
+    resultsOverride = (stepId) => withDeparture(current, stepId)
+    const err = await buildBulletinData(params(current, 'e5', 's5')).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(StepAfterDepartureError)
+    const message = (err as Error).message
+    expect(message).toBe(
+      `Bulletin indisponible : l'élève a quitté l'établissement le ${formatFrenchLongDate('2026-01-20')}. ` +
+      "Sa dernière étape suivie est « Etape 1 » ; aucun bulletin n'est produit pour une étape postérieure à son départ.",
+    )
+    expect(toMessage(err, 'lors de la génération du bulletin')).toBe(message)
+  })
+
+  it("étape suivie (la dernière) : bulletin généré normalement", async () => {
+    current = roomWithDropped('salle-l5-b')
+    resultsOverride = (stepId) => withDeparture(current, stepId)
+    const d = await buildBulletinData(params(current, 'e5', 's5', { stepId: 'st-1', stepName: 'Etape 1' }))
+    expect(d.moyenneEtape).not.toBe('—')
+    expect(d.rubrique1.find((x) => x.name === 'Lecture')).toEqual({ name: 'Lecture', note: 2, coeff: 40, isParent: false })
+  })
+
+  it("en lot : le refus ne touche que l'élève parti ; les autres bulletins sortent, une seule requête", async () => {
+    current = roomWithDropped('salle-l5-c')
+    resultsOverride = (stepId) => withDeparture(current, stepId)
+    const settled = await Promise.allSettled(current.enrollments.map((e) => buildBulletinData(params(current, e.id, e.studentId))))
+    expect(settled.map((x) => x.status)).toEqual(['fulfilled', 'fulfilled', 'fulfilled', 'fulfilled', 'rejected'])
+    expect((settled[4] as PromiseRejectedResult).reason).toBeInstanceOf(StepAfterDepartureError)
+    expect(calls.results).toBe(1)
+  })
+
+  it("élève absent de la réponse : toujours StudentNotInResultsError, jamais le message de départ", async () => {
+    current = roomWithDropped('salle-l5-d')
+    resultsOverride = (stepId) => withDeparture(current, stepId)
+    const err = await buildBulletinData(params(current, 'e-inconnu', 's9')).catch((e: unknown) => e)
+    expect(err).not.toBeInstanceOf(StepAfterDepartureError)
+    expect((err as Error).message).toMatch(/Résultats indisponibles/)
   })
 })

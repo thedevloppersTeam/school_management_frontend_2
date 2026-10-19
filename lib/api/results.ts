@@ -93,18 +93,36 @@ export interface ResultStudent {
   enrollmentId: string
   studentId: string
   trackId: string | null
-  /**
-   * D-17 : le service renvoie TOUTES les inscriptions de la salle. Un élève
-   * TRANSFERRED ou DROPPED a ses résultats (donc ses bulletins) mais n'entre
-   * jamais dans les moyennes de classe (ACTIVE + GRADUATED seulement).
-   */
+  /** D-17 / RS-11 : le service renvoie TOUTES les inscriptions de la salle, chacune avec ses résultats. */
   status: EnrollmentStatus
+  /** Départ (DROPPED / TRANSFERRED), null sinon ; complete = false : départ à compléter (RS-12). */
+  departure: ResultDeparture | null
+  /** Compté dans les moyennes de classe à l'étape demandée (RS-10, D-18). */
+  countedInClassAverage: boolean
+  /** Étape demandée postérieure au départ (RS-09) : l'étape est absente de `steps`. */
+  unavailable: ResultStepUnavailable | null
+  /** Pour un élève parti : seulement les étapes suivies (RS-09). */
   steps: ResultStep[]
   annual: DecimalString | null
 }
 
+export interface ResultDeparture {
+  /** AAAA-MM-JJ. */
+  leftAt: string | null
+  lastAttendedStepId: string | null
+  reason: 'TRANSFER_OTHER_SCHOOL' | 'DROPOUT' | 'OTHER' | null
+  complete: boolean
+}
+
+export interface ResultStepUnavailable {
+  code: 'ETAPE_APRES_DEPART'
+  message: string
+  lastAttendedStepId: string
+  lastAttendedStepName: string
+}
+
 export interface ResultClassAverages {
-  /** Inscriptions comptées : ACTIVE + GRADUATED (D-17). */
+  /** Inscriptions comptées à l'étape demandée (RS-10) : ACTIVE, GRADUATED, et élèves partis APRÈS cette étape. */
   enrollmentCount: number
   subjects: Record<string, DecimalString | null>
   rubriques: Record<RubriqueCode, DecimalString | null>

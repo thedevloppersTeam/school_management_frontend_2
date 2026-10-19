@@ -8,9 +8,10 @@
  *    règle de repli `override ?? max_score` du bulletin ;
  *  - moyennes de rubrique, d'étape, de classe, générale : valeurs EXACTES du
  *    service, arrondies ICI par formatAverage, au moment de l'affichage ;
- *  - élève transféré ou retiré (D-17) : bulletin généré comme les autres, le
- *    statut n'est pas lu ici ; la moyenne de classe imprimée est celle du
- *    service, calculée sur les seuls élèves ACTIVE + GRADUATED ;
+ *  - élève parti (D-17) : bulletin généré pour les étapes qu'il a suivies ; la
+ *    moyenne de classe imprimée est celle du service (RS-10 : l'élève y compte
+ *    pour ces étapes-là) ; étape postérieure au départ : StepAfterDepartureError
+ *    (RS-09), à la place du bulletin ;
  *  - une dispense n'a pas de ligne (le service ne l'imprime pas) ; une note
  *    manquante a `note: null`, que le gabarit imprime en trait, comme avant.
  *
@@ -21,6 +22,7 @@ import Decimal from 'decimal.js'
 import type { BulletinData, RubriqueEntry } from '@/components/BulletinScolaire'
 import { getBulletinAppreciation } from '@/lib/bulletin-calculations'
 import { formatAverage } from '@/lib/bulletin/compute'
+import { formatFrenchLongDate } from '@/lib/date-format'
 import type { DecimalString, PrintLine, RoomResults, RubriqueCode } from '@/lib/api/results'
 
 /**
@@ -53,6 +55,23 @@ export function toRubriqueEntry(line: PrintLine): RubriqueEntry {
   }
 }
 
+/**
+ * Bulletin d'une étape POSTÉRIEURE au départ de l'élève (RS-09) : refusé, avec
+ * un message complet rendu tel quel par lib/errors.ts (toMessage). Aucun
+ * bulletin partiel, aucun chiffre de repli.
+ */
+export class StepAfterDepartureError extends Error {
+  constructor(params: { leftAt: string | null; lastAttendedStepName: string }) {
+    const when = params.leftAt ? ` le ${formatFrenchLongDate(params.leftAt)}` : ''
+    super(
+      `Bulletin indisponible : l'élève a quitté l'établissement${when}. ` +
+      `Sa dernière étape suivie est « ${params.lastAttendedStepName} » ; ` +
+      "aucun bulletin n'est produit pour une étape postérieure à son départ.",
+    )
+    this.name = 'StepAfterDepartureError'
+  }
+}
+
 export type BulletinFigures = Pick<
   BulletinData,
   | 'rubrique1' | 'moyR1' | 'moyR1Texte' | 'moyClasseR1' | 'moyClasseR1Texte'
@@ -78,6 +97,12 @@ export function bulletinFiguresFromResults(params: {
   const student = params.step.students.find((s) => s.enrollmentId === params.enrollmentId)
   if (!student) throw new StudentNotInResultsError()
   const st = student.steps.find((s) => s.stepId === params.stepId)
+  if (!st && student.unavailable) {
+    throw new StepAfterDepartureError({
+      leftAt: student.departure?.leftAt ?? null,
+      lastAttendedStepName: student.unavailable.lastAttendedStepName,
+    })
+  }
   if (!st) throw new Error(`Étape ${params.stepId} absente des résultats de l'élève.`)
 
   const rub = (code: RubriqueCode) => st.rubriques[code]?.average ?? null

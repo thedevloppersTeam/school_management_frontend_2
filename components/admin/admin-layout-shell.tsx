@@ -64,6 +64,7 @@ import {
   HistoryIcon,
   GraduationCapIcon,
   CalendarCheckIcon,
+  UserXIcon,
 } from "lucide-react";
 
 import { getMe, logout, type AuthUser } from "@/lib/data/auth-data";
@@ -121,6 +122,12 @@ const navItems: NavItem[] = [
         label: "Élèves inscrits",
         href: "/admin/academic-year/:yearId/students",
         icon: UserIcon,
+      },
+      // Départs sans dernière étape suivie (SPEC-RESULTATS RS-12).
+      {
+        label: "Départs à compléter",
+        href: "/admin/academic-year/:yearId/departures",
+        icon: UserXIcon,
       },
       {
         label: "Notes",
@@ -213,6 +220,7 @@ function getBreadcrumbLabel(pathname: string): string {
   if (pathname.includes("/inscription-form")) return "Configuration du formulaire";
   if (pathname.includes("/inscription-import")) return "Import inscriptions";
   if (pathname.includes("/students")) return "Élèves inscrits";
+  if (pathname.includes("/departures")) return "Départs à compléter";
   if (pathname.includes("/subjects")) return "Matières";
   if (pathname.includes("/grades")) return "Notes";
   if (pathname.includes("/reports")) return "Bulletins";
