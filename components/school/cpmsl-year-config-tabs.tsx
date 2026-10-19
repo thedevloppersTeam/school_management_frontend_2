@@ -72,6 +72,8 @@ import {
 } from "@/lib/cpmsl-classes";
 import { Pagination } from "@/components/ui/table-pagination";
 import { parseScore } from "@/lib/grades/score-input";
+import { useExamMarkerChange } from "@/components/school/exam-marker-confirm";
+import { showExamSubjectCheckbox } from "@/lib/exam-markers/markers";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -81,6 +83,8 @@ interface Period {
   id: string;
   name: string;
   status: "open" | "closed";
+  /** Étape d'examen blanc (RS-06, pose manuelle — D3). */
+  isExamBlanc?: boolean;
 }
 interface Track {
   id: string;
@@ -137,6 +141,8 @@ interface SubjectChild {
   name: string;
   type: "L" | "C" | "N" | "P" | "T";
   coefficient: number;
+  /** Sous-matière d'examen : posée dans le RÉFÉRENTIEL, lue seulement ici (M1). */
+  isExam?: boolean;
 }
 
 interface CPMSLYearConfigTabsProps {
@@ -210,6 +216,8 @@ interface CPMSLYearConfigTabsProps {
   onDeleteClassroom?: (classroomId: string) => void;
   onEditLevel?: (levelId: string, data: { description?: string }) => void;
   onDeleteLevel?: (levelId: string) => void;
+  /** Appelé après un changement de marqueur d'examen (étape, affectation) : recharger l'année et RS-07. */
+  onExamMarkerChanged?: () => void;
 }
 
 // En-tête de colonne triable réutilisable (défini au niveau module).
@@ -342,8 +350,11 @@ export function CPMSLYearConfigTabs({
   onDeleteClassroom,
   onEditLevel,
   onDeleteLevel,
+  onExamMarkerChanged,
 }: CPMSLYearConfigTabsProps) {
   const { toast } = useToast();
+  // Marqueurs d'examen (lot M1) : décompte des notes, confirmation, journal serveur.
+  const examMarker = useExamMarkerChange();
 
   const [searchClass, setSearchClass] = useState("");
   const [searchSubject, setSearchSubject] = useState("");
@@ -413,9 +424,14 @@ export function CPMSLYearConfigTabs({
       subjectMaxScore: number;
       maxScoreOverride: number | null; // note max propre à cette affectation
       hasSections: boolean;
+      isExam: boolean; // matière d'examen (RS-03), classes d'examen seulement
     }>
   >([]);
   const [loadingClassSubjects, setLoadingClassSubjects] = useState(false);
+  // Case « Matière d'examen » : seulement pour une salle de niveau is_terminal (RS-03).
+  const showExamColumn = showExamSubjectCheckbox(
+    levels.find((l) => l.id === classrooms.find((c) => c.id === selectedSessionForAssign)?.levelId),
+  );
 
   // ── Modal assignation (classe d'abord, puis plusieurs matières) ──────────
   const [assignModalOpen, setAssignModalOpen] = useState(false);
@@ -653,7 +669,9 @@ export function CPMSLYearConfigTabs({
             };
             coefficientOverride?: { d?: number[] } | number | null;
             maxScoreOverride?: { d?: number[] } | number | null;
+            isExam?: boolean;
           }) => ({
+            isExam: cs.isExam === true,
             id: cs.id,
             subjectId: cs.subjectId,
             subjectName: cs.subject?.name || "—",
@@ -1205,6 +1223,7 @@ export function CPMSLYearConfigTabs({
         </div>
 
         {/* ═══════════════════ Onglet Étapes ═══════════════════════════════ */}
+        {examMarker.dialog}
         <TabsContent value="periods" className="p-6 space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium text-neutral-600">
@@ -1252,9 +1271,15 @@ export function CPMSLYearConfigTabs({
                   </th>
                   <th
                     scope="col"
-                    className={`${TH_CLASS} px-4 py-3 text-left w-[35%]`}
+                    className={`${TH_CLASS} px-4 py-3 text-left w-[20%]`}
                   >
                     Statut
+                  </th>
+                  <th
+                    scope="col"
+                    className={`${TH_CLASS} px-4 py-3 text-left w-[15%]`}
+                  >
+                    Examen blanc
                   </th>
                   <th
                     scope="col"
@@ -1268,7 +1293,7 @@ export function CPMSLYearConfigTabs({
                 {periods.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={3}
+                      colSpan={4}
                       className="px-4 py-6 text-center text-neutral-500 text-sm"
                     >
                       Aucune étape — cliquez sur &laquo;&nbsp;Nouvelle
@@ -1299,6 +1324,26 @@ export function CPMSLYearConfigTabs({
                             Clôturée
                           </div>
                         )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {/* RS-06 / D3 : pose manuelle. Vaut pour toute l'année ; ne
+                            change le calcul que des classes d'examen (RS-03). */}
+                        <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-neutral-700">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 accent-primary"
+                            checked={period.isExamBlanc === true}
+                            disabled={isArchived || examMarker.busy}
+                            onChange={(e) =>
+                              void examMarker.request(
+                                { kind: "step", id: period.id, label: period.name, next: e.target.checked },
+                                onExamMarkerChanged,
+                              )
+                            }
+                            aria-label={`Étape d'examen blanc : ${period.name}`}
+                          />
+                          <span className="sr-only sm:not-sr-only">Étape d&apos;examen blanc</span>
+                        </label>
                       </td>
                       <td className="px-4 py-3 text-center">
                         {!isArchived && (
@@ -1862,7 +1907,17 @@ export function CPMSLYearConfigTabs({
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-neutral-900 text-sm">
-                                {child.name}
+                                <span className="inline-flex items-center gap-2">
+                                  {child.name}
+                                  {child.isExam && (
+                                    <span
+                                      className="rounded border border-info-border bg-info-soft px-1.5 py-0.5 text-2xs font-semibold uppercase text-info-ink"
+                                      title="Sous-matière d'examen : se modifie dans le référentiel des matières (vaut pour toutes les années du niveau)."
+                                    >
+                                      examen
+                                    </span>
+                                  )}
+                                </span>
                               </td>
                               <td className="px-4 py-3"></td>
                               <td className="px-4 py-3"></td>
@@ -2029,6 +2084,14 @@ export function CPMSLYearConfigTabs({
                         >
                           Note maximale
                         </th>
+                        {showExamColumn && (
+                          <th
+                            scope="col"
+                            className={`${TH_CLASS} px-4 py-2.5 text-left`}
+                          >
+                            Examen
+                          </th>
+                        )}
                         <th
                           scope="col"
                           className={`${TH_CLASS} px-4 py-2.5 text-left`}
@@ -2041,7 +2104,7 @@ export function CPMSLYearConfigTabs({
                       {classSubjects.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={7}
+                            colSpan={showExamColumn ? 8 : 7}
                             className="px-4 py-6 text-center text-neutral-500 text-sm"
                           >
                             <p>Aucune matière assignée à cette classe</p>
@@ -2136,6 +2199,29 @@ export function CPMSLYearConfigTabs({
                                   )}
                                 </div>
                               </td>
+                              {showExamColumn && (
+                                <td className="px-4 py-3">
+                                  <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-neutral-700">
+                                    <input
+                                      type="checkbox"
+                                      className="h-4 w-4 accent-primary"
+                                      checked={cs.isExam}
+                                      disabled={isArchived || examMarker.busy}
+                                      onChange={(e) =>
+                                        void examMarker.request(
+                                          { kind: "classSubject", id: cs.id, label: cs.subjectName, next: e.target.checked },
+                                          () => {
+                                            void loadClassSubjects(selectedSessionForAssign);
+                                            onExamMarkerChanged?.();
+                                          },
+                                        )
+                                      }
+                                      aria-label={`Matière d'examen : ${cs.subjectName}`}
+                                    />
+                                    <span className="sr-only sm:not-sr-only">Matière d&apos;examen</span>
+                                  </label>
+                                </td>
+                              )}
                               <td className="px-4 py-3">
                                 {!isArchived && (
                                   <button

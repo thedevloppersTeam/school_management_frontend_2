@@ -26,6 +26,8 @@ export interface AcademicYearStep {
   endDate: string
   academicYearId: string
   isCurrent: boolean  // ← source de vérité pour le statut ouvert/clôturé
+  /** Étape d'examen blanc (RS-06, pose manuelle — D3). */
+  isExamBlanc?: boolean
 }
 
 export interface ClassSession {
