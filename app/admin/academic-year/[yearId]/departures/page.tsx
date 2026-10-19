@@ -1,7 +1,7 @@
 "use client"
 
-// Départs à compléter (SPEC-RESULTATS v0.3 RS-12, D-20) : inscriptions DROPPED
-// ou TRANSFERRED de l'année sans dernière étape suivie. Tant qu'un départ n'est
+// Départs à compléter (SPEC-RESULTATS v0.3 RS-12, D-20, D-21) : inscriptions
+// DROPPED de l'année sans dernière étape suivie. Tant qu'un départ n'est
 // pas complété, l'élève n'entre dans AUCUNE moyenne de classe et sa moyenne
 // générale n'est pas bornée (il garde ses résultats individuels, D-17).
 //
@@ -27,7 +27,7 @@ import { DeclareDepartureModal } from "@/components/school/departure-modals"
 interface IncompleteDeparture {
   enrollmentId: string
   studentId: string
-  status: "DROPPED" | "TRANSFERRED"
+  status: "DROPPED"
   leftAt: string | null
   studentCode: string | null
   firstname: string | null
@@ -103,7 +103,7 @@ export default function IncompleteDeparturesPage() {
         <CardHeader>
           <CardTitle>Départs à compléter</CardTitle>
           <CardDescription>
-            Inscriptions « Désactivé » ou « Transféré » sans dernière étape suivie.
+            Inscriptions « Désactivé » sans dernière étape suivie.
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
@@ -146,11 +146,7 @@ export default function IncompleteDeparturesPage() {
                     </TableCell>
                     <TableCell className="text-foreground">{r.className}</TableCell>
                     <TableCell>
-                      {r.status === "DROPPED" ? (
-                        <Badge variant="secondary">Désactivé</Badge>
-                      ) : (
-                        <Badge className="border-info-border bg-info-soft text-info-ink hover:bg-info-soft">Transféré</Badge>
-                      )}
+                      <Badge variant="secondary">Désactivé</Badge>
                     </TableCell>
                     <TableCell>
                       {r.gradeCount === 0 ? (

@@ -9,7 +9,7 @@
 // moyennes de classe (RS-10) : elle est rappelée sur la confirmation.
 //
 // « Compléter le départ » (D-20) : même formulaire, pour une inscription
-// DROPPED ou TRANSFERRED sans dernière étape (RS-12) → POST …/departure/complete.
+// DROPPED sans dernière étape (RS-12) → POST …/departure/complete.
 // L'élève n'entrait dans aucune moyenne de classe ; complété, il y entre pour
 // les étapes suivies : la confirmation le dit, avec le nombre de ses notes.
 //
