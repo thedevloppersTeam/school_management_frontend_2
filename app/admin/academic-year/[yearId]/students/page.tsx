@@ -29,9 +29,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Switch } from "@/components/ui/switch"
 import {
   PlusIcon,
   SearchIcon,
@@ -57,7 +55,14 @@ import { StudentTrackModal } from "@/components/school/student-track-modal"
 import { CorrectAssignmentModal } from "@/components/school/correct-assignment-modal"
 import { CorrectAssignmentBatchModal } from "@/components/school/correct-assignment-batch-modal"
 import { DeclareDepartureModal, CancelDepartureModal } from "@/components/school/departure-modals"
-import { formatFrenchLongDate } from "@/lib/date-format"
+import Link from "next/link"
+import { LeftBadge } from "@/components/school/left-badge"
+import {
+  DEFAULT_PRESENCE_FILTER,
+  PRESENCE_FILTERS,
+  matchesPresence,
+  type PresenceFilter,
+} from "@/lib/departures/presence"
 import { Checkbox } from "@/components/ui/checkbox"
 import { StatCard } from "@/components/school/stat-card"
 import { fetchClassSessions, getClassSessionName, type AcademicYear, type ClassSession } from "@/lib/api/dashboard"
@@ -141,7 +146,8 @@ export default function StudentsManagementPage() {
   const [students, setStudents]       = useState<StudentRow[]>([])
   const [loading, setLoading]         = useState(true)
   const [enrollOpen, setEnrollOpen]   = useState(false)
-  const [showInactive, setShowInactive] = useState(false)
+  // D-22 : les élèves partis restent listés ; filtre Actifs / Partis / Tous, défaut Tous.
+  const [presence, setPresence] = useState<PresenceFilter>(DEFAULT_PRESENCE_FILTER)
 
   // Filtres
   const [searchQuery, setSearchQuery]   = useState("")
@@ -286,7 +292,7 @@ export default function StudentsManagementPage() {
 
   // ── Données filtrées ─────────────────────────────────────────────────────────
   const displayed = useMemo(() => {
-    let result = showInactive ? students : activeStudents
+    let result = students.filter(s => matchesPresence(s.status, presence))
 
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
@@ -314,7 +320,7 @@ export default function StudentsManagementPage() {
       })
     }
     return result
-  }, [students, showInactive, searchQuery, selectedClass, sortCol, sortDir, activeStudents])
+  }, [students, presence, searchQuery, selectedClass, sortCol, sortDir])
 
   const totalPages        = Math.ceil(displayed.length / itemsPerPage)
   const paginated         = displayed.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
@@ -539,17 +545,16 @@ export default function StudentsManagementPage() {
             </SelectContent>
           </Select>
 
-          <div className="flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 sm:py-1.5">
-            <Switch
-              id="show-inactive"
-              checked={showInactive}
-              onCheckedChange={setShowInactive}
-              disabled={isArchived}
-            />
-            <Label htmlFor="show-inactive" className="cursor-pointer text-sm text-muted-foreground">
-              Désactivés ({inactiveStudents.length})
-            </Label>
-          </div>
+          <Select value={presence} onValueChange={v => { setPresence(v as PresenceFilter); setCurrentPage(1) }}>
+            <SelectTrigger className="w-full sm:w-[160px]" aria-label="Filtrer par présence">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PRESENCE_FILTERS.map(f => (
+                <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Barre d'action — correction d'affectation en lot */}
@@ -718,9 +723,7 @@ export default function StudentsManagementPage() {
                           <StatusBadge status={student.status} />
                           {student.status === 'DROPPED' && (
                             student.lastAttendedStepId ? (
-                              <span className="text-2xs text-muted-foreground">
-                                {student.leftAt ? `Parti le ${formatFrenchLongDate(student.leftAt)}` : 'Départ déclaré'}
-                              </span>
+                              <LeftBadge leftAt={student.leftAt} />
                             ) : (
                               <span className="text-2xs font-medium text-warning-ink">Départ à compléter</span>
                             )
@@ -728,6 +731,11 @@ export default function StudentsManagementPage() {
                         </div>
                       </TableCell>
                       <TableCell className="pr-6 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                        {/* D-22 : la fiche (parcours, historique des inscriptions et du départ). */}
+                        <Button asChild variant="ghost" size="sm" className="h-8 px-2 text-xs">
+                          <Link href={`/admin/all-students/${student.studentId}/transcript`}>Voir la fiche</Link>
+                        </Button>
                         {!isArchived && (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -788,6 +796,7 @@ export default function StudentsManagementPage() {
                             </DropdownMenuContent>
                           </DropdownMenu>
                         )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   )

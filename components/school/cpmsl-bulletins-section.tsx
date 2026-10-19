@@ -71,6 +71,8 @@ import {
   type ClassSession,
 } from "@/lib/api/dashboard";
 import { isNisuValid as isCentralNisuValid } from "@/lib/nisu";
+import { presentAtStep } from "@/lib/departures/presence";
+import { LeftBadge } from "@/components/school/left-badge";
 import {
   addBulletinCanvasToPdf,
   captureBulletinElement,
@@ -91,6 +93,8 @@ interface EnrollmentRow {
   classSessionId: string;
   className: string;
   status: string;
+  leftAt: string | null;
+  lastAttendedStepId: string | null;
 }
 
 interface CPMSLBulletinsSectionProps {
@@ -141,7 +145,9 @@ export function CPMSLBulletinsSection({
   // ── Données ──────────────────────────────────────────────────────────────────
   const [steps, setSteps] = useState<AcademicYearStep[]>([]);
   const [sessions, setSessions] = useState<ClassSession[]>([]);
-  const [enrollments, setEnrollments] = useState<EnrollmentRow[]>([]);
+  // D-22 : inscriptions ACTIVE et DROPPED de la salle ; à l'étape choisie, un
+  // élève parti n'est proposé que si elle est ≤ sa dernière étape suivie.
+  const [allEnrollments, setEnrollments] = useState<EnrollmentRow[]>([]);
   const [loadingInit, setLoadingInit] = useState(true);
   const [loadingStudents, setLoadingStudents] = useState(false);
 
@@ -210,6 +216,11 @@ export function CPMSLBulletinsSection({
   const [itemsPerPage, setItemsPerPage] = useState(15);
   const PAGE_SIZE_OPTIONS = [15, 25, 50, 100];
 
+  const enrollments = useMemo(
+    () => allEnrollments.filter((e) => presentAtStep(e, selectedStep, steps)),
+    [allEnrollments, selectedStep, steps],
+  );
+
   const filteredEnrollments = useMemo(() => {
     if (!searchQuery) return enrollments;
     return enrollments.filter((enrollment) => {
@@ -261,6 +272,8 @@ export function CPMSLBulletinsSection({
             studentId: string;
             classSessionId: string;
             status: string;
+            leftAt?: string | null;
+            lastAttendedStepId?: string | null;
             student?: {
               id: string;
               studentCode?: string;
@@ -268,13 +281,13 @@ export function CPMSLBulletinsSection({
               user?: { firstname?: string; lastname?: string };
             };
           }>
-        >(`/api/enrollments?classSessionId=${sessionId}&status=ACTIVE`);
+        >(`/api/enrollments?classSessionId=${sessionId}`);
 
         const session = sessions.find((s) => s.id === sessionId);
         const className = session ? getClassSessionName(session) : "";
 
         setEnrollments(
-          data.map((enr) => ({
+          data.filter((enr) => enr.status === "ACTIVE" || enr.status === "DROPPED").map((enr) => ({
             enrollmentId: enr.id,
             studentId: enr.studentId,
             studentCode: enr.student?.studentCode || "—",
@@ -284,6 +297,8 @@ export function CPMSLBulletinsSection({
             classSessionId: sessionId,
             className,
             status: enr.status,
+            leftAt: enr.leftAt ?? null,
+            lastAttendedStepId: enr.lastAttendedStepId ?? null,
           })),
         );
       } catch (err) {
@@ -810,7 +825,10 @@ export function CPMSLBulletinsSection({
                               </Avatar>
                             </TableCell>
                             <TableCell className="font-medium text-foreground">
-                              {student.lastname}
+                              <div className="flex items-center gap-1.5">
+                                <span>{student.lastname}</span>
+                                {student.status === "DROPPED" && <LeftBadge leftAt={student.leftAt} />}
+                              </div>
                             </TableCell>
                             <TableCell className="text-foreground">
                               {student.firstname}

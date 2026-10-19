@@ -36,11 +36,16 @@ import { RUBRIQUE_WEIGHTS, type RubriqueCode } from "@/lib/bulletin/compute"
 import { parseScore, validateScoreInput } from "@/lib/grades/score-input"
 import { useUnsavedChangesWarning } from "@/hooks/use-unsaved-changes-warning"
 import { toMessage } from "@/lib/errors"
+import { stepsForEnrollment } from "@/lib/departures/presence"
+import { LeftBadge } from "@/components/school/left-badge"
 
-interface Step { id: string; name: string; stepNumber: number; isCurrent: boolean }
+interface Step { id: string; name: string; stepNumber: number; isCurrent: boolean; startDate?: string | null }
 interface EnrollmentPayload {
   id: string
   classSessionId: string
+  status: string
+  leftAt?: string | null
+  lastAttendedStepId?: string | null
   trackId?: string | null
   track?: { id: string; code: string; name: string } | null
   student?: { user?: { firstname?: string; lastname?: string }; studentCode?: string }
@@ -115,11 +120,13 @@ export default function StudentGradesPage() {
         const enr = await apiFetch<EnrollmentPayload>(`/api/enrollments/${enrollmentId}`)
         if (cancelled) return
         setEnrollment(enr)
-        const stepList = (enr.classSession?.academicYear?.steps ?? [])
+        const yearSteps = (enr.classSession?.academicYear?.steps ?? [])
           .slice()
           .sort((a, b) => a.stepNumber - b.stepNumber)
+        // D-22 : un élève parti n'est proposé qu'aux étapes ≤ sa dernière étape suivie.
+        const stepList = stepsForEnrollment(enr, yearSteps)
         setSteps(stepList)
-        const current = stepList.find(s => s.isCurrent) ?? stepList[0]
+        const current = stepList.find(s => s.isCurrent) ?? stepList[stepList.length - 1] ?? stepList[0]
         setSelectedStepId(current?.id ?? "")
         const cs = await fetchClassSubjects(enr.classSessionId)
         if (!cancelled) setClassSubjects(cs)
@@ -440,6 +447,14 @@ export default function StudentGradesPage() {
           <p className="mt-1 max-w-prose text-xs text-muted-foreground">
             Saisie des notes par élève
           </p>
+          {enrollment?.status === "DROPPED" && (
+            <p className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+              <LeftBadge leftAt={enrollment.leftAt} />
+              {steps.length > 0
+                ? "Saisie ouverte jusqu'à sa dernière étape suivie seulement."
+                : "Départ à compléter : aucune saisie possible tant que la dernière étape suivie n'est pas renseignée."}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-3">
           <Select value={selectedStepId} onValueChange={requestStepChange}>

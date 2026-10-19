@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useParams } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
 import { Button } from "@/components/ui/button"
@@ -14,13 +14,14 @@ import { GradesViewContent } from "@/components/school/grades-view-content"
 import type { ApiClassSession } from "@/lib/api/students"
 import type { AcademicYearStep, ClassSession } from "@/lib/api/dashboard"
 import type { ApiClassSubject, ApiEnrollment, ApiGrade, CreateGradePayload } from "@/lib/api/grades"
-import { fetchClassSubjects, fetchEnrollments, fetchGradesForClassSubjectStep, bulkCreateGrades, updateGrade, deleteGrade } from "@/lib/api/grades"
+import { fetchClassSubjects, fetchEntryEnrollments, fetchGradesForClassSubjectStep, bulkCreateGrades, updateGrade, deleteGrade } from "@/lib/api/grades"
 import type { UpdateGradePayload } from "@/components/school/cpmsl-grades-grid"
 import { toMessage } from '@/lib/errors'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { presentAtStep } from "@/lib/departures/presence"
 
 function buildSaveDescription(created: number, updated: number, deleted: number): string {
   const parts: string[] = []
@@ -81,6 +82,13 @@ export default function GradesPage() {
   // Mode de saisie dans l'onglet "Saisie" : par matière (grille) ou par élève.
   const [entryMode,      setEntryMode]      = useState<"subject" | "student">("subject")
 
+  // D-22 : à l'étape choisie, un élève parti n'est proposé que si elle est
+  // ≤ sa dernière étape suivie ; après, il n'apparaît pas dans la grille.
+  const enrollmentsAtStep = useMemo(
+    () => enrollments.filter((e) => presentAtStep(e, selectedStepId, steps)),
+    [enrollments, selectedStepId, steps],
+  )
+
   // ── Chargement contexte ───────────────────────────────────────────────────
   useEffect(() => {
     async function loadContext() {
@@ -122,7 +130,8 @@ export default function GradesPage() {
     try {
       const [cs, enr] = await Promise.all([
         fetchClassSubjects(sessionId),
-        fetchEnrollments(sessionId),
+        // D-22 : actifs ET partis ; un parti n'est proposé qu'aux étapes suivies.
+        fetchEntryEnrollments(sessionId),
       ])
       setClassSubjects(cs)
       setEnrollments(enr)
@@ -325,7 +334,7 @@ export default function GradesPage() {
               sessions={apiSessions}
               steps={steps}
               classSubjects={classSubjects}
-              enrollments={enrollments}
+              enrollments={enrollmentsAtStep}
               existingGrades={existingGrades}
               selectedSessionId={selectedSessionId}
               selectedClassSubjectId={selectedClassSubjectId}

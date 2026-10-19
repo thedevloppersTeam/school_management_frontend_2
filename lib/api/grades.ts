@@ -54,6 +54,9 @@ export interface ApiEnrollmentStudent {
 export interface ApiEnrollment {
   id: string
   status: string
+  /** Départ (D-22) : date, dernière étape suivie. Renseignés pour une inscription DROPPED complète. */
+  leftAt?: string | null
+  lastAttendedStepId?: string | null
   /** Filière de l'élève (obligatoire en classe terminale, null sinon) */
   trackId?: string | null
   track?: ApiTrack | null
@@ -138,6 +141,21 @@ export async function fetchEnrollments(classSessionId: string): Promise<ApiEnrol
   })
   if (!res.ok) throw new Error('Impossible de charger les élèves')
   return res.json()
+}
+
+/**
+ * Inscriptions proposées en SAISIE (notes, comportement — D-22) : ACTIVE et
+ * DROPPED. Un élève parti n'est ensuite proposé qu'aux étapes ≤ sa dernière
+ * étape suivie (lib/departures/presence.ts, presentAtStep). La consultation, la
+ * progression et les effectifs gardent fetchEnrollments (ACTIVE seulement).
+ */
+export async function fetchEntryEnrollments(classSessionId: string): Promise<ApiEnrollment[]> {
+  const res = await fetch(`/api/enrollments?classSessionId=${classSessionId}`, {
+    credentials: 'include',
+  })
+  if (!res.ok) throw new Error('Impossible de charger les élèves')
+  const rows = (await res.json()) as ApiEnrollment[]
+  return rows.filter((e) => e.status === 'ACTIVE' || e.status === 'DROPPED')
 }
 
 // ── Fetch grades — normalise studentScore ─────────────────────────────────────

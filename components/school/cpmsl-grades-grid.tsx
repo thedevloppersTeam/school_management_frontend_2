@@ -50,6 +50,7 @@ import { parseScore, validateScoreInput } from "@/lib/grades/score-input"
 import { invalidateExclusionsCache } from "@/lib/api/bulletin"
 import { libelleClasseSalle } from "@/lib/classes/labels"
 import { useUnsavedChangesWarning } from "@/hooks/use-unsaved-changes-warning"
+import { LeftBadge } from "@/components/school/left-badge"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -1081,7 +1082,10 @@ export function CPMSLGradesGrid({
     return (
       <TableRow key={enrollment.id} className="group">
         <TableCell className="min-w-[132px] px-2 py-1 pl-6 text-xs font-semibold text-foreground">
-          {enrollment.student.user.lastname}
+          <div className="flex items-center gap-1.5">
+            <span>{enrollment.student.user.lastname}</span>
+            {enrollment.status === "DROPPED" && <LeftBadge leftAt={enrollment.leftAt} />}
+          </div>
         </TableCell>
         <TableCell className="min-w-[116px] px-2 py-1 text-xs text-foreground">
           {enrollment.student.user.firstname}
@@ -1146,6 +1150,7 @@ export function CPMSLGradesGrid({
               <SettingsIcon className="h-3.5 w-3.5" />
             </button>
             <span>{enrollment.student.user.lastname}</span>
+            {enrollment.status === "DROPPED" && <LeftBadge leftAt={enrollment.leftAt} />}
             {excludedHere > 0 && (
               <Badge variant="outline" className="border-warning-border bg-warning-soft text-3xs text-warning-ink">
                 {excludedHere} exclue(s)

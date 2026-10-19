@@ -13,6 +13,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { UserIcon, ClipboardListIcon } from "lucide-react"
 import type { ApiClassSession } from "@/lib/api/students"
 import type { ApiEnrollment } from "@/lib/api/grades"
+import { hasEntrySteps } from "@/lib/departures/presence"
+import { LeftBadge } from "@/components/school/left-badge"
 
 interface Props {
   yearId:            string
@@ -68,7 +70,8 @@ export function CPMSLGradesByStudent({
     onSessionChange("") // reset la salle : on attend un nouveau choix
   }
 
-  const active = enrollments.filter(e => e.status === "ACTIVE")
+  // D-22 : actifs, et partis au départ complété (saisie de leurs étapes suivies).
+  const active = enrollments.filter(hasEntrySteps)
   const sortedStudents = [...active].sort((a, b) =>
     `${a.student.user.lastname} ${a.student.user.firstname}`.localeCompare(
       `${b.student.user.lastname} ${b.student.user.firstname}`, "fr",
@@ -154,8 +157,9 @@ export function CPMSLGradesByStudent({
                     </AvatarFallback>
                   </Avatar>
                   <div className="min-w-0">
-                    <p className="truncate font-medium text-foreground">
-                      {enr.student.user.lastname} {enr.student.user.firstname}
+                    <p className="flex items-center gap-1.5 truncate font-medium text-foreground">
+                      <span className="truncate">{enr.student.user.lastname} {enr.student.user.firstname}</span>
+                      {enr.status === "DROPPED" && <LeftBadge leftAt={enr.leftAt} />}
                     </p>
                     <p className="truncate text-xs text-muted-foreground">
                       <span className="font-mono">{enr.student.studentCode}</span>

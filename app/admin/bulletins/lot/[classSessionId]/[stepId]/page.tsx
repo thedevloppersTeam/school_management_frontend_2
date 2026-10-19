@@ -15,6 +15,7 @@ import { toMessage } from "@/lib/errors"
 import { BulletinPrintable } from "@/components/school/bulletin-printable"
 import type { BulletinData } from "@/components/BulletinScolaire"
 import { isNisuValid } from "@/lib/nisu"
+import { presentAtStep } from "@/lib/departures/presence"
 import {
   addBulletinCanvasToPdf,
   captureBulletinElement,
@@ -25,6 +26,8 @@ interface ApiEnrollmentRow {
   studentId: string
   classSessionId: string
   status: "ACTIVE" | "TRANSFERRED" | "DROPPED" | "GRADUATED"
+  /** Départ (D-22) : borne des étapes auxquelles un élève parti a un bulletin. */
+  lastAttendedStepId?: string | null
   student?: {
     id: string
     nisu?: string
@@ -96,39 +99,42 @@ export default function BulletinLotPrintPage() {
     setError(null)
     setProgress({ current: 0, total: 0 })
     try {
-      // 1. Récupérer les inscriptions ACTIVES de la classe
-      const enrollments = await apiFetch<ApiEnrollmentRow[]>(
-        `/api/enrollments?classSessionId=${classSessionId}&status=ACTIVE`
-      )
+      // 1. Inscriptions ACTIVE et DROPPED de la classe (D-22) : un élève parti
+      //    a son bulletin aux étapes ≤ sa dernière étape suivie, pas après.
+      const enrollments = (await apiFetch<ApiEnrollmentRow[]>(
+        `/api/enrollments?classSessionId=${classSessionId}`
+      )).filter((e) => e.status === "ACTIVE" || e.status === "DROPPED")
 
-      const eligible = enrollments.filter((e) => isNisuValid(e.student?.nisu))
+      // 2. Contexte (année, étapes) : nécessaire AVANT le tri des élèves partis.
+      const yearId = enrollments[0]?.classSession?.academicYear?.id ?? ""
+      let resolvedStepName = "Étape"
+      let yearSteps: Awaited<ReturnType<typeof fetchSteps>> = []
+      if (yearId) {
+        setReportsHref(`/admin/academic-year/${yearId}/reports`)
+        try {
+          yearSteps = await fetchSteps(yearId)
+          const step = yearSteps.find((s) => s.id === stepId)
+          if (step) resolvedStepName = step.name
+        } catch {
+          /* best-effort : sans les étapes, aucun élève parti n'est inclus */
+        }
+      }
+      setStepName(resolvedStepName)
+
+      const eligible = enrollments
+        .filter((e) => presentAtStep(e, stepId, yearSteps))
+        .filter((e) => isNisuValid(e.student?.nisu))
       if (eligible.length === 0) {
         setSlots([])
         setLoading(false)
         return
       }
 
-      // 2. Dériver le contexte (classe, année, étape)
       const first = eligible[0]
       const cls = first.classSession?.class
       const trackSuffix = cls?.track?.code ? ` — ${cls.track.code}` : ""
       const computedClassName = `${cls?.classType?.name ?? ""} ${cls?.letter ?? ""}${trackSuffix}`.trim()
-      const yearId = first.classSession?.academicYear?.id ?? ""
-      let resolvedStepName = "Étape"
-
       setClassName(computedClassName)
-      if (yearId) setReportsHref(`/admin/academic-year/${yearId}/reports`)
-
-      if (yearId) {
-        try {
-          const steps = await fetchSteps(yearId)
-          const step = steps.find((s) => s.id === stepId)
-          if (step) resolvedStepName = step.name
-        } catch {
-          /* best-effort */
-        }
-      }
-      setStepName(resolvedStepName)
 
       // 3. Construire chaque bulletin (concurrence limitée à 4)
       setProgress({ current: 0, total: eligible.length })
