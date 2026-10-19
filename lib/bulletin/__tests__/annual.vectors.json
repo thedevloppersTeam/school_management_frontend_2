@@ -1,5 +1,5 @@
 {
-  "description": "Vecteurs communs de la moyenne annuelle de deliberation, calculee depuis des lignes (grades, exclusions, dispenses d'etape). Identique octet pour octet dans les deux depots. Serveur : src/lib/promotion/fromRows.ts. Frontend : chemin de calculateGeneralAverageForEnrollment (lib/api/bulletin.ts) rejoue avec from-api.ts. missingCount est verifie cote serveur seulement (RP-09, notion de deliberation).",
+  "description": "Vecteurs communs de la moyenne annuelle, calculee depuis des lignes (notes, dispenses de sous-matiere et de matiere, dispenses d'etape). Identique octet pour octet dans les deux depots. Serveur : non-regression du service de resultats (sans marqueur d'examen, memes valeurs). Frontend : alignement du moteur client (compute.ts) tant qu'il sert encore. missingCount = notes manquantes au sens de RP-09, verifie cote serveur seulement.",
   "vectors": [
     {
       "id": "A1-quatre-etapes",
