@@ -38,7 +38,13 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Switch } from "@/components/ui/switch"
+import { LeftBadge } from "@/components/school/left-badge"
+import {
+  DEFAULT_PRESENCE_FILTER,
+  PRESENCE_FILTERS,
+  matchesPresence,
+  type PresenceFilter,
+} from "@/lib/departures/presence"
 import Link from "next/link"
 import {
   PlusIcon,
@@ -95,6 +101,8 @@ interface StudentRow {
   yearString?:     string
   yearId?:         string
   status?:         EnrollmentStatus
+  /** Départ de la dernière inscription (D-22). */
+  leftAt?:         string | null
   enrollmentDate?: string
   /**
    * Plusieurs inscriptions non transferees sur la meme annee scolaire. Le
@@ -175,7 +183,8 @@ export default function StudentsManagementPage() {
   const [students, setStudents]       = useState<StudentRow[]>([])
   const [loading, setLoading]         = useState(true)
   const [enrollOpen, setEnrollOpen]   = useState(false)
-  const [showInactive, setShowInactive] = useState(false)
+  // D-22 : filtre Actifs / Partis / Tous sur la dernière inscription, défaut Tous.
+  const [presence, setPresence] = useState<PresenceFilter>(DEFAULT_PRESENCE_FILTER)
 
   // Filtres
   const [searchQuery, setSearchQuery]   = useState("")
@@ -251,6 +260,7 @@ export default function StudentsManagementPage() {
         classSessionId: string
         enrollmentDate?: string
         status: EnrollmentStatus
+        leftAt?: string | null
         classSession?: {
           id: string
           // Pas de `track` ici : une SALLE n'a pas de filiere. Le modele ne la
@@ -352,6 +362,7 @@ export default function StudentsManagementPage() {
           yearString: latest?.classSession?.academicYear?.yearString,
           yearId: latest?.classSession?.academicYear?.id,
           status: latest?.status,
+          leftAt: latest?.leftAt ?? null,
           enrollmentDate: latest?.enrollmentDate,
           conflitInscriptions: conflitsParEleve.get(s.id),
           registrationDate: s.registrationDate,
@@ -388,11 +399,8 @@ export default function StudentsManagementPage() {
 
   // ── Données filtrées ─────────────────────────────────────────────────────────
   const displayed = useMemo(() => {
-    // Default: show every student. The "Désactivés" switch hides DROPPED enrollments.
-    let result = students
-    if (!showInactive) {
-      result = result.filter(s => s.status !== 'DROPPED')
-    }
+    // D-22 : par défaut, tout le monde, élèves partis compris.
+    let result = students.filter(s => matchesPresence(s.status, presence))
 
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
@@ -425,7 +433,7 @@ export default function StudentsManagementPage() {
       })
     }
     return result
-  }, [students, showInactive, searchQuery, selectedClass, selectedSalle, sortCol, sortDir])
+  }, [students, presence, searchQuery, selectedClass, selectedSalle, sortCol, sortDir])
 
   const totalPages        = Math.ceil(displayed.length / itemsPerPage)
   const paginated         = displayed.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
@@ -717,16 +725,18 @@ export default function StudentsManagementPage() {
             </SelectContent>
           </Select>
 
-          <div className="flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 sm:py-1.5">
-            <Switch
-              id="show-inactive"
-              checked={showInactive}
-              onCheckedChange={setShowInactive}
-            />
-            <Label htmlFor="show-inactive" className="cursor-pointer text-sm text-muted-foreground">
-              Inclure désactivés ({droppedCurrentYear.length})
-            </Label>
-          </div>
+          <Select value={presence} onValueChange={v => { setPresence(v as PresenceFilter); setCurrentPage(1) }}>
+            <SelectTrigger className="w-full sm:w-[160px]" aria-label="Filtrer par présence">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PRESENCE_FILTERS.map(f => (
+                <SelectItem key={f.value} value={f.value}>
+                  {f.value === 'LEFT' ? `${f.label} (${droppedCurrentYear.length} cette année)` : f.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <Separator />
@@ -910,7 +920,10 @@ export default function StudentsManagementPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <StatusBadge status={student.status} />
+                        <div className="flex flex-col items-start gap-0.5">
+                          <StatusBadge status={student.status} />
+                          {student.status === 'DROPPED' && <LeftBadge leftAt={student.leftAt} />}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <span className="text-sm tabular-nums text-muted-foreground">

@@ -28,7 +28,9 @@ import {
 import type { ApiClassSession } from "@/lib/api/students"
 import type { AcademicYearStep } from "@/lib/api/dashboard"
 import type { ApiEnrollment } from "@/lib/api/grades"
-import { fetchEnrollments } from "@/lib/api/grades"
+import { fetchEntryEnrollments } from "@/lib/api/grades"
+import { presentAtStep } from "@/lib/departures/presence"
+import { LeftBadge } from "@/components/school/left-badge"
 import { libelleClasseSalle } from "@/lib/classes/labels"
 import { cn } from "@/lib/utils"
 
@@ -320,14 +322,16 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
       setLoadingBehaviors(true)
       try {
         const [enrs, behs] = await Promise.all([
-          fetchEnrollments(selectedSessionId),
+          // D-22 : actifs et partis ; un parti n'est proposé qu'aux étapes ≤ sa dernière étape suivie.
+          fetchEntryEnrollments(selectedSessionId),
           fetch(`/api/behaviors?classSessionId=${selectedSessionId}&stepId=${selectedStepId}`, { credentials: "include" })
             .then(r => r.json())
         ])
 
         if (cancelled) return
 
-        const enrollmentList: ApiEnrollment[] = Array.isArray(enrs) ? enrs : []
+        const enrollmentList: ApiEnrollment[] = (Array.isArray(enrs) ? enrs : [])
+          .filter((e) => presentAtStep(e, selectedStepId, steps))
         const behaviorList: ApiBehavior[]     = Array.isArray(behs) ? behs : []
 
         setEnrollments(enrollmentList)
@@ -348,7 +352,7 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
     })
 
     return () => { cancelled = true }
-  }, [selectedSessionId, selectedStepId, attitudes, toast])
+  }, [selectedSessionId, selectedStepId, steps, attitudes, toast])
 
   // Pagination + recherche
 
@@ -917,8 +921,9 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
                                 </AvatarFallback>
                               </Avatar>
                               <div>
-                                <CardTitle className="text-sm font-semibold text-foreground">
+                                <CardTitle className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
                                   {getStudentName(enr)}
+                                  {enr.status === "DROPPED" && <LeftBadge leftAt={enr.leftAt} />}
                                 </CardTitle>
                                 <CardDescription className="text-xs">
                                   Code élève : {enr.student?.studentCode ?? "-"}

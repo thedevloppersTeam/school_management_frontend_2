@@ -47,6 +47,9 @@ import { toMessage } from "@/lib/errors"
 import { libelleClasseSalle } from "@/lib/classes/labels"
 import { cn } from "@/lib/utils"
 import { normalizeUploadUrl } from "@/lib/upload-url"
+import { LeftBadge } from "@/components/school/left-badge"
+import { departureReasonLabel } from "@/lib/departures/departures"
+import { formatFrenchLongDate } from "@/lib/date-format"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -88,6 +91,11 @@ interface ApiEnrollment {
   status: "ACTIVE" | "TRANSFERRED" | "DROPPED" | "GRADUATED"
   enrollmentDate: string
   notes?: string | null
+  // Départ en cours d'année (D-22, affichage seul) : date, dernière étape suivie, motif.
+  leftAt?: string | null
+  lastAttendedStep?: { id: string; name: string } | null
+  departureReason?: string | null
+  departureNote?: string | null
   track?: { id: string; name: string; code: string } | null
   classSession: {
     id: string
@@ -856,7 +864,28 @@ export default function StudentTranscriptPage() {
                                 Notes non chargées
                               </Badge>
                             )}
+                            {e.status === "DROPPED" && <LeftBadge leftAt={e.leftAt} />}
                           </div>
+                          {/* D-22 : départ en cours d'année, tel que déclaré (RS-08). Affichage
+                              seul : les moyennes de ce Parcours ne changent pas (lot L4). */}
+                          {e.status === "DROPPED" && (
+                            <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
+                              <dt className="text-muted-foreground">Date du départ</dt>
+                              <dd className="text-foreground">{e.leftAt ? formatFrenchLongDate(e.leftAt) : "—"}</dd>
+                              <dt className="text-muted-foreground">Dernière étape suivie</dt>
+                              <dd className={cn(e.lastAttendedStep ? "text-foreground" : "font-medium text-warning-ink")}>
+                                {e.lastAttendedStep?.name ?? "Départ à compléter"}
+                              </dd>
+                              <dt className="text-muted-foreground">Motif</dt>
+                              <dd className="text-foreground">{departureReasonLabel(e.departureReason)}</dd>
+                              {e.departureNote && (
+                                <>
+                                  <dt className="text-muted-foreground">Commentaire</dt>
+                                  <dd className="whitespace-pre-wrap text-foreground">{e.departureNote}</dd>
+                                </>
+                              )}
+                            </dl>
+                          )}
                         </div>
                         <div className="flex shrink-0 items-baseline gap-2">
                           <span className="text-xs uppercase tracking-wide text-muted-foreground">
