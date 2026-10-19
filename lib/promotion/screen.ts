@@ -9,6 +9,8 @@
  * Aucune moyenne ici : elle arrive du serveur, déjà arrondie (RP-18).
  */
 import type { Outcome, PreviewStudent } from '@/lib/api/promotions'
+import { ApiError } from '@/lib/client-fetch'
+import { toMessage } from '@/lib/errors'
 
 export interface LevelInfo {
   id: string
@@ -65,4 +67,24 @@ export function nextYearOf<T extends { id: string; startDate: string }>(years: T
   return [...years]
     .filter((y) => y.startDate > yearN.startDate)
     .sort((a, b) => a.startDate.localeCompare(b.startDate))[0]
+}
+
+/**
+ * Message d'erreur des appels de l'écran (preview, decisions, execute, cancel).
+ *
+ * Si le corps de la réponse porte une chaîne non vide en `message` (ou, à
+ * défaut, en `error`), elle est rendue telle quelle : c'est la raison du
+ * refus rédigée par le serveur (RP-08, RP-14, RP-21, RP-22). Sinon, texte
+ * générique de toMessage, comme sur les autres écrans. toMessage ne garde le
+ * texte du serveur que s'il reconnaît un mot-clé, d'où ce helper propre à
+ * l'écran, qui laisse lib/errors.ts inchangé.
+ */
+export function serverMessage(err: unknown, context: string): string {
+  if (err instanceof ApiError && err.body && typeof err.body === 'object') {
+    const body = err.body as { message?: unknown; error?: unknown }
+    for (const value of [body.message, body.error]) {
+      if (typeof value === 'string' && value.trim()) return value
+    }
+  }
+  return toMessage(err, context)
 }
