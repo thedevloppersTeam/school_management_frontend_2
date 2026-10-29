@@ -48,3 +48,6 @@ jobs:
 
       - name: Unit tests
         run: npx vitest run
+
+      - name: Tests du moteur (test:unit)
+        run: npm run test:unit
