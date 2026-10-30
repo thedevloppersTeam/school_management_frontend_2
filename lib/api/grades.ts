@@ -1,5 +1,7 @@
 import { parseDecimal } from '@/lib/decimal'
 import { assertStorableScore } from '@/lib/grades/score-input'
+import { readBulkCreateCounts, type BulkCreateCounts } from '@/lib/grades/save-summary'
+import { ApiError } from '@/lib/client-fetch'
 
 export interface ApiSubjectSection {
   id: string
@@ -178,7 +180,12 @@ export async function fetchGradesForClassSubjectStep(
 
 // ── Bulk create grades ────────────────────────────────────────────────────────
 
-export async function bulkCreateGrades(grades: CreateGradePayload[]): Promise<void> {
+// Les erreurs sont levées en ApiError avec le corps JSON : son `code` (règle
+// enfreinte, ex. LOT_CASE_EN_DOUBLE, NOTE_HORS_BAREME) est traduit par
+// toMessage (lib/errors.ts). Succès : compteurs `created` / `replaced` du
+// serveur, ou null si le serveur ne les fournit pas.
+
+export async function bulkCreateGrades(grades: CreateGradePayload[]): Promise<BulkCreateCounts | null> {
   grades.forEach((g, i) =>
     assertStorableScore(g.studentScore, `grades[${i}]`),
   )
@@ -189,10 +196,11 @@ export async function bulkCreateGrades(grades: CreateGradePayload[]): Promise<vo
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ grades }),
   })
+  const data = await res.json().catch(() => null)
   if (!res.ok) {
-    const data = await res.json().catch(() => null)
-    throw new Error(data?.message ?? "Erreur lors de l'enregistrement des notes")
+    throw new ApiError(res.status, '/api/grades/bulk-create', data?.message ?? "Erreur lors de l'enregistrement des notes", data)
   }
+  return readBulkCreateCounts(data)
 }
 
 // ── Delete an existing grade ──────────────────────────────────────────────────
@@ -206,7 +214,7 @@ export async function deleteGrade(gradeId: string): Promise<void> {
   })
   if (!res.ok) {
     const data = await res.json().catch(() => null)
-    throw new Error(data?.message ?? 'Erreur lors de la suppression de la note')
+    throw new ApiError(res.status, `/api/grades/delete/${gradeId}`, data?.message ?? 'Erreur lors de la suppression de la note', data)
   }
 }
 
@@ -227,6 +235,6 @@ export async function updateGrade(
   })
   if (!res.ok) {
     const data = await res.json().catch(() => null)
-    throw new Error(data?.message ?? "Erreur lors de la mise à jour de la note")
+    throw new ApiError(res.status, `/api/grades/update/${gradeId}`, data?.message ?? "Erreur lors de la mise à jour de la note", data)
   }
 }

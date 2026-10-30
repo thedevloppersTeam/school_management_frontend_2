@@ -36,6 +36,7 @@ import { RUBRIQUE_WEIGHTS, type RubriqueCode } from "@/lib/bulletin/compute"
 import { parseScore, validateScoreInput } from "@/lib/grades/score-input"
 import { useUnsavedChangesWarning } from "@/hooks/use-unsaved-changes-warning"
 import { toMessage } from "@/lib/errors"
+import { bulkCreateParts, type BulkCreateCounts } from "@/lib/grades/save-summary"
 import { stepsForEnrollment } from "@/lib/departures/presence"
 import { LeftBadge } from "@/components/school/left-badge"
 
@@ -318,12 +319,14 @@ export default function StudentGradesPage() {
     setSaving(true)
     try {
       const ops: Promise<unknown>[] = []
-      if (diff.toCreate.length > 0) ops.push(bulkCreateGrades(diff.toCreate))
+      // Compteurs created / replaced du serveur (null : ancien message).
+      let createCounts: BulkCreateCounts | null = null
+      if (diff.toCreate.length > 0) ops.push(bulkCreateGrades(diff.toCreate).then(c => { createCounts = c }))
       diff.toUpdate.forEach(u => ops.push(updateGrade(u.gradeId, u.studentScore)))
       diff.toDelete.forEach(id => ops.push(deleteGrade(id)))
       await Promise.all(ops)
       const parts = [
-        diff.toCreate.length && `${diff.toCreate.length} créée${diff.toCreate.length > 1 ? "s" : ""}`,
+        ...bulkCreateParts(diff.toCreate.length, createCounts, false),
         diff.toUpdate.length && `${diff.toUpdate.length} modifiée${diff.toUpdate.length > 1 ? "s" : ""}`,
         diff.toDelete.length && `${diff.toDelete.length} retirée${diff.toDelete.length > 1 ? "s" : ""}`,
       ].filter(Boolean).join(", ")

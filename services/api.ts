@@ -418,10 +418,6 @@ export const gradesApi = {
     const response = await api.get<Grade[]>(`/api/grades/class-subject/${classSubjectId}/step/${stepId}`);
     return response.data;
   },
-  create: async (data: Record<string, unknown>): Promise<Grade> => {
-    const response = await api.post<Grade>("/api/grades/create", data);
-    return response.data;
-  },
   bulkCreate: async (grades: Record<string, unknown>[]): Promise<Grade[]> => {
     const response = await api.post<Grade[]>("/api/grades/bulk-create", { grades });
     return response.data;
