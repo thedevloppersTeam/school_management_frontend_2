@@ -76,6 +76,7 @@ import { cn } from "@/lib/utils"
 import { estArchivee } from "@/lib/academic-years/status"
 import { libelleClasseSalle } from "@/lib/classes/labels"
 import { isNisuValid, NISU_RULE_LABEL } from "@/lib/nisu"
+import { deleteFailures, type DeleteFailure } from "@/lib/students/delete-report"
 
 // ── Types locaux ──────────────────────────────────────────────────────────────
 
@@ -211,6 +212,9 @@ export default function StudentsManagementPage() {
   const [deletePassword, setDeletePassword] = useState("")
   const [deleting, setDeleting]         = useState(false)
   const [deleteError, setDeleteError]   = useState<string | null>(null)
+  // Échecs de la dernière suppression, élève par élève : restent affichés
+  // au-dessus de la liste (un toast disparaît avant d'être lu).
+  const [deleteReport, setDeleteReport] = useState<DeleteFailure[]>([])
 
   // Tri
   type SortCol = 'nisu' | 'name' | 'class' | 'date'
@@ -520,6 +524,7 @@ export default function StudentsManagementPage() {
     if (selectedIds.size === 0 || !deletePassword) return
     setDeleting(true)
     setDeleteError(null)
+    setDeleteReport([])
     try {
       const res = await fetch('/api/students/delete', {
         method: 'POST',
@@ -536,9 +541,14 @@ export default function StudentsManagementPage() {
       }
       const deleted = data?.summary?.deleted ?? 0
       const failed = data?.summary?.failed ?? 0
+      const byId = new Map(students.map(s => [s.studentId, `${s.lastname} ${s.firstname}`.trim()]))
+      const failures = deleteFailures(data, id => byId.get(id) || null)
+      setDeleteReport(failures)
       toast({
         title: `${deleted} élève(s) supprimé(s)`,
-        description: failed > 0 ? `${failed} suppression(s) en échec.` : undefined,
+        description: failed > 0
+          ? `${failed} suppression(s) en échec.${failures.length > 0 ? " Le détail reste affiché au-dessus de la liste." : ""}`
+          : undefined,
         variant: failed > 0 ? "destructive" : undefined,
       })
       setDeleteOpen(false)
@@ -608,6 +618,30 @@ export default function StudentsManagementPage() {
       )}
 
       {isArchived && year && <ArchivedYearBanner yearName={year.name} />}
+
+      {/* Suppressions refusées : élève, motif du serveur, et pour un élève qui a
+          un historique scolaire, l'invitation à déclarer un départ. */}
+      {deleteReport.length > 0 && (
+        <div role="alert" className="rounded-lg border border-destructive bg-destructive/5 p-3">
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-sm font-semibold text-destructive">
+              {deleteReport.length} suppression{deleteReport.length > 1 ? "s" : ""} refusée{deleteReport.length > 1 ? "s" : ""}
+            </p>
+            <Button variant="ghost" size="sm" onClick={() => setDeleteReport([])}>
+              Masquer
+            </Button>
+          </div>
+          <ul className="cpmsl-scroll mt-2 max-h-48 space-y-1.5 overflow-y-auto">
+            {deleteReport.map((f, i) => (
+              <li key={f.studentId || i} className="text-xs">
+                <span className="font-medium text-destructive">{f.name}</span>
+                <span className="text-destructive"> — {f.reason}</span>
+                {f.hint && <span className="block text-muted-foreground">{f.hint}</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* ── KPI Cards ── */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

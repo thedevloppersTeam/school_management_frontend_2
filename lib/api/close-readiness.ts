@@ -177,10 +177,13 @@ async function computeClassroomStatus(
   // On compte des paires (inscription, matière) distinctes plutôt que des lignes.
   // Le seul filtre `sectionId === null` ne bornait pas gradesEntered : rien en
   // base n'interdit deux notes principales sur la même paire — la table `grades`
-  // n'a que des index sur (enrollment_id, class_subject_id, section_id, step_id),
-  // aucune contrainte d'unicité, et createGrade fait un `create` simple sans
-  // vérifier l'existant. Compter des paires borne le numérateur par construction
-  // au lieu de dépendre de cette discipline d'écriture.
+  // n'a que des index simples sur chaque colonne, aucune contrainte d'unicité.
+  // Le serveur applique désormais « une note par case » à l'écriture (création,
+  // lot, import CSV : remplacement si la case porte une note, refus
+  // CASE_MULTI_NOTES si elle en porte plusieurs), mais sans contrainte en base
+  // deux saisies simultanées sur une case vide peuvent encore créer deux lignes,
+  // et des doublons écrits avant cette règle peuvent subsister. Compter des paires
+  // borne le numérateur par construction au lieu de dépendre de l'écriture.
   const activeEnrollmentIds = new Set(activeEnrollments.map(e => e.id))
   const gradesEntered = new Set(
     gradesPerSubject

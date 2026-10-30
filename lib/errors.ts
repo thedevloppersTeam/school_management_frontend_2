@@ -93,6 +93,96 @@ const KEYWORD_PATTERNS: Array<{ match: RegExp; message: string }> = [
   },
 ]
 
+// ── Codes métier renvoyés par le serveur ─────────────────────────────
+// Le serveur nomme la règle enfreinte dans `code` (corps JSON de l'erreur).
+// Le code est plus sûr que le texte : plusieurs messages du serveur sont en
+// anglais (portée de l'affectation) ou embarquent des index techniques
+// (« grades[3] »). Libellés rédigés d'après le sens de chaque code côté
+// serveur (src/controllers/grades.ts, src/modules/notation/domain/note.ts).
+// Textes fixes : ils ne reprennent aucune valeur du message du serveur.
+
+const CODE_MESSAGES: Record<string, string> = {
+  // Saisie en lot (bulk-create) : tout ou rien
+  LOT_CASE_EN_DOUBLE:
+    "Deux saisies visent la même case : lot refusé, aucune note enregistrée. Rechargez la grille puis saisissez à nouveau.",
+  LOT_ENTREES_INVALIDES:
+    "Lot refusé, aucune note enregistrée : au moins une saisie est invalide.",
+  LOT_AFFECTATION_HORS_PORTEE:
+    "Lot refusé, aucune note enregistrée : au moins une matière n'est pas dans la portée de l'élève.",
+  // Une note par case (ADR-009 § 5)
+  CASE_MULTI_NOTES:
+    "Cette case porte déjà plusieurs notes : saisie refusée, aucune note enregistrée. Supprimez les notes en trop avant de saisir à nouveau.",
+  // Portée de l'affectation (salle, filière)
+  AFFECTATION_AUTRE_SALLE:
+    "Cette matière n'est pas affectée à la salle de l'élève : note refusée.",
+  AFFECTATION_AUTRE_FILIERE:
+    "Cette matière relève d'une autre filière que celle de l'élève : note refusée.",
+  AFFECTATION_INTROUVABLE:
+    "La matière visée n'existe plus : rechargez la grille.",
+  SOUS_MATIERE_INTROUVABLE:
+    "La sous-matière visée n'existe plus : rechargez la grille.",
+  SOUS_MATIERE_HORS_MATIERE:
+    "La sous-matière visée n'appartient pas à cette matière : rechargez la grille.",
+  // Valeur de la note (objet-valeur Note)
+  NOTE_NEGATIVE:
+    "Note refusée : une note ne peut pas être négative.",
+  NOTE_HORS_BAREME:
+    "Note refusée : la note dépasse le barème de la case.",
+  NOTE_PAS_025:
+    "La note doit être un multiple de 0,25 (.00 / .25 / .50 / .75).",
+  NOTE_NON_NUMERIQUE:
+    "Note refusée : la valeur saisie n'est pas un nombre décimal.",
+}
+
+/** Codes de lot dont le corps liste les saisies en cause dans `entries[]`. */
+const LOT_ENTRY_CODES: Record<string, { singular: string; plural: string }> = {
+  LOT_ENTREES_INVALIDES: { singular: "saisie invalide", plural: "saisies invalides" },
+  LOT_AFFECTATION_HORS_PORTEE: {
+    singular: "saisie hors de la portée de l'élève",
+    plural: "saisies hors de la portée de l'élève",
+  },
+}
+
+function readCode(value: unknown): string | null {
+  if (!value || typeof value !== "object") return null
+  const code = (value as { code?: unknown }).code
+  return typeof code === "string" && code ? code : null
+}
+
+/**
+ * Message lisible pour un corps d'erreur du serveur qui porte un `code` connu,
+ * sinon null (le code inconnu retombe sur la traduction par mots-clés).
+ *
+ * Lots (`entries[]`) : nombre de saisies en cause, tel que le serveur les liste,
+ * et motif de la première. CASE_MULTI_NOTES : `cases[]` quand plusieurs cases
+ * sont en cause.
+ */
+export function messageForCode(body: unknown): string | null {
+  const code = readCode(body)
+  if (!code || !(code in CODE_MESSAGES)) return null
+
+  const lot = LOT_ENTRY_CODES[code]
+  if (lot) {
+    const entries = (body as { entries?: unknown }).entries
+    if (Array.isArray(entries) && entries.length > 0) {
+      const n = entries.length
+      const firstCode = readCode(entries[0])
+      const firstLabel = firstCode ? CODE_MESSAGES[firstCode] : undefined
+      const head = `Lot refusé, aucune note enregistrée : ${n} ${n > 1 ? lot.plural : lot.singular}.`
+      return firstLabel ? `${head} Première en cause : ${firstLabel}` : head
+    }
+  }
+
+  if (code === "CASE_MULTI_NOTES") {
+    const cases = (body as { cases?: unknown }).cases
+    if (Array.isArray(cases) && cases.length > 1) {
+      return `${cases.length} cases portent déjà plusieurs notes : saisie refusée, aucune note enregistrée. Supprimez les notes en trop avant de saisir à nouveau.`
+    }
+  }
+
+  return CODE_MESSAGES[code]
+}
+
 // ── Fonction principale ──────────────────────────────────────────────
 
 /**
@@ -120,6 +210,15 @@ export function toMessage(err: unknown, context?: string): string {
   // RS-09) : message complet, rédigé pour l'écran, rendu tel quel.
   if (err instanceof Error && err.name === "StepAfterDepartureError") {
     return err.message
+  }
+
+  // Erreur du serveur qui nomme sa règle (`code` du corps JSON) : libellé
+  // complet, rendu tel quel, sans le contexte de l'écran.
+  if (err instanceof ApiError) {
+    const codeMessage = messageForCode(err.body)
+    if (codeMessage) {
+      return codeMessage
+    }
   }
 
   const base = resolveBaseMessage(err)

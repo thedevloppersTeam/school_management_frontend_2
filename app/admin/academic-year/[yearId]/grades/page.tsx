@@ -22,13 +22,12 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { presentAtStep } from "@/lib/departures/presence"
+import { bulkCreateParts, type BulkCreateCounts } from "@/lib/grades/save-summary"
 
-function buildSaveDescription(created: number, updated: number, deleted: number): string {
-  const parts: string[] = []
-  if (created > 0) {
-    const plural = created > 1 ? 's' : ''
-    parts.push(`${created} note${plural} créée${plural}`)
-  }
+// `counts` : compteurs created / replaced de bulk-create (null = serveur qui ne
+// les fournit pas : ancien message, sur le nombre de saisies envoyées).
+function buildSaveDescription(created: number, updated: number, deleted: number, counts: BulkCreateCounts | null = null): string {
+  const parts: string[] = [...bulkCreateParts(created, counts, true)]
   if (updated > 0) {
     const plural = updated > 1 ? 's' : ''
     parts.push(`${updated} note${plural} mise${plural} à jour`)
@@ -190,11 +189,14 @@ export default function GradesPage() {
 
     type Op = { label: string; run: () => Promise<void> }
     const ops: Op[] = []
+    let createCounts: BulkCreateCounts | null = null
     if (toCreate.length > 0) {
       const plural = toCreate.length > 1 ? 's' : ''
       ops.push({
+        // Libellé d'un ÉCHEC : le lot est refusé en entier, rien n'est écrit ;
+        // on nomme donc les saisies envoyées, pas un résultat.
         label: `${toCreate.length} note${plural} nouvelle${plural}`,
-        run: () => bulkCreateGrades(toCreate),
+        run: async () => { createCounts = await bulkCreateGrades(toCreate) },
       })
     }
     toUpdate.forEach((u, i) => ops.push({
@@ -217,7 +219,7 @@ export default function GradesPage() {
       if (failures.length === 0) {
         toast({
           title: 'Notes enregistrées',
-          description: buildSaveDescription(toCreate.length, toUpdate.length, toDelete.length),
+          description: buildSaveDescription(toCreate.length, toUpdate.length, toDelete.length, createCounts),
         })
       } else {
         setSaveFailures(failures)
