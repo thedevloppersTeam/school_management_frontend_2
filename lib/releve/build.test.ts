@@ -389,6 +389,17 @@ async function main() {
   reset({ mutate: { matieres: changerMatieres((cs) => ({ ...cs, subject: { ...(cs.subject as object), releveColumn: 'MIDDLE' } })) } })
   check('T-O8 build : releveColumn invalide → indisponible', reason(await run()), 'indisponible')
 
+  // ── accepteNotes (décision du serveur) : false → ligne absente du relevé ──
+  reset({ mutate: { matieres: changerMatieres((cs) =>
+    cs.id === 'cs-gamma-smp' ? { ...cs, accepteNotes: false } : { ...cs, accepteNotes: true }) } })
+  r = await run()
+  check('AN-1 build : affectation à accepteNotes false absente',
+    r.data ? subjectGroups(r.data).map((x) => x.title).join(' / ') : reason(r),
+    'ESSAI Alpha / ESSAI Beta / ESSAI Gamma')
+  check('AN-1 build : sa note (12 à l’étape 1) n’apparaît nulle part',
+    r.data ? subjectGroups(r.data).some((g) => g.lines.some((l) => l.cells.some((c) => c.text === '12.00'))) : reason(r), false)
+  // Le cas nominal (champ absent) garde ESSAI Gamma (SMP) : voir T14/T15/T17.
+
   // ── Garde : n'appelle jamais getCurrentStep ni de route par défaut ──────
   check('aucune route non simulée appelée', appels.filter((u) => !ROUTES.some(([, re]) => re.test(u))).length, 0)
 

@@ -140,6 +140,13 @@ export interface ApiClassSubjectRow {
   createdAt?: string | null
   track?: { code?: string | null } | null
   maxScoreOverride?: unknown
+  /**
+   * Décidé par le serveur : une note peut-elle compter pour un élève de la
+   * portée de cette affectation. `false` = matière exclue du relevé (calcul et
+   * affichage). Absent (ancien serveur) = true. Typé `unknown`, lu par
+   * normaliserAccepteNotes (lib/grades/accepte-notes.ts).
+   */
+  accepteNotes?: unknown
   subject: {
     id: string
     name: string

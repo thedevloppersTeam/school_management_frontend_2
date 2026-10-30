@@ -18,6 +18,7 @@ import {
 import { buildExclusionSet, exclusionKey } from '@/lib/bulletin/from-api'
 import { GRADE_SCALE, gradeBand, type GradeBand } from '@/lib/bulletin/grade-color'
 import { deriveAcademicYearStatus } from '@/lib/academic-years/status'
+import { normaliserAccepteNotes } from '@/lib/grades/accepte-notes'
 import {
   ReleveUnavailableError,
   TIRET,
@@ -151,15 +152,24 @@ export function resolveSteps(
 
 /**
  * Tronc commun + matières de LA filière de l'élève. Même règle que
- * `filterSubjectsByScope(…, 'all', …)` (lib/api/grades.ts:94-106), réécrite
+ * `filterSubjectsByScope(…, 'all', …)` (lib/api/grades.ts), réécrite
  * sur une forme structurelle : l'original exige `ApiClassSubject`, dont les
  * barèmes sont déjà convertis par parseDecimal.
+ *
+ * Une affectation que le serveur déclare non saisissable
+ * (`accepteNotes === false`) sort aussi du relevé, calcul ET affichage : ses
+ * notes ne comptent pas dans cette classe. Champ absent = conservée. La règle
+ * qui produit ce booléen reste côté serveur (ADR-007).
  */
-export function scopeClassSubjects<T extends { trackId: string | null }>(
+export function scopeClassSubjects<T extends { trackId: string | null; accepteNotes?: unknown }>(
   rows: T[],
   studentTrackId: string | null,
 ): T[] {
-  return rows.filter((cs) => cs.trackId == null || (!!studentTrackId && cs.trackId === studentTrackId))
+  return rows.filter(
+    (cs) =>
+      normaliserAccepteNotes(cs.accepteNotes) &&
+      (cs.trackId == null || (!!studentTrackId && cs.trackId === studentTrackId)),
+  )
 }
 
 // ── Groupes de matières (G1, G2, G12, R-REL-2, R-REL-3) ─────────────────────

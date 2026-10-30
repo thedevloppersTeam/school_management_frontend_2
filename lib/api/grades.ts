@@ -1,6 +1,7 @@
 import { parseDecimal } from '@/lib/decimal'
 import { assertStorableScore } from '@/lib/grades/score-input'
 import { readBulkCreateCounts, type BulkCreateCounts } from '@/lib/grades/save-summary'
+import { normaliserAccepteNotes } from '@/lib/grades/accepte-notes'
 import { ApiError } from '@/lib/client-fetch'
 
 export interface ApiSubjectSection {
@@ -39,6 +40,14 @@ export interface ApiClassSubject {
   trackId: string | null
   track?: ApiTrack | null
   subject: ApiSubject
+  /**
+   * Décidé par le SERVEUR : une note peut-elle compter pour un élève de la
+   * portée de cette affectation. Toujours renseigné après fetchClassSubjects
+   * (absent dans la réponse d'un ancien serveur = true). Lire avec
+   * `accepteNotes()` de lib/grades/accepte-notes.ts ; ne jamais le recalculer
+   * depuis le type de classe ou la filière (ADR-007).
+   */
+  accepteNotes?: boolean
 }
 
 /** Note max effective d'une affectation : l'override s'il existe, sinon celle de la matière. */
@@ -121,6 +130,9 @@ export async function fetchClassSubjects(classSessionId: string): Promise<ApiCla
 
   return data.map((cs: ApiClassSubject) => ({
     ...cs,
+    // Lecteur tolérant : seul un `false` explicite ferme la saisie (voir
+    // normaliserAccepteNotes pour le traitement d'une valeur non booléenne).
+    accepteNotes: normaliserAccepteNotes((cs as { accepteNotes?: unknown }).accepteNotes),
     coefficientOverride: cs.coefficientOverride != null ? parseDecimal(cs.coefficientOverride) : null,
     maxScoreOverride: cs.maxScoreOverride != null ? parseDecimal(cs.maxScoreOverride) : null,
     subject: {

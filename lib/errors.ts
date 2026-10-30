@@ -109,6 +109,8 @@ const CODE_MESSAGES: Record<string, string> = {
     "Lot refusé, aucune note enregistrée : au moins une saisie est invalide.",
   LOT_AFFECTATION_HORS_PORTEE:
     "Lot refusé, aucune note enregistrée : au moins une matière n'est pas dans la portée de l'élève.",
+  LOT_FILIERE_HORS_CLASSE_EXAMEN:
+    "Lot refusé, aucune note enregistrée : au moins une matière de filière ne compte pas dans cette classe.",
   // Une note par case (ADR-009 § 5)
   CASE_MULTI_NOTES:
     "Cette case porte déjà plusieurs notes : saisie refusée, aucune note enregistrée. Supprimez les notes en trop avant de saisir à nouveau.",
@@ -117,6 +119,10 @@ const CODE_MESSAGES: Record<string, string> = {
     "Cette matière n'est pas affectée à la salle de l'élève : note refusée.",
   AFFECTATION_AUTRE_FILIERE:
     "Cette matière relève d'une autre filière que celle de l'élève : note refusée.",
+  // Matière de filière dans une classe non terminale : la note ne compterait
+  // ni dans le bulletin, ni dans la moyenne, ni dans la promotion.
+  NOTE_FILIERE_HORS_CLASSE_EXAMEN:
+    "Matière de filière : ne compte pas dans cette classe. Note refusée, elle ne compterait ni dans le bulletin, ni dans la moyenne, ni dans la promotion.",
   AFFECTATION_INTROUVABLE:
     "La matière visée n'existe plus : rechargez la grille.",
   SOUS_MATIERE_INTROUVABLE:
@@ -140,6 +146,10 @@ const LOT_ENTRY_CODES: Record<string, { singular: string; plural: string }> = {
   LOT_AFFECTATION_HORS_PORTEE: {
     singular: "saisie hors de la portée de l'élève",
     plural: "saisies hors de la portée de l'élève",
+  },
+  LOT_FILIERE_HORS_CLASSE_EXAMEN: {
+    singular: "saisie sur une matière de filière qui ne compte pas dans cette classe",
+    plural: "saisies sur une matière de filière qui ne compte pas dans cette classe",
   },
 }
 

@@ -344,6 +344,17 @@ function discipline(rows: Array<ApiBehaviorRow | null>, exemptedSteps: Set<strin
   ]
   check('T14 élève SMP : tronc commun + SMP', scopeClassSubjects(all, 'track-smp').map((c) => c.id).join(','), 'cs-tc,cs-smp')
   check('T14 élève sans filière : tronc commun seul', scopeClassSubjects(all, null).map((c) => c.id).join(','), 'cs-tc')
+  // accepteNotes (décision du serveur) : false exclut, absent ou true conserve.
+  const avecChamp = [
+    { ...all[0], accepteNotes: true },
+    { ...all[1], accepteNotes: false },
+    { ...plain('cs-tc2', 'Matière TC 2', '10'), accepteNotes: false },
+    plain('cs-tc3', 'Matière TC 3', '10'),
+  ]
+  check('T14b accepteNotes false : exclue (filière et tronc commun)',
+    scopeClassSubjects(avecChamp, 'track-smp').map((c) => c.id).join(','), 'cs-tc,cs-tc3')
+  check('T14b accepteNotes non booléen : conservée',
+    scopeClassSubjects([{ ...all[0], accepteNotes: 'false' }], null).map((c) => c.id).join(','), 'cs-tc')
 }
 {
   const tc = plain('cs-ph', 'Physique fictive', '10')

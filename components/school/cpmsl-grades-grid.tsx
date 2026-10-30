@@ -51,6 +51,8 @@ import { invalidateExclusionsCache } from "@/lib/api/bulletin"
 import { libelleClasseSalle } from "@/lib/classes/labels"
 import { useUnsavedChangesWarning } from "@/hooks/use-unsaved-changes-warning"
 import { LeftBadge } from "@/components/school/left-badge"
+import { FiliereHorsClasseHint } from "@/components/school/filiere-hors-classe-hint"
+import { MESSAGE_FILIERE_HORS_CLASSE, accepteNotes } from "@/lib/grades/accepte-notes"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -264,6 +266,13 @@ export function CPMSLGradesGrid({
   )
 
   const isLocked   = selectedStep ? !selectedStep.isCurrent : false   // +1
+  // Matière que le SERVEUR déclare non saisissable dans cette salle
+  // (`accepteNotes === false`, champ absent = saisissable). On ne recalcule
+  // pas la règle ici (ADR-007) : la grille passe en lecture seule, les notes
+  // existantes restent visibles, rien n'est envoyé.
+  const matiereFermee = !!selectedClassSubject && !accepteNotes(selectedClassSubject)
+  // Lecture seule : étape clôturée OU matière non saisissable.
+  const isReadOnly = isLocked || matiereFermee
   const showContent = !!(selectedSessionId && selectedClassSubjectId && selectedStepId)
 
   // ── Pré-remplissage depuis les notes existantes ──────────────────────────
@@ -534,7 +543,7 @@ export function CPMSLGradesGrid({
   // Le compte, et non un booléen, sert à nommer l'enjeu dans le garde-fou :
   // « 23 notes non enregistrées » se décide mieux que « des modifications ».
   const pendingChangeCount = useMemo(() => {
-    if (isLocked) return 0
+    if (isReadOnly) return 0
     if (!selectedClassSubjectId || !selectedStepId) return 0
 
     let count = 0
@@ -595,7 +604,7 @@ export function CPMSLGradesGrid({
     existingGrades,
     selectedClassSubjectId,
     selectedStepId,
-    isLocked,
+    isReadOnly,
   ])
 
   const missingCount = Math.max(0, enrollmentsForSubject.length - enteredCount)
@@ -631,7 +640,7 @@ export function CPMSLGradesGrid({
   // ── Save ─────────────────────────────────────────────────────────────────
 
   function handleSaveGrades() {
-    if (!selectedClassSubjectId || !selectedStepId || hasErrors || isLocked) return
+    if (!selectedClassSubjectId || !selectedStepId || hasErrors || isReadOnly) return
 
     const toCreate: CreateGradePayload[] = []
     const toUpdate: UpdateGradePayload[] = []
@@ -1095,12 +1104,12 @@ export function CPMSLGradesGrid({
             {enrollment.student.studentCode}
           </code>
         </TableCell>
-        <TableCell className="min-w-[104px] px-2 py-1 pr-6">
+        <TableCell className={cn("min-w-[104px] px-2 py-1 pr-6", matiereFermee && "bg-muted/30")}>
           <div className="flex flex-col items-center gap-0.5">
             <div className="flex items-center justify-center gap-1.5">
               <Input
                 type="text" inputMode="decimal" autoComplete="off"
-                value={entry?.value || ''} placeholder="—" disabled={isLocked}
+                value={entry?.value || ''} placeholder="—" disabled={isReadOnly}
                 onChange={e => handleGradeChange(enrollment.id, e.target.value)}
                 onPaste={e => handleGridPaste(
                   e, rowIndex, 0, filteredEnrollments.length,
@@ -1112,8 +1121,8 @@ export function CPMSLGradesGrid({
                   hasError && "border-destructive focus-visible:ring-destructive"
                 )}
                 onKeyDown={e => handleGridKeyDown(e, rowIndex, 0, 1, filteredEnrollments.length)}
-                aria-label={`Note de ${studentName} sur ${maxScore} — ${BADGE_WORDING[kind]}`}
-                title={BADGE_WORDING[kind]}
+                aria-label={`Note de ${studentName} sur ${maxScore} — ${matiereFermee ? MESSAGE_FILIERE_HORS_CLASSE : BADGE_WORDING[kind]}`}
+                title={matiereFermee ? MESSAGE_FILIERE_HORS_CLASSE : BADGE_WORDING[kind]}
                 aria-invalid={!!hasError}
                 aria-describedby={hasError ? errorId : undefined}
                 data-grid-row={rowIndex}
@@ -1145,7 +1154,7 @@ export function CPMSLGradesGrid({
               onClick={() => openExclusionsEditor(enrollment)}
               className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
               title="Configurer les sous-matières applicables à cet élève"
-              disabled={isLocked}
+              disabled={isReadOnly}
             >
               <SettingsIcon className="h-3.5 w-3.5" />
             </button>
@@ -1174,7 +1183,7 @@ export function CPMSLGradesGrid({
           const errorId = `note-error-${enrollment.id}-${sec.id}`
           const kind = getBadgeKind(enrollment.id)
           return (
-            <TableCell key={sec.id} className={cn("min-w-[104px] px-2 py-1 align-top", isExcluded && "bg-muted/30")}>
+            <TableCell key={sec.id} className={cn("min-w-[104px] px-2 py-1 align-top", (isExcluded || matiereFermee) && "bg-muted/30")}>
               {isExcluded ? (
                 <div className="flex flex-col items-center gap-0.5">
                   <span className="inline-flex items-center gap-1 text-3xs font-medium text-muted-foreground">
@@ -1187,7 +1196,7 @@ export function CPMSLGradesGrid({
                   <div className="flex items-center justify-center gap-1.5">
                     <Input
                       type="text" inputMode="decimal" autoComplete="off"
-                      value={entry?.value || ''} placeholder="—" disabled={isLocked}
+                      value={entry?.value || ''} placeholder="—" disabled={isReadOnly}
                       onChange={e => handleSectionGradeChange(enrollment.id, sec.id, e.target.value)}
                       onPaste={e => handleGridPaste(
                         e, rowIndex, colIndex, filteredEnrollments.length,
@@ -1201,8 +1210,8 @@ export function CPMSLGradesGrid({
                       onKeyDown={e => handleGridKeyDown(
                         e, rowIndex, colIndex, subjectSections.length, filteredEnrollments.length
                       )}
-                      aria-label={`${sec.name} — ${studentName}, sur ${sec.maxScore} — ${BADGE_WORDING[kind]}`}
-                      title={BADGE_WORDING[kind]}
+                      aria-label={`${sec.name} — ${studentName}, sur ${sec.maxScore} — ${matiereFermee ? MESSAGE_FILIERE_HORS_CLASSE : BADGE_WORDING[kind]}`}
+                      title={matiereFermee ? MESSAGE_FILIERE_HORS_CLASSE : BADGE_WORDING[kind]}
                       aria-invalid={!!hasError}
                       aria-describedby={hasError ? errorId : undefined}
                       data-grid-row={rowIndex}
@@ -1257,7 +1266,10 @@ export function CPMSLGradesGrid({
         <CardHeader className="pb-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
-                <CardTitle className="text-base font-semibold">Saisie des notes</CardTitle>
+                <CardTitle className="flex items-center gap-1.5 text-base font-semibold">
+                  {matiereFermee ? "Notes en lecture seule" : "Saisie des notes"}
+                  {matiereFermee && <FiliereHorsClasseHint />}
+                </CardTitle>
                 <CardDescription className="flex flex-wrap items-center gap-2">
                   <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-1">
                     {/* La salle porte le meme badge monospace que la colonne
@@ -1417,7 +1429,7 @@ export function CPMSLGradesGrid({
 
 
         {/* Save button */}
-        {!isLocked && filteredEnrollments.length > 0 && (
+        {!isReadOnly && filteredEnrollments.length > 0 && (
           <>
             <Separator />
             <div className="flex flex-col items-start justify-between gap-2 p-4 sm:flex-row sm:items-center">
@@ -1567,6 +1579,9 @@ export function CPMSLGradesGrid({
                     <SelectItem key={cs.id} value={cs.id}>
                       {cs.subject.name}
                       {cs.track ? ` — Examen ${cs.track.code}` : ""}
+                      {!accepteNotes(cs) && (
+                        <span className="text-muted-foreground"> (lecture seule)</span>
+                      )}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1615,6 +1630,18 @@ export function CPMSLGradesGrid({
           <AlertTitle>Étape clôturée</AlertTitle>
           <AlertDescription>
             Réouvrez l&apos;étape depuis la Configuration pour saisir des notes.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Matière non saisissable dans cette salle (décision du serveur) */}
+      {showContent && matiereFermee && (
+        <Alert className="border-info-border bg-info-soft text-info-ink">
+          <MinusCircleIcon className="h-4 w-4 !text-info-ink" />
+          <AlertTitle>{MESSAGE_FILIERE_HORS_CLASSE}</AlertTitle>
+          <AlertDescription>
+            Les notes déjà enregistrées restent affichées en lecture seule ; aucune
+            saisie n&apos;est enregistrée pour cette matière.
           </AlertDescription>
         </Alert>
       )}

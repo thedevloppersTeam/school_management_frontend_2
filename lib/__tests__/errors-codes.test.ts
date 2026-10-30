@@ -12,6 +12,7 @@ const CODES = [
   'CASE_MULTI_NOTES', 'AFFECTATION_AUTRE_SALLE', 'AFFECTATION_AUTRE_FILIERE',
   'AFFECTATION_INTROUVABLE', 'SOUS_MATIERE_INTROUVABLE', 'SOUS_MATIERE_HORS_MATIERE',
   'NOTE_NEGATIVE', 'NOTE_HORS_BAREME', 'NOTE_PAS_025', 'NOTE_NON_NUMERIQUE',
+  'NOTE_FILIERE_HORS_CLASSE_EXAMEN', 'LOT_FILIERE_HORS_CLASSE_EXAMEN',
 ]
 
 describe('messageForCode', () => {
@@ -39,6 +40,32 @@ describe('messageForCode', () => {
   it('lot hors portée, une seule saisie : singulier', () => {
     const m = messageForCode({ code: 'LOT_AFFECTATION_HORS_PORTEE', entries: [{ index: 0, code: 'AFFECTATION_AUTRE_FILIERE' }] })
     expect(m).toBe("Lot refusé, aucune note enregistrée : 1 saisie hors de la portée de l'élève. Première en cause : Cette matière relève d'une autre filière que celle de l'élève : note refusée.")
+  })
+
+  it("note de filière hors classe d'examen : libellé fixe, sans le message du serveur", () => {
+    const m = messageForCode({
+      code: 'NOTE_FILIERE_HORS_CLASSE_EXAMEN',
+      message: 'Note refusée : matière de filière dans une classe non terminale.',
+    })
+    expect(m).toBe('Matière de filière : ne compte pas dans cette classe. Note refusée, elle ne compterait ni dans le bulletin, ni dans la moyenne, ni dans la promotion.')
+  })
+
+  it("lot de filière hors classe d'examen : nombre de saisies et motif de la première", () => {
+    const m = messageForCode({
+      code: 'LOT_FILIERE_HORS_CLASSE_EXAMEN',
+      message: 'Lot refusé ... grades[3]: ...',
+      entries: [
+        { index: 3, code: 'NOTE_FILIERE_HORS_CLASSE_EXAMEN', message: 'x' },
+        { index: 7, code: 'NOTE_FILIERE_HORS_CLASSE_EXAMEN', message: 'x' },
+      ],
+    })
+    expect(m).toBe('Lot refusé, aucune note enregistrée : 2 saisies sur une matière de filière qui ne compte pas dans cette classe. Première en cause : Matière de filière : ne compte pas dans cette classe. Note refusée, elle ne compterait ni dans le bulletin, ni dans la moyenne, ni dans la promotion.')
+    expect(m).not.toMatch(/grades\[/)
+  })
+
+  it("lot de filière hors classe d'examen sans entries : libellé générique du code", () => {
+    expect(messageForCode({ code: 'LOT_FILIERE_HORS_CLASSE_EXAMEN' }))
+      .toBe('Lot refusé, aucune note enregistrée : au moins une matière de filière ne compte pas dans cette classe.')
   })
 
   it('plusieurs cases multi-notes : pluriel', () => {

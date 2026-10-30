@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { presentAtStep } from "@/lib/departures/presence"
 import { bulkCreateParts, type BulkCreateCounts } from "@/lib/grades/save-summary"
+import { retirerOperationsNonSaisissables } from "@/lib/grades/accepte-notes"
 
 // `counts` : compteurs created / replaced de bulk-create (null = serveur qui ne
 // les fournit pas : ancien message, sur le nombre de saisies envoyées).
@@ -183,7 +184,21 @@ export default function GradesPage() {
   // et on nomme ce qui a echoue au lieu d'annoncer un echec global sur un
   // enregistrement qui a partiellement reussi.
   // Cible a terme : un POST /api/grades/batch transactionnel cote backend.
-  async function handleSaveGrades(toCreate: CreateGradePayload[], toUpdate: UpdateGradePayload[], toDelete: string[] = []) {
+  async function handleSaveGrades(
+    toCreateIn: CreateGradePayload[],
+    toUpdateIn: UpdateGradePayload[],
+    toDeleteIn: string[] = [],
+  ) {
+    // Filet : aucune écriture sur une affectation que le serveur déclare non
+    // saisissable (`accepteNotes === false`). La grille est déjà en lecture
+    // seule dans ce cas ; les compteurs du message ci-dessous portent sur ce
+    // qui part réellement.
+    const { toCreate, toUpdate, toDelete } = retirerOperationsNonSaisissables(
+      { toCreate: toCreateIn, toUpdate: toUpdateIn, toDelete: toDeleteIn },
+      classSubjects,
+      existingGrades,
+    )
+    if (toCreate.length === 0 && toUpdate.length === 0 && toDelete.length === 0) return
     setSaving(true)
     setSaveFailures([])
 

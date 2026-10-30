@@ -17,7 +17,8 @@
  *     3. pour chaque matière, fetch les notes de l'étape
  *     4. on compte :
  *        - gradesEntered        : nb notes saisies (somme)
- *        - totalGrades          : nb_matières × nb_élèves actifs
+ *        - totalGrades          : nb_matières saisissables × nb_élèves actifs
+ *                                 (matière à `accepteNotes === false` exclue)
  *        - studentsWithoutNisu  : élèves sans NISU valide (DR-001)
  *        - unmappedSubjects     : matières sans rubrique (DR-003)
  *        - status               : 'complete' | 'incomplete' | 'not-started'
@@ -35,6 +36,7 @@
 
 import type { ApiClassSubject, ApiEnrollment, ApiGrade } from './grades'
 import { isNisuValid } from '@/lib/nisu'
+import { accepteNotes } from '@/lib/grades/accepte-notes'
 
 // ── Structures attendues côté composant parent ───────────────────────────────
 
@@ -142,8 +144,27 @@ async function computeClassroomStatus(
   // ApiClassSubject.subject a un champ `rubric` (optionnel)
   const unmappedSubjects = subjects.filter(cs => !cs.subject.rubric).length
 
+  // Matières qui attendent une note — le second facteur du dénominateur.
+  //
+  // Une affectation que le serveur déclare non saisissable
+  // (`accepteNotes === false` : matière de filière dans une classe non
+  // terminale) refuse toute création de note (NOTE_FILIERE_HORS_CLASSE_EXAMEN) ;
+  // la garder au dénominateur laisserait la salle éternellement `incomplete`.
+  // On ne recopie pas la règle (ADR-007) : seul le champ du serveur décide, lu
+  // par `accepteNotes()` (absent ou illisible = saisissable, comme la grille).
+  // Ce module lit le JSON brut de /api/class-subjects, pas fetchClassSubjects :
+  // la normalisation se fait donc ici, par la même fonction.
+  //
+  // Une matière fermée sort aussi du NUMÉRATEUR : ses notes ne sont pas
+  // demandées (aucun fetch), donc une note écrite avant la règle ne peut pas
+  // gonfler gradesEntered et faire passer une salle incomplète pour complète.
+  //
+  // unmappedSubjects (DR-003, plus haut) reste compté sur toutes les matières :
+  // c'est un contrôle de configuration de la matière, pas une note attendue.
+  const expectedSubjects = subjects.filter(cs => accepteNotes(cs))
+
   // Cas vide
-  if (subjects.length === 0 || activeEnrollments.length === 0) {
+  if (expectedSubjects.length === 0 || activeEnrollments.length === 0) {
     return {
       ...base,
       gradesEntered: 0,
@@ -158,12 +179,12 @@ async function computeClassroomStatus(
   // Note : on ne peut pas paralléliser trop large (limite réseau).
   // Ici on parallélise sur les matières de cette classe (typiquement <15).
   const gradesPerSubject = await Promise.all(
-    subjects.map(cs =>
+    expectedSubjects.map(cs =>
       fetchJson<ApiGrade[]>(`/api/grades/class-subject/${cs.id}/step/${stepId}`)
     )
   )
 
-  const totalGrades = subjects.length * activeEnrollments.length
+  const totalGrades = expectedSubjects.length * activeEnrollments.length
 
   // Le numérateur se compte sur les mêmes inscriptions que le dénominateur.
   // /api/grades/class-subject/:id/step/:id ne filtre pas le statut : une note

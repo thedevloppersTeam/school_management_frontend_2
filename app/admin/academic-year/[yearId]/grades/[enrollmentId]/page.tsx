@@ -27,13 +27,15 @@ import {
   effectiveMaxScore,
   type ApiClassSubject,
   type ApiGrade,
-  type CreateGradePayload,
   type SubjectScope,
 } from "@/lib/api/grades"
+import { MESSAGE_FILIERE_HORS_CLASSE, accepteNotes } from "@/lib/grades/accepte-notes"
+import { diffSaisieEleve } from "@/lib/grades/student-diff"
+import { FiliereHorsClasseHint } from "@/components/school/filiere-hors-classe-hint"
 import { parseDecimal } from "@/lib/decimal"
 import { libelleClasseSalle } from "@/lib/classes/labels"
 import { RUBRIQUE_WEIGHTS, type RubriqueCode } from "@/lib/bulletin/compute"
-import { parseScore, validateScoreInput } from "@/lib/grades/score-input"
+import { validateScoreInput } from "@/lib/grades/score-input"
 import { useUnsavedChangesWarning } from "@/hooks/use-unsaved-changes-warning"
 import { toMessage } from "@/lib/errors"
 import { bulkCreateParts, type BulkCreateCounts } from "@/lib/grades/save-summary"
@@ -251,54 +253,21 @@ export default function StudentGradesPage() {
     [classSubjects],
   )
 
-  // Diff avec l'existant → create / update / delete
-  // Basé sur les matières VISIBLES : on n'enregistre jamais une note pour une
-  // matière masquée (autre filière, ou hors du filtre courant).
-  const diff = useMemo(() => {
-    const existingByKey = new Map<string, ApiGrade>()
-    for (const g of existingGrades) {
-      const key = g.sectionId ? `${g.classSubjectId}::${g.sectionId}` : g.classSubjectId
-      existingByKey.set(key, g)
-    }
-    const toCreate: CreateGradePayload[] = []
-    const toUpdate: { gradeId: string; studentScore: number }[] = []
-    const toDelete: string[] = []
-
-    for (const cs of savableSubjects) {
-      const hasSections = cs.subject.hasSections && cs.subject.sections.length > 0
-      const targets = hasSections
-        ? cs.subject.sections.map(sec => ({ key: `${cs.id}::${sec.id}`, sectionId: sec.id }))
-        : [{ key: cs.id, sectionId: undefined as string | undefined }]
-
-      for (const t of targets) {
-        if (t.sectionId && excludedSections.has(t.sectionId)) continue // section dispensée : ignorer
-        const entry = entries.get(t.key)
-        const existing = existingByKey.get(t.key)
-        const raw = entry?.value?.trim() ?? ""
-
-        if (!raw) {
-          if (existing) toDelete.push(existing.id) // note effacée = suppression
-          continue
-        }
-        if (!entry?.isValid) continue
-        const score = parseScore(raw)
-        if (score === null) continue
-        if (!existing) {
-          toCreate.push({
-            enrollmentId,
-            classSubjectId: cs.id,
-            ...(t.sectionId && { sectionId: t.sectionId }),
-            stepId: selectedStepId,
-            studentScore: score,
-            gradeType: "EXAM",
-          })
-        } else if (score !== Number(existing.studentScore)) {
-          toUpdate.push({ gradeId: existing.id, studentScore: score })
-        }
-      }
-    }
-    return { toCreate, toUpdate, toDelete }
-  }, [savableSubjects, entries, existingGrades, excludedSections, enrollmentId, selectedStepId])
+  // Diff avec l'existant → create / update / delete, calculé sur
+  // `savableSubjects` (portée de l'élève, filtre d'affichage exclu). Une
+  // matière à `accepteNotes === false` (décision du serveur) n'y entre jamais :
+  // ni création, ni modification, ni suppression (lib/grades/student-diff.ts).
+  const diff = useMemo(
+    () => diffSaisieEleve({
+      subjects: savableSubjects,
+      entries,
+      existingGrades,
+      excludedSections,
+      enrollmentId,
+      stepId: selectedStepId,
+    }),
+    [savableSubjects, entries, existingGrades, excludedSections, enrollmentId, selectedStepId],
+  )
 
   const dirtyCount = diff.toCreate.length + diff.toUpdate.length + diff.toDelete.length
   // L'alerte native ne couvre que la fermeture d'onglet, F5 et l'URL. Changer
@@ -356,8 +325,11 @@ export default function StudentGradesPage() {
   const { classe, salle } = libelleClasseSalle(enrollment?.classSession?.class)
 
   // Matières groupées par rubrique R1 → R2 → R3 (dans la portée choisie)
+  // Les matières non saisissables (accepteNotes === false) n'ont pas de champ
+  // éditable : elles ne reçoivent pas de collage et ne prennent pas de rang.
   const maxScoreByKey = new Map<string, number>()
   for (const cs of visibleSubjects) {
+    if (!accepteNotes(cs)) continue
     const hasSections = cs.subject.hasSections && cs.subject.sections.length > 0
     if (!hasSections) { maxScoreByKey.set(cs.id, effectiveMaxScore(cs)); continue }
     for (const sec of cs.subject.sections) maxScoreByKey.set(`${cs.id}::${sec.id}`, sec.maxScore)
@@ -373,6 +345,7 @@ export default function StudentGradesPage() {
   // dispensees n'ont pas de champ : elles ne prennent pas de rang.
   const inputOrder: string[] = []
   for (const cs of orderedForKeys) {
+    if (!accepteNotes(cs)) continue
     const hasSections = cs.subject.hasSections && cs.subject.sections.length > 0
     if (!hasSections) { inputOrder.push(cs.id); continue }
     for (const sec of [...cs.subject.sections].sort((a, b) => a.displayOrder - b.displayOrder)) {
@@ -566,6 +539,9 @@ export default function StudentGradesPage() {
                     const startsGroup = ci === 0 || rubric !== prevRubric
                     const subj = cs.subject
                     const hasSections = subj.hasSections && subj.sections.length > 0
+                    // Décision du serveur : ligne grisée, notes en lecture seule.
+                    const fermee = !accepteNotes(cs)
+                    const ariaFermee = fermee ? ` — ${MESSAGE_FILIERE_HORS_CLASSE}` : ""
                     const rows: React.ReactNode[] = []
 
                     if (startsGroup) {
@@ -588,14 +564,15 @@ export default function StudentGradesPage() {
                       const entry = entries.get(key)
                       const err = entry && !entry.isValid
                       rows.push(
-                        <tr key={cs.id} className={ci > 0 ? "border-t" : ""}>
-                          <td className="px-3 py-1 font-semibold text-foreground">
+                        <tr key={cs.id} className={`${ci > 0 ? "border-t" : ""} ${fermee ? "bg-muted/30" : ""}`}>
+                          <td className={`px-3 py-1 font-semibold ${fermee ? "text-muted-foreground" : "text-foreground"}`}>
                             {subj.name}
                             {cs.track && (
                               <span className="ml-2 rounded border border-info-border bg-info-soft px-1.5 py-0.5 text-3xs font-medium text-info-ink">
                                 Examen · {cs.track.code}
                               </span>
                             )}
+                            {fermee && <FiliereHorsClasseHint className="ml-1" />}
                           </td>
                           <td className="px-3 py-1">
                             {subj.rubric?.code && <Badge variant="outline" className={RUBRIC_BADGE}>{rubricLabel(subj.rubric.code)}</Badge>}
@@ -603,12 +580,13 @@ export default function StudentGradesPage() {
                           <td className="px-3 py-1 text-center">
                             <Input
                               type="text" inputMode="decimal" autoComplete="off"
-                              placeholder="—" disabled={exclusionsUnavailable}
+                              placeholder="—" disabled={exclusionsUnavailable || fermee}
                               value={entry?.value ?? ""}
                               onChange={e => setEntry(key, e.target.value, effectiveMaxScore(cs))}
                               onPaste={e => handlePasteFrom(key, e)}
                               data-grid-row={inputOrder.indexOf(key)}
-                              aria-label={`${subj.name} — ${studentName}, sur ${effectiveMaxScore(cs)}`}
+                              aria-label={`${subj.name} — ${studentName}, sur ${effectiveMaxScore(cs)}${ariaFermee}`}
+                              title={fermee ? MESSAGE_FILIERE_HORS_CLASSE : undefined}
                               aria-invalid={!!err}
                               aria-describedby={err ? `err-${key}` : undefined}
                               className={`h-7 text-center tabular-nums ${err ? "border-destructive focus-visible:ring-destructive" : ""}`}
@@ -625,14 +603,15 @@ export default function StudentGradesPage() {
                     } else {
                       // Ligne parent (matière)
                       rows.push(
-                        <tr key={cs.id} className={`bg-muted/20 ${ci > 0 ? "border-t" : ""}`}>
-                          <td className="px-3 py-1 font-semibold text-foreground">
+                        <tr key={cs.id} className={`${fermee ? "bg-muted/30" : "bg-muted/20"} ${ci > 0 ? "border-t" : ""}`}>
+                          <td className={`px-3 py-1 font-semibold ${fermee ? "text-muted-foreground" : "text-foreground"}`}>
                             {subj.name}
                             {cs.track && (
                               <span className="ml-2 rounded border border-info-border bg-info-soft px-1.5 py-0.5 text-3xs font-medium text-info-ink">
                                 Examen · {cs.track.code}
                               </span>
                             )}
+                            {fermee && <FiliereHorsClasseHint className="ml-1" />}
                           </td>
                           <td className="px-3 py-1">
                             {subj.rubric?.code && <Badge variant="outline" className={RUBRIC_BADGE}>{rubricLabel(subj.rubric.code)}</Badge>}
@@ -649,7 +628,7 @@ export default function StudentGradesPage() {
                         const err = entry && !entry.isValid
                         const excluded = excludedSections.has(sec.id)
                         rows.push(
-                          <tr key={key} className="border-t">
+                          <tr key={key} className={`border-t ${fermee ? "bg-muted/30" : ""}`}>
                             <td className="px-3 py-1 pl-8 text-muted-foreground">
                               <span className="mr-1.5 text-muted-foreground" aria-hidden>└</span>
                               {sec.name}
@@ -660,12 +639,13 @@ export default function StudentGradesPage() {
                               <Input
                                 type="text" inputMode="decimal" autoComplete="off"
                                 placeholder="—"
-                                disabled={excluded || exclusionsUnavailable}
+                                disabled={excluded || exclusionsUnavailable || fermee}
                                 value={excluded ? "" : (entry?.value ?? "")}
                                 onChange={e => setEntry(key, e.target.value, sec.maxScore)}
                                 onPaste={e => handlePasteFrom(key, e)}
                                 data-grid-row={inputOrder.indexOf(key)}
-                                aria-label={`${sec.name} — ${subj.name}, ${studentName}, sur ${sec.maxScore}`}
+                                aria-label={`${sec.name} — ${subj.name}, ${studentName}, sur ${sec.maxScore}${ariaFermee}`}
+                                title={fermee ? MESSAGE_FILIERE_HORS_CLASSE : undefined}
                                 aria-invalid={!!err}
                                 aria-describedby={err ? `err-${key}` : undefined}
                                 className={`h-7 text-center tabular-nums ${err ? "border-destructive focus-visible:ring-destructive" : ""}`}
