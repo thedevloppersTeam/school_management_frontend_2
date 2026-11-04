@@ -637,6 +637,11 @@ export default function StudentsManagementPage() {
                 <span className="font-medium text-destructive">{f.name}</span>
                 <span className="text-destructive"> — {f.reason}</span>
                 {f.hint && <span className="block text-muted-foreground">{f.hint}</span>}
+                {f.link && (
+                  <Link href={f.link.href} className="block font-medium underline underline-offset-2">
+                    {f.link.label}
+                  </Link>
+                )}
               </li>
             ))}
           </ul>

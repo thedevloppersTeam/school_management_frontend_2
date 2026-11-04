@@ -65,6 +65,8 @@ import {
   GraduationCapIcon,
   CalendarCheckIcon,
   UserXIcon,
+  LandmarkIcon,
+  FileSpreadsheetIcon,
 } from "lucide-react";
 
 import { getMe, logout, type AuthUser } from "@/lib/data/auth-data";
@@ -153,6 +155,11 @@ const navItems: NavItem[] = [
         href: "/admin/fin-annee/promotion",
         icon: GraduationCapIcon,
       },
+      {
+        label: "Liste MENFP",
+        href: "/admin/fin-annee/menfp",
+        icon: FileSpreadsheetIcon,
+      },
     ],
   },
   {
@@ -186,6 +193,11 @@ const navItems: NavItem[] = [
         icon: ListOrderedIcon,
       },
       {
+        label: "MENFP",
+        href: "/admin/settings/menfp",
+        icon: LandmarkIcon,
+      },
+      {
         label: "Années Scolaires",
         href: "/admin/academic-years",
         icon: CalendarIcon,
@@ -209,9 +221,11 @@ const breadcrumbMap: Record<string, string> = {
   "/admin/academic-years": "Années Scolaires",
   "/admin/settings": "Établissement",
   "/admin/settings/releve": "Relevé de notes",
+  "/admin/settings/menfp": "MENFP",
   "/admin/archives": "Bulletins archivés",
   "/admin/journal": "Journal",
   "/admin/fin-annee/promotion": "Promotion des élèves",
+  "/admin/fin-annee/menfp": "Liste MENFP",
 };
 
 function getBreadcrumbLabel(pathname: string): string {

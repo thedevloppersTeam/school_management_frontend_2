@@ -22,11 +22,16 @@ const LIENS = [
   '/admin/journal',
   '/admin/settings',
   '/admin/settings/releve',
+  '/admin/settings/menfp',
+  '/admin/fin-annee/promotion',
+  '/admin/fin-annee/menfp',
   '/admin/academic-years',
 ]
 
 check('/admin/settings → Établissement', activeHref('/admin/settings', LIENS), '/admin/settings')
 check('/admin/settings/releve → Relevé de notes seul', activeHref('/admin/settings/releve', LIENS), '/admin/settings/releve')
+check('/admin/settings/menfp → MENFP seul, pas Établissement', activeHref('/admin/settings/menfp', LIENS), '/admin/settings/menfp')
+check('/admin/fin-annee/menfp → Liste MENFP, pas Promotion', activeHref('/admin/fin-annee/menfp', LIENS), '/admin/fin-annee/menfp')
 check('/admin/settings-x n’active pas /admin/settings', activeHref('/admin/settings-x', LIENS), 'null')
 check('/admin/all-students/123/transcript → Élève', activeHref('/admin/all-students/123/transcript', LIENS), '/admin/all-students')
 check('/admin/academic-years/abc → Années Scolaires', activeHref('/admin/academic-years/abc', LIENS), '/admin/academic-years')
