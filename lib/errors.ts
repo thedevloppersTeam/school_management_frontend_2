@@ -132,6 +132,89 @@ const CODE_MESSAGES: Record<string, string> = {
     "La note doit être un multiple de 0,25 (.00 / .25 / .50 / .75).",
   NOTE_NON_NUMERIQUE:
     "Note refusée : la valeur saisie n'est pas un nombre décimal.",
+
+  // ── Module MENFP (liste de fin d'année, SPEC-MENFP) ──
+  // Libellés d'après le sens de chaque code côté serveur (src/modules/menfp).
+  // Paramètres et logo du ministère
+  MENFP_ENTREE_INVALIDE: "Demande refusée : une donnée envoyée n'a pas le format attendu.",
+  MENFP_SEUIL_INVALIDE:
+    "Seuil refusé : saisissez un nombre positif à deux décimales au plus (999,99 au maximum), sans arrondi.",
+  MENFP_FICHIER_ABSENT: "Aucun fichier reçu : choisissez une image PNG ou JPEG.",
+  MENFP_LOGO_MINISTERE_ABSENT: "Aucun logo du ministère n'est enregistré : le gel est impossible.",
+  // Référentiel (matières et coefficients)
+  MENFP_CLASSE_EXAMEN: "Classe d'examen : elle n'a pas de liste MENFP de fin d'année.",
+  MENFP_NIVEAU_INCONNU: "Ce niveau n'a aucune salle cette année : créez d'abord les salles de ce niveau.",
+  MENFP_REFERENTIEL_ABSENT:
+    "Aucun référentiel MENFP pour ce niveau et cette année : créez-le dans Paramètres › MENFP.",
+  MENFP_REFERENTIEL_VIDE:
+    "Le référentiel MENFP de ce niveau n'a aucune matière : ajoutez-en dans Paramètres › MENFP.",
+  MENFP_REFERENTIEL_EXISTANT: "Un référentiel MENFP existe déjà pour cette année et ce niveau.",
+  MENFP_REFERENTIEL_INCONNU: "Ce référentiel MENFP n'existe plus : rechargez la page.",
+  MENFP_REFERENTIEL_NON_VIDE:
+    "Le référentiel contient déjà des matières : la copie et l'import d'une grille sont réservés à un référentiel vide.",
+  MENFP_ORIGINE_ABSENTE:
+    "Copie impossible : l'année précédente n'existe pas ou n'a pas de référentiel MENFP pour ce niveau.",
+  MENFP_GRILLE_INCONNUE: "Grille officielle inconnue : choisissez 1re–6e AF, 7e–8e AF ou NS1–NS3.",
+  MENFP_MATIERE_INVALIDE:
+    "Matière refusée : libellé obligatoire (150 caractères au plus), coefficient entier de 1 à 99 999, ordre de 1 à 999.",
+  MENFP_MATIERE_EN_DOUBLE: "Une même matière figure deux fois dans la demande : rechargez la page.",
+  MENFP_MATIERE_INCONNUE: "Une matière ministère visée n'existe plus dans ce référentiel : rechargez la page.",
+  MENFP_LIBELLE_EN_DOUBLE: "Deux matières ministère portent le même libellé.",
+  MENFP_ORDRE_EN_DOUBLE: "Deux matières ministère portent le même ordre.",
+  MENFP_MODIFICATION_CONCURRENTE:
+    "Le référentiel a été modifié en même temps ailleurs : rechargez la page puis recommencez.",
+  // Correspondances (classement des sources)
+  MENFP_CLASSEMENT_INVALIDE:
+    "Classement refusé : une source figure deux fois, ou est à la fois associée et ignorée.",
+  MENFP_SOURCE_HORS_UNIVERS: "Cette source n'appartient pas aux matières des salles de ce niveau : rechargez la page.",
+  MENFP_MATIERE_SANS_RUBRIQUE:
+    "Matière sans rubrique R1, R2 ou R3 : ses sources ne peuvent être qu'ignorées. Corrigez d'abord la rubrique de la matière.",
+  MENFP_ASSOCIATION_SANS_RUBRIQUE:
+    "Des sources sont associées à une matière qui n'a plus de rubrique : corrigez la rubrique ou ignorez ces sources.",
+  MENFP_SOURCES_NON_CLASSEES:
+    "Des sources ne sont pas classées : associez chacune à une matière ministère, ou ignorez-la.",
+  MENFP_MATIERE_SANS_SOURCE: "Une matière ministère n'a aucune source : associez-lui au moins une source.",
+  MENFP_MODE_GLOBAL:
+    "Une matière à sous-matières est notée en note globale : saisissez les notes par sous-matière.",
+  // Aperçu, gel, versions, purge, export
+  MENFP_SALLE_INCONNUE: "Cette salle n'existe plus : choisissez une autre salle.",
+  MENFP_BAREME_NUL:
+    "Le total des barèmes d'une matière est nul : une source n'est pas affectée à la salle ou a un barème de 0.",
+  MENFP_MOTIF_OBLIGATOIRE: "Le motif est obligatoire.",
+  MENFP_LISTE_VIDE: "Gel impossible : la salle ne compte aucun élève retenu.",
+  MENFP_SEXE_MANQUANT: "Gel impossible : le sexe d'au moins un élève n'est pas renseigné.",
+  MENFP_DEPART_A_COMPLETER: "Gel impossible : au moins un départ est à compléter ou n'a pas de date.",
+  MENFP_DELIBERATION_ABSENTE: "Gel impossible : au moins un élève n'a pas de décision de fin d'année.",
+  MENFP_ANNEE_NON_CLOSE: "Gel impossible : toutes les étapes de l'année ne sont pas closes.",
+  MENFP_ECOLE_ABSENTE: "Les informations de l'école sont absentes : le gel est impossible.",
+  MENFP_MOYENNE_IMPOSSIBLE:
+    "Gel impossible : au moins un élève n'a pas de moyenne MENFP (toutes ses matières sont hors total).",
+  MENFP_LOGO_ECOLE_OMIS: "Le logo de l'école sera omis de l'en-tête du fichier exporté.",
+  MENFP_MATIERE_AFFECTEE_DEUX_FOIS:
+    "Une matière est affectée deux fois en tronc commun à la salle : ses notes sont additionnées, comme au bulletin.",
+  MENFP_MODIFIE_DEPUIS_LE_GEL: "Le référentiel ou les paramètres ont changé depuis la dernière version gelée.",
+  MENFP_GEL_CONCURRENT:
+    "Une autre version de cette salle a été gelée en même temps : rechargez la liste des versions puis recommencez.",
+  MENFP_AUCUN_RAPPORT: "Cette salle n'a aucune version gelée : rien à purger.",
+  MENFP_PURGE_CONCURRENTE: "Une version a été gelée pendant la purge : rechargez la page puis recommencez.",
+  MENFP_RAPPORT_INCONNU: "Cette version gelée n'existe plus (elle a peut-être été purgée) : rechargez la page.",
+  MENFP_EMPREINTE_INVALIDE:
+    "Export refusé : la version gelée ne correspond plus à son empreinte enregistrée. Prévenez l'administrateur système.",
+  // Téléversement d'une image (contrôles partagés du serveur)
+  IMAGE_TYPE_REFUSE: "Format d'image refusé : choisissez un fichier PNG ou JPEG.",
+  IMAGE_TROP_VOLUMINEUSE: "Image trop volumineuse : 2 Mo au maximum.",
+  IMAGE_PLUSIEURS_FICHIERS: "Envoyez un seul fichier à la fois.",
+  IMAGE_CHAMP_INATTENDU: "Envoi refusé : le fichier n'est pas dans le champ attendu.",
+  IMAGE_ENVOI_REFUSE: "Envoi de l'image refusé.",
+  // Gestes existants refusés à cause d'un rapport MENFP gelé (lot 4B)
+  STUDENT_IN_FROZEN_MENFP_REPORT:
+    "Suppression refusée : l'élève figure dans un rapport MENFP gelé. Purgez d'abord les rapports MENFP de sa salle (écran de préparation de la liste MENFP).",
+  SALLE_REFERENCEE: "Cette salle est encore utilisée (rapport MENFP gelé…) : suppression impossible.",
+  SOUS_MATIERE_REFERENCEE:
+    "Cette sous-matière est encore utilisée (notes, référentiel MENFP…) : suppression impossible.",
+  // Relais : réponse du serveur hors contrat (lib/backend.ts, backendFetchValide)
+  CONTRAT_REPONSE_INVALIDE:
+    "La réponse du serveur ne correspond pas au format attendu : l'application et le serveur ne sont probablement pas à la même version. Rechargez la page ; si le problème persiste, prévenez l'administrateur.",
 }
 
 /** Codes de lot dont le corps liste les saisies en cause dans `entries[]`. */

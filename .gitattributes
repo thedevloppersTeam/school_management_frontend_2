@@ -1,0 +1,3 @@
+# Copie épinglée du contrat (ADR-007) : octets conservés, sans conversion des fins de ligne,
+# sinon son SHA-256 ne correspond plus à contract/PROVENANCE.md (tools/contract/generate.mjs).
+contract/openapi.json -text

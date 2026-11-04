@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react"
 import { useToast } from "@/components/ui/use-toast"
 import { clientFetch as apiFetch } from "@/lib/client-fetch"
 import { parseDecimal } from "@/lib/decimal"
-import { toMessage } from "@/lib/errors"
+import { toMessage, messageForCode } from "@/lib/errors"
 import { useAcademicYearContext } from "@/lib/contexts/academic-year-context"
 import { cn } from "@/lib/utils"
 
@@ -748,7 +748,8 @@ function useSchoolSettings() {
         credentials: "include",
       })
       const body = await res.json().catch(() => null)
-      if (!res.ok) throw new Error(body?.message || "Échec de la suppression")
+      // 409 SOUS_MATIERE_REFERENCEE (notes, référentiel MENFP) : libellé du code.
+      if (!res.ok) throw new Error(messageForCode(body) ?? (body?.message || "Échec de la suppression"))
       toast({ title: "Sous-matière supprimée" })
       setDeletingSection(null)
       await loadReferentiel()

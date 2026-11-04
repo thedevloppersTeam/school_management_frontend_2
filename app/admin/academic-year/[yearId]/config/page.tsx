@@ -18,6 +18,7 @@ import {
 } from "@/lib/api/dashboard"
 import { libelleClasseSalle } from "@/lib/classes/labels"
 import { toMessage } from '@/lib/errors'
+import { ApiError } from "@/lib/client-fetch"
 import { estArchivee } from "@/lib/academic-years/status"
 
 // ── Types locaux (format attendu par CPMSLYearConfigTabs) ─────────────────────
@@ -624,7 +625,13 @@ export default function AcademicYearConfigPage() {
         credentials: 'include',
       })
       const body = await res.json().catch(() => null)
-      if (!res.ok) throw new Error(body?.message || `Erreur ${res.status}`)
+      // ApiError garde le corps : un 409 SALLE_REFERENCEE (salle d'un rapport
+      // MENFP gelé, lot 4B) est traduit par son code (lib/errors.ts).
+      // Les autres erreurs gardent leur traitement d'avant (Error et message).
+      if (!res.ok) {
+        const message = body?.message || `Erreur ${res.status}`
+        throw body?.code ? new ApiError(res.status, `/api/class-sessions/delete/${classroomId}`, message, body) : new Error(message)
+      }
 
       toast({ title: "Salle supprimée", description: "La salle a été retirée de cette année scolaire." })
       await loadData()

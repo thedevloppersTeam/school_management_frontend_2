@@ -43,6 +43,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # ADR-007 § 2 : les validateurs du contrat (lib/api/menfp/contract.gen.ts)
+      # sont générés depuis la copie épinglée contract/openapi.json. Échec si la
+      # copie a changé sans régénération, ou si le fichier généré a été modifié à
+      # la main. L'outil (orval) vit dans tools/contract, installé à part.
+      - name: Contrat — validateurs à jour
+        run: |
+          npm ci --prefix tools/contract
+          npm run contract:generate
+          git diff --exit-code -- lib/api/menfp/contract.gen.ts
+
       - name: TypeScript check
         run: npx tsc --noEmit
 

@@ -5,7 +5,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import {
-  deleteFailures, ACADEMIC_HISTORY_REASON, DECLARE_DEPARTURE_HINT,
+  deleteFailures, ACADEMIC_HISTORY_REASON, DECLARE_DEPARTURE_HINT, FROZEN_MENFP_REPORT_REASON,
 } from '@/lib/students/delete-report'
 
 const names: Record<string, string> = { 'id-a': 'ALPHA Test', 'id-b': 'BETA Test' }
@@ -28,6 +28,23 @@ describe('deleteFailures', () => {
     const r = deleteFailures({ results: [{ studentId: 'id-a', status: 'error', code: 'STUDENT_HAS_ACADEMIC_HISTORY' }] }, nameOf)
     expect(r[0].reason).toBe(ACADEMIC_HISTORY_REASON)
     expect(r[0].hint).toBe(DECLARE_DEPARTURE_HINT)
+  })
+
+  it('rapport MENFP gelé (M-56) : motif du serveur et lien vers l’écran Liste MENFP', () => {
+    const motif = "Suppression refusée : l'élève figure dans un rapport MENFP gelé. Purgez d'abord les rapports MENFP de sa salle (écran de préparation de la liste MENFP)."
+    const r = deleteFailures({
+      results: [{ studentId: 'id-a', status: 'error', code: 'STUDENT_IN_FROZEN_MENFP_REPORT', message: motif }],
+    }, nameOf)
+    expect(r).toEqual([{
+      studentId: 'id-a', name: 'ALPHA Test', reason: motif,
+      link: { href: '/admin/fin-annee/menfp', label: 'Ouvrir Liste MENFP' },
+    }])
+  })
+
+  it('rapport MENFP gelé sans message : motif français par défaut, lien conservé', () => {
+    const r = deleteFailures({ results: [{ studentId: 'id-b', status: 'error', code: 'STUDENT_IN_FROZEN_MENFP_REPORT' }] }, nameOf)
+    expect(r[0].reason).toBe(FROZEN_MENFP_REPORT_REASON)
+    expect(r[0].link?.href).toBe('/admin/fin-annee/menfp')
   })
 
   it('autre échec : le motif reçu, sans invitation', () => {

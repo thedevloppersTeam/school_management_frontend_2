@@ -1,0 +1,12 @@
+{
+  "name": "cpmsl-contract-tools",
+  "private": true,
+  "description": "Outil de génération des validateurs du contrat (npm run contract:generate à la racine). Isolé du projet : sans legacy-peer-deps, orval reçoit ses dépendances pairs (ajv 8).",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "dependencies": {
+    "orval": "8.46.0"
+  }
+}

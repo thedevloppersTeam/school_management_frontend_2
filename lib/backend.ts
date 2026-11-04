@@ -238,6 +238,146 @@ export async function backendFetch(
   return response;
 }
 
+/** Schéma de réponse : seul `safeParse` est utilisé (validateurs générés du contrat). */
+interface SchemaReponse {
+  safeParse(data: unknown):
+    | { success: true }
+    | { success: false; error: { issues: ReadonlyArray<{ path: ReadonlyArray<PropertyKey>; code: string }> } };
+}
+
+/**
+ * Relais qui VALIDE la réponse de succès contre le contrat (ADR-007 § 2 :
+ * « valide chaque réponse avant usage »), côté serveur de Next.js : aucun
+ * octet de zod n'est envoyé au navigateur.
+ *
+ * - Le transport est celui de backendFetch, inchangé.
+ * - Les réponses d'erreur (4xx, 5xx) et sans corps sont relayées telles quelles.
+ * - Une réponse 2xx qui ne respecte pas le contrat devient un 502
+ *   CONTRAT_REPONSE_INVALIDE : jamais une valeur partielle à l'écran. Le journal
+ *   ne garde que les chemins et les codes d'écart de zod, jamais les valeurs
+ *   (la réponse peut porter des données d'élèves).
+ */
+export async function backendFetchValide(
+  request: NextRequest,
+  path: string,
+  method: string,
+  schema: SchemaReponse,
+): Promise<NextResponse> {
+  const response = await backendFetch(request, path, method);
+  if (!response.ok || NULL_BODY_STATUSES.has(response.status)) return response;
+
+  let data: unknown;
+  try {
+    data = await response.clone().json();
+  } catch {
+    data = undefined;
+  }
+
+  const result = schema.safeParse(data);
+  if (result.success) return response;
+
+  logger.error(
+    {
+      event: "backend_contract_violation",
+      method,
+      path,
+      status: response.status,
+      issues: result.error.issues.slice(0, 20).map((issue) => ({
+        path: issue.path.map(String).join("."),
+        code: issue.code,
+      })),
+    },
+    "Backend response does not match the pinned contract",
+  );
+
+  return NextResponse.json(
+    {
+      code: "CONTRAT_REPONSE_INVALIDE",
+      message:
+        "La réponse du serveur ne correspond pas au contrat attendu : l'application et le serveur ne sont probablement pas à la même version.",
+    },
+    { status: 502 },
+  );
+}
+
+/** En-têtes d'une réponse binaire relayés au navigateur (fichier, image). */
+const BINARY_FORWARDED_HEADERS = [
+  "content-type",
+  "content-length",
+  "content-disposition",
+  "cache-control",
+  "x-content-type-options",
+  "content-security-policy",
+] as const;
+
+/**
+ * Relais BINAIRE (GET) : image ou fichier, octets et en-têtes du serveur
+ * transmis tels quels. backendFetch relit toute réponse en JSON et ne convient
+ * pas (SPEC-MENFP 6.4). Même transport : cookie, délai, échec de transmission.
+ *
+ * Une réponse d'erreur JSON du serveur (401, 403, 404, 409…) est relayée en
+ * JSON avec son statut, comme par backendFetch.
+ */
+export async function backendFetchBinary(request: NextRequest, path: string): Promise<NextResponse> {
+  const targetUrl = new URL(path, env.BACKEND_URL);
+  request.nextUrl.searchParams.forEach((value, key) => {
+    targetUrl.searchParams.set(key, value);
+  });
+
+  const headers: Record<string, string> = { accept: "*/*", "cache-control": "no-cache" };
+  const cookie = request.headers.get("cookie");
+  if (cookie) headers.cookie = cookie;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), BACKEND_TIMEOUT_MS);
+
+  let backendRes: Response;
+  try {
+    backendRes = await fetch(targetUrl.toString(), {
+      method: "GET",
+      headers,
+      redirect: "manual",
+      signal: controller.signal,
+      cache: "no-store",
+    });
+  } catch (error: unknown) {
+    clearTimeout(timeoutId);
+    return transportFailure(error, "GET", path);
+  }
+
+  if (NULL_BODY_STATUSES.has(backendRes.status)) {
+    clearTimeout(timeoutId);
+    return new NextResponse(null, { status: backendRes.status });
+  }
+
+  if (!backendRes.ok) {
+    let raw = "";
+    try {
+      raw = await backendRes.text();
+    } catch {
+      raw = "";
+    } finally {
+      clearTimeout(timeoutId);
+    }
+    let data: unknown = null;
+    try {
+      data = raw ? JSON.parse(raw) : null;
+    } catch {
+      data = null;
+    }
+    return NextResponse.json(data, { status: backendRes.status });
+  }
+
+  // Les en-têtes sont reçus : le délai ne doit pas couper le flux d'octets.
+  clearTimeout(timeoutId);
+  const forwarded = new Headers();
+  for (const name of BINARY_FORWARDED_HEADERS) {
+    const value = backendRes.headers.get(name);
+    if (value) forwarded.set(name, value);
+  }
+  return new NextResponse(backendRes.body, { status: backendRes.status, headers: forwarded });
+}
+
 /** Statuts HTTP qui ne portent jamais de corps (Fetch : « null body status »). */
 const NULL_BODY_STATUSES = new Set([101, 103, 204, 205, 304]);
 

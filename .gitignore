@@ -82,3 +82,6 @@ _cpmsl_dashboard_tmp/
 /AUDIT_*.md
 /audit-*.md
 /diagnostic-*.md
+
+# outil de génération du contrat (npm ci --prefix tools/contract)
+/tools/contract/node_modules

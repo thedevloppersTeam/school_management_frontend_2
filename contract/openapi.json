@@ -1,0 +1,3746 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "API du serveur CPMSL",
+    "version": "1.0.0",
+    "description": "Généré par architecture/export-contract.cjs depuis les contract.ts des modules (ADR-007 § 2). Ne pas modifier à la main."
+  },
+  "paths": {
+    "/api/menfp/annees/{academicYearId}/niveaux": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "academicYearId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.NiveauxReponse"
+                }
+              }
+            },
+            "description": "Niveaux."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.Erreur"
+                }
+              }
+            },
+            "description": "Entrée invalide ou règle violée (RuleViolation)."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.RefusAcces"
+                }
+              }
+            },
+            "description": "Sans session (ADR-013 § 6)."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.RefusAcces"
+                }
+              }
+            },
+            "description": "Session sans la permission de la route (ADR-013 § 6, M-35)."
+          }
+        },
+        "summary": "Niveaux configurables d'une année et état de leur référentiel.",
+        "tags": [
+          "menfp"
+        ],
+        "x-permission": "menfp.referentiel.gerer"
+      }
+    },
+    "/api/menfp/parametres": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.ParametresReponse"
+                }
+              }
+            },
+            "description": "Paramètres."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.RefusAcces"
+                }
+              }
+            },
+            "description": "Sans session (ADR-013 § 6)."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.RefusAcces"
+                }
+              }
+            },
+            "description": "Session sans la permission de la route (ADR-013 § 6, M-35)."
+          }
+        },
+        "summary": "Seuil d'alerte et logo du ministère en vigueur.",
+        "tags": [
+          "menfp"
+        ],
+        "x-permission": "menfp.referentiel.gerer"
+      }
+    },
+    "/api/menfp/parametres/logo-ministere": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.LogoMinistereOctets"
+                }
+              },
+              "image/png": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.LogoMinistereOctets"
+                }
+              }
+            },
+            "description": "Image du logo, Content-Type stocké.",
+            "headers": {
+              "Cache-Control": {
+                "description": "private, no-store",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Security-Policy": {
+                "description": "sandbox (CSP_FICHIER_SERVI, D-32)",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Content-Type-Options": {
+                "description": "nosniff",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.RefusAcces"
+                }
+              }
+            },
+            "description": "Sans session (ADR-013 § 6)."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.RefusAcces"
+                }
+              }
+            },
+            "description": "Session sans la permission de la route (ADR-013 § 6, M-35)."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.Erreur"
+                }
+              }
+            },
+            "description": "Aucun logo du ministère (MENFP_LOGO_MINISTERE_ABSENT)."
+          }
+        },
+        "summary": "Octets du logo du ministère en vigueur.",
+        "tags": [
+          "menfp"
+        ],
+        "x-permission": "menfp.referentiel.gerer"
+      },
+      "post": {
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/menfp.LogoMinistereEntree"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.ParametresReponse"
+                }
+              }
+            },
+            "description": "Paramètres."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.Erreur"
+                }
+              }
+            },
+            "description": "Entrée invalide ou règle violée (RuleViolation)."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.RefusAcces"
+                }
+              }
+            },
+            "description": "Sans session (ADR-013 § 6)."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.RefusAcces"
+                }
+              }
+            },
+            "description": "Session sans la permission de la route (ADR-013 § 6, M-35)."
+          }
+        },
+        "summary": "Téléverser le logo du ministère (M-49).",
+        "tags": [
+          "menfp"
+        ],
+        "x-permission": "menfp.referentiel.gerer"
+      }
+    },
+    "/api/menfp/parametres/seuil": {
+      "put": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/menfp.SeuilEntree"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.ParametresReponse"
+                }
+              }
+            },
+            "description": "Paramètres."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.Erreur"
+                }
+              }
+            },
+            "description": "Entrée invalide ou règle violée (RuleViolation)."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.RefusAcces"
+                }
+              }
+            },
+            "description": "Sans session (ADR-013 § 6)."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.RefusAcces"
+                }
+              }
+            },
+            "description": "Session sans la permission de la route (ADR-013 § 6, M-35)."
+          }
+        },
+        "summary": "Modifier le seuil d'alerte (M-22).",
+        "tags": [
+          "menfp"
+        ],
+        "x-permission": "menfp.referentiel.gerer"
+      }
+    },
+    "/api/menfp/rapports/{id}/export": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.ExportOctets"
+                }
+              }
+            },
+            "description": "Classeur .xlsx d'une feuille.",
+            "headers": {
+              "Cache-Control": {
+                "description": "private, no-store",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Disposition": {
+                "description": "attachment; filename=\"MENFP-<année>-<niveau>-<lettre>-v<version>.xlsx\" (ASCII) ; filename*=UTF-8''<même nom, encodé> ; aucune donnée d'élève.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Content-Type-Options": {
+                "description": "nosniff",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.Erreur"
+                }
+              }
+            },
+            "description": "Entrée invalide ou règle violée (RuleViolation)."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.RefusAcces"
+                }
+              }
+            },
+            "description": "Sans session (ADR-013 § 6)."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.RefusAcces"
+                }
+              }
+            },
+            "description": "Session sans la permission de la route (ADR-013 § 6, M-35)."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.Erreur"
+                }
+              }
+            },
+            "description": "Rapport inconnu ou purgé (MENFP_RAPPORT_INCONNU)."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.Erreur"
+                }
+              }
+            },
+            "description": "Instantané ou logo figé qui ne correspond plus à son empreinte (MENFP_EMPREINTE_INVALIDE, M-30 c)."
+          }
+        },
+        "summary": "Fichier Excel d'une version gelée, depuis l'instantané (M-29).",
+        "tags": [
+          "menfp"
+        ],
+        "x-permission": "menfp.rapport.generer"
+      }
+    },
+    "/api/menfp/referentiels/{academicYearId}/{classTypeId}": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "academicYearId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "classTypeId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.ReferentielReponse"
+                }
+              }
+            },
+            "description": "Référentiel."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.Erreur"
+                }
+              }
+            },
+            "description": "Entrée invalide ou règle violée (RuleViolation)."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.RefusAcces"
+                }
+              }
+            },
+            "description": "Sans session (ADR-013 § 6)."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.RefusAcces"
+                }
+              }
+            },
+            "description": "Session sans la permission de la route (ADR-013 § 6, M-35)."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.Erreur"
+                }
+              }
+            },
+            "description": "Ressource inconnue (NotFound)."
+          }
+        },
+        "summary": "Référentiel d'un niveau d'une année.",
+        "tags": [
+          "menfp"
+        ],
+        "x-permission": "menfp.referentiel.gerer"
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "academicYearId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "classTypeId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/menfp.CreationReferentielEntree"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.ReferentielReponse"
+                }
+              }
+            },
+            "description": "Référentiel créé."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.Erreur"
+                }
+              }
+            },
+            "description": "Entrée invalide ou règle violée (RuleViolation)."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.RefusAcces"
+                }
+              }
+            },
+            "description": "Sans session (ADR-013 § 6)."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.RefusAcces"
+                }
+              }
+            },
+            "description": "Session sans la permission de la route (ADR-013 § 6, M-35)."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.Erreur"
+                }
+              }
+            },
+            "description": "Ressource inconnue (NotFound)."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.Erreur"
+                }
+              }
+            },
+            "description": "Conflit d'état (Conflict)."
+          }
+        },
+        "summary": "Créer un référentiel vide ou par copie de l'année précédente (M-06, M-07).",
+        "tags": [
+          "menfp"
+        ],
+        "x-permission": "menfp.referentiel.gerer"
+      }
+    },
+    "/api/menfp/referentiels/{id}/import-grille": {
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/menfp.ImportGrilleEntree"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.ReferentielReponse"
+                }
+              }
+            },
+            "description": "Référentiel."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.Erreur"
+                }
+              }
+            },
+            "description": "Entrée invalide ou règle violée (RuleViolation)."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.RefusAcces"
+                }
+              }
+            },
+            "description": "Sans session (ADR-013 § 6)."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.RefusAcces"
+                }
+              }
+            },
+            "description": "Session sans la permission de la route (ADR-013 § 6, M-35)."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.Erreur"
+                }
+              }
+            },
+            "description": "Ressource inconnue (NotFound)."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.Erreur"
+                }
+              }
+            },
+            "description": "Conflit d'état (Conflict)."
+          }
+        },
+        "summary": "Importer une grille officielle (M-37).",
+        "tags": [
+          "menfp"
+        ],
+        "x-permission": "menfp.referentiel.gerer"
+      }
+    },
+    "/api/menfp/referentiels/{id}/matieres": {
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/menfp.MatieresEntree"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.ReferentielReponse"
+                }
+              }
+            },
+            "description": "Référentiel."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.Erreur"
+                }
+              }
+            },
+            "description": "Entrée invalide ou règle violée (RuleViolation)."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.RefusAcces"
+                }
+              }
+            },
+            "description": "Sans session (ADR-013 § 6)."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.RefusAcces"
+                }
+              }
+            },
+            "description": "Session sans la permission de la route (ADR-013 § 6, M-35)."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.Erreur"
+                }
+              }
+            },
+            "description": "Ressource inconnue (NotFound)."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.Erreur"
+                }
+              }
+            },
+            "description": "Conflit d'état (Conflict)."
+          }
+        },
+        "summary": "Mise à jour différentielle des matières ministère (M-45).",
+        "tags": [
+          "menfp"
+        ],
+        "x-permission": "menfp.referentiel.gerer"
+      }
+    },
+    "/api/menfp/referentiels/{id}/sources": {
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/menfp.SourcesEntree"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.ReferentielReponse"
+                }
+              }
+            },
+            "description": "Référentiel."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.Erreur"
+                }
+              }
+            },
+            "description": "Entrée invalide ou règle violée (RuleViolation)."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.RefusAcces"
+                }
+              }
+            },
+            "description": "Sans session (ADR-013 § 6)."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.RefusAcces"
+                }
+              }
+            },
+            "description": "Session sans la permission de la route (ADR-013 § 6, M-35)."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.Erreur"
+                }
+              }
+            },
+            "description": "Ressource inconnue (NotFound)."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.Erreur"
+                }
+              }
+            },
+            "description": "Conflit d'état (Conflict)."
+          }
+        },
+        "summary": "Classement des sources (M-09 à M-12).",
+        "tags": [
+          "menfp"
+        ],
+        "x-permission": "menfp.referentiel.gerer"
+      }
+    },
+    "/api/menfp/salles/{classSessionId}/apercu": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "classSessionId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.ApercuReponse"
+                }
+              }
+            },
+            "description": "Aperçu."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.Erreur"
+                }
+              }
+            },
+            "description": "Entrée invalide ou règle violée (RuleViolation)."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.RefusAcces"
+                }
+              }
+            },
+            "description": "Sans session (ADR-013 § 6)."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.RefusAcces"
+                }
+              }
+            },
+            "description": "Session sans la permission de la route (ADR-013 § 6, M-35)."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.Erreur"
+                }
+              }
+            },
+            "description": "Ressource inconnue (NotFound)."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/menfp.ErreurAvecRefus"
+                    },
+                    {
+                      "$ref": "#/components/schemas/menfp.Erreur"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Blocages d'état multiples (ErreurAvecRefus, M-32) ou conflit (Erreur)."
+          }
+        },
+        "summary": "Aperçu de la liste d'une salle (référentiel en vigueur, M-46).",
+        "tags": [
+          "menfp"
+        ],
+        "x-permission": "menfp.rapport.generer"
+      }
+    },
+    "/api/menfp/salles/{classSessionId}/rapports": {
+      "delete": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "classSessionId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/menfp.PurgeEntree"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.PurgeReponse"
+                }
+              }
+            },
+            "description": "Versions supprimées."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.Erreur"
+                }
+              }
+            },
+            "description": "Entrée invalide ou règle violée (RuleViolation)."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.RefusAcces"
+                }
+              }
+            },
+            "description": "Sans session (ADR-013 § 6)."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.RefusAcces"
+                }
+              }
+            },
+            "description": "Session sans la permission de la route (ADR-013 § 6, M-35)."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.Erreur"
+                }
+              }
+            },
+            "description": "Ressource inconnue (NotFound)."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.Erreur"
+                }
+              }
+            },
+            "description": "Conflit d'état (Conflict)."
+          }
+        },
+        "summary": "Purger toutes les versions d'une salle (M-56, motif obligatoire).",
+        "tags": [
+          "menfp"
+        ],
+        "x-permission": "menfp.rapport.geler"
+      },
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "classSessionId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.VersionsReponse"
+                }
+              }
+            },
+            "description": "Versions."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.Erreur"
+                }
+              }
+            },
+            "description": "Entrée invalide ou règle violée (RuleViolation)."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.RefusAcces"
+                }
+              }
+            },
+            "description": "Sans session (ADR-013 § 6)."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.RefusAcces"
+                }
+              }
+            },
+            "description": "Session sans la permission de la route (ADR-013 § 6, M-35)."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.Erreur"
+                }
+              }
+            },
+            "description": "Ressource inconnue (NotFound)."
+          }
+        },
+        "summary": "Versions gelées d'une salle et signalement de M-47.",
+        "tags": [
+          "menfp"
+        ],
+        "x-permission": "menfp.rapport.generer"
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "classSessionId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/menfp.GelEntree"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.RapportGeleReponse"
+                }
+              }
+            },
+            "description": "Version gelée."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/menfp.ErreurAvecRefus"
+                    },
+                    {
+                      "$ref": "#/components/schemas/menfp.Erreur"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Entrée invalide (Erreur) ou erreurs d'entrée multiples (ErreurAvecRefus, M-32)."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.RefusAcces"
+                }
+              }
+            },
+            "description": "Sans session (ADR-013 § 6)."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.RefusAcces"
+                }
+              }
+            },
+            "description": "Session sans la permission de la route (ADR-013 § 6, M-35)."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/menfp.Erreur"
+                }
+              }
+            },
+            "description": "Ressource inconnue (NotFound)."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/menfp.ErreurAvecRefus"
+                    },
+                    {
+                      "$ref": "#/components/schemas/menfp.Erreur"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Blocages d'état multiples (ErreurAvecRefus, M-32) ou conflit (Erreur)."
+          }
+        },
+        "summary": "Geler une version (M-30 ; M-31 : motif obligatoire si version > 1).",
+        "tags": [
+          "menfp"
+        ],
+        "x-permission": "menfp.rapport.geler"
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "menfp.ApercuReponse": {
+        "additionalProperties": false,
+        "properties": {
+          "bandeau": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "blocages": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "enrollmentIds": {
+                  "items": {
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "matieres": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "id": {
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                        "type": "string"
+                      },
+                      "libelle": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "libelle"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "matieresCpmsl": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "nom": {
+                        "type": "string"
+                      },
+                      "subjectId": {
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "subjectId",
+                      "nom"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "sources": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "nom": {
+                        "type": "string"
+                      },
+                      "raison": {
+                        "enum": [
+                          "NON_CALCULEE",
+                          "BAREME_NUL"
+                        ],
+                        "type": "string"
+                      },
+                      "sectionId": {
+                        "anyOf": [
+                          {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "subjectId": {
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "subjectId",
+                      "sectionId",
+                      "nom"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "colonnes": {
+            "additionalProperties": false,
+            "properties": {
+              "matieres": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "coefficient": {
+                      "description": "Nombre décimal exact, en chaîne à point (ex. « 0.1 », « 200 »).",
+                      "type": "string"
+                    },
+                    "id": {
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                      "type": "string"
+                    },
+                    "libelle": {
+                      "type": "string"
+                    },
+                    "ordre": {
+                      "maximum": 9007199254740991,
+                      "minimum": -9007199254740991,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "libelle",
+                    "coefficient",
+                    "ordre"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "sommeCoefficients": {
+                "description": "Nombre décimal exact, en chaîne à point (ex. « 0.1 », « 200 »).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "matieres",
+              "sommeCoefficients"
+            ],
+            "type": "object"
+          },
+          "entete": {
+            "additionalProperties": false,
+            "properties": {
+              "annee": {
+                "additionalProperties": false,
+                "properties": {
+                  "academicYearId": {
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                    "type": "string"
+                  },
+                  "yearString": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "academicYearId",
+                  "yearString"
+                ],
+                "type": "object"
+              },
+              "ecole": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "nom": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "nom"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "salle": {
+                "additionalProperties": false,
+                "properties": {
+                  "classSessionId": {
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                    "type": "string"
+                  },
+                  "classTypeId": {
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                    "type": "string"
+                  },
+                  "lettre": {
+                    "type": "string"
+                  },
+                  "niveau": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "classSessionId",
+                  "classTypeId",
+                  "niveau",
+                  "lettre"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "ecole",
+              "annee",
+              "salle"
+            ],
+            "type": "object"
+          },
+          "lignes": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "alerte": {
+                  "type": "boolean"
+                },
+                "dateDepart": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "dateNaissance": {
+                  "description": "JJ/MM/AAAA",
+                  "type": "string"
+                },
+                "decisionFinale": {
+                  "type": "string"
+                },
+                "ecart": {
+                  "anyOf": [
+                    {
+                      "description": "Nombre décimal exact, en chaîne à point (ex. « 0.1 », « 200 »).",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "enrollmentId": {
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                  "type": "string"
+                },
+                "matieres": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "horsTotal": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "DISPENSEE",
+                              "SANS_EVALUATION"
+                            ],
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "matiereId": {
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                        "type": "string"
+                      },
+                      "points": {
+                        "anyOf": [
+                          {
+                            "description": "Nombre décimal exact, en chaîne à point (ex. « 0.1 », « 200 »).",
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "pourcentage": {
+                        "anyOf": [
+                          {
+                            "description": "Nombre décimal exact, en chaîne à point (ex. « 0.1 », « 200 »).",
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "sommeBaremes": {
+                        "anyOf": [
+                          {
+                            "description": "Nombre décimal exact, en chaîne à point (ex. « 0.1 », « 200 »).",
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "sommeNotes": {
+                        "anyOf": [
+                          {
+                            "description": "Nombre décimal exact, en chaîne à point (ex. « 0.1 », « 200 »).",
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "matiereId",
+                      "horsTotal",
+                      "sommeNotes",
+                      "sommeBaremes",
+                      "pourcentage",
+                      "points"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "moyenneCpmsl": {
+                  "anyOf": [
+                    {
+                      "description": "Nombre décimal exact, en chaîne à point (ex. « 0.1 », « 200 »).",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "moyenneMenfp": {
+                  "anyOf": [
+                    {
+                      "description": "Nombre décimal exact, en chaîne à point (ex. « 0.1 », « 200 »).",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "nom": {
+                  "type": "string"
+                },
+                "prenom": {
+                  "type": "string"
+                },
+                "sexe": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "M",
+                        "F"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "sigmaCoefficients": {
+                  "description": "Nombre décimal exact, en chaîne à point (ex. « 0.1 », « 200 »).",
+                  "type": "string"
+                },
+                "statut": {
+                  "enum": [
+                    "ACTIVE",
+                    "TRANSFERRED",
+                    "DROPPED",
+                    "GRADUATED"
+                  ],
+                  "type": "string"
+                },
+                "total": {
+                  "description": "Nombre décimal exact, en chaîne à point (ex. « 0.1 », « 200 »).",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "enrollmentId",
+                "nom",
+                "prenom",
+                "sexe",
+                "dateNaissance",
+                "statut",
+                "dateDepart",
+                "decisionFinale",
+                "matieres",
+                "sigmaCoefficients",
+                "total",
+                "moyenneMenfp",
+                "moyenneCpmsl",
+                "ecart",
+                "alerte"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "modifieDepuisLeGel": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "code": {
+                    "const": "MENFP_MODIFIE_DEPUIS_LE_GEL",
+                    "type": "string"
+                  },
+                  "differences": {
+                    "items": {
+                      "oneOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "apres": {
+                              "description": "Nombre décimal exact, en chaîne à point (ex. « 0.1 », « 200 »).",
+                              "type": "string"
+                            },
+                            "avant": {
+                              "description": "Nombre décimal exact, en chaîne à point (ex. « 0.1 », « 200 »).",
+                              "type": "string"
+                            },
+                            "libelle": {
+                              "type": "string"
+                            },
+                            "matiereId": {
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "nature": {
+                              "const": "COEFFICIENT",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "nature",
+                            "matiereId",
+                            "libelle",
+                            "avant",
+                            "apres",
+                            "message"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "libelle": {
+                              "type": "string"
+                            },
+                            "matiereId": {
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "nature": {
+                              "const": "MATIERE_AJOUTEE",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "nature",
+                            "matiereId",
+                            "libelle",
+                            "message"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "libelle": {
+                              "type": "string"
+                            },
+                            "matiereId": {
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "nature": {
+                              "const": "MATIERE_SUPPRIMEE",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "nature",
+                            "matiereId",
+                            "libelle",
+                            "message"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "apres": {
+                              "type": "string"
+                            },
+                            "avant": {
+                              "type": "string"
+                            },
+                            "matiereId": {
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "nature": {
+                              "const": "LIBELLE",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "nature",
+                            "matiereId",
+                            "avant",
+                            "apres",
+                            "message"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "apres": {
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            "avant": {
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            "libelle": {
+                              "type": "string"
+                            },
+                            "matiereId": {
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "nature": {
+                              "const": "ORDRE",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "nature",
+                            "matiereId",
+                            "libelle",
+                            "avant",
+                            "apres",
+                            "message"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "apres": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "ignoree": {
+                                  "type": "boolean"
+                                },
+                                "matiereId": {
+                                  "anyOf": [
+                                    {
+                                      "format": "uuid",
+                                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "matiereId",
+                                "ignoree"
+                              ],
+                              "type": "object"
+                            },
+                            "avant": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "ignoree": {
+                                  "type": "boolean"
+                                },
+                                "matiereId": {
+                                  "anyOf": [
+                                    {
+                                      "format": "uuid",
+                                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "matiereId",
+                                "ignoree"
+                              ],
+                              "type": "object"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "nature": {
+                              "const": "CLASSEMENT",
+                              "type": "string"
+                            },
+                            "sectionId": {
+                              "anyOf": [
+                                {
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "subjectId": {
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "nature",
+                            "subjectId",
+                            "sectionId",
+                            "avant",
+                            "apres",
+                            "message"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "apres": {
+                              "description": "Nombre décimal exact, en chaîne à point (ex. « 0.1 », « 200 »).",
+                              "type": "string"
+                            },
+                            "avant": {
+                              "description": "Nombre décimal exact, en chaîne à point (ex. « 0.1 », « 200 »).",
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "nature": {
+                              "const": "SEUIL",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "nature",
+                            "avant",
+                            "apres",
+                            "message"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "apres": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "avant": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "nature": {
+                              "const": "LOGO_MINISTERE",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "nature",
+                            "avant",
+                            "apres",
+                            "message"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "apres": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "avant": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "nature": {
+                              "const": "LOGO_ECOLE",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "nature",
+                            "avant",
+                            "apres",
+                            "message"
+                          ],
+                          "type": "object"
+                        }
+                      ]
+                    },
+                    "type": "array"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "rapportId": {
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                    "type": "string"
+                  },
+                  "version": {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message",
+                  "rapportId",
+                  "version",
+                  "differences"
+                ],
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "seuil": {
+            "description": "Nombre décimal exact, en chaîne à point (ex. « 0.1 », « 200 »).",
+            "type": "string"
+          },
+          "signalements": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "code": {
+                  "enum": [
+                    "MENFP_SEXE_MANQUANT",
+                    "MENFP_DEPART_A_COMPLETER",
+                    "MENFP_DELIBERATION_ABSENTE",
+                    "MENFP_LOGO_MINISTERE_ABSENT",
+                    "MENFP_LOGO_ECOLE_OMIS",
+                    "MENFP_ECOLE_ABSENTE",
+                    "MENFP_MOYENNE_IMPOSSIBLE",
+                    "MENFP_MATIERE_AFFECTEE_DEUX_FOIS"
+                  ],
+                  "type": "string"
+                },
+                "enrollmentId": {
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "subjectId": {
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "entete",
+          "colonnes",
+          "seuil",
+          "lignes",
+          "signalements",
+          "bandeau",
+          "blocages",
+          "modifieDepuisLeGel"
+        ],
+        "type": "object"
+      },
+      "menfp.CreationReferentielEntree": {
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "mode": {
+                "const": "vide",
+                "type": "string"
+              }
+            },
+            "required": [
+              "mode"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "mode": {
+                "const": "copie",
+                "type": "string"
+              }
+            },
+            "required": [
+              "mode"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "menfp.Erreur": {
+        "additionalProperties": false,
+        "description": "Refus typé (ADR-008 § 6) : RuleViolation 400, NotFound 404, Conflict 409.",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object"
+      },
+      "menfp.ErreurAvecRefus": {
+        "additionalProperties": false,
+        "description": "Refus 400 (erreurs d'entrée) OU 409 (blocages d'état), jamais les deux (M-32) ; `code` : celui du premier refus.",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "refus": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "enrollmentIds": {
+                  "items": {
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "matieres": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "id": {
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                        "type": "string"
+                      },
+                      "libelle": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "libelle"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "matieresCpmsl": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "nom": {
+                        "type": "string"
+                      },
+                      "subjectId": {
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "subjectId",
+                      "nom"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "sources": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "nom": {
+                        "type": "string"
+                      },
+                      "raison": {
+                        "enum": [
+                          "NON_CALCULEE",
+                          "BAREME_NUL"
+                        ],
+                        "type": "string"
+                      },
+                      "sectionId": {
+                        "anyOf": [
+                          {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "subjectId": {
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "subjectId",
+                      "sectionId",
+                      "nom"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "refus"
+        ],
+        "type": "object"
+      },
+      "menfp.EtatReferentiel": {
+        "description": "État du référentiel d'un niveau (M-61).",
+        "enum": [
+          "absent",
+          "incomplet",
+          "complet"
+        ],
+        "type": "string"
+      },
+      "menfp.ExportOctets": {
+        "description": "Réponse binaire : classeur .xlsx d'une feuille (Content-Type application/vnd.openxmlformats-officedocument.spreadsheetml.sheet), produit depuis l'instantané gelé (M-29) ; Content-Disposition attachment avec filename et filename* (UTF-8), Cache-Control: private, no-store, X-Content-Type-Options: nosniff. Nom de fichier MENFP-<année>-<niveau>-<lettre>-v<version>.xlsx, sans donnée d'élève.",
+        "format": "binary",
+        "type": "string"
+      },
+      "menfp.GelEntree": {
+        "additionalProperties": false,
+        "properties": {
+          "motif": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "menfp.IdGrille": {
+        "description": "Grille officielle de M-08 (M-37).",
+        "enum": [
+          "AF_1_6",
+          "AF_7_8",
+          "NS_1_3"
+        ],
+        "type": "string"
+      },
+      "menfp.ImportGrilleEntree": {
+        "additionalProperties": false,
+        "properties": {
+          "grille": {
+            "description": "Grille officielle de M-08 (M-37).",
+            "enum": [
+              "AF_1_6",
+              "AF_7_8",
+              "NS_1_3"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "grille"
+        ],
+        "type": "object"
+      },
+      "menfp.LogoMinistereEntree": {
+        "additionalProperties": false,
+        "description": "Corps multipart/form-data.",
+        "properties": {
+          "logo": {
+            "description": "Fichier PNG ou JPEG, 2 Mo au plus (M-49).",
+            "format": "binary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "logo"
+        ],
+        "type": "object"
+      },
+      "menfp.LogoMinistereOctets": {
+        "description": "Réponse binaire : octets du logo du ministère, Content-Type stocké (image/png ou image/jpeg), X-Content-Type-Options: nosniff, Content-Security-Policy sandbox, Cache-Control: private, no-store.",
+        "format": "binary",
+        "type": "string"
+      },
+      "menfp.MatieresEntree": {
+        "additionalProperties": false,
+        "properties": {
+          "matieres": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "coefficient": {
+                  "description": "Nombre décimal exact, en chaîne à point (ex. « 0.1 », « 200 »).",
+                  "type": "string"
+                },
+                "id": {
+                  "anyOf": [
+                    {
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "libelle": {
+                  "type": "string"
+                },
+                "ordre": {
+                  "maximum": 9007199254740991,
+                  "minimum": -9007199254740991,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "libelle",
+                "coefficient",
+                "ordre"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "matieres"
+        ],
+        "type": "object"
+      },
+      "menfp.NiveauxReponse": {
+        "additionalProperties": false,
+        "properties": {
+          "academicYearId": {
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+            "type": "string"
+          },
+          "niveaux": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "classTypeId": {
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                  "type": "string"
+                },
+                "etat": {
+                  "description": "État du référentiel d'un niveau (M-61).",
+                  "enum": [
+                    "absent",
+                    "incomplet",
+                    "complet"
+                  ],
+                  "type": "string"
+                },
+                "nom": {
+                  "type": "string"
+                },
+                "referentielId": {
+                  "anyOf": [
+                    {
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "classTypeId",
+                "nom",
+                "etat",
+                "referentielId"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "academicYearId",
+          "niveaux"
+        ],
+        "type": "object"
+      },
+      "menfp.ParametresReponse": {
+        "additionalProperties": false,
+        "properties": {
+          "logoMinistere": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "empreinte": {
+                    "type": "string"
+                  },
+                  "taille": {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  "typeMime": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "empreinte",
+                  "typeMime",
+                  "taille"
+                ],
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "seuil": {
+            "description": "Nombre décimal exact, en chaîne à point (ex. « 0.1 », « 200 »).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "seuil",
+          "logoMinistere"
+        ],
+        "type": "object"
+      },
+      "menfp.ParamsAnnee": {
+        "additionalProperties": false,
+        "properties": {
+          "academicYearId": {
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "academicYearId"
+        ],
+        "type": "object"
+      },
+      "menfp.ParamsNiveau": {
+        "additionalProperties": false,
+        "properties": {
+          "academicYearId": {
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+            "type": "string"
+          },
+          "classTypeId": {
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "academicYearId",
+          "classTypeId"
+        ],
+        "type": "object"
+      },
+      "menfp.ParamsRapport": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "menfp.ParamsReferentiel": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "menfp.ParamsSalle": {
+        "additionalProperties": false,
+        "properties": {
+          "classSessionId": {
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "classSessionId"
+        ],
+        "type": "object"
+      },
+      "menfp.PurgeEntree": {
+        "additionalProperties": false,
+        "properties": {
+          "motif": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "menfp.PurgeReponse": {
+        "additionalProperties": false,
+        "properties": {
+          "classSessionId": {
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+            "type": "string"
+          },
+          "versionsSupprimees": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "empreinte": {
+                  "type": "string"
+                },
+                "id": {
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                  "type": "string"
+                },
+                "version": {
+                  "maximum": 9007199254740991,
+                  "minimum": -9007199254740991,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id",
+                "version",
+                "empreinte"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "classSessionId",
+          "versionsSupprimees"
+        ],
+        "type": "object"
+      },
+      "menfp.RapportGeleReponse": {
+        "additionalProperties": false,
+        "properties": {
+          "classSessionId": {
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+            "type": "string"
+          },
+          "empreinte": {
+            "type": "string"
+          },
+          "geleLe": {
+            "description": "Date et heure ISO 8601, UTC.",
+            "type": "string"
+          },
+          "geleParId": {
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+            "type": "string"
+          },
+          "logoEcole": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "empreinte": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                    "type": "string"
+                  },
+                  "typeMime": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "empreinte",
+                  "typeMime"
+                ],
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "logoMinistere": {
+            "additionalProperties": false,
+            "properties": {
+              "empreinte": {
+                "type": "string"
+              },
+              "id": {
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                "type": "string"
+              },
+              "typeMime": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "empreinte",
+              "typeMime"
+            ],
+            "type": "object"
+          },
+          "motif": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "remplaceId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "version": {
+            "maximum": 9007199254740991,
+            "minimum": -9007199254740991,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "classSessionId",
+          "version",
+          "remplaceId",
+          "motif",
+          "empreinte",
+          "geleLe",
+          "geleParId",
+          "logoMinistere",
+          "logoEcole"
+        ],
+        "type": "object"
+      },
+      "menfp.ReferentielReponse": {
+        "additionalProperties": false,
+        "properties": {
+          "academicYearId": {
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+            "type": "string"
+          },
+          "classTypeId": {
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+            "type": "string"
+          },
+          "classementHorsUnivers": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "ignoree": {
+                  "type": "boolean"
+                },
+                "matiereId": {
+                  "anyOf": [
+                    {
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "sectionId": {
+                  "anyOf": [
+                    {
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "subjectId": {
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "subjectId",
+                "sectionId",
+                "matiereId",
+                "ignoree"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "copieDeId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "etat": {
+            "description": "État du référentiel d'un niveau (M-61).",
+            "enum": [
+              "absent",
+              "incomplet",
+              "complet"
+            ],
+            "type": "string"
+          },
+          "grilleImportee": {
+            "anyOf": [
+              {
+                "description": "Grille officielle de M-08 (M-37).",
+                "enum": [
+                  "AF_1_6",
+                  "AF_7_8",
+                  "NS_1_3"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+            "type": "string"
+          },
+          "matieres": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "coefficient": {
+                  "description": "Nombre décimal exact, en chaîne à point (ex. « 0.1 », « 200 »).",
+                  "type": "string"
+                },
+                "id": {
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                  "type": "string"
+                },
+                "libelle": {
+                  "type": "string"
+                },
+                "ordre": {
+                  "maximum": 9007199254740991,
+                  "minimum": -9007199254740991,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id",
+                "libelle",
+                "coefficient",
+                "ordre"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "signalements": {
+            "items": {
+              "oneOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "const": "MENFP_SOURCES_NON_CLASSEES",
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "sources": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "nom": {
+                            "type": "string"
+                          },
+                          "sectionId": {
+                            "anyOf": [
+                              {
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "subjectId": {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "subjectId",
+                          "sectionId",
+                          "nom"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "sources"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "const": "MENFP_MATIERE_SANS_SOURCE",
+                      "type": "string"
+                    },
+                    "matieres": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "id": {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                            "type": "string"
+                          },
+                          "libelle": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "libelle"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "matieres"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "const": "MENFP_MATIERE_SANS_RUBRIQUE",
+                      "type": "string"
+                    },
+                    "matieresCpmsl": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "nom": {
+                            "type": "string"
+                          },
+                          "subjectId": {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "subjectId",
+                          "nom"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "matieresCpmsl"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "const": "MENFP_ASSOCIATION_SANS_RUBRIQUE",
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "sources": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "nom": {
+                            "type": "string"
+                          },
+                          "sectionId": {
+                            "anyOf": [
+                              {
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "subjectId": {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "subjectId",
+                          "sectionId",
+                          "nom"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "sources"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "classSessionId": {
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                      "type": "string"
+                    },
+                    "code": {
+                      "const": "MENFP_MODE_GLOBAL",
+                      "type": "string"
+                    },
+                    "matieresCpmsl": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "nom": {
+                            "type": "string"
+                          },
+                          "subjectId": {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "subjectId",
+                          "nom"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "salle": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "classSessionId",
+                    "salle",
+                    "matieresCpmsl"
+                  ],
+                  "type": "object"
+                }
+              ]
+            },
+            "type": "array"
+          },
+          "sommeCoefficients": {
+            "description": "Nombre décimal exact, en chaîne à point (ex. « 0.1 », « 200 »).",
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "classee": {
+                  "type": "boolean"
+                },
+                "ignoree": {
+                  "type": "boolean"
+                },
+                "matiereId": {
+                  "anyOf": [
+                    {
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "nom": {
+                  "type": "string"
+                },
+                "nomMatiere": {
+                  "type": "string"
+                },
+                "nomSousMatiere": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "rubrique": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "sectionId": {
+                  "anyOf": [
+                    {
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "subjectId": {
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "subjectId",
+                "sectionId",
+                "nomMatiere",
+                "nomSousMatiere",
+                "nom",
+                "rubrique",
+                "matiereId",
+                "ignoree",
+                "classee"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "academicYearId",
+          "classTypeId",
+          "copieDeId",
+          "grilleImportee",
+          "etat",
+          "sommeCoefficients",
+          "matieres",
+          "sources",
+          "classementHorsUnivers",
+          "signalements"
+        ],
+        "type": "object"
+      },
+      "menfp.RefusAcces": {
+        "additionalProperties": false,
+        "description": "Refus d'accès de l'autorisateur (401, 403).",
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "type": "object"
+      },
+      "menfp.SeuilEntree": {
+        "additionalProperties": false,
+        "properties": {
+          "seuil": {
+            "description": "Nombre décimal exact, en chaîne à point (ex. « 0.1 », « 200 »).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "seuil"
+        ],
+        "type": "object"
+      },
+      "menfp.SourcesEntree": {
+        "additionalProperties": false,
+        "properties": {
+          "sources": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "ignoree": {
+                  "type": "boolean"
+                },
+                "matiereId": {
+                  "anyOf": [
+                    {
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "sectionId": {
+                  "anyOf": [
+                    {
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "subjectId": {
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "subjectId",
+                "sectionId",
+                "matiereId",
+                "ignoree"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "sources"
+        ],
+        "type": "object"
+      },
+      "menfp.VersionsReponse": {
+        "additionalProperties": false,
+        "properties": {
+          "classSessionId": {
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+            "type": "string"
+          },
+          "modifieDepuisLeGel": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "code": {
+                    "const": "MENFP_MODIFIE_DEPUIS_LE_GEL",
+                    "type": "string"
+                  },
+                  "differences": {
+                    "items": {
+                      "oneOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "apres": {
+                              "description": "Nombre décimal exact, en chaîne à point (ex. « 0.1 », « 200 »).",
+                              "type": "string"
+                            },
+                            "avant": {
+                              "description": "Nombre décimal exact, en chaîne à point (ex. « 0.1 », « 200 »).",
+                              "type": "string"
+                            },
+                            "libelle": {
+                              "type": "string"
+                            },
+                            "matiereId": {
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "nature": {
+                              "const": "COEFFICIENT",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "nature",
+                            "matiereId",
+                            "libelle",
+                            "avant",
+                            "apres",
+                            "message"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "libelle": {
+                              "type": "string"
+                            },
+                            "matiereId": {
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "nature": {
+                              "const": "MATIERE_AJOUTEE",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "nature",
+                            "matiereId",
+                            "libelle",
+                            "message"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "libelle": {
+                              "type": "string"
+                            },
+                            "matiereId": {
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "nature": {
+                              "const": "MATIERE_SUPPRIMEE",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "nature",
+                            "matiereId",
+                            "libelle",
+                            "message"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "apres": {
+                              "type": "string"
+                            },
+                            "avant": {
+                              "type": "string"
+                            },
+                            "matiereId": {
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "nature": {
+                              "const": "LIBELLE",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "nature",
+                            "matiereId",
+                            "avant",
+                            "apres",
+                            "message"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "apres": {
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            "avant": {
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            "libelle": {
+                              "type": "string"
+                            },
+                            "matiereId": {
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "nature": {
+                              "const": "ORDRE",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "nature",
+                            "matiereId",
+                            "libelle",
+                            "avant",
+                            "apres",
+                            "message"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "apres": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "ignoree": {
+                                  "type": "boolean"
+                                },
+                                "matiereId": {
+                                  "anyOf": [
+                                    {
+                                      "format": "uuid",
+                                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "matiereId",
+                                "ignoree"
+                              ],
+                              "type": "object"
+                            },
+                            "avant": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "ignoree": {
+                                  "type": "boolean"
+                                },
+                                "matiereId": {
+                                  "anyOf": [
+                                    {
+                                      "format": "uuid",
+                                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "matiereId",
+                                "ignoree"
+                              ],
+                              "type": "object"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "nature": {
+                              "const": "CLASSEMENT",
+                              "type": "string"
+                            },
+                            "sectionId": {
+                              "anyOf": [
+                                {
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "subjectId": {
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "nature",
+                            "subjectId",
+                            "sectionId",
+                            "avant",
+                            "apres",
+                            "message"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "apres": {
+                              "description": "Nombre décimal exact, en chaîne à point (ex. « 0.1 », « 200 »).",
+                              "type": "string"
+                            },
+                            "avant": {
+                              "description": "Nombre décimal exact, en chaîne à point (ex. « 0.1 », « 200 »).",
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "nature": {
+                              "const": "SEUIL",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "nature",
+                            "avant",
+                            "apres",
+                            "message"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "apres": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "avant": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "nature": {
+                              "const": "LOGO_MINISTERE",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "nature",
+                            "avant",
+                            "apres",
+                            "message"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "apres": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "avant": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "nature": {
+                              "const": "LOGO_ECOLE",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "nature",
+                            "avant",
+                            "apres",
+                            "message"
+                          ],
+                          "type": "object"
+                        }
+                      ]
+                    },
+                    "type": "array"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "rapportId": {
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                    "type": "string"
+                  },
+                  "version": {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message",
+                  "rapportId",
+                  "version",
+                  "differences"
+                ],
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "versions": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "empreinte": {
+                  "type": "string"
+                },
+                "geleLe": {
+                  "description": "Date et heure ISO 8601, UTC.",
+                  "type": "string"
+                },
+                "geleParId": {
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                  "type": "string"
+                },
+                "id": {
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                  "type": "string"
+                },
+                "motif": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "version": {
+                  "maximum": 9007199254740991,
+                  "minimum": -9007199254740991,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id",
+                "version",
+                "geleLe",
+                "geleParId",
+                "motif",
+                "empreinte"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "classSessionId",
+          "versions",
+          "modifieDepuisLeGel"
+        ],
+        "type": "object"
+      }
+    }
+  }
+}
