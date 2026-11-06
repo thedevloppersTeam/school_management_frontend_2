@@ -1,7 +1,7 @@
 "use client"
 
 import { clientFetch as apiFetch } from '@/lib/client-fetch'
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef, useId } from "react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -30,8 +30,16 @@ import {
   CheckCircle2Icon,
   CircleDashedIcon,
 } from "lucide-react"
-import { getClassSessionName, type AcademicYearStep, type ClassSession } from "@/lib/api/dashboard"
+import { type AcademicYearStep, type ClassSession } from "@/lib/api/dashboard"
 import { libelleClasseSalle } from "@/lib/classes/labels"
+import { SELECTION_VIDE, type SelectionClasseSalle } from "@/lib/classes/selection"
+import {
+  comparerLignesAvancement,
+  filtrerParClasseSalle,
+  ligneCorrespondRecherche,
+  type IdentiteLigneAvancement,
+} from "@/lib/classes/avancement"
+import { ClasseSalleSelect } from "@/components/school/classe-salle-select"
 import { fetchClassSubjects, fetchEnrollments } from "@/lib/api/grades"
 import { cn } from "@/lib/utils"
 
@@ -39,12 +47,8 @@ import { cn } from "@/lib/utils"
 
 interface ClassProgress {
   sessionId: string
-  /**
-   * Forme fusionnee (« 1e AF A ») : CLE DE RECHERCHE uniquement. Ce qui
-   * s'affiche, ce sont les deux champs ci-dessous — voir « La Regle des Deux
-   * Champs » dans DESIGN.md.
-   */
-  className: string
+  classeId: string             // ClassType.id, pour le filtre Classe
+  levelOrder: number | null    // rang dans le cursus, pour le tri
   classTypeName: string   // la CLASSE, ex. « 1e AF »
   salleLabel: string      // la SALLE, ex. « A » — jamais une filiere
   totalExpected: number   // enrollments × class-subjects
@@ -63,17 +67,34 @@ interface CPMSLProgressionTabProps {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /**
- * Les trois champs d'identite d'une ligne, en un seul point.
+ * Les champs d'identite d'une ligne, en un seul point.
  *
- * `className` reste la chaine fusionnee — c'est la cle sur laquelle porte la
- * recherche de cet ecran, un usage legitime de la fusion. Elle vient de
- * `getClassSessionName`, deja le point unique de ce cas ; la copie locale qui
- * vivait ici a ete retiree. Ce qui S'AFFICHE, ce sont `classTypeName` et
+ * Plus de chaine fusionnee « 1e AF A », meme comme cle de recherche : la
+ * recherche compare la classe et la salle separement (lib/classes/avancement.ts ;
+ * DESIGN.md, « Pages de notes »). Ce qui s'affiche, ce sont `classTypeName` et
  * `salleLabel`, deux colonnes distinctes.
  */
 function identiteClasse(s: ClassSession) {
   const { classe, salle } = libelleClasseSalle(s)
-  return { className: getClassSessionName(s), classTypeName: classe, salleLabel: salle }
+  const rang = s.class.classType.levelOrder
+  return {
+    classeId: s.class.classType.id,
+    levelOrder: typeof rang === "number" ? rang : null,
+    classTypeName: classe,
+    salleLabel: salle,
+  }
+}
+
+/** Vue d'une ligne pour le filtre, la recherche et le tri (lib/classes/avancement.ts). */
+function versIdentite(c: ClassProgress): IdentiteLigneAvancement {
+  return {
+    sessionId: c.sessionId,
+    classeId: c.classeId,
+    classe: c.classTypeName,
+    salle: c.salleLabel,
+    levelOrder: c.levelOrder,
+    status: c.status,
+  }
 }
 
 
@@ -89,10 +110,21 @@ export function CPMSLProgressionTab({
   const [classProgress, setClassProgress]       = useState<ClassProgress[]>([])
   const [loading, setLoading]                   = useState(false)
   const [searchQuery, setSearchQuery]           = useState("")
+  // Filtre Classe puis Salle (T8, D3-b), LOCAL à l'onglet : en mode filtre,
+  // « Toutes » vaut null, et la sélection partagée de Saisie ne doit pas s'en
+  // trouver effacée. Le bouton « Saisir » positionne la sélection partagée.
+  const [filtre, setFiltre] = useState<SelectionClasseSalle>(SELECTION_VIDE)
+  const idEtape = useId()
+
+  // Jeton : seul le calcul de la DERNIÈRE étape demandée est appliqué. Sans
+  // lui, deux étapes choisies vite pouvaient afficher les chiffres de la première.
+  const dernierCalcul = useRef(0)
 
   // ── Chargement ───────────────────────────────────────────────────────────────
   const loadProgress = useCallback(async (stepId: string) => {
     if (!stepId || sessions.length === 0) return
+    dernierCalcul.current += 1
+    const jeton = dernierCalcul.current
     setLoading(true)
     setClassProgress([])
 
@@ -184,17 +216,18 @@ export function CPMSLProgressionTab({
         })
       )
 
-      // Trier : complètes en bas, non-commencées en haut
-      results.sort((a, b) => {
-        const order = { 'not-started': 0, 'in-progress': 1, 'complete': 2 }
-        return order[a.status] - order[b.status]
-      })
+      if (jeton !== dernierCalcul.current) return
+
+      // Trier : non commencées en haut, complètes en bas ; à statut égal,
+      // ordre du cursus puis salle. Plus d'ordre dépendant du serveur.
+      results.sort((a, b) => comparerLignesAvancement(versIdentite(a), versIdentite(b)))
 
       setClassProgress(results)
     } catch (err) {
+      if (jeton !== dernierCalcul.current) return
       console.error('[progression] erreur:', err)
     } finally {
-      setLoading(false)
+      if (jeton === dernierCalcul.current) setLoading(false)
     }
   }, [sessions])
 
@@ -203,13 +236,21 @@ export function CPMSLProgressionTab({
     else setClassProgress([])
   }, [selectedStep, loadProgress])
 
-  // ── KPIs globaux ─────────────────────────────────────────────────────────────
-  const totalExpected = classProgress.reduce((s, c) => s + c.totalExpected, 0)
-  const totalEntered  = classProgress.reduce((s, c) => s + c.totalEntered,  0)
+  // ── Filtre Classe / Salle (T8) ───────────────────────────────────────────────
+  // Sur les lignes déjà calculées : aucune requête. Les statistiques suivent ce
+  // filtre ; la recherche texte, plus bas, ne réduit que le tableau.
+  const lignesFiltrees = useMemo(
+    () => filtrerParClasseSalle(classProgress, filtre),
+    [classProgress, filtre],
+  )
+
+  // ── KPIs (suivent le filtre Classe / Salle, pas la recherche) ────────────────
+  const totalExpected = lignesFiltrees.reduce((s, c) => s + c.totalExpected, 0)
+  const totalEntered  = lignesFiltrees.reduce((s, c) => s + c.totalEntered,  0)
   const globalPct     = totalExpected > 0 ? Math.round((totalEntered / totalExpected) * 100) : 0
-  const complete      = classProgress.filter(c => c.status === 'complete').length
-  const inProgress    = classProgress.filter(c => c.status === 'in-progress').length
-  const notStarted    = classProgress.filter(c => c.status === 'not-started').length
+  const complete      = lignesFiltrees.filter(c => c.status === 'complete').length
+  const inProgress    = lignesFiltrees.filter(c => c.status === 'in-progress').length
+  const notStarted    = lignesFiltrees.filter(c => c.status === 'not-started').length
 
   // ── Semantic progress color class ─────────────────────────────────────────
   const progressTextClass = (pct: number) =>
@@ -248,11 +289,12 @@ export function CPMSLProgressionTab({
   }
 
   // ── Filtered classes (search) ─────────────────────────────────────────────
-  const filteredProgress = useMemo(() => {
-    if (!searchQuery.trim()) return classProgress
-    const q = searchQuery.toLowerCase()
-    return classProgress.filter(c => c.className.toLowerCase().includes(q))
-  }, [classProgress, searchQuery])
+  // Recherche sur la classe et la salle SÉPARÉMENT (T9), sans libellé fusionné ;
+  // un seul caractère ne compare que la salle (lib/classes/avancement.ts).
+  const filteredProgress = useMemo(
+    () => lignesFiltrees.filter(c => ligneCorrespondRecherche(searchQuery, versIdentite(c))),
+    [lignesFiltrees, searchQuery],
+  )
 
   // ── Rendu ─────────────────────────────────────────────────────────────────
   return (
@@ -261,20 +303,36 @@ export function CPMSLProgressionTab({
       <Card className="border bg-card shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-base font-semibold">Sélection d&apos;une étape</CardTitle>
-          <CardDescription>Voir l&apos;avancement de la saisie pour une étape donnée</CardDescription>
+          <CardDescription>
+            Voir l&apos;avancement de la saisie pour une étape donnée, toutes classes ou filtré par classe et salle
+          </CardDescription>
         </CardHeader>
         <Separator />
         <CardContent className="p-4">
-          <Select value={selectedStep} onValueChange={setSelectedStep}>
-            <SelectTrigger className="max-w-sm">
-              <SelectValue placeholder="Choisir une étape" />
-            </SelectTrigger>
-            <SelectContent>
-              {steps.map(s => (
-                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:max-w-3xl">
+            <div className="space-y-1.5">
+              <label htmlFor={idEtape} className="text-xs font-medium text-muted-foreground">Étape</label>
+              <Select value={selectedStep} onValueChange={setSelectedStep}>
+                <SelectTrigger id={idEtape}>
+                  <SelectValue placeholder="Choisir une étape" />
+                </SelectTrigger>
+                <SelectContent>
+                  {steps.map(s => (
+                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Filtre Classe puis Salle (T8) : « Toutes » par défaut, salle
+                unique non préremplie, local à l'onglet. */}
+            <ClasseSalleSelect
+              mode="filtre"
+              sessions={sessions}
+              value={filtre}
+              onChange={setFiltre}
+            />
+          </div>
         </CardContent>
       </Card>
 
@@ -367,9 +425,9 @@ export function CPMSLProgressionTab({
             <CardHeader className="pb-3">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <CardTitle className="text-base font-semibold">Détail par classe</CardTitle>
+                  <CardTitle className="text-base font-semibold">Détail par salle</CardTitle>
                   <CardDescription>
-                    {filteredProgress.length} classe{filteredProgress.length > 1 ? 's' : ''}
+                    {filteredProgress.length} salle{filteredProgress.length > 1 ? 's' : ''}
                     {searchQuery && ` — recherche : "${searchQuery}"`}
                   </CardDescription>
                 </div>
@@ -383,7 +441,7 @@ export function CPMSLProgressionTab({
               <div className="relative max-w-md">
                 <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  placeholder="Rechercher une classe..."
+                  placeholder="Rechercher une classe ou une salle…"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   className="pl-9"
@@ -400,10 +458,10 @@ export function CPMSLProgressionTab({
                     <InboxIcon className="h-7 w-7 text-muted-foreground" />
                   </div>
                   <h2 className="mt-4 text-base font-semibold text-foreground">
-                    Aucune classe trouvée
+                    Aucune salle trouvée
                   </h2>
                   <p className="mt-1 max-w-prose text-sm text-muted-foreground">
-                    Modifiez vos critères de recherche.
+                    Modifiez la recherche ou le filtre Classe et Salle.
                   </p>
                 </div>
               ) : (

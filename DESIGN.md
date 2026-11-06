@@ -774,6 +774,17 @@ deux badges, avec `ClasseSalleInfo` (`components/school/classe-salle-info.tsx`).
 Ailleurs (archives, promotion, MENFP, rapports, inscriptions), les quatre cas
 admis ci-dessus restent inchangés.
 
+*État des quatre onglets (chantier W2, 6 novembre 2026).*
+- **Saisie**, **Consultation** et **Comportement** partagent la même classe et
+  la même salle (l'étape reste propre à chaque onglet) ; leur en-tête porte les
+  deux badges `ClasseSalleInfo`.
+- **Avancement** liste toutes les salles d'une étape, classe et salle en **deux
+  colonnes** de tableau ; il les filtre par `ClasseSalleSelect` en mode filtre,
+  un filtre propre à l'onglet, qui ne touche pas la sélection partagée. Sa
+  recherche texte compare la classe et la salle **séparément**
+  (`lib/classes/avancement.ts`) : aucun libellé fusionné, pas même comme clé de
+  recherche ; une recherche d'un seul caractère ne compare que la salle.
+
 **La filière n'entre jamais dans un libellé de classe ou de salle.** Une salle
 n'a pas de filière : le modèle ne la porte ni sur `Class` ni sur
 `ClassSession` — elle appartient à l'inscription de l'élève, et une même salle
