@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useId } from "react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -48,7 +48,9 @@ import { cn } from "@/lib/utils"
 import { parseDecimal } from "@/lib/decimal"
 import { parseScore, validateScoreInput } from "@/lib/grades/score-input"
 import { invalidateExclusionsCache } from "@/lib/api/bulletin"
-import { libelleClasseSalle } from "@/lib/classes/labels"
+import type { SelectionClasseSalle } from "@/lib/classes/selection"
+import { ClasseSalleSelect } from "@/components/school/classe-salle-select"
+import { ClasseSalleInfo } from "@/components/school/classe-salle-info"
 import { useUnsavedChangesWarning } from "@/hooks/use-unsaved-changes-warning"
 import { LeftBadge } from "@/components/school/left-badge"
 
@@ -81,13 +83,15 @@ interface CPMSLGradesGridProps {
   classSubjects:          ApiClassSubject[]
   enrollments:            ApiEnrollment[]
   existingGrades:         ApiGrade[]
-  selectedSessionId:      string
+  /** Classe et salle choisies, tenues par la page (chantier W2). */
+  selection:              SelectionClasseSalle
   selectedClassSubjectId: string
   selectedStepId:         string
   loadingSession:         boolean
   loadingGrades:          boolean
   saving:                 boolean
-  onSessionChange:        (sessionId: string) => void
+  /** Changement de Classe ou de Salle, déjà passé par la garde de saisie. */
+  onSelectionChange:      (next: SelectionClasseSalle) => void
   onClassSubjectChange:   (classSubjectId: string) => void
   onStepChange:           (stepId: string) => void
   onSaveGrades:           (toCreate: CreateGradePayload[], toUpdate: UpdateGradePayload[], toDelete: string[]) => void
@@ -133,13 +137,13 @@ export function CPMSLGradesGrid({
   classSubjects,
   enrollments,
   existingGrades,
-  selectedSessionId,
+  selection,
   selectedClassSubjectId,
   selectedStepId,
   loadingSession,
   loadingGrades,
   saving,
-  onSessionChange,
+  onSelectionChange,
   onClassSubjectChange,
   onStepChange,
   onSaveGrades,
@@ -163,53 +167,15 @@ export function CPMSLGradesGrid({
   const [searchQuery,  setSearchQuery]  = useState("")
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: null, direction: null })
 
-  // ── Classe / Salle split ────────────────────────────────────────────────
-  const [selectedClassTypeId, setSelectedClassTypeId] = useState("")
-  const [selectedLetter, setSelectedLetter]           = useState("")
-
-  const classTypes = useMemo(() => {
-    const map = new Map<string, { id: string; name: string }>()
-    sessions.forEach(s => {
-      const ct = s.class.classType
-      if (!map.has(ct.id)) map.set(ct.id, { id: ct.id, name: ct.name })
-    })
-    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name))
-  }, [sessions])
-
-  const availableLetters = useMemo(() => {
-    if (!selectedClassTypeId) return []
-    return sessions
-      .filter(s => s.class.classType.id === selectedClassTypeId)
-      .map(s => ({
-        sessionId: s.id,
-        letter: s.class.letter,
-        label: s.class.letter,
-      }))
-      .sort((a, b) => a.label.localeCompare(b.label))
-  }, [sessions, selectedClassTypeId])
-
-  // Sync selectedClassTypeId/selectedLetter from selectedSessionId (e.g. when navigating from Avancement)
-  useEffect(() => {
-    if (!selectedSessionId) return
-    const session = sessions.find(s => s.id === selectedSessionId)
-    if (session) {
-      setSelectedClassTypeId(session.class.classType.id)
-      setSelectedLetter(session.id)
-    }
-  }, [selectedSessionId, sessions])
-
-  function handleClassTypeChange(classTypeId: string) {
-    setSelectedClassTypeId(classTypeId)
-    setSelectedLetter("")
-    // Don't call onSessionChange yet — wait for letter selection
-  }
-
-  function handleLetterChange(sessionId: string) {
-    guardContextChange("de salle", () => {
-      setSelectedLetter(sessionId)
-      onSessionChange(sessionId)
-    })
-  }
+  // ── Classe / Salle ──────────────────────────────────────────────────────
+  // La sélection est tenue par la page et choisie par ClasseSalleSelect
+  // (chantier W2). Plus d'état local ni d'effet de synchronisation : la
+  // navigation Avancement → Saisie positionne directement la sélection.
+  // Chaîne vide = aucune salle : les usages ci-dessous (selectedSession,
+  // showContent, dispenses, cache, liste Matière) ne lancent rien sans salle.
+  const selectedSessionId = selection.sessionId ?? ""
+  const idEtape   = useId()
+  const idMatiere = useId()
 
   const selectedClassSubject = useMemo(
     () => classSubjects.find(cs => cs.id === selectedClassSubjectId),
@@ -613,7 +579,7 @@ export function CPMSLGradesGrid({
 
   // ── Garde-fou sur les changements de contexte ─────────────────────────────
   //
-  // Changer de salle, d'étape ou de matière fait recharger les notes, ce qui
+  // Changer de classe, de salle, d'étape ou de matière fait recharger les notes, ce qui
   // réécrit gradeEntries/sectionEntries dans le useEffect de pré-remplissage.
   // Sans ce garde-fou, une saisie en attente disparaissait sans un mot : les
   // quatre sélecteurs sont à quelques pixels au-dessus du tableau, et le clic
@@ -828,13 +794,8 @@ export function CPMSLGradesGrid({
   }
 
   // CLASSE et SALLE : deux champs, jamais « 1e AF A » en une chaîne. Voir
-  // « La Règle des Deux Champs » dans DESIGN.md. Le repli qui collait ici un
-  // code de filière à la place de la lettre affichait une salle inexistante :
-  // le modèle ne porte pas de filière sur `Class`.
-  const { classe, salle } = useMemo(
-    () => libelleClasseSalle(selectedSession),
-    [selectedSession]
-  )
+  // « La Règle des Deux Champs » dans DESIGN.md. L'en-tête les affiche avec
+  // ClasseSalleInfo, qui passe par libelleClasseSalle.
 
   // Ce qui reste du contexte — étape et matière — garde sa forme de prose.
   const contexteLabel = useMemo(() => {
@@ -1260,18 +1221,8 @@ export function CPMSLGradesGrid({
                 <CardTitle className="text-base font-semibold">Saisie des notes</CardTitle>
                 <CardDescription className="flex flex-wrap items-center gap-2">
                   <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-1">
-                    {/* La salle porte le meme badge monospace que la colonne
-                        Salle de la liste des eleves. */}
-                    <span className={classe ? undefined : "italic"}>
-                      {classe || "Classe non renseignée"}
-                    </span>
-                    {salle && (
-                      <span className="inline-flex items-center justify-center rounded-md bg-muted px-2 py-0.5 font-mono text-xs font-semibold text-foreground">
-                        {salle}
-                      </span>
-                    )}
                     <span>
-                      {contexteLabel && <>&mdash; {contexteLabel} </>}
+                      {contexteLabel && <>{contexteLabel} </>}
                       &middot; {enteredCount} / {enrollmentsForSubject.length} notes saisies
                     </span>
                   </span>
@@ -1284,6 +1235,11 @@ export function CPMSLGradesGrid({
         </Badge>
                 )}
               </CardDescription>
+                {/* Classe et salle : deux badges étiquetés (D8), hors de la
+                    CardDescription, qui est un <p> où un badge ne s'imbrique pas. */}
+                <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                  <ClasseSalleInfo source={selectedSession} />
+                </div>
           </div>
           </div>
         </CardHeader>
@@ -1494,48 +1450,24 @@ export function CPMSLGradesGrid({
         <Separator />
         <CardContent className="p-4">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {/* Classe */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Classe</label>
-              <Select value={selectedClassTypeId} onValueChange={handleClassTypeChange}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionner une classe" />
-                </SelectTrigger>
-                <SelectContent>
-                  {classTypes.map(ct => (
-                    <SelectItem key={ct.id} value={ct.id}>{ct.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Salle */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Salle</label>
-              <Select
-                value={selectedLetter}
-                onValueChange={handleLetterChange}
-                disabled={!selectedClassTypeId}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={!selectedClassTypeId ? "Choisir une classe d'abord" : "Sélectionner une salle"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableLetters.map(l => (
-                    <SelectItem key={l.sessionId} value={l.sessionId}>{l.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Classe puis Salle : changer l'une ou l'autre passe par la garde
+                de saisie non enregistrée (défaut 2 de l'audit W2). */}
+            <ClasseSalleSelect
+              sessions={sessions}
+              value={selection}
+              onChange={onSelectionChange}
+              garde={guardContextChange}
+              chargement={loadingSession}
+            />
 
             {/* Étape */}
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Étape</label>
+              <label htmlFor={idEtape} className="text-xs font-medium text-muted-foreground">Étape</label>
               <Select
                 value={selectedStepId}
                 onValueChange={v => guardContextChange("d'étape", () => onStepChange(v))}
               >
-                <SelectTrigger>
+                <SelectTrigger id={idEtape}>
                   <div className="flex items-center gap-2">
                     {isLocked && <LockIcon className="h-4 w-4 text-warning-ink" />}
                     <SelectValue placeholder="Sélectionner une étape" />
@@ -1553,13 +1485,13 @@ export function CPMSLGradesGrid({
 
             {/* Matière */}
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Matière</label>
+              <label htmlFor={idMatiere} className="text-xs font-medium text-muted-foreground">Matière</label>
               <Select
                 value={selectedClassSubjectId}
                 onValueChange={v => guardContextChange("de matière", () => onClassSubjectChange(v))}
                 disabled={!selectedSessionId || loadingSession}
               >
-                <SelectTrigger>
+                <SelectTrigger id={idMatiere}>
                   <SelectValue placeholder={loadingSession ? "Chargement..." : "Sélectionner une matière"} />
                 </SelectTrigger>
                 <SelectContent>

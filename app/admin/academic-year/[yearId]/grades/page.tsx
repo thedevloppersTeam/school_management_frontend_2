@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { useParams } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
 import { Button } from "@/components/ui/button"
@@ -23,6 +23,12 @@ import {
 } from "@/components/ui/alert-dialog"
 import { presentAtStep } from "@/lib/departures/presence"
 import { bulkCreateParts, type BulkCreateCounts } from "@/lib/grades/save-summary"
+import {
+  SELECTION_VIDE,
+  effetChangementSalle,
+  selectionDepuisSession,
+  type SelectionClasseSalle,
+} from "@/lib/classes/selection"
 
 // `counts` : compteurs created / replaced de bulk-create (null = serveur qui ne
 // les fournit pas : ancien message, sur le nombre de saisies envoyées).
@@ -54,7 +60,11 @@ export default function GradesPage() {
   const [classSubjects,          setClassSubjects]          = useState<ApiClassSubject[]>([])
   const [enrollments,            setEnrollments]            = useState<ApiEnrollment[]>([])
   const [existingGrades,         setExistingGrades]         = useState<ApiGrade[]>([])
-  const [selectedSessionId,      setSelectedSessionId]      = useState<string>("")
+  // Sélection Classe → Salle (chantier W2). Tenue ICI, et non dans chaque mode
+  // de saisie : une classe choisie sans salle doit survivre au passage Par
+  // matière ↔ Par élève, et les autres onglets la partageront (T10, PR 3).
+  const [selection,              setSelection]              = useState<SelectionClasseSalle>(SELECTION_VIDE)
+  const selectedSessionId = selection.sessionId ?? ""
   const [selectedClassSubjectId, setSelectedClassSubjectId] = useState<string>("")
   const [selectedStepId,         setSelectedStepId]         = useState<string>("")
   const [loadingSession,         setLoadingSession]         = useState(false)
@@ -121,10 +131,36 @@ export default function GradesPage() {
   }, [yearId])
 
   // ── Handlers W3 ──────────────────────────────────────────────────────────
-  async function handleSessionChange(sessionId: string) {
-    setSelectedSessionId(sessionId)
+
+  // Jetons de chargement : seule la réponse de la DERNIÈRE demande est
+  // appliquée. Sans eux, deux changements de salle rapprochés pouvaient
+  // afficher les matières (ou les notes) de la salle précédente, arrivées
+  // après celles de la nouvelle.
+  const dernierChargement = useRef(0)
+  const dernieresNotes    = useRef(0)
+
+  // Efface tout ce qui appartient à la salle courante, et périme les
+  // chargements en vol. Appelé AVANT tout chargement d'une autre salle : à
+  // aucun moment l'en-tête d'une salle ne doit côtoyer la matière ou les
+  // notes d'une autre (effetChangementSalle, lib/classes/selection.ts).
+  function viderSalle() {
+    dernierChargement.current += 1
+    dernieresNotes.current += 1
     setSelectedClassSubjectId('')
     setExistingGrades([])
+    setClassSubjects([])
+    setEnrollments([])
+    setLoadingSession(false)
+    setLoadingGrades(false)
+  }
+
+  async function handleSessionChange(sessionId: string) {
+    // Défaut 1 (audit W2) : une chaîne vide supprimait le filtre côté serveur
+    // et ramenait TOUTES les matières et inscriptions (BACKLOG E25). Aucune
+    // valeur vide ne part plus vers fetchClassSubjects ni fetchEntryEnrollments.
+    if (!sessionId) { viderSalle(); return }
+    viderSalle()
+    const jeton = dernierChargement.current
     setLoadingSession(true)
     try {
       const [cs, enr] = await Promise.all([
@@ -132,32 +168,48 @@ export default function GradesPage() {
         // D-22 : actifs ET partis ; un parti n'est proposé qu'aux étapes suivies.
         fetchEntryEnrollments(sessionId),
       ])
+      if (jeton !== dernierChargement.current) return
       setClassSubjects(cs)
       setEnrollments(enr)
     } catch (e) {
+      if (jeton !== dernierChargement.current) return
       toast({
         title: 'Erreur',
         description: toMessage(e, "lors du chargement de la classe"),
         variant: 'destructive'
       })
     } finally {
-      setLoadingSession(false)
+      if (jeton === dernierChargement.current) setLoadingSession(false)
     }
   }
 
+  // Changement de Classe ou de Salle, venu de ClasseSalleSelect (déjà passé
+  // par la garde de saisie de la grille).
+  function handleSelectionChange(next: SelectionClasseSalle) {
+    const effet = effetChangementSalle(selection, next)
+    setSelection(next)
+    if (!effet.viderAvant) return
+    if (effet.charger) handleSessionChange(effet.charger)
+    else viderSalle()
+  }
+
   async function loadGrades(classSubjectId: string, stepId: string) {
+    dernieresNotes.current += 1
+    const jeton = dernieresNotes.current
     setLoadingGrades(true)
     try {
       const grades = await fetchGradesForClassSubjectStep(classSubjectId, stepId)
+      if (jeton !== dernieresNotes.current) return
       setExistingGrades(grades)
     } catch (e) {
+      if (jeton !== dernieresNotes.current) return
       toast({
         title: 'Erreur',
         description: toMessage(e, "lors du chargement des notes"),
         variant: 'destructive'
       })
     } finally {
-      setLoadingGrades(false)
+      if (jeton === dernieresNotes.current) setLoadingGrades(false)
     }
   }
 
@@ -240,11 +292,15 @@ export default function GradesPage() {
   }
 
   // ── Navigation depuis Avancement → Saisie ────────────────────────────────
+  // Positionne classe, salle et étape, puis recharge TOUJOURS la salle, même
+  // si c'est celle qui était ouverte : l'étape change, la matière et les
+  // notes affichées ne valent plus. handleSessionChange vide avant de charger.
   function handleNavigateToSaisie(sessionId: string, stepId: string) {
     setActiveTab("notes")
-    setSelectedSessionId(sessionId)
     setSelectedStepId(stepId)
-    handleSessionChange(sessionId)
+    const next = selectionDepuisSession(apiSessions, sessionId)
+    setSelection(next)
+    handleSessionChange(next.sessionId ?? "")
   }
 
   // ── Rendu ─────────────────────────────────────────────────────────────────
@@ -338,13 +394,13 @@ export default function GradesPage() {
               classSubjects={classSubjects}
               enrollments={enrollmentsAtStep}
               existingGrades={existingGrades}
-              selectedSessionId={selectedSessionId}
+              selection={selection}
               selectedClassSubjectId={selectedClassSubjectId}
               selectedStepId={selectedStepId}
               loadingSession={loadingSession}
               loadingGrades={loadingGrades}
               saving={saving}
-              onSessionChange={handleSessionChange}
+              onSelectionChange={handleSelectionChange}
               onClassSubjectChange={handleClassSubjectChange}
               onStepChange={handleStepChange}
               onSaveGrades={handleSaveGrades}
@@ -355,9 +411,9 @@ export default function GradesPage() {
               yearId={yearId}
               sessions={apiSessions}
               enrollments={enrollments}
-              selectedSessionId={selectedSessionId}
+              selection={selection}
               loadingSession={loadingSession}
-              onSessionChange={handleSessionChange}
+              onSelectionChange={handleSelectionChange}
             />
           )}
         </TabsContent>

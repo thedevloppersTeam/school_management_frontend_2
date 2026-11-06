@@ -179,6 +179,43 @@ export function selectionApresChoixSession(
   return appartient ? { classeId: courante.classeId, sessionId } : courante
 }
 
+/**
+ * Ce qu'un écran doit faire de ses données quand la sélection change
+ * (chantier W2, PR 2 : défauts 1 et 2 de l'audit).
+ *
+ * - `viderAvant` : effacer d'abord tout ce qui appartient à la salle
+ *   précédente (matière choisie, notes, matières, inscriptions). C'est vrai
+ *   pour TOUT changement de salle, y compris quand une autre salle va être
+ *   chargée : à aucun moment l'en-tête d'une salle ne doit côtoyer la matière
+ *   ou les notes d'une autre.
+ * - `charger` : la session à charger ensuite, ou `null` s'il n'y a rien à
+ *   charger. Jamais une chaîne vide.
+ */
+export interface EffetChangementSalle {
+  viderAvant: boolean
+  charger: string | null
+}
+
+const AUCUN_EFFET: EffetChangementSalle = Object.freeze({ viderAvant: false, charger: null })
+
+/**
+ * Effet d'un passage de `avant` à `apres` sur les données de l'écran.
+ * - Même salle : rien (un changement de classe sans salle, de « aucune » à
+ *   « aucune », ne recharge rien non plus).
+ * - Plus de salle (classe à plusieurs salles, ou « Toutes ») : vider, sans charger.
+ * - Autre salle (choix de salle, salle unique préremplie, navigation depuis
+ *   Avancement) : vider, PUIS charger la nouvelle salle.
+ */
+export function effetChangementSalle(
+  avant: SelectionClasseSalle,
+  apres: SelectionClasseSalle,
+): EffetChangementSalle {
+  const cible = apres.sessionId === '' ? null : apres.sessionId
+  const courante = avant.sessionId === '' ? null : avant.sessionId
+  if (cible === courante) return AUCUN_EFFET
+  return { viderAvant: true, charger: cible }
+}
+
 /** Deux sélections désignent-elles la même chose ? */
 export function memeSelection(a: SelectionClasseSalle, b: SelectionClasseSalle): boolean {
   return a.classeId === b.classeId && a.sessionId === b.sessionId
