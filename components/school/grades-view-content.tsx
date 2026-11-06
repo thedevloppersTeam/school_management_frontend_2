@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef, useId } from "react"
 import { useParams } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -28,7 +28,10 @@ import {
   InboxIcon,
 } from "lucide-react"
 import { gradeBand, gradeBandToneClass, gradeMention } from "@/lib/bulletin/grade-color"
-import { fetchClassSessions, fetchSteps, getClassSessionName, type AcademicYearStep, type ClassSession } from "@/lib/api/dashboard"
+import { fetchClassSessions, fetchSteps, type AcademicYearStep, type ClassSession } from "@/lib/api/dashboard"
+import { SELECTION_VIDE, type SelectionClasseSalle } from "@/lib/classes/selection"
+import { ClasseSalleSelect } from "@/components/school/classe-salle-select"
+import { ClasseSalleInfo } from "@/components/school/classe-salle-info"
 import { fetchClassSubjects, fetchEnrollments, effectiveMaxScore, type ApiClassSubject, type ApiEnrollment } from "@/lib/api/grades"
 import DecimalJs from "decimal.js"
 import type Decimal from "decimal.js"
@@ -89,12 +92,10 @@ function getAppreciation(m: Decimal | null): string {
   return gradeMention(bandePourcent(m))
 }
 
-// La copie locale de la fusion « classe + salle » qui vivait ici a été
-// supprimée : son unique consommateur est une valeur d'option de liste
-// (`SelectItem`), l'un des quatre cas où DESIGN.md (« La Règle des Deux
-// Champs ») admet une chaîne fusionnée. Le point unique de cette fusion est
-// `getClassSessionName`, importé du même module que `ClassSession`. Rien à
-// découper ici : cet écran n'affiche la classe nulle part ailleurs.
+// Classe et salle : sélection en deux listes (ClasseSalleSelect) et en-tête en
+// deux badges (ClasseSalleInfo). Sur les pages de notes, aucune fusion
+// « 1e AF A », même en option de liste (DESIGN.md, « Pages de notes » ;
+// chantier W2, T6 et T9).
 
 /**
  * Portée du calcul, la même que celle du bulletin : 'common' = bulletin normal
@@ -109,24 +110,56 @@ function porteeEffective(cs: ApiClassSubject[], choix: PorteeBulletin): PorteeBu
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export function GradesViewContent({
-  initialSessionId = "",
-  initialStepId    = "",
-}: {
-  initialSessionId?: string
-  initialStepId?:    string
-}) {
+/**
+ * Deux modes, exclusifs (union discriminée sur `selection`) :
+ * - CONTRÔLÉ, dans la page Notes : la page fournit ensemble la sélection
+ *   partagée entre les onglets (T10), son rappel et ses sessions. Fournir
+ *   l'une sans les autres ne compile pas.
+ * - AUTONOME, sur la page /grades/view : aucune des trois ; le composant tient
+ *   sa propre sélection et charge ses sessions.
+ */
+type ModeSelection =
+  | {
+      selection:         SelectionClasseSalle
+      onSelectionChange: (next: SelectionClasseSalle) => void
+      sessions:          ClassSession[]
+    }
+  | {
+      selection?:         never
+      onSelectionChange?: never
+      sessions?:          never
+    }
+
+export type GradesViewContentProps = ModeSelection & {
+  /** Étape reprise au montage (celle de Saisie) ; propre à l'onglet ensuite. */
+  initialStepId?: string
+}
+
+export function GradesViewContent(props: GradesViewContentProps) {
+  const { initialStepId = "" } = props
+  const controle = props.selection !== undefined
   const params  = useParams()
   const yearId  = params.yearId as string
   const { toast } = useToast()
 
-  const [sessions,   setSessions]   = useState<ClassSession[]>([])
+  const [sessionsLocales,  setSessions]         = useState<ClassSession[]>([])
+  const [selectionLocale,  setSelectionLocale]  = useState<SelectionClasseSalle>(SELECTION_VIDE)
+  const sessions  = props.sessions ?? sessionsLocales
+  const selection = props.selection ?? selectionLocale
+  function changerSelection(next: SelectionClasseSalle) {
+    if (props.onSelectionChange) props.onSelectionChange(next)
+    else setSelectionLocale(next)
+  }
   const [steps,      setSteps]      = useState<AcademicYearStep[]>([])
   const [rubrics,    setRubrics]    = useState<Rubric[]>([])
   const [loadingCtx, setLoadingCtx] = useState(true)
 
-  const [selectedSession, setSelectedSession] = useState(initialSessionId)
+  // Identifiant de la salle choisie ("" si aucune) : nom conservé pour les
+  // usages existants. Aucune requête ne part sans salle (loadGrid, effet).
+  const selectedSession = selection.sessionId ?? ""
   const [selectedStep,    setSelectedStep]    = useState(initialStepId)
+  const idEtape  = useId()
+  const idPortee = useId()
   const [scope,           setScope]           = useState<PorteeBulletin>('common')
 
   const [classSubjects, setClassSubjects] = useState<ApiClassSubject[]>([])
@@ -144,12 +177,13 @@ export function GradesViewContent({
     async function init() {
       try {
         const [sessionsData, stepsData, rubricsRes, yearRes] = await Promise.all([
-          fetchClassSessions(yearId),
+          // En mode contrôlé, la page fournit déjà les sessions.
+          controle ? Promise.resolve(null) : fetchClassSessions(yearId),
           fetchSteps(yearId),
           fetch('/api/subject-rubrics', { credentials: 'include' }),
           fetch(`/api/academic-years/${yearId}`, { credentials: 'include' }),
         ])
-        setSessions(sessionsData)
+        if (sessionsData) setSessions(sessionsData)
         setSteps([...stepsData].sort((a, b) => a.stepNumber - b.stepNumber))
         if (rubricsRes.ok) setRubrics(await rubricsRes.json())
         
@@ -160,13 +194,24 @@ export function GradesViewContent({
       }
     }
     init()
-  }, [yearId, toast])
+  }, [yearId, toast, controle])
 
   // ── Chargement grille ─────────────────────────────────────────────────────
+  // Jeton : seule la réponse de la DERNIÈRE demande est appliquée. Sans lui,
+  // deux salles enchaînées vite pouvaient afficher les notes de la première
+  // sous l'en-tête de la seconde (chantier W2, PR 3).
+  const dernierChargement = useRef(0)
+
   const loadGrid = useCallback(async (sessionId: string, stepId: string) => {
     if (!sessionId || !stepId) return
+    dernierChargement.current += 1
+    const jeton = dernierChargement.current
+    const perime = () => jeton !== dernierChargement.current
+    // Vider AVANT de charger : rien de la salle précédente ne reste affiché.
     setLoadingGrid(true)
     setGradeRows([])
+    setClassSubjects([])
+    setUnmappedSubjects([])
     try {
       const [cs, enr, exclusionRows] = await Promise.all([
         fetchClassSubjects(sessionId),
@@ -176,6 +221,7 @@ export function GradesViewContent({
           .then((r) => (r.ok ? r.json() as Promise<ApiExclusionLike[]> : []))
           .catch(() => [] as ApiExclusionLike[]),
       ])
+      if (perime()) return
       setClassSubjects(cs)
 
       const rubricCodeById = rubricIndex(rubrics)
@@ -282,17 +328,24 @@ export function GradesViewContent({
         }
       })
 
+      if (perime()) return
       setGradeRows(rows)
     } catch {
+      if (perime()) return
       toast({ title: "Erreur", description: "Impossible de charger les notes", variant: "destructive" })
     } finally {
-      setLoadingGrid(false)
+      if (!perime()) setLoadingGrid(false)
     }
   }, [rubrics, scope, toast])
 
   useEffect(() => {
     if (selectedSession && selectedStep) loadGrid(selectedSession, selectedStep)
-    else { setGradeRows([]); setClassSubjects([]); setUnmappedSubjects([]) }
+    else {
+      // Plus de salle ou d'étape : un chargement encore en vol est périmé.
+      dernierChargement.current += 1
+      setLoadingGrid(false)
+      setGradeRows([]); setClassSubjects([]); setUnmappedSubjects([])
+    }
   }, [selectedSession, selectedStep, loadGrid])
 
   // ── Portée affichée ───────────────────────────────────────────────────────
@@ -426,45 +479,47 @@ export function GradesViewContent({
       <Card className="border bg-card shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-base font-semibold">Sélection</CardTitle>
-          <CardDescription>Choisissez une classe et une étape pour afficher la grille</CardDescription>
+          <CardDescription>Choisissez une classe, une salle et une étape pour afficher la grille</CardDescription>
         </CardHeader>
         <Separator />
         <CardContent className="p-4">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:max-w-2xl">
-            <Select value={selectedSession} onValueChange={setSelectedSession}>
-              <SelectTrigger>
-                <SelectValue placeholder="Sélectionner une classe" />
-              </SelectTrigger>
-              <SelectContent>
-                {sessions.map(s => (
-                  <SelectItem key={s.id} value={s.id}>{getClassSessionName(s)}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {/* Classe puis Salle (T6). Pas de garde : l'écran est en lecture seule. */}
+            <ClasseSalleSelect
+              sessions={sessions}
+              value={selection}
+              onChange={changerSelection}
+            />
 
-            <Select value={selectedStep} onValueChange={setSelectedStep}>
-              <SelectTrigger>
-                <SelectValue placeholder="Sélectionner une étape" />
-              </SelectTrigger>
-              <SelectContent>
-                {steps.map(s => (
-                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="space-y-1.5">
+              <label htmlFor={idEtape} className="text-xs font-medium text-muted-foreground">Étape</label>
+              <Select value={selectedStep} onValueChange={setSelectedStep}>
+                <SelectTrigger id={idEtape}>
+                  <SelectValue placeholder="Sélectionner une étape" />
+                </SelectTrigger>
+                <SelectContent>
+                  {steps.map(s => (
+                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
             {/* Uniquement si la salle a des matières de filière : ailleurs, les
                 deux bulletins portent sur le même tronc commun. */}
             {hasTrackSubjects && (
-              <Select value={scope} onValueChange={(v) => setScope(v as PorteeBulletin)}>
-                <SelectTrigger aria-label="Portée du calcul">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="common">Bulletin normal (tronc commun)</SelectItem>
-                  <SelectItem value="exam">Bulletin d&apos;examen (matières de la filière)</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="space-y-1.5">
+                <label htmlFor={idPortee} className="text-xs font-medium text-muted-foreground">Portée</label>
+                <Select value={scope} onValueChange={(v) => setScope(v as PorteeBulletin)}>
+                  <SelectTrigger id={idPortee} aria-label="Portée du calcul">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="common">Bulletin normal (tronc commun)</SelectItem>
+                    <SelectItem value="exam">Bulletin d&apos;examen (matières de la filière)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             )}
           </div>
         </CardContent>
@@ -504,7 +559,7 @@ export function GradesViewContent({
               Aucune sélection
             </h2>
             <p className="mt-1 max-w-[320px] text-center text-sm text-muted-foreground">
-              Sélectionnez une classe et une étape pour voir les notes des élèves.
+              Sélectionnez une classe, une salle et une étape pour voir les notes des élèves.
             </p>
           </CardContent>
         </Card>
@@ -521,6 +576,11 @@ export function GradesViewContent({
           </div>
         ) : (
           <>
+            {/* Classe et salle consultées : deux badges étiquetés (D8) */}
+            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+              <ClasseSalleInfo source={sessions.find(s => s.id === selectedSession)} />
+            </div>
+
             {/* KPI Cards */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <StatCard

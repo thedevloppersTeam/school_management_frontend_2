@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useId } from "react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -31,8 +31,10 @@ import type { ApiEnrollment } from "@/lib/api/grades"
 import { fetchEntryEnrollments } from "@/lib/api/grades"
 import { presentAtStep } from "@/lib/departures/presence"
 import { LeftBadge } from "@/components/school/left-badge"
-import { libelleClasseSalle } from "@/lib/classes/labels"
 import { cn } from "@/lib/utils"
+import { effetChangementSalle, type SelectionClasseSalle } from "@/lib/classes/selection"
+import { ClasseSalleSelect } from "@/components/school/classe-salle-select"
+import { ClasseSalleInfo } from "@/components/school/classe-salle-info"
 
 // Types API
 
@@ -114,6 +116,9 @@ interface CPMSLBehaviorGridProps {
   yearId: string
   sessions: ApiClassSession[]
   steps: AcademicYearStep[]
+  /** Classe et salle, partagées avec les autres onglets de notes (chantier W2, T10). */
+  selection: SelectionClasseSalle
+  onSelectionChange: (next: SelectionClasseSalle) => void
 }
 
 // Helpers
@@ -229,51 +234,28 @@ function createBehaviorEntry(
 
 // Composant
 
-export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGridProps) {
+export function CPMSLBehaviorGrid({ yearId, sessions, steps, selection, onSelectionChange }: CPMSLBehaviorGridProps) {
   const { toast } = useToast()
 
-  const [selectedSessionId, setSelectedSessionId] = useState("")
+  // ── Classe / Salle ──────────────────────────────────────────────────────
+  // Sélection tenue par la page et partagée entre les onglets (T10), choisie
+  // par ClasseSalleSelect. Plus d'état local de classe ni d'effet différé de
+  // synchronisation. L'étape reste propre à cet onglet.
+  // Chaîne vide = aucune salle : le chargement ci-dessous ne part pas sans salle.
+  const selectedSessionId = selection.sessionId ?? ""
   const [selectedStepId,    setSelectedStepId]    = useState("")
-  const [selectedClassTypeId, setSelectedClassTypeId] = useState("")
 
-  // Sync classType when sessions arrive or the session changes externally
-  useEffect(() => {
-    const nextClassTypeId = selectedSessionId
-      ? sessions.find(x => x.id === selectedSessionId)?.class.classType.id ?? ""
-      : ""
-
-    void Promise.resolve().then(() => {
-      setSelectedClassTypeId(current => current === nextClassTypeId ? current : nextClassTypeId)
-    })
-  }, [selectedSessionId, sessions])
-
-  const classTypeOptions = useMemo(() => {
-    const map = new Map<string, { id: string; name: string }>()
-    sessions.forEach(s => {
-      const ct = s.class?.classType
-      if (ct && !map.has(ct.id)) map.set(ct.id, { id: ct.id, name: ct.name })
-    })
-    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name))
-  }, [sessions])
-
-  const salleOptions = useMemo(() => {
-    if (!selectedClassTypeId) return []
-    return sessions
-      .filter(s => s.class?.classType?.id === selectedClassTypeId)
-      .map(s => ({
-        sessionId: s.id,
-        // Le commentaire d'origine annoncait un repli sur le code de filiere
-        // pour les classes NS3/NS4 : il ne decrivait plus le code, et la
-        // filiere n'est de toute facon pas une salle. La salle est la lettre.
-        label: s.class.letter ?? "",
-      }))
-      .sort((a, b) => a.label.localeCompare(b.label))
-  }, [sessions, selectedClassTypeId])
-
-  function handleClassTypeChange(ctId: string) {
-    setSelectedClassTypeId(ctId)
-    setSelectedSessionId("")
-    setSelectedStepId("")
+  // Changement de classe ou de salle : l'étape est remise à zéro (comme
+  // avant), et tout ce qui appartient à la salle précédente est vidé AVANT un
+  // éventuel chargement (pas de mélange de salles, effetChangementSalle).
+  // Pas de garde : cet onglet ne suit pas ses modifications (BACKLOG W3).
+  function handleSelectionChange(next: SelectionClasseSalle) {
+    if (effetChangementSalle(selection, next).viderAvant) {
+      setSelectedStepId("")
+      setEnrollments([])
+      setEntries(new Map())
+    }
+    onSelectionChange(next)
   }
 
   const [attitudes,   setAttitudes]   = useState<ApiAttitude[]>([])
@@ -319,6 +301,11 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
     let cancelled = false
 
     void Promise.resolve().then(async () => {
+      if (cancelled) return
+      // Vider avant de charger : les saisies d'une autre salle ou d'une autre
+      // étape n'apparaissent jamais sous le nouvel en-tête.
+      setEnrollments([])
+      setEntries(new Map())
       setLoadingBehaviors(true)
       try {
         const [enrs, behs] = await Promise.all([
@@ -625,8 +612,9 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
   const selectedStep    = steps.find(s => s.id === selectedStepId)
   const isLocked        = selectedStep ? !selectedStep.isCurrent : false
   // CLASSE et SALLE : deux champs, jamais fusionnes a l'affichage. Voir
-  // « La Regle des Deux Champs » dans DESIGN.md.
-  const { classe: classeLabel, salle: salleLabel } = libelleClasseSalle(selectedSession)
+  // « La Regle des Deux Champs » dans DESIGN.md. L'en-tete les affiche avec
+  // ClasseSalleInfo.
+  const idEtape = useId()
 
   // Pagination footer
   function renderPaginationFooter() {
@@ -691,52 +679,37 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
       <Card className="border bg-card shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-base font-semibold">Sélection</CardTitle>
-          <CardDescription>Classe et étape pour la saisie des comportements</CardDescription>
+          <CardDescription>Classe, salle et étape pour la saisie des comportements</CardDescription>
         </CardHeader>
         <Separator />
         <CardContent className="p-4">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <Select value={selectedClassTypeId} onValueChange={handleClassTypeChange}>
-              <SelectTrigger>
-                <SelectValue placeholder="Classe" />
-              </SelectTrigger>
-              <SelectContent>
-                {classTypeOptions.map(ct => (
-                  <SelectItem key={ct.id} value={ct.id}>{ct.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {/* Classe puis Salle (T7), sélection partagée entre les onglets. */}
+            <ClasseSalleSelect
+              sessions={sessions}
+              value={selection}
+              onChange={handleSelectionChange}
+              chargement={loadingBehaviors}
+            />
 
-            <Select
-              value={selectedSessionId}
-              onValueChange={v => { setSelectedSessionId(v); setSelectedStepId("") }}
-              disabled={!selectedClassTypeId}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder={selectedClassTypeId ? "Salle" : "Choisir d'abord une classe"} />
-              </SelectTrigger>
-              <SelectContent>
-                {salleOptions.map(opt => (
-                  <SelectItem key={opt.sessionId} value={opt.sessionId}>{opt.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={selectedStepId} onValueChange={setSelectedStepId} disabled={!selectedSessionId}>
-              <SelectTrigger>
-                <div className="flex items-center gap-2">
-                  {isLocked && <LockIcon className="h-4 w-4 text-warning-ink" />}
-                  <SelectValue placeholder="Étape" />
-                </div>
-              </SelectTrigger>
-              <SelectContent>
-                {steps.map(s => (
-                  <SelectItem key={s.id} value={s.id}>
-                    Étape {s.stepNumber}{s.isCurrent ? " (active)" : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="space-y-1.5">
+              <label htmlFor={idEtape} className="text-xs font-medium text-muted-foreground">Étape</label>
+              <Select value={selectedStepId} onValueChange={setSelectedStepId} disabled={!selectedSessionId}>
+                <SelectTrigger id={idEtape}>
+                  <div className="flex items-center gap-2">
+                    {isLocked && <LockIcon className="h-4 w-4 text-warning-ink" />}
+                    <SelectValue placeholder="Sélectionner une étape" />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  {steps.map(s => (
+                    <SelectItem key={s.id} value={s.id}>
+                      Étape {s.stepNumber}{s.isCurrent ? " (active)" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -819,17 +792,9 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps }: CPMSLBehaviorGrid
                     {filteredEnrollments.length} élève{filteredEnrollments.length > 1 ? "s" : ""} affiché{filteredEnrollments.length > 1 ? "s" : ""} sur {sortedEnrollments.length} - {kpis.entered} / {kpis.total} saisis
                   </CardDescription>
                   <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                    <Badge variant="outline">
-                      Classe : <span className="ml-1 font-semibold text-foreground">{classeLabel || "—"}</span>
-                    </Badge>
-                    {/* Le repli `track?.code ?? letter` qui vivait ici etait une
-                        branche morte : ni `Class` ni `ClassSession` ne portent de
-                        filiere, l'expression valait toujours `letter`. Elle
-                        pouvait en revanche afficher un code de filiere comme une
-                        SALLE le jour ou le backend en aurait renvoye un. */}
-                    <Badge variant="outline">
-                      Salle : <span className="ml-1 font-mono font-semibold text-foreground">{salleLabel || "—"}</span>
-                    </Badge>
+                    {/* Classe et salle : ClasseSalleInfo, même format qu'avant (D8).
+                        La salle est la lettre, jamais un code de filière. */}
+                    <ClasseSalleInfo source={selectedSession} />
                     <Badge variant="outline">Étape : {selectedStep ? `Étape ${selectedStep.stepNumber}` : "-"}</Badge>
                     {isLocked && (
                       <Badge variant="outline" className="border-warning-border bg-warning-soft text-warning-ink">
