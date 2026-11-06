@@ -749,13 +749,30 @@ dur, et des divergences qu'aucune règle ne permettait d'arbitrer.
 d'option de liste, clé de tri ou de recherche, nom de fichier exporté, prose de
 confirmation. Elle y garde son point unique, `getClassSessionName`
 (`lib/api/dashboard.ts`). Une chaîne fusionnée qui atterrit dans une cellule de
-tableau est un défaut, même si elle se lit bien.
+tableau est un défaut, même si elle se lit bien. Les pages de notes font
+exception, dans le sens le plus strict : voir « Pages de notes » ci-dessous.
 
 `getClassSessionName` n'est donc **pas un vestige à supprimer** : une valeur
 d'option (`SelectItem`), un comparateur de tri et un nom de fichier PDF exporté
 ont besoin d'une chaîne unique, et il vaut mieux qu'ils partagent celle-là que
 d'en recomposer chacun la sienne. La passe suivante ne le remplace pas par
 `libelleClasseSalle` : les deux fonctions répondent à deux besoins distincts.
+
+**Pages de notes : pas de fusion, même dans une liste.** *Précisé le 6 novembre
+2026.* Sur les quatre onglets de la page Notes (Saisie, Avancement,
+Consultation, Comportement), la fusion n'est admise **nulle part**, pas même en
+valeur d'option : on choisit d'abord la **classe**, puis la **salle** parmi les
+salles de cette classe, dans deux listes distinctes. La liste Salle reste
+désactivée tant qu'aucune classe n'est choisie et se vide au changement de
+classe. Les classes suivent l'ordre du cursus (`levelOrder`), puis les niveaux
+sans rang par nom. Une classe à salle unique la préremplit, sauf en filtre :
+chaque liste y commence par « Toutes », et un changement de classe remet la
+salle à « Toutes les salles ». Le composant de référence est `ClasseSalleSelect`
+(`components/school/classe-salle-select.tsx`), sur la logique pure de
+`lib/classes/selection.ts`. L'en-tête affiche « Classe : » et « Salle : » en
+deux badges, avec `ClasseSalleInfo` (`components/school/classe-salle-info.tsx`).
+Ailleurs (archives, promotion, MENFP, rapports, inscriptions), les quatre cas
+admis ci-dessus restent inchangés.
 
 **La filière n'entre jamais dans un libellé de classe ou de salle.** Une salle
 n'a pas de filière : le modèle ne la porte ni sur `Class` ni sur
@@ -834,6 +851,8 @@ autre module change d'où viennent les chiffres, pas la mise en page.
   couche visuelle ne parle jamais au serveur en direct.
 - **Do** présenter la classe et la salle comme deux champs étiquetés, composés
   par `libelleClasseSalle` (`lib/classes/labels.ts`).
+- **Do**, sur les pages de notes, faire choisir la classe puis la salle avec
+  `ClasseSalleSelect`, et afficher l'en-tête avec `ClasseSalleInfo`.
 
 ### Don't:
 - **Don't** modifier le gabarit du bulletin imprimé, sous aucun prétexte visuel.
@@ -869,7 +888,8 @@ autre module change d'où viennent les chiffres, pas la mise en page.
   16 px sans raison explicite.
 - **Don't** afficher « 1e AF A » en une seule chaîne dans une colonne, une fiche
   ou un badge, ni y accoler une filière. La fusion ne sert qu'à une option de
-  liste, une clé de tri, un nom de fichier ou une phrase.
+  liste, une clé de tri, un nom de fichier ou une phrase — **sauf sur les pages
+  de notes**, où elle n'est admise nulle part, pas même en option de liste.
 
 ### Écarts connus au 14 septembre 2026
 
