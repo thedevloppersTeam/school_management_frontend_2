@@ -2,8 +2,9 @@ name: CPMSL Frontend CI
 
 # Contrôles de base du frontend : dépendances, types, tests vitest.
 # Les tests vitest sont ceux de lib/**/__tests__/ (vitest.config.mts) ; ils
-# ne parlent à aucun serveur ni à aucune base. Les audits UI / UX restent dans
-# ui-audit.yml et ux-audit.yml.
+# ne parlent à aucun serveur ni à aucune base. Aucun audit d'interface ne
+# tourne en CI : les workflows ui-audit.yml et ux-audit.yml, qui n'ont jamais
+# abouti, ont été retirés (2026-11-06) ; un contrôle déterministe est prévu.
 
 on:
   pull_request:
