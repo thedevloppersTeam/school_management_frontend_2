@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo, useId } from "react"
+import { useState, useEffect, useMemo, useId, useRef } from "react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -35,6 +35,12 @@ import { cn } from "@/lib/utils"
 import { effetChangementSalle, type SelectionClasseSalle } from "@/lib/classes/selection"
 import { ClasseSalleSelect } from "@/components/school/classe-salle-select"
 import { ClasseSalleInfo } from "@/components/school/classe-salle-info"
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { useUnsavedChangesWarning } from "@/hooks/use-unsaved-changes-warning"
+import { compterModifications, referencesApresEnregistrement } from "@/lib/comportement/modifications"
 
 // Types API
 
@@ -119,6 +125,14 @@ interface CPMSLBehaviorGridProps {
   /** Classe et salle, partagées avec les autres onglets de notes (chantier W2, T10). */
   selection: SelectionClasseSalle
   onSelectionChange: (next: SelectionClasseSalle) => void
+  /**
+   * Remonte le nombre d'élèves dont le comportement est modifié et non
+   * enregistré (BACKLOG W3). Même rôle que dans la grille de saisie : Radix
+   * démonte l'onglet inactif, la page doit savoir qu'il y a quelque chose à perdre.
+   */
+  onDirtyChange?: (count: number) => void
+  /** Signale un enregistrement en cours : la page bloque alors le changement d'onglet. */
+  onSavingChange?: (saving: boolean) => void
 }
 
 // Helpers
@@ -234,7 +248,9 @@ function createBehaviorEntry(
 
 // Composant
 
-export function CPMSLBehaviorGrid({ yearId, sessions, steps, selection, onSelectionChange }: CPMSLBehaviorGridProps) {
+export function CPMSLBehaviorGrid({
+  yearId, sessions, steps, selection, onSelectionChange, onDirtyChange, onSavingChange,
+}: CPMSLBehaviorGridProps) {
   const { toast } = useToast()
 
   // ── Classe / Salle ──────────────────────────────────────────────────────
@@ -248,12 +264,13 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps, selection, onSelect
   // Changement de classe ou de salle : l'étape est remise à zéro (comme
   // avant), et tout ce qui appartient à la salle précédente est vidé AVANT un
   // éventuel chargement (pas de mélange de salles, effetChangementSalle).
-  // Pas de garde : cet onglet ne suit pas ses modifications (BACKLOG W3).
+  // Appelé seulement après la garde de saisie (guardContextChange, plus bas).
   function handleSelectionChange(next: SelectionClasseSalle) {
     if (effetChangementSalle(selection, next).viderAvant) {
       setSelectedStepId("")
       setEnrollments([])
       setEntries(new Map())
+      setEntreesInitiales(new Map())
     }
     onSelectionChange(next)
   }
@@ -261,6 +278,16 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps, selection, onSelect
   const [attitudes,   setAttitudes]   = useState<ApiAttitude[]>([])
   const [enrollments, setEnrollments] = useState<ApiEnrollment[]>([])
   const [entries,     setEntries]     = useState<Map<string, BehaviorEntry>>(new Map())
+  // Valeurs de référence : celles chargées, puis celles effectivement
+  // enregistrées. Le compteur de modifications compare `entries` à elles.
+  const [entreesInitiales, setEntreesInitiales] = useState<Map<string, BehaviorEntry>>(new Map())
+
+  // Contexte affiché (salle, étape), lu par la fin d'un enregistrement : si
+  // l'écran a changé entre-temps, la fin ne touche ni aux références ni aux saisies.
+  const contexteAffiche = useRef({ sessionId: selectedSessionId, stepId: selectedStepId })
+  useEffect(() => {
+    contexteAffiche.current = { sessionId: selectedSessionId, stepId: selectedStepId }
+  }, [selectedSessionId, selectedStepId])
 
   const [loadingAttitudes, setLoadingAttitudes] = useState(false)
   const [loadingBehaviors, setLoadingBehaviors] = useState(false)
@@ -306,6 +333,7 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps, selection, onSelect
       // étape n'apparaissent jamais sous le nouvel en-tête.
       setEnrollments([])
       setEntries(new Map())
+      setEntreesInitiales(new Map())
       setLoadingBehaviors(true)
       try {
         const [enrs, behs] = await Promise.all([
@@ -329,6 +357,7 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps, selection, onSelect
           newEntries.set(enr.id, createBehaviorEntry(enr, behaviorList, attitudes))
         })
         setEntries(newEntries)
+        setEntreesInitiales(newEntries)
       } catch {
         if (!cancelled) {
           toast({ title: "Erreur", description: "Impossible de charger les comportements", variant: "destructive" })
@@ -393,6 +422,41 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps, selection, onSelect
     return { total, entered, missing: total - entered, percent: total > 0 ? Math.round((entered / total) * 100) : 0 }
   }, [sortedEnrollments, entries])
 
+  // Modifications non enregistrées (BACKLOG W3)
+  //
+  // Même mécanisme que la grille de saisie des notes : un compteur, l'alerte
+  // native du navigateur, une garde sur les changements de contexte, et le
+  // compteur remonté à la page pour le changement d'onglet. L'unité est
+  // l'élève ; une fiche remise à l'identique ne compte plus.
+  const dirtyCount = useMemo(
+    () => compterModifications(entreesInitiales, entries),
+    [entreesInitiales, entries],
+  )
+  const hasUnsavedChanges = dirtyCount > 0
+
+  useEffect(() => { onDirtyChange?.(dirtyCount) }, [dirtyCount, onDirtyChange])
+  // Au démontage, la page ne doit pas rester bloquée sur un compte périmé.
+  useEffect(() => () => { onDirtyChange?.(0) }, [onDirtyChange])
+
+  useEffect(() => { onSavingChange?.(saving) }, [saving, onSavingChange])
+  useEffect(() => () => { onSavingChange?.(false) }, [onSavingChange])
+
+  // Fermeture d'onglet du navigateur, F5, saisie d'une URL.
+  useUnsavedChangesWarning(hasUnsavedChanges)
+
+  // Garde sur la classe, la salle et l'étape : sans modification, le
+  // changement s'applique ; sinon la fenêtre demande confirmation.
+  const [pendingContextChange, setPendingContextChange] =
+    useState<{ label: string; apply: () => void } | null>(null)
+
+  function guardContextChange(label: string, apply: () => void) {
+    if (!hasUnsavedChanges) {
+      apply()
+      return
+    }
+    setPendingContextChange({ label, apply })
+  }
+
   // Handlers
 
   function handleNumber(enrollmentId: string, field: NumericBehaviorField, value: string) {
@@ -445,6 +509,15 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps, selection, onSelect
 
       let successCount = 0
       let errorCount = 0
+      // Contexte de départ : la fin de l'enregistrement ne s'applique à
+      // l'écran que s'il montre encore la même salle et la même étape.
+      const depart = { sessionId: selectedSessionId, stepId: selectedStepId }
+      const memeEcran = () =>
+        contexteAffiche.current.sessionId === depart.sessionId &&
+        contexteAffiche.current.stepId === depart.stepId
+      // Fiches effectivement enregistrées : elles deviennent les nouvelles
+      // références. Les fiches en échec restent comptées comme modifiées.
+      const enregistrees = new Map<string, BehaviorEntry>()
 
       for (const e of entriesToSave) {
         const body = buildBehaviorPayload(e, selectedStepId)
@@ -478,7 +551,7 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps, selection, onSelect
             })
             if (!res.ok) throw new Error(`HTTP ${res.status}`)
             const created = await res.json().catch(() => null) as Partial<ApiBehavior> | null
-            if (created?.id) {
+            if (created?.id && memeEcran()) {
               setEntries(prev => {
                 const next  = new Map(prev)
                 const entry = next.get(e.enrollmentId)
@@ -488,10 +561,17 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps, selection, onSelect
             }
           }
           successCount++
+          enregistrees.set(e.enrollmentId, e)
         } catch (error) {
           errorCount++
           console.error("[CPMSLBehaviorGrid] save behavior:", error)
         }
+      }
+
+      // Un échec, même total, ne remet pas le compteur à zéro : seules les
+      // fiches enregistrées changent de référence. Rien si l'écran a changé.
+      if (enregistrees.size > 0 && memeEcran()) {
+        setEntreesInitiales(prev => referencesApresEnregistrement(prev, enregistrees))
       }
 
       if (successCount > 0 && errorCount === 0) {
@@ -684,17 +764,25 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps, selection, onSelect
         <Separator />
         <CardContent className="p-4">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            {/* Classe puis Salle (T7), sélection partagée entre les onglets. */}
+            {/* Classe puis Salle (T7), sélection partagée entre les onglets.
+                Gardées par la saisie non enregistrée, et inactives pendant un
+                enregistrement (`disabled` : `chargement` ne couvre que la Salle). */}
             <ClasseSalleSelect
               sessions={sessions}
               value={selection}
               onChange={handleSelectionChange}
+              garde={guardContextChange}
               chargement={loadingBehaviors}
+              disabled={saving}
             />
 
             <div className="space-y-1.5">
               <label htmlFor={idEtape} className="text-xs font-medium text-muted-foreground">Étape</label>
-              <Select value={selectedStepId} onValueChange={setSelectedStepId} disabled={!selectedSessionId}>
+              <Select
+                value={selectedStepId}
+                onValueChange={v => guardContextChange("d'étape", () => setSelectedStepId(v))}
+                disabled={!selectedSessionId || saving}
+              >
                 <SelectTrigger id={idEtape}>
                   <div className="flex items-center gap-2">
                     {isLocked && <LockIcon className="h-4 w-4 text-warning-ink" />}
@@ -939,6 +1027,40 @@ export function CPMSLBehaviorGrid({ yearId, sessions, steps, selection, onSelect
           </Card>
         </>
       )}
+
+      {/* Saisie non enregistrée : même fenêtre que la grille de saisie des
+          notes, au mot près (« comportement », « liste »). Copie assumée en
+          attendant un composant partagé (BACKLOG W4). */}
+      <AlertDialog
+        open={!!pendingContextChange}
+        onOpenChange={(o) => { if (!o) setPendingContextChange(null) }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {dirtyCount} comportement{dirtyCount > 1 ? "s" : ""} non
+              enregistré{dirtyCount > 1 ? "s" : ""}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Changer {pendingContextChange?.label} recharge la liste et efface{" "}
+              {dirtyCount > 1 ? "ces saisies" : "cette saisie"}.
+              Enregistrez d&apos;abord pour {dirtyCount > 1 ? "les" : "la"} conserver.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Revenir à la saisie</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                pendingContextChange?.apply()
+                setPendingContextChange(null)
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Abandonner {dirtyCount > 1 ? "les modifications" : "la modification"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
