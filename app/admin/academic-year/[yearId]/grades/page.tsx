@@ -82,10 +82,21 @@ export default function GradesPage() {
   // grille est la seule facon pour cette page de savoir qu'il y a quelque chose
   // a perdre.
   const [gridDirtyCount, setGridDirtyCount] = useState(0)
+  // Même chose pour l'onglet Comportement (BACKLOG W3) : nombre d'élèves dont
+  // le comportement est modifié et non enregistré, et enregistrement en cours.
+  const [comportementDirtyCount, setComportementDirtyCount] = useState(0)
+  const [comportementSaving,     setComportementSaving]     = useState(false)
   const [pendingNav, setPendingNav] = useState<{ label: string; apply: () => void } | null>(null)
 
+  // Un seul onglet est monté à la fois : au plus un des deux compteurs est non nul.
+  const navDirtyCount = gridDirtyCount + comportementDirtyCount
+  const navDirtyComportement = comportementDirtyCount > 0
+
   function guardNavigation(label: string, apply: () => void) {
-    if (gridDirtyCount === 0) { apply(); return }
+    // Pendant l'enregistrement de Comportement, aucun changement d'onglet :
+    // les onglets sont inactifs, et ce refus couvre tout autre appel.
+    if (comportementSaving) return
+    if (navDirtyCount === 0) { apply(); return }
     setPendingNav({ label, apply })
   }
   // Mode de saisie dans l'onglet "Saisie" : par matière (grille) ou par élève.
@@ -348,10 +359,11 @@ export default function GradesPage() {
         onValueChange={(v) => guardNavigation("d'onglet", () => changerOnglet(v))}
         className="space-y-6"
       >
+        {/* Pendant un enregistrement de Comportement, les autres onglets sont inactifs. */}
         <TabsList>
-          <TabsTrigger value="notes">Saisie</TabsTrigger>
-          <TabsTrigger value="consultation">Consultation</TabsTrigger>
-          <TabsTrigger value="avancement">Avancement</TabsTrigger>
+          <TabsTrigger value="notes" disabled={comportementSaving}>Saisie</TabsTrigger>
+          <TabsTrigger value="consultation" disabled={comportementSaving}>Consultation</TabsTrigger>
+          <TabsTrigger value="avancement" disabled={comportementSaving}>Avancement</TabsTrigger>
           <TabsTrigger value="comportement">Comportement</TabsTrigger>
         </TabsList>
 
@@ -463,6 +475,8 @@ export default function GradesPage() {
             steps={steps}
             selection={selection}
             onSelectionChange={handleSelectionChange}
+            onDirtyChange={setComportementDirtyCount}
+            onSavingChange={setComportementSaving}
           />
         </TabsContent>
       </Tabs>
@@ -493,12 +507,15 @@ export default function GradesPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {gridDirtyCount} note{gridDirtyCount > 1 ? 's' : ''} non enregistrée{gridDirtyCount > 1 ? 's' : ''}
+              {navDirtyComportement
+                ? <>{navDirtyCount} comportement{navDirtyCount > 1 ? 's' : ''} non enregistré{navDirtyCount > 1 ? 's' : ''}</>
+                : <>{navDirtyCount} note{navDirtyCount > 1 ? 's' : ''} non enregistrée{navDirtyCount > 1 ? 's' : ''}</>}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Changer {pendingNav?.label} ferme la grille de saisie et efface{' '}
-              {gridDirtyCount > 1 ? 'ces saisies' : 'cette saisie'}. Enregistrez d&apos;abord
-              pour {gridDirtyCount > 1 ? 'les' : 'la'} conserver.
+              Changer {pendingNav?.label} ferme{' '}
+              {navDirtyComportement ? "l'onglet Comportement" : 'la grille de saisie'} et efface{' '}
+              {navDirtyCount > 1 ? 'ces saisies' : 'cette saisie'}. Enregistrez d&apos;abord
+              pour {navDirtyCount > 1 ? 'les' : 'la'} conserver.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -507,7 +524,7 @@ export default function GradesPage() {
               onClick={() => { pendingNav?.apply(); setPendingNav(null) }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Abandonner {gridDirtyCount > 1 ? 'les modifications' : 'la modification'}
+              Abandonner {navDirtyCount > 1 ? 'les modifications' : 'la modification'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
