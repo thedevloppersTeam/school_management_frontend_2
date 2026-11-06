@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vitest'
 import {
   SELECTION_VIDE,
   effetChangementSalle,
+  salleAChargerAuRetour,
   memeSelection,
   optionsClasses,
   optionsSalles,
@@ -260,5 +261,36 @@ describe('effetChangementSalle — données de l\'écran (PR 2, défauts 1 et 2)
   it('jamais de chargement vide : une chaîne vide reçue vaut « aucune salle » (défaut 1)', () => {
     expect(effetChangementSalle(A, { classeId: CT.af2.id, sessionId: '' })).toEqual({ viderAvant: true, charger: null })
     expect(effetChangementSalle({ classeId: null, sessionId: '' }, SELECTION_VIDE)).toEqual({ viderAvant: false, charger: null })
+  })
+})
+
+describe('salleAChargerAuRetour — chargement différé de Saisie (PR 3, T10)', () => {
+  const A = { classeId: CT.af2.id, sessionId: 's-af2-a' }
+
+  it('salle déjà chargée : rien à charger (le retour ne relance pas)', () => {
+    expect(salleAChargerAuRetour(A, 's-af2-a')).toBeNull()
+  })
+
+  it('salle changée depuis un autre onglet : charger la nouvelle', () => {
+    expect(salleAChargerAuRetour(A, 's-af1-a')).toBe('s-af2-a')
+  })
+
+  it('rien de chargé encore : charger la salle choisie', () => {
+    expect(salleAChargerAuRetour(A, null)).toBe('s-af2-a')
+  })
+
+  it('classe sans salle, ou aucune sélection : rien à charger', () => {
+    expect(salleAChargerAuRetour({ classeId: CT.af2.id, sessionId: null }, 's-af2-a')).toBeNull()
+    expect(salleAChargerAuRetour(SELECTION_VIDE, null)).toBeNull()
+  })
+
+  it('jamais de chargement vide : une chaîne vide vaut « aucune salle »', () => {
+    expect(salleAChargerAuRetour({ classeId: CT.af2.id, sessionId: '' }, null)).toBeNull()
+  })
+
+  it('une seule fois : après le chargement, un second retour ne relance rien', () => {
+    const premier = salleAChargerAuRetour(A, 's-af1-a')
+    expect(premier).toBe('s-af2-a')
+    expect(salleAChargerAuRetour(A, premier)).toBeNull()
   })
 })

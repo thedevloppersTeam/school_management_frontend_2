@@ -216,6 +216,24 @@ export function effetChangementSalle(
   return { viderAvant: true, charger: cible }
 }
 
+/**
+ * Salle à charger au RETOUR sur l'onglet Saisie (chantier W2, PR 3, T10).
+ *
+ * La sélection est partagée entre les onglets. Changée depuis Consultation ou
+ * Comportement, elle vide aussitôt les données de Saisie, mais leur
+ * chargement attend le retour sur Saisie. `salleChargee` est la salle dont
+ * Saisie détient (ou charge) les données. Renvoie la session à charger, ou
+ * `null` si Saisie est déjà à jour ou s'il n'y a aucune salle. Jamais "".
+ */
+export function salleAChargerAuRetour(
+  selection: SelectionClasseSalle,
+  salleChargee: string | null,
+): string | null {
+  const cible = selection.sessionId === '' ? null : selection.sessionId
+  if (cible === null) return null
+  return cible === salleChargee ? null : cible
+}
+
 /** Deux sélections désignent-elles la même chose ? */
 export function memeSelection(a: SelectionClasseSalle, b: SelectionClasseSalle): boolean {
   return a.classeId === b.classeId && a.sessionId === b.sessionId

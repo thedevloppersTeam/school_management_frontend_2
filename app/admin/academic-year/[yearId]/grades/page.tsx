@@ -26,6 +26,7 @@ import { bulkCreateParts, type BulkCreateCounts } from "@/lib/grades/save-summar
 import {
   SELECTION_VIDE,
   effetChangementSalle,
+  salleAChargerAuRetour,
   selectionDepuisSession,
   type SelectionClasseSalle,
 } from "@/lib/classes/selection"
@@ -64,7 +65,6 @@ export default function GradesPage() {
   // de saisie : une classe choisie sans salle doit survivre au passage Par
   // matière ↔ Par élève, et les autres onglets la partageront (T10, PR 3).
   const [selection,              setSelection]              = useState<SelectionClasseSalle>(SELECTION_VIDE)
-  const selectedSessionId = selection.sessionId ?? ""
   const [selectedClassSubjectId, setSelectedClassSubjectId] = useState<string>("")
   const [selectedStepId,         setSelectedStepId]         = useState<string>("")
   const [loadingSession,         setLoadingSession]         = useState(false)
@@ -138,6 +138,9 @@ export default function GradesPage() {
   // après celles de la nouvelle.
   const dernierChargement = useRef(0)
   const dernieresNotes    = useRef(0)
+  // Salle dont Saisie détient (ou charge) les données ; null après un vidage.
+  // Sert au chargement différé au retour sur l'onglet Saisie (T10, PR 3).
+  const salleChargee      = useRef<string | null>(null)
 
   // Efface tout ce qui appartient à la salle courante, et périme les
   // chargements en vol. Appelé AVANT tout chargement d'une autre salle : à
@@ -146,6 +149,7 @@ export default function GradesPage() {
   function viderSalle() {
     dernierChargement.current += 1
     dernieresNotes.current += 1
+    salleChargee.current = null
     setSelectedClassSubjectId('')
     setExistingGrades([])
     setClassSubjects([])
@@ -160,6 +164,7 @@ export default function GradesPage() {
     // valeur vide ne part plus vers fetchClassSubjects ni fetchEntryEnrollments.
     if (!sessionId) { viderSalle(); return }
     viderSalle()
+    salleChargee.current = sessionId
     const jeton = dernierChargement.current
     setLoadingSession(true)
     try {
@@ -183,14 +188,26 @@ export default function GradesPage() {
     }
   }
 
-  // Changement de Classe ou de Salle, venu de ClasseSalleSelect (déjà passé
-  // par la garde de saisie de la grille).
+  // Changement de Classe ou de Salle, venu de ClasseSalleSelect, dans
+  // n'importe quel onglet : la sélection est partagée (T10). Le vidage des
+  // données de Saisie est immédiat ; leur chargement n'a lieu que si Saisie
+  // est l'onglet affiché, sinon il attend le retour sur Saisie (changerOnglet).
   function handleSelectionChange(next: SelectionClasseSalle) {
     const effet = effetChangementSalle(selection, next)
     setSelection(next)
     if (!effet.viderAvant) return
-    if (effet.charger) handleSessionChange(effet.charger)
+    if (effet.charger && activeTab === "notes") handleSessionChange(effet.charger)
     else viderSalle()
+  }
+
+  // Changement d'onglet (déjà passé par guardNavigation). Au retour sur
+  // Saisie, la salle choisie ailleurs est chargée une seule fois, par
+  // handleSessionChange (vidage et jetons).
+  function changerOnglet(onglet: string) {
+    setActiveTab(onglet)
+    if (onglet !== "notes") return
+    const aCharger = salleAChargerAuRetour(selection, salleChargee.current)
+    if (aCharger) handleSessionChange(aCharger)
   }
 
   async function loadGrades(classSubjectId: string, stepId: string) {
@@ -328,7 +345,7 @@ export default function GradesPage() {
     return (
       <Tabs
         value={activeTab}
-        onValueChange={(v) => guardNavigation("d'onglet", () => setActiveTab(v))}
+        onValueChange={(v) => guardNavigation("d'onglet", () => changerOnglet(v))}
         className="space-y-6"
       >
         <TabsList>
@@ -421,7 +438,9 @@ export default function GradesPage() {
         {/* Consultation — W4 */}
         <TabsContent value="consultation">
           <GradesViewContent
-            initialSessionId={selectedSessionId}
+            sessions={sessions}
+            selection={selection}
+            onSelectionChange={handleSelectionChange}
             initialStepId={selectedStepId}
           />
         </TabsContent>
@@ -442,6 +461,8 @@ export default function GradesPage() {
             yearId={yearId}
             sessions={apiSessions}
             steps={steps}
+            selection={selection}
+            onSelectionChange={handleSelectionChange}
           />
         </TabsContent>
       </Tabs>
