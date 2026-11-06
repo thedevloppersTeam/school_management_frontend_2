@@ -3,72 +3,47 @@
 // Saisie des notes PAR ÉLÈVE : on choisit une classe/salle, la liste des élèves
 // s'affiche, et chaque élève mène à sa page de saisie (toutes matières d'un coup).
 
-import { useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { UserIcon, ClipboardListIcon } from "lucide-react"
 import type { ApiClassSession } from "@/lib/api/students"
 import type { ApiEnrollment } from "@/lib/api/grades"
 import { hasEntrySteps } from "@/lib/departures/presence"
 import { LeftBadge } from "@/components/school/left-badge"
+import { ClasseSalleSelect } from "@/components/school/classe-salle-select"
+import type { SelectionClasseSalle } from "@/lib/classes/selection"
 
 interface Props {
   yearId:            string
   sessions:          ApiClassSession[]
   enrollments:       ApiEnrollment[]
-  selectedSessionId: string
+  /** Classe et salle choisies, tenues par la page et partagées avec le mode Par matière. */
+  selection:         SelectionClasseSalle
   loadingSession:    boolean
-  onSessionChange:   (sessionId: string) => void
+  onSelectionChange: (next: SelectionClasseSalle) => void
 }
 
 export function CPMSLGradesByStudent({
   yearId,
   sessions,
   enrollments,
-  selectedSessionId,
+  selection,
   loadingSession,
-  onSessionChange,
+  onSelectionChange,
 }: Props) {
   const router = useRouter()
 
-  // ── Classe (niveau) puis Salle (lettre) — sélecteurs en cascade ──────────
-  // Le niveau choisi explicitement prime ; sinon on le dérive de la salle déjà
-  // sélectionnée (ex. héritée du mode "Par matière"). Pas de setState-in-effect.
-  const [classTypeOverride, setClassTypeOverride] = useState<string | null>(null)
-  const selectedClassTypeId =
-    classTypeOverride ??
-    (selectedSessionId
-      ? sessions.find(s => s.id === selectedSessionId)?.class.classType.id ?? ""
-      : "")
-
-  const classTypes = useMemo(() => {
-    const map = new Map<string, { id: string; name: string }>()
-    sessions.forEach(s => {
-      const ct = s.class.classType
-      if (!map.has(ct.id)) map.set(ct.id, { id: ct.id, name: ct.name })
-    })
-    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, "fr", { numeric: true }))
-  }, [sessions])
-
-  const availableSalles = useMemo(() => {
-    if (!selectedClassTypeId) return []
-    return sessions
-      .filter(s => s.class.classType.id === selectedClassTypeId)
-      .map(s => ({
-        sessionId: s.id,
-        label: s.class.letter,
-      }))
-      .sort((a, b) => a.label.localeCompare(b.label, "fr", { numeric: true }))
-  }, [sessions, selectedClassTypeId])
-
-  const handleClassTypeChange = (classTypeId: string) => {
-    setClassTypeOverride(classTypeId)
-    onSessionChange("") // reset la salle : on attend un nouveau choix
-  }
+  // ── Classe puis Salle ────────────────────────────────────────────────────
+  // ClasseSalleSelect, sur la sélection tenue par la page (chantier W2). Elle
+  // survit au passage Par matière ↔ Par élève, y compris une classe sans
+  // salle. Changer de classe n'émet plus de salle vide (défaut 1 de l'audit) :
+  // la sélection passe à `sessionId: null`, et la page ne charge rien.
+  // Pas de garde ici : ce mode ne porte aucune saisie en cours.
+  const classeChoisie = selection.classeId !== null
+  const salleChoisie  = selection.sessionId !== null
 
   // D-22 : actifs, et partis au départ complété (saisie de leurs étapes suivies).
   const active = enrollments.filter(hasEntrySteps)
@@ -90,48 +65,21 @@ export function CPMSLGradesByStudent({
         </CardDescription>
       </CardHeader>
 
-      <div className="flex flex-col gap-3 border-t px-4 py-3 sm:flex-row">
-        {/* Classe (niveau) */}
-        <div className="space-y-1">
-          <label className="text-xs font-medium text-muted-foreground">Classe</label>
-          <Select value={selectedClassTypeId} onValueChange={handleClassTypeChange}>
-            <SelectTrigger className="w-full sm:w-[220px]">
-              <SelectValue placeholder="Sélectionner une classe" />
-            </SelectTrigger>
-            <SelectContent>
-              {classTypes.map(ct => (
-                <SelectItem key={ct.id} value={ct.id}>{ct.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Salle (lettre) */}
-        <div className="space-y-1">
-          <label className="text-xs font-medium text-muted-foreground">Salle</label>
-          <Select
-            value={selectedSessionId}
-            onValueChange={onSessionChange}
-            disabled={!selectedClassTypeId}
-          >
-            <SelectTrigger className="w-full sm:w-[180px]">
-              <SelectValue placeholder={selectedClassTypeId ? "Sélectionner une salle" : "Choisir une classe d'abord"} />
-            </SelectTrigger>
-            <SelectContent>
-              {availableSalles.map(s => (
-                <SelectItem key={s.sessionId} value={s.sessionId}>{s.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+      <div className="grid grid-cols-1 gap-3 border-t px-4 py-3 sm:max-w-md sm:grid-cols-2">
+        <ClasseSalleSelect
+          sessions={sessions}
+          value={selection}
+          onChange={onSelectionChange}
+          chargement={loadingSession}
+        />
       </div>
 
       <CardContent className="p-0">
-        {!selectedClassTypeId ? (
+        {!classeChoisie ? (
           <p className="px-6 py-12 text-center text-sm text-muted-foreground">
             Sélectionnez une classe puis une salle pour afficher ses élèves.
           </p>
-        ) : !selectedSessionId ? (
+        ) : !salleChoisie ? (
           <p className="px-6 py-12 text-center text-sm text-muted-foreground">
             Sélectionnez une salle pour afficher ses élèves.
           </p>

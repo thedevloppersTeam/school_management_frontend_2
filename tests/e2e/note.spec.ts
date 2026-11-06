@@ -1,4 +1,14 @@
-import { test, expect } from '@playwright/test';
+// ⚠ TEST NON EXÉCUTÉ dans le chantier W2 (PR 2, T14). Il n'existe pas
+// d'environnement de bout en bout : frontend, serveur, base fictive et
+// identifiants d'administrateur de test (BACKLOG E11 ; DECISIONS D-38). Les
+// sélecteurs ci-dessous ont été réécrits d'après le code, sans passage réel.
+// La vérification passe par la recette manuelle sur app-test (T16).
+//
+// Sélection Classe → Salle (chantier W2) : les listes sont trouvées par leur
+// ÉTIQUETTE (« Classe », « Salle », « Étape », « Matière »), plus par leur
+// position. L'écran en a quatre ; l'ancien découpage par indice (0 = classe,
+// 1 = étape, 2 = matière) était déjà faux depuis l'ajout de la liste Salle.
+import { test, expect, type Page } from '@playwright/test';
 import { setupJeuEssai, loginAsAdmin } from '../fixtures/jeu-essai';
 
 // Les cellules de note de la grille. Elles etaient ciblees par
@@ -18,30 +28,42 @@ async function goToGradesPage(page: any) {
   await expect(page.getByRole('tab', { name: /saisie/i })).toBeVisible({ timeout: 10000 });
 }
 
-// Helper: selectionner classe, etape et matiere
-async function selectGradeContext(page: any) {
-  const comboboxes = page.getByRole('combobox');
+// Une liste de sélection, par son étiquette exacte.
+function liste(page: Page, etiquette: 'Classe' | 'Salle' | 'Étape' | 'Matière') {
+  return page.getByLabel(etiquette, { exact: true });
+}
 
-  // Selectionner la premiere classe disponible (combobox 0: classe)
-  await comboboxes.nth(0).click();
-  const classOption = page.getByRole('option').first();
-  await expect(classOption).toBeVisible({ timeout: 10000 });
-  await classOption.click();
+// Ouvre une liste dès qu'elle est active et choisit sa première option.
+async function choisirPremiere(page: Page, etiquette: 'Classe' | 'Salle' | 'Étape' | 'Matière') {
+  const l = liste(page, etiquette);
+  await expect(l).toBeEnabled({ timeout: 15000 });
+  await l.click();
+  const option = page.getByRole('option').first();
+  await expect(option).toBeVisible({ timeout: 10000 });
+  await option.click();
+}
 
-  // Attendre le chargement des matieres (la combobox matieres est disabled pendant le chargement)
-  await expect(comboboxes.nth(2)).not.toBeDisabled({ timeout: 15000 });
+// Classe, puis Salle. Une classe à salle unique la préremplit (D1) : dans ce
+// cas la liste n'affiche plus « Sélectionner une salle » et on ne la rouvre pas.
+async function choisirClasseEtSalle(page: Page) {
+  await choisirPremiere(page, 'Classe');
+  const salle = liste(page, 'Salle');
+  // Désactivée pendant le chargement de la salle préremplie : on attend.
+  await expect(salle).toBeEnabled({ timeout: 15000 });
+  if ((await salle.getByText(/sélectionner une salle/i).count()) > 0) {
+    await choisirPremiere(page, 'Salle');
+  }
+}
 
-  // Selectionner la premiere etape (periode) — combobox 1
-  await comboboxes.nth(1).click();
-  const stepOption = page.getByRole('option').first();
-  await expect(stepOption).toBeVisible({ timeout: 10000 });
-  await stepOption.click();
+// Helper: selectionner classe, salle, etape et matiere
+async function selectGradeContext(page: Page) {
+  await choisirClasseEtSalle(page);
 
-  // Selectionner la premiere matiere — combobox 2 (maintenant active)
-  await comboboxes.nth(2).click();
-  const subjectOption = page.getByRole('option').first();
-  await expect(subjectOption).toBeVisible({ timeout: 10000 });
-  await subjectOption.click();
+  // La liste Matière reste inactive tant que les matières de la salle chargent.
+  await expect(liste(page, 'Matière')).toBeEnabled({ timeout: 15000 });
+
+  await choisirPremiere(page, 'Étape');
+  await choisirPremiere(page, 'Matière');
 
   // Attendre que la grille de saisie soit visible
   await expect(page.getByText(/notes saisies/i)).toBeVisible({ timeout: 15000 });
@@ -169,21 +191,14 @@ test.describe('Module NOTE — Saisie et validation des notes', () => {
     // Etape 1: Naviguer vers la saisie des notes
     await goToGradesPage(page);
 
-    // Selectionner classe et etape
-    const comboboxes = page.getByRole('combobox');
-    await comboboxes.nth(0).click();
-    const classOption = page.getByRole('option').first();
-    await expect(classOption).toBeVisible({ timeout: 10000 });
-    await classOption.click();
+    // Selectionner classe, salle et etape
+    await choisirClasseEtSalle(page);
 
     // Attendre le chargement des matieres avant de selectionner l'etape
-    await expect(comboboxes.nth(2)).not.toBeDisabled({ timeout: 15000 });
+    await expect(liste(page, 'Matière')).toBeEnabled({ timeout: 15000 });
 
     // Selectionner la premiere etape disponible
-    await comboboxes.nth(1).click();
-    const stepOption = page.getByRole('option').first();
-    await expect(stepOption).toBeVisible({ timeout: 10000 });
-    await stepOption.click();
+    await choisirPremiere(page, 'Étape');
 
     // Resultat attendu: Si l'etape est clôturee, un bandeau "Etape clôturee" est visible
     // ET le bouton "Enregistrer les notes" n'est pas present (isLocked = true)
@@ -219,5 +234,33 @@ test.describe('Module NOTE — Saisie et validation des notes', () => {
     // Resultat attendu: La sauvegarde partielle est acceptee (notes manquantes = non saisies)
     // Le systeme enregistre les notes saisies et affiche le decompte mis a jour
     await expect(page.getByText(/notes enregistr.es|notes saisies/i)).toBeVisible({ timeout: 15000 });
+  });
+
+  test('NOTE-007 — Sélection Classe → Salle : salle inactive sans classe, grille vidée au changement de classe', async ({ page }) => {
+    // Chantier W2 (PR 2) : défaut 2 de l'audit. Aucune grille d'une salle ne
+    // doit rester affichée sous une autre classe.
+
+    await loginAsAdmin(page);
+    await expect(page).toHaveURL(/\/admin\/dashboard/, { timeout: 15000 });
+    await goToGradesPage(page);
+
+    // Etape 1: sans classe, la liste Salle est inactive et le dit
+    const salle = liste(page, 'Salle');
+    await expect(salle).toBeDisabled();
+    await expect(salle).toContainText(/choisir une classe d.abord/i);
+
+    // Etape 2: contexte complet, la grille est affichee
+    await selectGradeContext(page);
+
+    // Etape 3: changer de classe (s'il en existe une autre)
+    const classe = liste(page, 'Classe');
+    await classe.click();
+    const options = page.getByRole('option');
+    test.skip((await options.count()) < 2, 'Une seule classe dans le jeu d\'essai');
+    await options.nth(1).click();
+
+    // Resultat attendu: la matiere est videe, la grille de l'ancienne salle a disparu
+    await expect(page.getByText(/aucune s.lection/i)).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText(/notes saisies/i)).toHaveCount(0);
   });
 });

@@ -11,6 +11,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   SELECTION_VIDE,
+  effetChangementSalle,
   memeSelection,
   optionsClasses,
   optionsSalles,
@@ -201,5 +202,63 @@ describe('memeSelection', () => {
   it('compare les deux champs', () => {
     expect(memeSelection(SELECTION_VIDE, { classeId: null, sessionId: null })).toBe(true)
     expect(memeSelection({ classeId: 'a', sessionId: null }, { classeId: 'a', sessionId: 's' })).toBe(false)
+  })
+})
+
+describe('effetChangementSalle — données de l\'écran (PR 2, défauts 1 et 2)', () => {
+  const A = { classeId: CT.af2.id, sessionId: 's-af2-a' }
+  const B = { classeId: CT.af2.id, sessionId: 's-af2-b' }
+
+  it('même salle : rien à vider ni à charger', () => {
+    expect(effetChangementSalle(A, { ...A })).toEqual({ viderAvant: false, charger: null })
+  })
+
+  it('changement de classe sans salle des deux côtés : rien', () => {
+    const avant = { classeId: CT.af2.id, sessionId: null }
+    expect(effetChangementSalle(avant, { classeId: CT.ns4.id, sessionId: null })).toEqual({ viderAvant: false, charger: null })
+  })
+
+  it('classe changée vers une classe à plusieurs salles : vider, ne rien charger (défaut 2)', () => {
+    const avant = { classeId: CT.af1.id, sessionId: 's-af1-a' }
+    const apres = selectionApresChoixClasse(SESSIONS, avant, CT.af2.id)
+    expect(apres).toEqual({ classeId: CT.af2.id, sessionId: null })
+    expect(effetChangementSalle(avant, apres)).toEqual({ viderAvant: true, charger: null })
+  })
+
+  it('classe changée vers une classe à salle unique : vider, puis charger cette salle (D1)', () => {
+    const apres = selectionApresChoixClasse(SESSIONS, A, CT.af1.id)
+    expect(effetChangementSalle(A, apres)).toEqual({ viderAvant: true, charger: 's-af1-a' })
+  })
+
+  it('changement de salle dans la même classe : vider, puis charger', () => {
+    expect(effetChangementSalle(A, B)).toEqual({ viderAvant: true, charger: 's-af2-b' })
+  })
+
+  it('navigation Avancement → Saisie sur une autre salle : vider, puis charger', () => {
+    const apres = selectionDepuisSession(SESSIONS, 's-ns4-a')
+    expect(effetChangementSalle(A, apres)).toEqual({ viderAvant: true, charger: 's-ns4-a' })
+    expect(effetChangementSalle(SELECTION_VIDE, apres)).toEqual({ viderAvant: true, charger: 's-ns4-a' })
+  })
+
+  it('retour à aucune sélection : vider, ne rien charger', () => {
+    expect(effetChangementSalle(A, SELECTION_VIDE)).toEqual({ viderAvant: true, charger: null })
+  })
+
+  it('pas de mélange de salles : tout chargement est précédé d\'un vidage', () => {
+    // Exigence de la PR 2 : à aucun moment l'en-tête d'une salle ne côtoie la
+    // matière ou les notes d'une autre. Une nouvelle salle n'est donc jamais
+    // chargée « par-dessus » la précédente.
+    const salles = [null, ...SESSIONS.map((s) => s.id)]
+    for (const de of salles) {
+      for (const vers of salles) {
+        const e = effetChangementSalle({ classeId: null, sessionId: de }, { classeId: null, sessionId: vers })
+        if (e.charger !== null) expect(e.viderAvant).toBe(true)
+      }
+    }
+  })
+
+  it('jamais de chargement vide : une chaîne vide reçue vaut « aucune salle » (défaut 1)', () => {
+    expect(effetChangementSalle(A, { classeId: CT.af2.id, sessionId: '' })).toEqual({ viderAvant: true, charger: null })
+    expect(effetChangementSalle({ classeId: null, sessionId: '' }, SELECTION_VIDE)).toEqual({ viderAvant: false, charger: null })
   })
 })
