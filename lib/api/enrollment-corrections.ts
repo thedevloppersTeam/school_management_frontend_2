@@ -225,6 +225,20 @@ export type StudentAuditAction =
   | 'BULLETIN_REGENERATED'
   | 'ENROLLMENT_DEACTIVATED'
   | 'ENROLLMENT_REACTIVATED'
+  // Gestes du calendrier scolaire v2 (SPEC-CAL-2 C-50, CT-47). Sans élève : la
+  // colonne « Élève » reste vide. CALENDAR_ENTRY_VALIDATED et CALENDAR_COPIED
+  // viendront avec CAL-2.6.
+  | 'CALENDAR_CATEGORY_CREATED'
+  | 'CALENDAR_CATEGORY_UPDATED'
+  | 'CALENDAR_CATEGORY_DEACTIVATED'
+  | 'CALENDAR_CATEGORY_REACTIVATED'
+  | 'CALENDAR_CATEGORY_DELETED'
+  | 'CALENDAR_LEGEND_ADDED'
+  | 'CALENDAR_LEGEND_UPDATED'
+  | 'CALENDAR_LEGEND_REMOVED'
+  | 'CALENDAR_ENTRY_CREATED'
+  | 'CALENDAR_ENTRY_UPDATED'
+  | 'CALENDAR_ENTRY_DELETED'
 
 /** Libellés d'affichage. Seule ASSIGNMENT_CORRECTED est écrite à ce jour. */
 export const AUDIT_ACTION_LABELS: Record<StudentAuditAction, string> = {
@@ -236,6 +250,17 @@ export const AUDIT_ACTION_LABELS: Record<StudentAuditAction, string> = {
   BULLETIN_REGENERATED:          'Bulletin régénéré',
   ENROLLMENT_DEACTIVATED:        'Inscription désactivée',
   ENROLLMENT_REACTIVATED:        'Inscription réactivée',
+  CALENDAR_CATEGORY_CREATED:     'Catégorie du calendrier créée',
+  CALENDAR_CATEGORY_UPDATED:     'Catégorie du calendrier modifiée',
+  CALENDAR_CATEGORY_DEACTIVATED: 'Catégorie du calendrier désactivée',
+  CALENDAR_CATEGORY_REACTIVATED: 'Catégorie du calendrier réactivée',
+  CALENDAR_CATEGORY_DELETED:     'Catégorie du calendrier supprimée',
+  CALENDAR_LEGEND_ADDED:         "Catégorie ajoutée à la légende d'une année",
+  CALENDAR_LEGEND_UPDATED:       'Ligne de légende modifiée',
+  CALENDAR_LEGEND_REMOVED:       "Catégorie retirée de la légende d'une année",
+  CALENDAR_ENTRY_CREATED:        'Entrée du calendrier créée',
+  CALENDAR_ENTRY_UPDATED:        'Entrée du calendrier modifiée',
+  CALENDAR_ENTRY_DELETED:        'Entrée du calendrier supprimée',
 }
 
 /**

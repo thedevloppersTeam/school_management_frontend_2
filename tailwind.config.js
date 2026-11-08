@@ -3,6 +3,9 @@ export default {
   content: [
     "./app/**/*.{js,ts,jsx,tsx}",
     "./components/**/*.{js,ts,jsx,tsx}",
+    // Table des jetons du calendrier v2 : ses classes de rampe ne figurent
+    // nulle part ailleurs (DESIGN.md, « L'exception du calendrier »).
+    "./lib/calendar-v2/**/*.ts",
   ],
   darkMode: ["class"],
   theme: {
