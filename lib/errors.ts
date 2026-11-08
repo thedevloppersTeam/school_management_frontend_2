@@ -212,6 +212,34 @@ const CODE_MESSAGES: Record<string, string> = {
   SALLE_REFERENCEE: "Cette salle est encore utilisée (rapport MENFP gelé…) : suppression impossible.",
   SOUS_MATIERE_REFERENCEE:
     "Cette sous-matière est encore utilisée (notes, référentiel MENFP…) : suppression impossible.",
+  // ── Calendrier scolaire v2 (SPEC-CAL-2 C-45) ──
+  // Codes de CAL-2.1 à CAL-2.3. Ceux de CAL-2.6 (copie d'une année) viendront
+  // avec elle. CAL_HORS_ANNEE n'existe pas : les dates hors de l'année sont
+  // acceptées, avec un avertissement à la saisie (lib/calendar-v2/hors-bornes.ts).
+  CAL_ENTREE_INVALIDE:
+    "Demande refusée : une donnée envoyée n'a pas le format attendu (champ manquant, trop long ou inconnu).",
+  CAL_DATE_INVALIDE: "Date refusée : elle n'existe pas au calendrier ou n'est pas lisible.",
+  CAL_PERIODE_INVERSEE: "La date de fin est antérieure à la date de début : corrigez la période.",
+  CAL_DATE_FIXE_PERIODE:
+    "« Même date chaque année » ne vaut que pour un seul jour : pour une période, choisissez « Date à revoir chaque année ».",
+  CAL_COULEUR_INCONNUE: "Cette couleur ne fait pas partie de la palette : choisissez-en une autre.",
+  CAL_ANNEE_INTROUVABLE: "Cette année scolaire n'existe pas ou a été supprimée.",
+  CAL_CATEGORIE_INTROUVABLE: "Cette catégorie n'existe plus : rechargez la page.",
+  CAL_LEGENDE_INTROUVABLE:
+    "Cette catégorie ne figure pas dans la légende de cette année : rechargez la page.",
+  CAL_ENTREE_INTROUVABLE: "Cette entrée du calendrier n'existe plus : rechargez la page.",
+  CAL_CATEGORIE_UTILISEE:
+    "Suppression impossible : cette catégorie figure dans la légende d'au moins une année. Désactivez-la plutôt.",
+  CAL_CATEGORIE_DESACTIVEE:
+    "Cette catégorie est désactivée : elle ne peut plus entrer dans une légende ni servir à une nouvelle entrée. Réactivez-la dans le catalogue si besoin.",
+  CAL_LEGENDE_UTILISEE:
+    "Retrait impossible : des entrées de cette année utilisent cette catégorie. Modifiez-les ou supprimez-les d'abord.",
+  CAL_LEGENDE_EN_DOUBLE: "Cette catégorie figure déjà dans la légende de cette année.",
+  CAL_LIBELLE_EN_DOUBLE: "Une autre catégorie de la légende de cette année porte déjà ce libellé.",
+  CAL_ENTREE_EN_DOUBLE: "Cette entrée existe déjà : même catégorie, même titre et mêmes dates.",
+  CAL_CATEGORIE_EN_DOUBLE: "Une catégorie du catalogue porte déjà ce libellé interne.",
+  CAL_EN_DOUBLE:
+    "Enregistrement refusé : une autre saisie faite au même moment entre en conflit avec celle-ci. Rechargez la page, puis vérifiez.",
   // Relais : réponse du serveur hors contrat (lib/backend.ts, backendFetchValide)
   CONTRAT_REPONSE_INVALIDE:
     "La réponse du serveur ne correspond pas au format attendu : l'application et le serveur ne sont probablement pas à la même version. Rechargez la page ; si le problème persiste, prévenez l'administrateur.",

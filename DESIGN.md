@@ -320,6 +320,13 @@ répète. *Les initiales d'avatar sortent de cette exception depuis le
 sous le seuil texte de 4,5:1. Elles sont en blanc (5,11:1). Une règle qui
 autorise un usage illisible est pire qu'une règle absente.*
 
+*Exception bornée, ajoutée le 8 novembre 2026 (décision D-44, palette
+PALETTE-CAL-2) : le pas `secondary-700` (bronze, `#7A6E50`) est admis
+**uniquement** comme pastille de catégorie du calendrier scolaire. Ce n'est pas
+l'or du sceau : l'or plein (`vieil-or`, `vieil-or-clair`) reste réservé au
+sceau, et tout autre usage de la rampe `secondary` reste une faute. Le détail
+est dans « L'exception du calendrier », sous la Règle de la Rareté.*
+
 **La Règle du Papier.** Le fond de page est `hsl(40 14% 98%)` et les fiches sont
 `#FFFFFF`. Jamais l'inverse, jamais les deux en blanc. C'est ce delta de 2 % qui
 donne la profondeur, pas l'ombre.
@@ -369,6 +376,69 @@ sarcelle, et « Moyenne classe » en ambre, qui laissait croire à une alerte l�
 il n'y avait qu'un chiffre). Elles sont neutres depuis le 14 septembre 2026.
 C'est la rareté qui donne sa force à l'alerte : si tout est coloré, plus rien
 n'alerte.
+
+**L'exception du calendrier : la couleur d'identité de catégorie.** *Ajoutée
+le 8 novembre 2026 (décision D-44, palette PALETTE-CAL-2).* Le calendrier
+scolaire est le seul endroit du produit où une couleur ne signale pas un état.
+Elle aide à reconnaître d'un coup d'œil une catégorie de la légende d'une
+année. L'exception est bornée, et chacune de ses limites est une règle.
+
+1. **La couleur n'est jamais seule.** Elle accompagne toujours le libellé de la
+   légende, écrit en encre (`text-foreground`), jamais en couleur. Retirer
+   toutes les couleurs ne fait perdre aucune information (WCAG 1.4.1). Le
+   libellé porte l'identité de la catégorie, et la couleur ne fait que
+   l'appuyer. Plusieurs catégories peuvent partager une couleur.
+2. **Une seule forme : la pastille.** Un carré plein de 10 px, rayon 2 px,
+   placé avant le libellé et masqué aux lecteurs d'écran (`aria-hidden`).
+   Jamais un texte coloré, un fond de ligne ou de carte, une bordure ni un
+   badge. **Aucune icône de catégorie.**
+3. **Trois jetons, nommés comme la charte** (tableau ci-dessous). Aucun ne
+   reprend la valeur ni le nom d'un état (`succes`, `avertissement`, `erreur`,
+   `information`) ni de `destructif` : une catégorie ne doit jamais se lire
+   comme une alerte. `bleu-ardoise` en est exclu parce qu'il est la couleur de
+   l'action. La rampe `neutral` en est exclue **comme jeton** : le rendu
+   neutre est réservé à la ligne sans couleur et au jeton inconnu (point 6).
+   Il n'existe aucun nom de jeton « neutre ».
+4. **Une exception bornée à la Règle du Sceau.** Le pas `secondary-700`,
+   bronze, est admis **seulement** comme pastille de catégorie du calendrier.
+   L'or plein (`vieil-or`, `vieil-or-clair`) reste réservé au sceau, et tout
+   autre usage de la rampe `secondary` reste une faute.
+5. **Le contraste est vérifié.** Chaque pastille donne au moins 3:1 sur la
+   fiche, sur le papier et sur la sourdine (WCAG 1.4.11). Le libellé, en encre,
+   dépasse 18:1 (WCAG 1.4.3). Les rapports sont recalculés à chaque
+   modification d'une rampe.
+6. **Le rendu neutre n'est jamais une erreur.** Il sert à deux cas, rendus à
+   l'identique : une ligne **sans couleur** (aucun jeton, choisi par
+   l'administrateur : option « Sans couleur ») et un jeton que l'interface **ne
+   connaît pas** (nom inconnu, ou chaîne vide). Un carré sans remplissage,
+   bordé de 1 px en `muted-foreground` (4,83:1 sur la fiche, 4,40:1 sur la
+   sourdine), avec son libellé. Aucun message d'erreur ni d'avertissement.
+   *Complété le 8 novembre 2026 (décision D-44 sur la ligne sans couleur).*
+7. **Un nom de jeton ne se retire jamais.** La base stocke le nom, pas la
+   couleur. Un jeton peut cesser d'être proposé, mais il garde sa
+   correspondance ici pour toujours. Un jeton nouveau s'ajoute en fin de liste,
+   avec ses mesures.
+8. **La portée est fermée** : la légende d'une année, la saisie des entrées et
+   les cartes du calendrier du tableau de bord. L'exception ne s'étend à aucun
+   autre écran.
+
+| Jeton | Nom affiché | Classe | Valeur | sur la fiche | sur le papier | sur la sourdine |
+|---|---|---|---|---|---|---|
+| `ardoise-profonde` | Ardoise | `bg-primary-800` | `#2A3740` | 12,22:1 | 11,72:1 | 11,11:1 |
+| `primary-400` | Bleu clair | `bg-primary-400` | `#6B8FA8` | 3,43:1 | 3,29:1 | 3,12:1 |
+| `secondary-700` | Bronze | `bg-secondary-700` | `#7A6E50` | 5,03:1 | 4,83:1 | 4,58:1 |
+
+La correspondance entre un jeton et sa classe vit à un seul endroit du code,
+`lib/calendar-v2/palette.ts`. Aucun code ne relie un jeton à une catégorie : la
+couleur appartient à la ligne de légende de chaque année, et l'administrateur
+la choisit.
+
+*Limite connue* : `primary-400` et `secondary-700` ont presque la même clarté
+(1,47:1 entre elles). La teinte, bleu contre brun, les sépare, et elle résiste
+aux daltonismes rouge-vert. *Thème sombre* : il n'est pas servi. S'il l'est un
+jour, `ardoise-profonde` passe à `primary-200` et `secondary-700` à
+`secondary-600`, pour tenir 3:1 sur les fonds sombres. Les noms ne changent
+pas.
 
 ## Typography
 
