@@ -60,11 +60,9 @@ export function ProfileDialog({
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...user,
-          firstname,
-          lastname,
-        }),
+        // Le serveur n'accepte qu'une liste fermée de champs : seuls le prénom
+        // et le nom sont envoyés, jamais l'objet utilisateur entier.
+        body: JSON.stringify({ firstname, lastname }),
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
