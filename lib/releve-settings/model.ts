@@ -19,6 +19,13 @@ export interface SectionSetting {
   displayOrder: number
   showOnReleve: boolean
   createdAt: string | null
+  /**
+   * Période de vigueur (SPEC-VALIDITE-SOUS-MATIERES, D-O5) : identifiants
+   * d'années, null = sans limite. Lue pour l'affichage seulement : elle
+   * n'entre ni dans les charges utiles ni dans hasChanges.
+   */
+  validFromYearId: string | null
+  validUntilYearId: string | null
 }
 
 export interface SubjectSetting {
@@ -34,6 +41,7 @@ export interface SubjectSetting {
 
 const texte = (v: unknown): string => (typeof v === 'string' ? v : '')
 const rang = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+const borne = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null)
 const byNumber = (x: number, y: number) => (x === y ? 0 : x < y ? -1 : 1)
 const byId = (a: { id: string }, b: { id: string }) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
 
@@ -79,6 +87,8 @@ export function fromApiSubjects(raw: unknown, classTypeId: string): SubjectSetti
             displayOrder: rang(x.displayOrder) ?? 1,
             showOnReleve: x.showOnReleve !== false,
             createdAt: typeof x.createdAt === 'string' ? x.createdAt : null,
+            validFromYearId: borne(x.validFromYearId),
+            validUntilYearId: borne(x.validUntilYearId),
           })),
       ),
     }))

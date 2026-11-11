@@ -12,6 +12,7 @@
  */
 
 import { ApiError } from "./client-fetch"
+import { messageValidite } from "./validite-sous-matieres/messages"
 
 // ── Messages par code HTTP ─────────────────────────────────────────────
 
@@ -267,8 +268,15 @@ function readCode(value: unknown): string | null {
  * Lots (`entries[]`) : nombre de saisies en cause, tel que le serveur les liste,
  * et motif de la première. CASE_MULTI_NOTES : `cases[]` quand plusieurs cases
  * sont en cause.
+ *
+ * Validité annuelle des sous-matières (SECTION_HORS_VIGUEUR, MATIERE_HORS_VIGUEUR,
+ * ANNEE_INCONNUE, VALIDITE_PERIODE_INVERSEE, VALIDITE_INVALIDE, VALIDITE_EXCLUT_NOTES) :
+ * libellés de lib/validite-sous-matieres/messages.ts ; null pour tout autre code.
  */
 export function messageForCode(body: unknown): string | null {
+  const validite = messageValidite(body)
+  if (validite) return validite
+
   const code = readCode(body)
   if (!code || !(code in CODE_MESSAGES)) return null
 

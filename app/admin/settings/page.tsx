@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react"
 import { useToast } from "@/components/ui/use-toast"
-import { clientFetch as apiFetch } from "@/lib/client-fetch"
+import { ApiError, clientFetch as apiFetch } from "@/lib/client-fetch"
 import { parseDecimal } from "@/lib/decimal"
 import { toMessage, messageForCode } from "@/lib/errors"
 import { useAcademicYearContext } from "@/lib/contexts/academic-year-context"
@@ -66,12 +66,26 @@ import { parseScore } from "@/lib/grades/score-input"
 import { RUBRIQUE_BADGE_CLASS, rubriqueShare } from "@/lib/cpmsl-classes"
 import { Pagination } from "@/components/ui/table-pagination"
 import { useExamMarkerChange } from "@/components/school/exam-marker-confirm"
+import {
+  SANS_LIMITE,
+  anneesTriees,
+  borneVersChoix,
+  choixVersBorne,
+  libellePeriodeActuelle,
+  validerPeriode,
+  type AnneeScolaire,
+} from "@/lib/validite-sous-matieres/periode"
+import { messageValidite } from "@/lib/validite-sous-matieres/messages"
 
 interface SchoolInfo  { name: string; motto?: string; foundedYear?: number; logo?: string; address?: string; phone?: string; email?: string }
 interface Holiday     { id: string; name: string; date: string }
 interface SchoolEvent { id: string; title: string; date: string; type: 'exam'|'holiday'|'meeting'|'other'|'ceremony'|'trip'; academicYearId: string }
 interface Rubric      { id: string; name: string; code: string; description?: string }
-interface Section     { id: string; name: string; code: string; maxScore: unknown; displayOrder: number; isExam?: boolean }
+interface Section     {
+  id: string; name: string; code: string; maxScore: unknown; displayOrder: number; isExam?: boolean
+  // Période de vigueur (SPEC-VALIDITE-SOUS-MATIERES, D-O5) : années, null = sans limite.
+  validFromYearId?: string | null; validUntilYearId?: string | null
+}
 interface ApiSubject  {
   id: string; name: string; code: string
   maxScore: unknown; coefficient: unknown
@@ -95,7 +109,8 @@ interface Class       { id: string; classTypeId: string; classType?: ClassType; 
 interface Attitude    { id: string; label: string; academicYearId: string }
 interface RubricForm  { name: string; code: string; description: string }
 interface SubjectForm { name: string; code: string; maxScore: string; coefficient: string; hasSections: boolean; rubricId: string; classTypeId: string }
-interface SectionForm { name: string; code: string; maxScore: string; cycles: string[]; isExam: boolean }
+// validFrom / validUntil : valeur des listes de période, SANS_LIMITE ou id d'année.
+interface SectionForm { name: string; code: string; maxScore: string; cycles: string[]; isExam: boolean; validFrom: string; validUntil: string }
 // Le niveau porte deux drapeaux DISTINCTS (RP-11c) : classe d'examen
 // (isTerminal) et niveau à filière (hasTrack).
 interface ClassForm   { maxStudents: string; isTerminal: boolean; hasTrack: boolean }
@@ -282,7 +297,10 @@ function useSchoolSettings() {
   const [deleteAttitudeTarget, setDeleteAttitudeTarget] = useState<Attitude | null>(null)
   const [rubricForm, setRubricForm] = useState<RubricForm>({ name: "", code: "", description: "" })
   const [subjectForm, setSubjectForm] = useState<SubjectForm>({ name: "", code: "", maxScore: "100", coefficient: "1", hasSections: false, rubricId: "", classTypeId: NONE_CLASSTYPE })
-  const [sectionForm, setSectionForm] = useState<SectionForm>({ name: "", code: "", maxScore: "100", cycles: [], isExam: false })
+  const [sectionForm, setSectionForm] = useState<SectionForm>({ name: "", code: "", maxScore: "100", cycles: [], isExam: false, validFrom: SANS_LIMITE, validUntil: SANS_LIMITE })
+  // Années scolaires des listes de période, triées par date de début ; null si
+  // la lecture a échoué (la période n'est alors ni modifiable ni envoyée).
+  const [annees, setAnnees] = useState<AnneeScolaire[] | null>(null)
   // Sous-matière d'examen (lot M1) : décompte des notes par année, confirmation, journal serveur.
   const examMarker = useExamMarkerChange()
   const [classForm, setClassForm] = useState<ClassForm>({ maxStudents: "30", isTerminal: false, hasTrack: false })
@@ -301,6 +319,10 @@ function useSchoolSettings() {
         // visits the Classes tab.
         apiFetch<ClassType[]>("/api/class-types").catch(() => [] as ClassType[]),
       ])
+      // Années de la période de vigueur : un échec n'empêche pas le référentiel.
+      void apiFetch<unknown>("/api/academic-years")
+        .then((raw) => setAnnees(anneesTriees(raw)))
+        .catch(() => setAnnees(null))
       setRubrics(rubricsData)
       setClassTypes((prev) => (prev.length > 0 ? prev : classTypesData))
       setSubjects(
@@ -656,7 +678,7 @@ function useSchoolSettings() {
   const openCreateSection = (subjectId: string) => {
     setSectionParentId(subjectId)
     setEditingSection(null)
-    setSectionForm({ name: "", code: "", maxScore: "100", cycles: [], isExam: false })
+    setSectionForm({ name: "", code: "", maxScore: "100", cycles: [], isExam: false, validFrom: SANS_LIMITE, validUntil: SANS_LIMITE })
     setSectionModal(true)
   }
 
@@ -669,6 +691,8 @@ function useSchoolSettings() {
       maxScore: String(parseDecimal(section.maxScore) ?? 0),
       cycles: getSectionCycles(section.id),
       isExam: section.isExam === true,
+      validFrom: borneVersChoix(section.validFromYearId),
+      validUntil: borneVersChoix(section.validUntilYearId),
     })
     setSectionModal(true)
   }
@@ -684,6 +708,16 @@ function useSchoolSettings() {
 
   const handleSaveSection = async () => {
     if (!sectionParentId) return
+    // Période de vigueur (D-O5) : contrôlée avant envoi, envoyée seulement si les
+    // années ont été lues ; sinon les bornes enregistrées restent inchangées.
+    const refusPeriode = annees ? validerPeriode(sectionForm.validFrom, sectionForm.validUntil, annees) : null
+    if (refusPeriode) {
+      toast({ title: "Période refusée", description: refusPeriode, variant: "destructive" })
+      return
+    }
+    const periode = annees
+      ? { validFromYearId: choixVersBorne(sectionForm.validFrom), validUntilYearId: choixVersBorne(sectionForm.validUntil) }
+      : {}
     setSubmitting(true)
     try {
       if (editingSection) {
@@ -694,6 +728,7 @@ function useSchoolSettings() {
           body: JSON.stringify({
             name: sectionForm.name,
             maxScore: parseScore(sectionForm.maxScore) ?? Number.NaN,
+            ...periode,
           }),
         })
         // Cycles are stored client-side (localStorage). Persist the new list.
@@ -719,6 +754,7 @@ function useSchoolSettings() {
             code: sectionForm.code,
             maxScore: parseScore(sectionForm.maxScore) ?? Number.NaN,
             displayOrder: (parent?.sections?.length || 0) + 1,
+            ...periode,
           }),
         })
         const sectionId = result?.section?.id
@@ -731,7 +767,10 @@ function useSchoolSettings() {
     } catch (err) {
       toast({
         title: "Erreur",
-        description: toMessage(err, editingSection ? "lors de la modification de la sous-matière" : "lors de la création de la sous-matière"),
+        // Refus de validité annuelle (période, notes exclues…) : message en clair.
+        description:
+          (err instanceof ApiError ? messageValidite(err.body) : null) ??
+          toMessage(err, editingSection ? "lors de la modification de la sous-matière" : "lors de la création de la sous-matière"),
         variant: "destructive",
       })
     } finally {
@@ -933,7 +972,7 @@ function useSchoolSettings() {
     attitudeModal, setAttitudeModal, classModal, setClassModal, submitting,
     editingRubric, editingSubject, editingClass, editingAttitude,
     rubricForm, setRubricForm, subjectForm, setSubjectForm, sectionForm, setSectionForm, classForm, setClassForm,
-    attitudeLabel, setAttitudeLabel, sectionParentId,
+    attitudeLabel, setAttitudeLabel, sectionParentId, annees,
     handleSubjectNameChange, handleSectionNameChange, toggleSectionCycle,
     handleSaveRubric, handleSaveSubject, handleSaveSection, handleSaveAttitude, handleSaveClass,
   }
@@ -1750,13 +1789,15 @@ function SubjectModal({ open, onOpenChange, form, onChange, onNameChange, rubric
   )
 }
 
-function SectionModal({ open, onOpenChange, form, onChange, onNameChange, onToggleCycle, submitting, onSave, editing }: {
+function SectionModal({ open, onOpenChange, form, onChange, onNameChange, onToggleCycle, submitting, onSave, editing, annees }: {
   open: boolean; onOpenChange: (v: boolean) => void
   form: SectionForm; onChange: (f: SectionForm) => void
   onNameChange: (name: string) => void; onToggleCycle: (key: string, checked: boolean) => void
   submitting: boolean; onSave: () => void
   editing: Section | null
+  annees: AnneeScolaire[] | null
 }) {
+  const refusPeriode = annees ? validerPeriode(form.validFrom, form.validUntil, annees) : null
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[560px]">
@@ -1764,7 +1805,7 @@ function SectionModal({ open, onOpenChange, form, onChange, onNameChange, onTogg
           <DialogTitle>{editing ? "Modifier la sous-matière" : "Nouvelle sous-matière"}</DialogTitle>
           <DialogDescription>
             {editing
-              ? "Le code est immuable. Le nom, la note max et les cycles peuvent être modifiés."
+              ? "Le code est immuable. Le nom, la note max, la période de vigueur et les cycles peuvent être modifiés."
               : "Une sous-matière permet de découper une matière (ex: Algèbre / Géométrie / Analyse)."}
           </DialogDescription>
         </DialogHeader>
@@ -1817,6 +1858,65 @@ function SectionModal({ open, onOpenChange, form, onChange, onNameChange, onTogg
             </div>
           </div>
 
+          {/* Période de vigueur (SPEC-VALIDITE-SOUS-MATIERES, D-O5) */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">
+              Période de vigueur{" "}
+              <span className="text-xs font-normal text-muted-foreground">
+                — Années scolaires où cette sous-matière est enseignée
+              </span>
+            </Label>
+            {editing && annees && (
+              <p className="text-xs text-muted-foreground">
+                Période actuelle : {libellePeriodeActuelle(editing, annees)}.
+              </p>
+            )}
+            {annees ? (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="sec-valid-from">En vigueur à partir de</Label>
+                  <Select value={form.validFrom} onValueChange={(v) => onChange({ ...form, validFrom: v })}>
+                    <SelectTrigger id="sec-valid-from">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={SANS_LIMITE}>Sans limite</SelectItem>
+                      {annees.map((a) => (
+                        <SelectItem key={a.id} value={a.id}>{a.libelle}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="sec-valid-until">Jusqu&apos;à</Label>
+                  <Select value={form.validUntil} onValueChange={(v) => onChange({ ...form, validUntil: v })}>
+                    <SelectTrigger id="sec-valid-until">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={SANS_LIMITE}>Sans limite</SelectItem>
+                      {annees.map((a) => (
+                        <SelectItem key={a.id} value={a.id}>{a.libelle}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            ) : (
+              <p className="text-2xs text-warning-ink">
+                Années scolaires indisponibles : la période de vigueur ne peut pas être modifiée pour
+                l&apos;instant ; elle reste inchangée.
+              </p>
+            )}
+            {refusPeriode && (
+              <p className="text-2xs text-destructive" role="alert">{refusPeriode}</p>
+            )}
+            <p className="text-2xs text-muted-foreground">
+              Hors de cette période, la sous-matière n&apos;apparaît ni à la saisie, ni au calcul, ni au bulletin.
+              Ses notes ne sont jamais supprimées.
+            </p>
+          </div>
+
           <div className="space-y-2">
             <Label className="text-sm font-medium">
               Cycles applicables{" "}
@@ -1861,7 +1961,7 @@ function SectionModal({ open, onOpenChange, form, onChange, onNameChange, onTogg
           </Button>
           <Button
             onClick={onSave}
-            disabled={submitting || !form.name || !form.code}
+            disabled={submitting || !form.name || !form.code || !!refusPeriode}
             className=""
           >
             {submitting ? "En cours..." : editing ? "Enregistrer" : "Créer"}
@@ -2122,6 +2222,7 @@ export default function SchoolSettingsPage() {
         submitting={s.submitting}
         onSave={s.handleSaveSection}
         editing={s.editingSection}
+        annees={s.annees}
       />
       {s.examMarkerDialog}
 
