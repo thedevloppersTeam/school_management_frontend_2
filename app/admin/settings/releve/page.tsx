@@ -12,6 +12,10 @@
  * pour chaque matière dont les sous-matières ont changé, la liste COMPLÈTE de
  * ses sous-matières. Après un enregistrement, réussi ou non, l'écran recharge
  * l'état du serveur : il n'affiche jamais comme enregistré ce qui ne l'est pas.
+ *
+ * Période de vigueur de chaque sous-matière (SPEC-VALIDITE-SOUS-MATIERES,
+ * D-O5) : affichée seulement ; elle se règle dans Paramétrage → Établissement
+ * → Matières et n'entre pas dans l'enregistrement de cet écran.
  */
 import { useEffect, useState } from "react"
 import { ArrowDownIcon, ArrowUpIcon, ChevronDownIcon, ChevronRightIcon, RotateCcwIcon, SaveIcon } from "lucide-react"
@@ -42,6 +46,7 @@ import {
   type ReleveColumnChoice,
   type SubjectSetting,
 } from "@/lib/releve-settings/model"
+import { anneesTriees, libellePeriode, type AnneeScolaire } from "@/lib/validite-sous-matieres/periode"
 
 interface ClassTypeRow {
   id: string
@@ -57,6 +62,17 @@ const COLONNES: { value: string; label: string; column: ReleveColumnChoice }[] =
   { value: "LEFT", label: "Gauche", column: "LEFT" },
   { value: "RIGHT", label: "Droite", column: "RIGHT" },
 ]
+
+/**
+ * Période d'une sous-matière pour la liste : « depuis 2026-2027 », rien si sans
+ * limite. Années en cours de lecture : rien ; illisibles : la limite est
+ * signalée sans être devinée.
+ */
+function periodeDe(x: { validFromYearId: string | null; validUntilYearId: string | null }, annees: AnneeScolaire[] | null | undefined): string {
+  if (annees === undefined) return ""
+  if (annees) return libellePeriode(x, annees)
+  return x.validFromYearId || x.validUntilYearId ? "période limitée (années indisponibles)" : ""
+}
 
 /** Message lisible d'une erreur : celui du serveur s'il existe. */
 const messageOf = (err: unknown, defaut: string) =>
@@ -74,6 +90,8 @@ export default function ReleveSettingsPage() {
   const [saved, setSaved] = useState(false)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [pendingType, setPendingType] = useState<string | null>(null)
+  // Années scolaires, pour le libellé de période : undefined en lecture, null en échec.
+  const [annees, setAnnees] = useState<AnneeScolaire[] | null | undefined>(undefined)
 
   const dirty = hasChanges(initial, current)
 
@@ -101,6 +119,14 @@ export default function ReleveSettingsPage() {
   // lieu après les lectures, jamais de façon synchrone dans l'effet.
   useEffect(() => {
     let cancelled = false
+    // Libellés de période : lecture à part, son échec ne bloque pas l'écran.
+    void clientFetch<unknown>("/api/academic-years")
+      .then((raw) => {
+        if (!cancelled) setAnnees(anneesTriees(raw))
+      })
+      .catch(() => {
+        if (!cancelled) setAnnees(null)
+      })
     void (async () => {
       try {
         const raw = await clientFetch<unknown>("/api/class-types")
@@ -373,6 +399,9 @@ export default function ReleveSettingsPage() {
                               <span className={x.showOnReleve ? "min-w-0 flex-1 truncate text-sm" : "min-w-0 flex-1 truncate text-sm text-muted-foreground line-through"}>
                                 {x.name}
                               </span>
+                              {periodeDe(x, annees) && (
+                                <span className="shrink-0 text-xs text-muted-foreground">{periodeDe(x, annees)}</span>
+                              )}
                               <div className="flex items-center gap-2">
                                 <Switch
                                   id={`releve-show-${s.id}-${x.id}`}

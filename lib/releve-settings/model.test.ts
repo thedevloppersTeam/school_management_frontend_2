@@ -51,6 +51,27 @@ check('valeurs lues', JSON.stringify([initial[1]?.releveColumn, initial[1]?.show
 check('niveau sans matière : liste vide', fromApiSubjects(api, 'niveau-vide').length, 0)
 check('entrée non tableau : liste vide', fromApiSubjects(null, NIVEAU).length, 0)
 
+// ── Période de vigueur des sous-matières (SPEC-VALIDITE-SOUS-MATIERES, W3) ──
+// Lue pour l'affichage seulement : elle n'entre ni dans les charges utiles ni
+// dans la détection des changements.
+
+const avecPeriode = fromApiSubjects([
+  {
+    id: 's-v', name: 'Vigueur', code: 'V', classTypeId: NIVEAU, displayOrder: 1, sections: [
+      { id: 'v-1', name: 'Bornée', displayOrder: 1, validFromYearId: 'a-26', validUntilYearId: 'a-27' },
+      { id: 'v-2', name: 'Sans limite', displayOrder: 2, validFromYearId: null, validUntilYearId: null },
+      { id: 'v-3', name: 'Ancien serveur', displayOrder: 3 },
+      { id: 'v-4', name: 'Valeur invalide', displayOrder: 4, validFromYearId: 42, validUntilYearId: '' },
+    ],
+  },
+], NIVEAU)
+const bornes = (avecPeriode[0]?.sections ?? []).map((x) => `${x.validFromYearId}/${x.validUntilYearId}`).join(',')
+check('période : bornes lues, absentes ou invalides → null', bornes, 'a-26/a-27,null/null,null/null,null/null')
+const v = avecPeriode[0]
+check('période : absente de la charge utile', JSON.stringify(v ? sectionsPayload(v).items[0] : null), '{"id":"v-1","displayOrder":1,"showOnReleve":true}')
+const bornesChangees = avecPeriode.map((s) => ({ ...s, sections: s.sections.map((x) => ({ ...x, validFromYearId: 'autre' })) }))
+check('période : pas un changement à enregistrer', hasChanges(avecPeriode, bornesChangees), false)
+
 // ── Déplacer haut / bas ─────────────────────────────────────────────────────
 
 const abc = ['a', 'b', 'c']
