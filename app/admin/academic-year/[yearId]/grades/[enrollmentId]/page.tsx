@@ -39,6 +39,7 @@ import { toMessage } from "@/lib/errors"
 import { bulkCreateParts, type BulkCreateCounts } from "@/lib/grades/save-summary"
 import { stepsForEnrollment } from "@/lib/departures/presence"
 import { LeftBadge } from "@/components/school/left-badge"
+import { dispensesDeLEleve, valeurSousMatiere, type LigneDispense } from "@/lib/bulletin/exclusions-view"
 
 interface Step { id: string; name: string; stepNumber: number; isCurrent: boolean; startDate?: string | null }
 interface EnrollmentPayload {
@@ -100,7 +101,10 @@ export default function StudentGradesPage() {
   const [classSubjects, setClassSubjects] = useState<ApiClassSubject[]>([])
   const [selectedStepId, setSelectedStepId] = useState("")
   const [existingGrades, setExistingGrades] = useState<ApiGrade[]>([])
-  const [excludedSections, setExcludedSections] = useState<Set<string>>(new Set())
+  const [excludedSections, setExcludedSections] = useState<ReadonlySet<string>>(new Set())
+  // Matières (classSubjectId) dont l'élève est dispensé en entier à l'étape
+  // (ligne à sectionId NULL, D-48) : notes visibles, grisées, jamais écrites.
+  const [dispensedSubjects, setDispensedSubjects] = useState<ReadonlySet<string>>(new Set())
   // Les dispenses n'ont pas pu etre chargees : on ne sait pas lesquelles
   // s'appliquent, donc on n'edite rien plutot que de risquer d'ecrire par-dessus.
   const [exclusionsUnavailable, setExclusionsUnavailable] = useState(false)
@@ -153,17 +157,17 @@ export default function StudentGradesPage() {
         // dans le diff, et une saisie ecrivait une note la ou une dispense
         // existait. L'ecart manquante/dispensee vaut 1,50 point sur 10
         // (docs/CALCUL-BULLETIN.md). On distingue donc les deux cas.
-        apiFetch<Array<{ enrollmentId: string; sectionId: string }>>(
+        apiFetch<LigneDispense[]>(
           `/api/enrollments/excluded-sections?classSessionId=${enrollment.classSessionId}&stepId=${stepId}`,
         ).then(rows => ({ ok: true as const, rows }))
-         .catch(() => ({ ok: false as const, rows: [] as Array<{ enrollmentId: string; sectionId: string }> })),
+         .catch(() => ({ ok: false as const, rows: [] as LigneDispense[] })),
       ])
       const normalized = grades.map(g => ({ ...g, studentScore: parseDecimal(g.studentScore) ?? 0 }))
       setExistingGrades(normalized)
       setExclusionsUnavailable(!exclusionRows.ok)
-      setExcludedSections(new Set(
-        exclusionRows.rows.filter(r => r.enrollmentId === enrollmentId).map(r => r.sectionId),
-      ))
+      const dispenses = dispensesDeLEleve(exclusionRows.rows, enrollmentId)
+      setExcludedSections(dispenses.sousMatieres)
+      setDispensedSubjects(dispenses.matieresEntieres)
 
       // Pré-remplir les saisies avec les notes existantes
       const next = new Map<string, Entry>()
@@ -265,6 +269,8 @@ export default function StudentGradesPage() {
     const toDelete: string[] = []
 
     for (const cs of savableSubjects) {
+      // Matière dispensée entière : ses notes restent en base, ni envoyées ni supprimées.
+      if (dispensedSubjects.has(cs.id)) continue
       const hasSections = cs.subject.hasSections && cs.subject.sections.length > 0
       const targets = hasSections
         ? cs.subject.sections.map(sec => ({ key: `${cs.id}::${sec.id}`, sectionId: sec.id }))
@@ -298,7 +304,7 @@ export default function StudentGradesPage() {
       }
     }
     return { toCreate, toUpdate, toDelete }
-  }, [savableSubjects, entries, existingGrades, excludedSections, enrollmentId, selectedStepId])
+  }, [savableSubjects, entries, existingGrades, excludedSections, dispensedSubjects, enrollmentId, selectedStepId])
 
   const dirtyCount = diff.toCreate.length + diff.toUpdate.length + diff.toDelete.length
   // L'alerte native ne couvre que la fermeture d'onglet, F5 et l'URL. Changer
@@ -373,6 +379,7 @@ export default function StudentGradesPage() {
   // dispensees n'ont pas de champ : elles ne prennent pas de rang.
   const inputOrder: string[] = []
   for (const cs of orderedForKeys) {
+    if (dispensedSubjects.has(cs.id)) continue // matière dispensée : aucun champ éditable
     const hasSections = cs.subject.hasSections && cs.subject.sections.length > 0
     if (!hasSections) { inputOrder.push(cs.id); continue }
     for (const sec of [...cs.subject.sections].sort((a, b) => a.displayOrder - b.displayOrder)) {
@@ -567,6 +574,14 @@ export default function StudentGradesPage() {
                     const subj = cs.subject
                     const hasSections = subj.hasSections && subj.sections.length > 0
                     const rows: React.ReactNode[] = []
+                    // Matière dispensée entière à l'étape (D-48) : note visible,
+                    // grisée, non modifiable ; elle ne compte pas.
+                    const dispensed = dispensedSubjects.has(cs.id)
+                    const dispensedMark = dispensed && (
+                      <span className="ml-2 rounded border border-warning-border bg-warning-soft px-1.5 py-0.5 text-3xs font-medium text-warning-ink">
+                        Dispensé (matière)
+                      </span>
+                    )
 
                     if (startsGroup) {
                       rows.push(
@@ -596,6 +611,7 @@ export default function StudentGradesPage() {
                                 Examen · {cs.track.code}
                               </span>
                             )}
+                            {dispensedMark}
                           </td>
                           <td className="px-3 py-1">
                             {subj.rubric?.code && <Badge variant="outline" className={RUBRIC_BADGE}>{rubricLabel(subj.rubric.code)}</Badge>}
@@ -603,15 +619,16 @@ export default function StudentGradesPage() {
                           <td className="px-3 py-1 text-center">
                             <Input
                               type="text" inputMode="decimal" autoComplete="off"
-                              placeholder="—" disabled={exclusionsUnavailable}
+                              placeholder="—" disabled={dispensed || exclusionsUnavailable}
+                              title={dispensed ? "Matière dispensée à cette étape : note conservée, non comptée" : undefined}
                               value={entry?.value ?? ""}
                               onChange={e => setEntry(key, e.target.value, effectiveMaxScore(cs))}
                               onPaste={e => handlePasteFrom(key, e)}
                               data-grid-row={inputOrder.indexOf(key)}
-                              aria-label={`${subj.name} — ${studentName}, sur ${effectiveMaxScore(cs)}`}
+                              aria-label={`${subj.name} — ${studentName}, sur ${effectiveMaxScore(cs)}${dispensed ? " — matière dispensée, note non comptée" : ""}`}
                               aria-invalid={!!err}
                               aria-describedby={err ? `err-${key}` : undefined}
-                              className={`h-7 text-center tabular-nums ${err ? "border-destructive focus-visible:ring-destructive" : ""}`}
+                              className={`h-7 text-center tabular-nums ${dispensed ? "border-dashed bg-muted/40 text-muted-foreground" : ""} ${err ? "border-destructive focus-visible:ring-destructive" : ""}`}
                             />
                             {err && entry?.error && (
                               <p id={`err-${key}`} role="alert" className="mt-0.5 text-3xs text-destructive">
@@ -633,6 +650,7 @@ export default function StudentGradesPage() {
                                 Examen · {cs.track.code}
                               </span>
                             )}
+                            {dispensedMark}
                           </td>
                           <td className="px-3 py-1">
                             {subj.rubric?.code && <Badge variant="outline" className={RUBRIC_BADGE}>{rubricLabel(subj.rubric.code)}</Badge>}
@@ -660,15 +678,16 @@ export default function StudentGradesPage() {
                               <Input
                                 type="text" inputMode="decimal" autoComplete="off"
                                 placeholder="—"
-                                disabled={excluded || exclusionsUnavailable}
-                                value={excluded ? "" : (entry?.value ?? "")}
+                                disabled={dispensed || excluded || exclusionsUnavailable}
+                                title={dispensed ? "Matière dispensée à cette étape : note conservée, non comptée" : undefined}
+                                value={valeurSousMatiere(entry?.value, dispensed, excluded)}
                                 onChange={e => setEntry(key, e.target.value, sec.maxScore)}
                                 onPaste={e => handlePasteFrom(key, e)}
                                 data-grid-row={inputOrder.indexOf(key)}
-                                aria-label={`${sec.name} — ${subj.name}, ${studentName}, sur ${sec.maxScore}`}
+                                aria-label={`${sec.name} — ${subj.name}, ${studentName}, sur ${sec.maxScore}${dispensed ? " — matière dispensée, note non comptée" : ""}`}
                                 aria-invalid={!!err}
                                 aria-describedby={err ? `err-${key}` : undefined}
-                                className={`h-7 text-center tabular-nums ${err ? "border-destructive focus-visible:ring-destructive" : ""}`}
+                                className={`h-7 text-center tabular-nums ${dispensed ? "border-dashed bg-muted/40 text-muted-foreground" : ""} ${err ? "border-destructive focus-visible:ring-destructive" : ""}`}
                               />
                               {err && entry?.error && (
                                 <p id={`err-${key}`} role="alert" className="mt-0.5 text-3xs text-destructive">

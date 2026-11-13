@@ -38,6 +38,7 @@ import {
   type ApiExclusionLike,
   type ApiGradeLike,
 } from "@/lib/bulletin/from-api"
+import { lireDispenses, MESSAGE_DISPENSES_INDISPONIBLES } from "@/lib/bulletin/exclusions-view"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -222,6 +223,8 @@ export function CPMSLRapportsSection({
   const [selectedStep,    setSelectedStep]    = useState("")
   const [selectedSession, setSelectedSession] = useState("")
   const [report,          setReport]          = useState<ReportData | null>(null)
+  // Lecture des dispenses en échec : aucune moyenne calculée (D-04).
+  const [dispensesIndisponibles, setDispensesIndisponibles] = useState(false)
   const reportRef = useRef<HTMLDivElement>(null)
 
   // ── Init ───────────────────────────────────────────────────────────────────
@@ -248,9 +251,10 @@ export function CPMSLRapportsSection({
     if (!selectedSession || !selectedStep) return
     setLoadingReport(true)
     setReport(null)
+    setDispensesIndisponibles(false)
 
     try {
-      const [enrollments, classSubjects, rubrics, exclusionRows] = await Promise.all([
+      const [enrollments, classSubjects, rubrics, lecture] = await Promise.all([
         apiFetch<RawEnrollment[]>(
           `/api/enrollments?classSessionId=${selectedSession}&status=ACTIVE`
         ),
@@ -259,13 +263,20 @@ export function CPMSLRapportsSection({
         fetchClassSubjects(selectedSession),
         apiFetch<Array<{ id: string; code: string }>>('/api/subject-rubrics'),
         // MEME source que le bulletin : une seule verite sur les dispenses.
-        apiFetch<ApiExclusionLike[]>(
+        // Une lecture echouee n'est PAS « aucune dispense » : calculer quand
+        // meme ferait entrer les notes dispensees dans les moyennes (D-04).
+        lireDispenses(() => apiFetch<ApiExclusionLike[]>(
           `/api/enrollments/excluded-sections?classSessionId=${selectedSession}&stepId=${selectedStep}`
-        ).catch(() => [] as ApiExclusionLike[]),
+        )),
       ])
 
+      if (!lecture.ok) {
+        setDispensesIndisponibles(true)
+        return
+      }
+
       const rubricCodeById = rubricIndex(rubrics)
-      const exclusions     = buildExclusionSet(exclusionRows)
+      const exclusions     = buildExclusionSet(lecture.rows)
 
       // Colonnes du tableau : l'UNION des matieres de la salle, sans note ni
       // dispense. Chaque eleve n'est ensuite evalue que sur les siennes ; les
@@ -502,6 +513,17 @@ export function CPMSLRapportsSection({
 
       {loadingReport && <Skeleton className="h-64 w-full" />}
 
+      {dispensesIndisponibles && !loadingReport && (
+        <Card className="border bg-card shadow-sm">
+          <CardContent className="flex flex-col items-center justify-center gap-3 py-10">
+            <p role="alert" className="max-w-prose text-center text-sm text-warning-ink">
+              {MESSAGE_DISPENSES_INDISPONIBLES}
+            </p>
+            <Button variant="outline" onClick={() => computeReport()}>Réessayer</Button>
+          </CardContent>
+        </Card>
+      )}
+
       {report && !loadingReport && (
         <>
           {/* KPIs aperçu */}
@@ -722,7 +744,7 @@ export function CPMSLRapportsSection({
         </>
       )}
 
-      {!report && !loadingReport && (
+      {!report && !loadingReport && !dispensesIndisponibles && (
         <Card className="border bg-card shadow-sm">
           <CardContent className="flex flex-col items-center justify-center py-16">
             <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
