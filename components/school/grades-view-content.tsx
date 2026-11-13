@@ -6,6 +6,7 @@ import { useToast } from "@/components/ui/use-toast"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Separator } from "@/components/ui/separator"
@@ -45,6 +46,7 @@ import {
   type ApiExclusionLike,
   type ToSubjectInputsResult,
 } from "@/lib/bulletin/from-api"
+import { lireDispenses, MESSAGE_DISPENSES_INDISPONIBLES } from "@/lib/bulletin/exclusions-view"
 import { cn } from "@/lib/utils"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -169,6 +171,8 @@ export function GradesViewContent(props: GradesViewContentProps) {
   }, [steps, selectedStep])
   const [gradeRows,   setGradeRows]   = useState<GradeRow[]>([])
   const [loadingGrid, setLoadingGrid] = useState(false)
+  // Lecture des dispenses en échec : aucune moyenne calculée (D-04).
+  const [dispensesIndisponibles, setDispensesIndisponibles] = useState(false)
   // DR-003 — matieres dont la rubrique est inconnue. Signalees, jamais ignorees.
   const [unmappedSubjects, setUnmappedSubjects] = useState<ToSubjectInputsResult['unmapped']>([])
 
@@ -212,20 +216,29 @@ export function GradesViewContent(props: GradesViewContentProps) {
     setGradeRows([])
     setClassSubjects([])
     setUnmappedSubjects([])
+    setDispensesIndisponibles(false)
     try {
-      const [cs, enr, exclusionRows] = await Promise.all([
+      const [cs, enr, lecture] = await Promise.all([
         fetchClassSubjects(sessionId),
         fetchEnrollments(sessionId),
         // MEME source que le bulletin : une seule verite sur les dispenses.
-        fetch(`/api/enrollments/excluded-sections?classSessionId=${sessionId}&stepId=${stepId}`, { credentials: 'include' })
-          .then((r) => (r.ok ? r.json() as Promise<ApiExclusionLike[]> : []))
-          .catch(() => [] as ApiExclusionLike[]),
+        // Une lecture echouee (reseau, statut non 2xx) n'est PAS « aucune
+        // dispense » : on ne calcule pas (D-04).
+        lireDispenses(async () => {
+          const r = await fetch(`/api/enrollments/excluded-sections?classSessionId=${sessionId}&stepId=${stepId}`, { credentials: 'include' })
+          if (!r.ok) throw new Error(`excluded-sections ${r.status}`)
+          return r.json() as Promise<ApiExclusionLike[]>
+        }),
       ])
       if (perime()) return
+      if (!lecture.ok) {
+        setDispensesIndisponibles(true)
+        return
+      }
       setClassSubjects(cs)
 
       const rubricCodeById = rubricIndex(rubrics)
-      const exclusions     = buildExclusionSet(exclusionRows)
+      const exclusions     = buildExclusionSet(lecture.rows)
       const portee         = porteeEffective(cs, scope)
 
       // DR-003 — le mapping ne depend ni de l'eleve ni des notes : on le
@@ -574,6 +587,15 @@ export function GradesViewContent(props: GradesViewContentProps) {
             </div>
             <Skeleton className="h-96 w-full rounded-xl" />
           </div>
+        ) : dispensesIndisponibles ? (
+          <Card className="border bg-card shadow-sm">
+            <CardContent className="flex flex-col items-center justify-center gap-3 py-10">
+              <p role="alert" className="max-w-prose text-center text-sm text-warning-ink">
+                {MESSAGE_DISPENSES_INDISPONIBLES}
+              </p>
+              <Button variant="outline" onClick={() => loadGrid(selectedSession, selectedStep)}>Réessayer</Button>
+            </CardContent>
+          </Card>
         ) : (
           <>
             {/* Classe et salle consultées : deux badges étiquetés (D8) */}

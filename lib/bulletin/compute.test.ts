@@ -1,7 +1,7 @@
 import Decimal from 'decimal.js'
 import {
   computeSubject, computeRubrique, computeStep, computeStepAverage,
-  isPassing, checkMaxScoreCoherence, isValidGrade, detectMode,
+  isPassing, isValidGrade, detectMode,
   formatScore, formatMaxScore, formatAverage,
   type SubjectInput, type SectionInput, type RubriqueCode,
 } from './compute'
@@ -193,15 +193,19 @@ console.log('\n=== maxScoreOverride ET GARDE-FOU DE BAREME ===')
   }))
   check('override prime sur le bareme', o.denominator, D(40))
 
+  // ADAPTE (lot A, E30) — D-45, D-O3 bis : le bareme d'une matiere a
+  // sous-matieres EST leur somme ; l'avertissement « Bareme a verifier » est
+  // retire, comme dans la copie serveur. Le denominateur ne change pas.
   const incoherent = computeSubject(subj('Francais', 'R1', 60, {
     sections: [sec('A', 40, [30]), sec('B', 40, [30])],  // total 80 != 60
   }))
-  check('incoherence 60 vs 80 detectee', incoherent.warnings.length, 1)
+  check('60 vs 80 : plus d\'avertissement de bareme', incoherent.warnings.length, 0)
   check('denominateur = somme des sections', incoherent.denominator, D(80))
-  results.push(`  NOTE  ${incoherent.warnings[0]}`)
 
-  check('bareme a 0 : refuse', String(checkMaxScoreCoherence(D(0), D(30))!.slice(0, 26)),
-    'Bareme de la matiere inval')
+  const nulle = computeSubject(subj('Francais', 'R1', 60, {
+    sections: [sec('A', 0, []), sec('B', 0, [])],
+  }))
+  check('somme des sous-matieres nulle : signalee', nulle.warnings.some((w) => w.includes('Somme des baremes de sous-matieres nulle')), true)
 }
 
 // ════════════════════════════════════════════════════════════════════════════

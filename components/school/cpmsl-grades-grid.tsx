@@ -48,6 +48,18 @@ import { cn } from "@/lib/utils"
 import { parseDecimal } from "@/lib/decimal"
 import { parseScore, validateScoreInput } from "@/lib/grades/score-input"
 import { invalidateExclusionsCache } from "@/lib/api/bulletin"
+import {
+  DISPENSES_VIDES,
+  avecSousMatieres,
+  corpsDispensesSousMatieres,
+  elevesAttendus,
+  etatDispensesDeLaMatiere,
+  lireDispenses,
+  MESSAGE_DISPENSES_INDISPONIBLES_SAISIE,
+  sousMatieresDispensees,
+  type DispensesDeLaMatiere,
+  type LigneDispense,
+} from "@/lib/bulletin/exclusions-view"
 import type { SelectionClasseSalle } from "@/lib/classes/selection"
 import { ClasseSalleSelect } from "@/components/school/classe-salle-select"
 import { ClasseSalleInfo } from "@/components/school/classe-salle-info"
@@ -158,7 +170,17 @@ export function CPMSLGradesGrid({
   // Exclusions de sous-matières pour le contexte courant.
   // IMPORTANT : une dispense est scoped par élève + matière + étape/période.
   // Elle ne doit pas être chargée/appliquée globalement sur toute l'année.
-  const [exclusionsByEnrollment, setExclusionsByEnrollment] = useState<Map<string, Set<string>>>(new Map())
+  // Une ligne à sectionId NULL = dispense de la matière entière (D-48) : elle
+  // l'emporte sur les sous-matières et sur la note saisie, qui reste visible.
+  // En échec de lecture, `saisieBloquee` : dispenses inconnues, rien n'est saisissable.
+  const [etatDispenses, setEtatDispenses] = useState<{ dispenses: DispensesDeLaMatiere; saisieBloquee: boolean }>(
+    { dispenses: DISPENSES_VIDES, saisieBloquee: false },
+  )
+  const dispenses = etatDispenses.dispenses
+  const dispensesIndisponibles = etatDispenses.saisieBloquee
+  const dispenseMatiere = dispenses.matiereEntiere
+  // Incrémenté par « Réessayer » : relance la lecture des dispenses.
+  const [rechargementDispenses, setRechargementDispenses] = useState(0)
 
   // Exclusions-editor modal state
   const [exclusionTarget, setExclusionTarget] = useState<ApiEnrollment | null>(null)
@@ -284,7 +306,7 @@ export function CPMSLGradesGrid({
   // obligatoire dans le contrat frontend/backend.
   useEffect(() => {
     if (!selectedSessionId || !selectedClassSubjectId || !selectedStepId) {
-      setExclusionsByEnrollment(new Map())
+      setEtatDispenses({ dispenses: DISPENSES_VIDES, saisieBloquee: false })
       return
     }
 
@@ -295,25 +317,21 @@ export function CPMSLGradesGrid({
       stepId: selectedStepId,
     })
 
-    fetch(`/api/enrollments/excluded-sections?${params.toString()}`, { credentials: 'include' })
-      .then((r) => (r.ok ? r.json() : []))
-      .then((rows: Array<{ enrollmentId: string; sectionId: string }>) => {
-        if (cancelled) return
-        const m = new Map<string, Set<string>>()
-        for (const row of rows) {
-          const set = m.get(row.enrollmentId) ?? new Set<string>()
-          set.add(row.sectionId)
-          m.set(row.enrollmentId, set)
-        }
-        setExclusionsByEnrollment(m)
-      })
-      .catch(() => { if (!cancelled) setExclusionsByEnrollment(new Map()) })
+    // Une lecture échouée (réseau, statut non 2xx) n'est PAS « aucune
+    // dispense » : la saisie de la matière est bloquée jusqu'à « Réessayer ».
+    lireDispenses<LigneDispense>(async () => {
+      const r = await fetch(`/api/enrollments/excluded-sections?${params.toString()}`, { credentials: 'include' })
+      if (!r.ok) throw new Error(`excluded-sections ${r.status}`)
+      return r.json() as Promise<LigneDispense[]>
+    }).then((lecture) => {
+      if (!cancelled) setEtatDispenses(etatDispensesDeLaMatiere(lecture, selectedClassSubjectId))
+    })
     return () => { cancelled = true }
-  }, [selectedSessionId, selectedClassSubjectId, selectedStepId])
+  }, [selectedSessionId, selectedClassSubjectId, selectedStepId, rechargementDispenses])
 
   // ── Exclusions editor handlers ────────────────────────────────────────────
   function openExclusionsEditor(enrollment: ApiEnrollment) {
-    const current = exclusionsByEnrollment.get(enrollment.id) ?? new Set<string>()
+    const current = sousMatieresDispensees(dispenses, enrollment.id)
     setExclusionTarget(enrollment)
     setExclusionDraft(new Set(current))
   }
@@ -332,17 +350,15 @@ export function CPMSLGradesGrid({
     try {
       // Le draft concerne uniquement la matière + l'étape actuellement sélectionnées.
       // On n'envoie donc pas une liste globale annuelle d'exclusions.
-      const finalSet = new Set<string>(exclusionDraft)
+      // Sans `wholeSubject` : la dispense de matière entière éventuelle est
+      // conservée par le serveur (Q2 option B de D-48) ; le geste est E31.
+      const body = corpsDispensesSousMatieres(selectedClassSubjectId, selectedStepId, exclusionDraft)
 
       const res = await fetch(`/api/enrollments/${exclusionTarget.id}/excluded-sections`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          classSubjectId: selectedClassSubjectId,
-          stepId: selectedStepId,
-          sectionIds: [...finalSet],
-        }),
+        body: JSON.stringify(body),
       })
       if (!res.ok) throw new Error((await res.json().catch(() => null))?.message ?? 'Échec')
 
@@ -351,11 +367,7 @@ export function CPMSLGradesGrid({
       // bulletin jusqu'au rechargement complet de la page.
       invalidateExclusionsCache(selectedSessionId, selectedStepId)
 
-      setExclusionsByEnrollment((prev) => {
-        const next = new Map(prev)
-        next.set(exclusionTarget.id, finalSet)
-        return next
-      })
+      setEtatDispenses((prev) => ({ ...prev, dispenses: avecSousMatieres(prev.dispenses, exclusionTarget.id, body.sectionIds) }))
       toast({ title: "Sections mises à jour" })
       setExclusionTarget(null)
     } catch (err) {
@@ -386,6 +398,7 @@ export function CPMSLGradesGrid({
   }
 
   function handleGradeChange(enrollmentId: string, value: string) {
+    if (dispensesIndisponibles || dispenseMatiere.has(enrollmentId)) return // dispenses inconnues, ou note conservée non modifiable
     const validation = validateScore(value)
     setGradeEntries(prev => {
       const next = new Map(prev)
@@ -399,6 +412,7 @@ export function CPMSLGradesGrid({
   }
 
   function handleSectionGradeChange(enrollmentId: string, sectionId: string, value: string) {
+    if (dispensesIndisponibles || dispenseMatiere.has(enrollmentId)) return // dispenses inconnues, ou note conservée non modifiable
     const section = subjectSections.find(s => s.id === sectionId)
     const sectionMax = section ? section.maxScore : 0
     const validation = validateSectionScore(value, sectionMax)
@@ -413,7 +427,7 @@ export function CPMSLGradesGrid({
 
   function sectionRowTotal(enrollmentId: string): { raw: number; max: number; complete: boolean } {
     const studentMap = sectionEntries.get(enrollmentId)
-    const excluded = exclusionsByEnrollment.get(enrollmentId) ?? new Set<string>()
+    const excluded = sousMatieresDispensees(dispenses, enrollmentId)
     let raw = 0
     let filledMax = 0
     let totalMax = 0
@@ -454,10 +468,17 @@ export function CPMSLGradesGrid({
   // X, en mode sections, comptait les élèves ayant AU MOINS UNE sous-matière
   // remplie : « 30 / 30 » pouvait s'afficher avec la moitié des cellules vides.
   // Un élève n'est saisi que si toutes ses sous-matières applicables le sont.
+  // Un élève dispensé de la matière entière n'est pas attendu : il sort des
+  // deux nombres du compteur (D-48).
+  const enrollmentsAttendus = useMemo(
+    () => elevesAttendus(enrollmentsForSubject, dispenseMatiere),
+    [enrollmentsForSubject, dispenseMatiere],
+  )
+
   const enteredCount = useMemo(() => {
     if (entryMode === 'global') {
       let count = 0
-      for (const enrollment of enrollmentsForSubject) {
+      for (const enrollment of enrollmentsAttendus) {
         const entry = gradeEntries.get(enrollment.id)
         if (entry?.value.trim() && entry.isValid) count++
       }
@@ -465,9 +486,9 @@ export function CPMSLGradesGrid({
     }
 
     let count = 0
-    for (const enrollment of enrollmentsForSubject) {
+    for (const enrollment of enrollmentsAttendus) {
       const studentMap = sectionEntries.get(enrollment.id)
-      const excluded = exclusionsByEnrollment.get(enrollment.id) ?? new Set<string>()
+      const excluded = sousMatieresDispensees(dispenses, enrollment.id)
       const applicable = subjectSections.filter(sec => !excluded.has(sec.id))
       if (applicable.length === 0) continue
       const allFilled = applicable.every(sec => {
@@ -481,8 +502,8 @@ export function CPMSLGradesGrid({
     entryMode,
     gradeEntries,
     sectionEntries,
-    enrollmentsForSubject,
-    exclusionsByEnrollment,
+    enrollmentsAttendus,
+    dispenses,
     subjectSections,
   ])
   // ── EP-006 : détection des modifications non enregistrées ─────────────────
@@ -564,7 +585,7 @@ export function CPMSLGradesGrid({
     isLocked,
   ])
 
-  const missingCount = Math.max(0, enrollmentsForSubject.length - enteredCount)
+  const missingCount = Math.max(0, enrollmentsAttendus.length - enteredCount)
 
   const hasUnsavedChanges = pendingChangeCount > 0
 
@@ -597,7 +618,8 @@ export function CPMSLGradesGrid({
   // ── Save ─────────────────────────────────────────────────────────────────
 
   function handleSaveGrades() {
-    if (!selectedClassSubjectId || !selectedStepId || hasErrors || isLocked) return
+    // Dispenses non chargées : on ne sait pas quelles notes compter ou ignorer.
+    if (!selectedClassSubjectId || !selectedStepId || hasErrors || isLocked || dispensesIndisponibles) return
 
     const toCreate: CreateGradePayload[] = []
     const toUpdate: UpdateGradePayload[] = []
@@ -613,6 +635,8 @@ export function CPMSLGradesGrid({
       )
 
       gradeEntries.forEach((entry, enrollmentId) => {
+        // Matière dispensée entière : la note reste en base, ni envoyée ni supprimée.
+        if (dispenseMatiere.has(enrollmentId)) return
         const existing = existingMap.get(enrollmentId)
         if (!entry.value?.trim()) {
           if (existing) toDelete.push(existing.id)
@@ -639,7 +663,9 @@ export function CPMSLGradesGrid({
         })
 
       sectionEntries.forEach((studentMap, enrollmentId) => {
-        const excluded = exclusionsByEnrollment.get(enrollmentId) ?? new Set<string>()
+        // Matière dispensée entière : les notes restent en base, ni envoyées ni supprimées.
+        if (dispenseMatiere.has(enrollmentId)) return
+        const excluded = sousMatieresDispensees(dispenses, enrollmentId)
         studentMap.forEach((entry, sectionId) => {
           // Don't write grades for sections explicitly excluded for this student.
           if (excluded.has(sectionId)) return
@@ -1030,6 +1056,31 @@ export function CPMSLGradesGrid({
     )
   }
 
+  // ── Dispense de la matière entière (D-48) ─────────────────────────────────
+  //
+  // La note existante reste visible, grisée, sans champ : ni modifiable, ni
+  // effaçable. Sans champ, la navigation clavier et le collage la sautent,
+  // comme une sous-matière dispensée.
+  function renderBadgeDispenseMatiere() {
+    return (
+      <Badge variant="outline" className="border-warning-border bg-warning-soft text-3xs text-warning-ink">
+        Dispensé (matière)
+      </Badge>
+    )
+  }
+
+  function renderNoteDispensee(value: string | undefined, label: string) {
+    return (
+      <span
+        className="inline-flex h-7 w-16 items-center justify-center rounded-md border border-dashed bg-muted/40 text-sm tabular-nums text-muted-foreground"
+        aria-label={`${label} — matière dispensée, note non comptée`}
+        title="Matière dispensée à cette étape : note conservée, non comptée"
+      >
+        {value?.trim() ? value : "—"}
+      </span>
+    )
+  }
+
   // ── Table row ─────────────────────────────────────────────────────────────
 
   function renderTableRow(enrollment: ApiEnrollment, rowIndex: number) {
@@ -1039,6 +1090,7 @@ export function CPMSLGradesGrid({
     const errorId  = `note-error-${enrollment.id}`
     const studentName = `${enrollment.student.user.firstname} ${enrollment.student.user.lastname}`
     const kind     = getBadgeKind(enrollment.id)
+    const dispense = dispenseMatiere.has(enrollment.id)
 
     return (
       <TableRow key={enrollment.id} className="group">
@@ -1046,6 +1098,7 @@ export function CPMSLGradesGrid({
           <div className="flex items-center gap-1.5">
             <span>{enrollment.student.user.lastname}</span>
             {enrollment.status === "DROPPED" && <LeftBadge leftAt={enrollment.leftAt} />}
+            {dispense && renderBadgeDispenseMatiere()}
           </div>
         </TableCell>
         <TableCell className="min-w-[116px] px-2 py-1 text-xs text-foreground">
@@ -1057,11 +1110,17 @@ export function CPMSLGradesGrid({
           </code>
         </TableCell>
         <TableCell className="min-w-[104px] px-2 py-1 pr-6">
+          {dispense ? (
+            <div className="flex items-center justify-center gap-1.5">
+              {renderNoteDispensee(entry?.value, `Note de ${studentName}`)}
+              <span className="text-xs font-medium text-muted-foreground">/ {maxScore}</span>
+            </div>
+          ) : (
           <div className="flex flex-col items-center gap-0.5">
             <div className="flex items-center justify-center gap-1.5">
               <Input
                 type="text" inputMode="decimal" autoComplete="off"
-                value={entry?.value || ''} placeholder="—" disabled={isLocked}
+                value={entry?.value || ''} placeholder="—" disabled={isLocked || dispensesIndisponibles}
                 onChange={e => handleGradeChange(enrollment.id, e.target.value)}
                 onPaste={e => handleGridPaste(
                   e, rowIndex, 0, filteredEnrollments.length,
@@ -1086,6 +1145,7 @@ export function CPMSLGradesGrid({
               <p id={errorId} role="alert" className="text-2xs text-destructive">{entry.error}</p>
             )}
           </div>
+          )}
         </TableCell>
       </TableRow>
     )
@@ -1094,8 +1154,9 @@ export function CPMSLGradesGrid({
   function renderSectionsTableRow(enrollment: ApiEnrollment, rowIndex: number) {
     const studentMap = sectionEntries.get(enrollment.id)
     const total = sectionRowTotal(enrollment.id)
-    const excluded = exclusionsByEnrollment.get(enrollment.id) ?? new Set<string>()
+    const excluded = sousMatieresDispensees(dispenses, enrollment.id)
     const excludedHere = subjectSections.filter((sec) => excluded.has(sec.id)).length
+    const dispense = dispenseMatiere.has(enrollment.id)
     const studentName = `${enrollment.student.user.firstname} ${enrollment.student.user.lastname}`
     return (
       <TableRow key={enrollment.id} className="group">
@@ -1106,12 +1167,13 @@ export function CPMSLGradesGrid({
               onClick={() => openExclusionsEditor(enrollment)}
               className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
               title="Configurer les sous-matières applicables à cet élève"
-              disabled={isLocked}
+              disabled={isLocked || dispensesIndisponibles}
             >
               <SettingsIcon className="h-3.5 w-3.5" />
             </button>
             <span>{enrollment.student.user.lastname}</span>
             {enrollment.status === "DROPPED" && <LeftBadge leftAt={enrollment.leftAt} />}
+            {dispense && renderBadgeDispenseMatiere()}
             {excludedHere > 0 && (
               <Badge variant="outline" className="border-warning-border bg-warning-soft text-3xs text-warning-ink">
                 {excludedHere} exclue(s)
@@ -1135,8 +1197,13 @@ export function CPMSLGradesGrid({
           const errorId = `note-error-${enrollment.id}-${sec.id}`
           const kind = getBadgeKind(enrollment.id)
           return (
-            <TableCell key={sec.id} className={cn("min-w-[104px] px-2 py-1 align-top", isExcluded && "bg-muted/30")}>
-              {isExcluded ? (
+            <TableCell key={sec.id} className={cn("min-w-[104px] px-2 py-1 align-top", (isExcluded || dispense) && "bg-muted/30")}>
+              {dispense ? (
+                <div className="flex items-center justify-center gap-1.5">
+                  {renderNoteDispensee(entry?.value, `${sec.name} — ${studentName}`)}
+                  <span className="text-2xs font-medium text-muted-foreground tabular-nums">/ {sec.maxScore}</span>
+                </div>
+              ) : isExcluded ? (
                 <div className="flex flex-col items-center gap-0.5">
                   <span className="inline-flex items-center gap-1 text-3xs font-medium text-muted-foreground">
                     <MinusCircleIcon className="h-3 w-3" /> Exclue
@@ -1148,7 +1215,7 @@ export function CPMSLGradesGrid({
                   <div className="flex items-center justify-center gap-1.5">
                     <Input
                       type="text" inputMode="decimal" autoComplete="off"
-                      value={entry?.value || ''} placeholder="—" disabled={isLocked}
+                      value={entry?.value || ''} placeholder="—" disabled={isLocked || dispensesIndisponibles}
                       onChange={e => handleSectionGradeChange(enrollment.id, sec.id, e.target.value)}
                       onPaste={e => handleGridPaste(
                         e, rowIndex, colIndex, filteredEnrollments.length,
@@ -1180,7 +1247,9 @@ export function CPMSLGradesGrid({
           )
         })}
         <TableCell className="min-w-[104px] px-2 py-1 pr-6 text-center">
-          {total.raw > 0 || total.complete ? (
+          {dispense ? (
+            <span className="text-xs text-muted-foreground" title="Matière dispensée : aucun total">—</span>
+          ) : total.raw > 0 || total.complete ? (
             <span
               className={cn(
                 "inline-flex min-w-[88px] items-center justify-center rounded-md border px-2 py-0.5 tabular-nums text-sm font-bold text-foreground",
@@ -1210,10 +1279,27 @@ export function CPMSLGradesGrid({
   }
 
   // ── Grades table section ──────────────────────────────────────────────────
+  // Lecture des dispenses en échec : la grille reste lisible, rien n'est
+  // saisissable ni enregistrable, jusqu'à « Réessayer ».
+  function renderDispensesIndisponibles() {
+    return (
+      <Card className="border bg-card shadow-sm">
+        <CardContent className="flex flex-col items-center justify-center gap-3 py-6">
+          <p role="alert" className="max-w-prose text-center text-sm text-warning-ink">
+            {MESSAGE_DISPENSES_INDISPONIBLES_SAISIE}
+          </p>
+          <Button variant="outline" onClick={() => setRechargementDispenses((n) => n + 1)}>Réessayer</Button>
+        </CardContent>
+      </Card>
+    )
+  }
+
   function renderGradesSection() {
     if (loadingGrades) return renderSpinner()
 
     return (
+      <>
+      {dispensesIndisponibles && renderDispensesIndisponibles()}
       <Card className="border bg-card shadow-sm">
         <CardHeader className="pb-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -1223,7 +1309,7 @@ export function CPMSLGradesGrid({
                   <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-1">
                     <span>
                       {contexteLabel && <>{contexteLabel} </>}
-                      &middot; {enteredCount} / {enrollmentsForSubject.length} notes saisies
+                      &middot; {enteredCount} / {enrollmentsAttendus.length} notes saisies
                     </span>
                   </span>
                   {hasUnsavedChanges && (
@@ -1398,7 +1484,7 @@ export function CPMSLGradesGrid({
               <Button
                 className="shrink-0"
                 onClick={handleSaveGrades}
-                disabled={!selectedClassSubjectId || !selectedStepId || hasErrors || saving}
+                disabled={!selectedClassSubjectId || !selectedStepId || hasErrors || saving || dispensesIndisponibles}
               >
                 {saving ? (
                   <div className="mr-2 h-4 w-4 animate-spin rounded-full border border-primary-foreground border-t-transparent" />
@@ -1411,6 +1497,7 @@ export function CPMSLGradesGrid({
           </>
         )}
       </Card>
+      </>
     )
   }
 
@@ -1601,6 +1688,13 @@ export function CPMSLGradesGrid({
               )}
             </DialogDescription>
           </DialogHeader>
+          {exclusionTarget && dispenseMatiere.has(exclusionTarget.id) && (
+            <div role="status" className="rounded-md border border-warning-border bg-warning-soft px-3 py-2 text-xs text-warning-ink">
+              Élève dispensé de la matière entière à cette étape. Cette dispense
+              l&apos;emporte sur les sous-matières ci-dessous et reste en place à
+              l&apos;enregistrement.
+            </div>
+          )}
           <div className="space-y-1 py-1">
             {subjectSections.map((sec) => {
               const isIncluded = !exclusionDraft.has(sec.id)
@@ -1618,6 +1712,13 @@ export function CPMSLGradesGrid({
               )
             })}
             {(() => {
+              if (exclusionTarget && dispenseMatiere.has(exclusionTarget.id)) {
+                return (
+                  <p className="pt-2 text-xs text-muted-foreground">
+                    Total après exclusions : <strong className="text-foreground">—</strong> (matière dispensée).
+                  </p>
+                )
+              }
               const includedMax = subjectSections
                 .filter((s) => !exclusionDraft.has(s.id))
                 .reduce((sum, s) => sum + s.maxScore, 0)

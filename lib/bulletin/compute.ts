@@ -161,21 +161,6 @@ export function effectiveMaxScore(subject: SubjectInput): Decimal {
   return subject.maxScoreOverride ?? subject.maxScore
 }
 
-/**
- * Recupere de lib/bulletin-subject-entries.ts (module mort), ou il etait le
- * seul garde-fou du calcul. Detecte qu'une matiere declaree /60 a des
- * sous-matieres totalisant /80 : le denominateur du calcul devient douteux.
- */
-export function checkMaxScoreCoherence(
-  subjectMax: Decimal,
-  sectionsMax: Decimal,
-): string | undefined {
-  if (subjectMax.lte(0)) return `Bareme de la matiere invalide : /${subjectMax}`
-  if (sectionsMax.lte(0)) return `Somme des baremes de sous-matieres nulle`
-  if (subjectMax.equals(sectionsMax)) return undefined
-  return `Bareme a verifier : matiere /${subjectMax}, sous-matieres /${sectionsMax}`
-}
-
 /** DR-004 — une note doit etre un multiple de 0,25 et tenir dans le bareme. */
 export function isValidGrade(score: Decimal, maxScore: Decimal): boolean {
   if (score.isNegative()) return false
@@ -299,8 +284,10 @@ export function computeSubject(subject: SubjectInput): SubjectOutput {
     })
   }
 
-  const coherence = checkMaxScoreCoherence(maxScore, declaredSectionsMax)
-  if (coherence) warnings.push(`${subject.name} — ${coherence}`)
+  // D-45, D-O3 bis : le bareme d'une matiere a sous-matieres EST la somme de
+  // ses sous-matieres ; plus d'avertissement « Bareme a verifier » contre le
+  // bareme de la fiche (aligne sur la copie serveur). Seule reste la somme nulle.
+  if (declaredSectionsMax.lte(0)) warnings.push(`${subject.name} — Somme des baremes de sous-matieres nulle`)
 
   const anyNoted = sections.some((s) => s.state === 'noted')
   const allExempted =
