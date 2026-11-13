@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, useEffect, useMemo, useState, useCallback } from "react"
+import { Fragment, useEffect, useState, useCallback } from "react"
 import { useParams } from "next/navigation"
 import Link from "next/link"
 import { useToast } from "@/components/ui/use-toast"
@@ -42,8 +42,19 @@ import {
   gradeMention,
   gradeMentionLabel,
 } from "@/lib/bulletin/grade-color"
-import { parseDecimal } from "@/lib/decimal"
 import { toMessage } from "@/lib/errors"
+import { fetchRoomResults } from "@/lib/api/results"
+import { etapesTriees, type AnneeAvecEtapes } from "@/lib/parcours/reference"
+import {
+  cartesEtapes,
+  celluleMatiere,
+  chargerMoyennes,
+  etatSousMatiere,
+  moyenneAnnuelle,
+  type CarteEtape,
+  type MoyennesAnnee,
+} from "@/lib/parcours/resultats"
+import { regrouperNotes, texteSaisies, type MatiereSaisie, type NoteSaisie } from "@/lib/parcours/notes"
 import { libelleClasseSalle } from "@/lib/classes/labels"
 import { cn } from "@/lib/utils"
 import { normalizeUploadUrl } from "@/lib/upload-url"
@@ -115,71 +126,19 @@ interface ApiEnrollment {
   }
 }
 
-interface ApiGrade {
-  id: string
-  classSubjectId: string
-  sectionId: string | null
-  stepId: string
-  studentScore: unknown
-  gradeType: string
-  comment: string | null
-  gradedAt: string
-  classSubject: {
-    id: string
-    coefficientOverride: unknown
-    subject: {
-      id: string
-      name: string
-      code: string
-      maxScore: unknown
-      coefficient: unknown
-      hasSections: boolean
-      sections: Array<{ id: string; name: string; code: string; maxScore: unknown }>
-    }
-  }
-  section: { id: string; name: string; code: string; maxScore: unknown } | null
-  step: { id: string; name: string; stepNumber: number }
-}
-
-interface SectionTotals {
-  sectionId: string
-  sectionName: string
-  sectionCode: string
-  perStep: Map<string, { raw: number; max: number }>
-}
-
-interface SubjectTotals {
-  subjectId: string
-  subjectName: string
-  subjectCode: string
-  maxScore: number
-  coefficient: number
-  perStep: Map<string, { raw: number; max: number }>
-  /**
-   * Décomposition par sous-matière, vide quand la matière n'en a pas.
-   *
-   * Accumulée exactement comme l'agrégat parent — `raw + score`, `max + secMax`
-   * — pour que la somme des sous-matières redonne la matière à l'unité près.
-   * Ce n'est pas un second calcul, c'est la ventilation du premier.
-   */
-  sections: Map<string, SectionTotals>
-}
-
-interface StepSummary {
-  stepId: string
-  stepName: string
-  stepNumber: number
-  average: number | null
-}
+/** Note lue par `/api/grades/enrollment/:id` : seuls les champs affichés sont déclarés. */
+type ApiGrade = NoteSaisie
 
 interface EnrollmentSummary {
   enrollment: ApiEnrollment
-  grades: ApiGrade[]
-  subjects: SubjectTotals[]
-  steps: StepSummary[]
-  generalAverage: number | null
+  /** Notes saisies, regroupées pour l'affichage (aucun calcul). */
+  matieres: MatiereSaisie[]
   /** Le chargement des notes de cette inscription a échoué : « aucune note » serait un mensonge. */
   gradesFailed: boolean
+  /** Moyennes calculées par le serveur (`GET /api/results`), ou la raison de leur absence. */
+  moyennes: MoyennesAnnee
+  /** Année de l'inscription avec ses étapes (`GET /api/academic-years`), null si illisible. */
+  annee: AnneeAvecEtapes | null
 }
 
 function statusBadge(status: ApiEnrollment["status"]) {
@@ -204,94 +163,6 @@ function genderLabel(gender?: "MALE" | "FEMALE" | null): string | null {
   if (gender === "MALE") return "Masculin"
   if (gender === "FEMALE") return "Féminin"
   return null
-}
-
-function buildEnrollmentSummary(
-  enrollment: ApiEnrollment,
-  grades: ApiGrade[],
-  gradesFailed: boolean
-): EnrollmentSummary {
-  const subjectsMap = new Map<string, SubjectTotals>()
-  const stepsMap = new Map<string, { stepName: string; stepNumber: number }>()
-
-  for (const g of grades) {
-    stepsMap.set(g.step.id, { stepName: g.step.name, stepNumber: g.step.stepNumber })
-
-    const subjectId = g.classSubject.subject.id
-    if (!subjectsMap.has(subjectId)) {
-      const subjMax = parseDecimal(g.classSubject.subject.maxScore) ?? 0
-      const override = parseDecimal(g.classSubject.coefficientOverride)
-      const baseCoef = parseDecimal(g.classSubject.subject.coefficient) ?? 1
-      subjectsMap.set(subjectId, {
-        subjectId,
-        subjectName: g.classSubject.subject.name,
-        subjectCode: g.classSubject.subject.code,
-        maxScore: subjMax,
-        coefficient: override ?? baseCoef,
-        perStep: new Map(),
-        sections: new Map(),
-      })
-    }
-    const entry = subjectsMap.get(subjectId)!
-
-    const prev = entry.perStep.get(g.step.id) ?? { raw: 0, max: 0 }
-    const score = parseDecimal(g.studentScore) ?? 0
-
-    if (g.sectionId && g.section) {
-      const secMax = parseDecimal(g.section.maxScore) ?? 0
-      entry.perStep.set(g.step.id, { raw: prev.raw + score, max: prev.max + secMax })
-
-      // Même accumulation, ventilée : la somme des sous-matières redonne la
-      // matière. Aucun calcul n'est ajouté ici, seulement une décomposition.
-      if (!entry.sections.has(g.sectionId)) {
-        entry.sections.set(g.sectionId, {
-          sectionId: g.sectionId,
-          sectionName: g.section.name,
-          sectionCode: g.section.code,
-          perStep: new Map(),
-        })
-      }
-      const sec = entry.sections.get(g.sectionId)!
-      const secPrev = sec.perStep.get(g.step.id) ?? { raw: 0, max: 0 }
-      sec.perStep.set(g.step.id, { raw: secPrev.raw + score, max: secPrev.max + secMax })
-    } else {
-      entry.perStep.set(g.step.id, { raw: score, max: entry.maxScore })
-    }
-  }
-
-  const steps: StepSummary[] = Array.from(stepsMap.entries())
-    .map(([stepId, info]) => {
-      let weightedSum = 0
-      let totalCoef = 0
-      for (const subj of subjectsMap.values()) {
-        const stepEntry = subj.perStep.get(stepId)
-        if (!stepEntry || stepEntry.max <= 0) continue
-        const normalized = (stepEntry.raw / stepEntry.max) * 100
-        weightedSum += normalized * subj.coefficient
-        totalCoef += subj.coefficient
-      }
-      return {
-        stepId,
-        stepName: info.stepName,
-        stepNumber: info.stepNumber,
-        average: totalCoef > 0 ? weightedSum / totalCoef : null,
-      }
-    })
-    .sort((a, b) => a.stepNumber - b.stepNumber)
-
-  const validStepAvgs = steps.filter((s): s is StepSummary & { average: number } => s.average !== null)
-  const generalAverage = validStepAvgs.length > 0
-    ? validStepAvgs.reduce((sum, s) => sum + s.average, 0) / validStepAvgs.length
-    : null
-
-  return {
-    enrollment,
-    grades,
-    subjects: Array.from(subjectsMap.values()).sort((a, b) => a.subjectName.localeCompare(b.subjectName)),
-    steps,
-    generalAverage,
-    gradesFailed,
-  }
 }
 
 /**
@@ -335,12 +206,9 @@ function alertMark(value: number | null): string {
  * `colorClass` sur le gabarit imprimé.
  *
  * Elle n'est posée sur **aucune moyenne** de cette page — ni visible, ni
- * audible. Les moyennes sont pondérées par coefficient, sans les 70 % R1 /
- * 25 % R2 / 5 % R3 que le pied de bulletin déclare comme la règle : leur
- * accoler une lettre officielle, c'était prononcer un verdict d'établissement
- * sur un chiffre qui ne l'applique pas. La teinte reste, elle correspond bien
- * à la valeur affichée ; la lettre reviendra quand `lib/bulletin/compute.ts`
- * alimentera cet écran (U1i-2).
+ * audible. Depuis le lot B (D-03), les moyennes sont celles du serveur
+ * (`GET /api/results`, règles du bulletin) ; rétablir la lettre sur une
+ * moyenne est une décision d'affichage distincte, non prise dans ce lot.
  *
  * Elle n'est pas visible non plus sur les notes : elle se répétait jusqu'à six
  * fois par ligne et écrasait une grille conçue pour le balayage vertical. Le
@@ -394,32 +262,38 @@ function GradeScaleHint() {
   )
 }
 
-const scoreFormatter = new Intl.NumberFormat("fr-FR", {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-})
+/**
+ * Les moyennes s'affichent **sur 10**, comme le bulletin : le serveur les rend
+ * sur 10. `scoreTone` et `alertMark` attendent un POURCENTAGE : leur passer
+ * `bande` (lib/parcours/resultats.ts, `pourcentageDeBande`), jamais la valeur
+ * sur 10, sans quoi la bande deviendrait fausse d'un facteur dix.
+ */
+const MENTION_REGLES = "Moyennes calculées selon les règles du bulletin"
 
-const plainFormatter = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 2 })
-
-/** Affichage seul : aucun arrondi métier n'est introduit ici. */
-function formatScore(value: number): string {
-  return scoreFormatter.format(value)
-}
+/** Texte de l'échec d'un appel `/api/results` pour une année (aucun chiffre de repli). */
+const MOYENNES_INDISPONIBLES = "Moyennes indisponibles pour cette année. Réessayez."
 
 /**
- * Les moyennes s'affichent **sur 10**, comme le bulletin.
- *
- * Elles sont calculées en interne sur 100 — c'est ce qu'attendent `gradeBand` et
- * `scoreTone`, alignés sur `colorClass` du gabarit, qui raisonne en pourcentage.
- * Seule la restitution change d'échelle. Deux échelles pour le même élève,
- * /100 ici et /10 sur la feuille remise à la famille, étaient ingérables : le
- * seuil de promotion imprimé en pied de bulletin est 7,00.
- *
- * Ne pas passer une valeur déjà divisée à `scoreTone` : la bande deviendrait
- * fausse d'un facteur dix.
+ * Années pour lesquelles AUCUN appel `/api/results` n'est fait (règle du
+ * relevé, lib/parcours/reference.ts) : la grille garde les notes saisies, sur
+ * toutes les étapes de l'année.
  */
-function formatAverageOn10(percent: number): string {
-  return scoreFormatter.format(percent / 10)
+const MESSAGES_SANS_APPEL: Partial<Record<MoyennesAnnee["kind"], string>> = {
+  "sans-etape": "Aucune étape n'est définie pour cette année.",
+  "aucune-etape-en-cours": "Aucune étape en cours pour cette année : moyennes non disponibles.",
+  "en-preparation": "Année en préparation : moyennes non disponibles.",
+}
+
+/** Étapes à afficher en colonnes : celles du service, sinon celles de l'année. */
+function colonnesDe(summary: EnrollmentSummary): Array<{ stepId: string; stepName: string }> {
+  if (summary.moyennes.kind === "ok") {
+    return cartesEtapes(summary.moyennes.eleve, nomsEtapesDe(summary.annee))
+  }
+  return etapesTriees(summary.annee?.steps).map((s) => ({ stepId: s.id, stepName: s.name }))
+}
+
+function nomsEtapesDe(annee: AnneeAvecEtapes | null): Map<string, string> {
+  return new Map((annee?.steps ?? []).map((s) => [s.id, s.name]))
 }
 
 function formatDate(value?: string): string {
@@ -427,6 +301,505 @@ function formatDate(value?: string): string {
   const d = new Date(value)
   if (isNaN(d.getTime())) return "—"
   return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" })
+}
+
+// ── Moyennes (serveur) ────────────────────────────────────────────────────────
+
+/**
+ * « Moy. générale » de l'année = `annual` du service. Aucune mention MENFP :
+ * voir `Mention`. La teinte est calculée sur le pourcentage (`bande`).
+ */
+function MoyenneAnneeEnTete({ moyennes }: { moyennes: MoyennesAnnee }) {
+  const annuelle = moyennes.kind === "ok" ? moyenneAnnuelle(moyennes.eleve) : null
+  return (
+    <div className="flex shrink-0 items-baseline gap-2">
+      <span className="text-xs uppercase tracking-wide text-muted-foreground">Moy. générale</span>
+      <span className={cn("text-lg font-bold tabular-nums", scoreTone(annuelle?.bande ?? null))}>
+        {annuelle && annuelle.texte !== "—" ? annuelle.texte : <span aria-hidden="true">—</span>}
+      </span>
+      <span className="text-xs text-muted-foreground">/ 10</span>
+      {moyennes.kind !== "ok" && <span className="sr-only">Moyenne indisponible</span>}
+    </div>
+  )
+}
+
+/** Message d'une année sans moyennes du service : jamais de chiffre de repli. */
+function MessageMoyennes({ moyennes, onRetry }: { moyennes: MoyennesAnnee; onRetry: () => void }) {
+  const sansAppel = MESSAGES_SANS_APPEL[moyennes.kind]
+  if (sansAppel) return <p className="text-xs text-muted-foreground">{sansAppel}</p>
+  const texte =
+    moyennes.kind === "absent"
+      ? "Moyennes indisponibles pour cette année : l'inscription est absente des résultats de sa salle."
+      : MOYENNES_INDISPONIBLES
+  return (
+    <div role="status" className="flex flex-wrap items-center gap-2 rounded-md border border-warning-border bg-warning-soft px-3 py-2 text-xs text-warning-ink">
+      <span>{texte}</span>
+      {moyennes.kind === "echec" && (
+        <Button variant="outline" size="sm" onClick={onRetry}>
+          Réessayer
+        </Button>
+      )}
+    </div>
+  )
+}
+
+function CarteEtapeVue({ carte, enrollmentId }: { carte: CarteEtape; enrollmentId: string }) {
+  return (
+    // La page tenait déjà les deux paramètres de la route bulletin
+    // sans jamais y mener : l'administrateur re-sélectionnait à la
+    // main classe, salle et étape depuis la section Bulletins.
+    <Link
+      href={`/admin/bulletins/${enrollmentId}/${carte.stepId}`}
+      className="rounded-md border bg-muted/20 px-3 py-2 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+    >
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{carte.stepName}</p>
+      {carte.exempted ? (
+        <p className="mt-0.5 text-sm font-medium text-muted-foreground">Dispensé(e)</p>
+      ) : (
+        <p className={cn("mt-0.5 flex items-baseline gap-1.5 text-lg font-semibold tabular-nums", scoreTone(carte.bande))}>
+          {carte.moyenne === "—" ? <span aria-hidden="true">—</span> : carte.moyenne}
+          <span className="text-xs font-normal text-muted-foreground">/ 10</span>
+        </p>
+      )}
+      <span className="sr-only">— ouvrir le bulletin de cette étape</span>
+    </Link>
+  )
+}
+
+/**
+ * Cartes d'étape = `steps[]` du service (D-03). Élève parti : le service n'y
+ * met que les étapes suivies et rend le motif dans `unavailable` (RS-09).
+ */
+function BlocMoyennesEtapes({
+  moyennes,
+  annee,
+  enrollmentId,
+  onRetry,
+}: {
+  moyennes: MoyennesAnnee
+  annee: AnneeAvecEtapes | null
+  enrollmentId: string
+  onRetry: () => void
+}) {
+  if (moyennes.kind !== "ok") return <MessageMoyennes moyennes={moyennes} onRetry={onRetry} />
+  const cartes = cartesEtapes(moyennes.eleve, nomsEtapesDe(annee))
+  const depart = moyennes.eleve.unavailable
+  return (
+    <div className="space-y-2">
+      {depart && (
+        <p role="status" className="rounded-md border border-info-border bg-info-soft px-3 py-2 text-xs text-info-ink">
+          {depart.message}
+        </p>
+      )}
+      {cartes.length > 0 ? (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {cartes.map((c) => (
+            <CarteEtapeVue key={c.stepId} carte={c} enrollmentId={enrollmentId} />
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">Aucune étape suivie pour cette année.</p>
+      )}
+      <p className="text-xs text-muted-foreground">{MENTION_REGLES}</p>
+    </div>
+  )
+}
+
+// ── Grille des notes ──────────────────────────────────────────────────────────
+
+const TIRET_ABSENT = (
+  <>
+    <span aria-hidden="true">—</span>
+    <span className="sr-only">Non noté</span>
+  </>
+)
+
+/**
+ * Total d'une matière à une étape : celui du SERVEUR (numérateur / barème
+ * retenu), rapproché par `classSubjectId`. Les notes saisies sur la matière
+ * entière restent visibles quand le total ne les reflète pas tel quel.
+ */
+function CelluleMatiereVue({
+  summary,
+  matiere,
+  stepId,
+}: {
+  summary: EnrollmentSummary
+  matiere: MatiereSaisie
+  stepId: string
+}) {
+  const saisies = texteSaisies(matiere.globalParEtape.get(stepId))
+  if (summary.moyennes.kind !== "ok") {
+    return <TableCell className="text-right tabular-nums text-muted-foreground">{saisies ?? TIRET_ABSENT}</TableCell>
+  }
+  const c = celluleMatiere(summary.moyennes.eleve, stepId, matiere.classSubjectId)
+  const plusieurs = (matiere.globalParEtape.get(stepId)?.length ?? 0) > 1
+  return (
+    <TableCell className="text-right tabular-nums">
+      {c.etat === "exempted" && <span className="text-xs font-medium text-muted-foreground">Dispensé</span>}
+      {c.etat === "hors-calcul" && <span className="text-xs text-muted-foreground">Hors calcul</span>}
+      {c.etat === "missing" && (
+        <>
+          {TIRET_ABSENT}
+          <span className="text-muted-foreground"> / {c.bareme}</span>
+        </>
+      )}
+      {c.etat === "noted" && (
+        <>
+          <span className={cn("font-medium", scoreTone(c.bande), alertMark(c.bande))}>{c.note}</span>
+          <span className="text-muted-foreground"> / {c.bareme}</span>
+          <Mention value={c.bande} />
+        </>
+      )}
+      {saisies && (c.etat !== "noted" || plusieurs) && (
+        <span className="block text-2xs text-muted-foreground">Saisie : {saisies}</span>
+      )}
+    </TableCell>
+  )
+}
+
+/** Note(s) saisie(s) d'une sous-matière, telles quelles ; dispense marquée d'après le serveur. */
+function CelluleSousMatiereVue({
+  summary,
+  matiere,
+  sectionId,
+  stepId,
+  saisies,
+  bareme,
+}: {
+  summary: EnrollmentSummary
+  matiere: MatiereSaisie
+  sectionId: string
+  stepId: string
+  saisies: string | null
+  bareme: number | null
+}) {
+  const dispensee =
+    summary.moyennes.kind === "ok" &&
+    etatSousMatiere(summary.moyennes.eleve, stepId, matiere.classSubjectId, sectionId) === "exempted"
+  return (
+    <TableCell className="py-1.5 text-right tabular-nums">
+      {saisies ?? TIRET_ABSENT}
+      {saisies && bareme !== null && <span> / {bareme.toLocaleString("fr-FR")}</span>}
+      {dispensee && <span className="block text-2xs font-medium">Dispensé</span>}
+    </TableCell>
+  )
+}
+
+function LignesMatiere({
+  summary,
+  matiere,
+  colonnes,
+}: {
+  summary: EnrollmentSummary
+  matiere: MatiereSaisie
+  colonnes: Array<{ stepId: string; stepName: string }>
+}) {
+  const avecSous = matiere.sousMatieres.length > 0
+  return (
+    <Fragment>
+      <TableRow className={cn(avecSous && "bg-muted")}>
+        {/* `th scope="row"` : en navigation cellule à cellule, le lecteur
+            d'écran annonce de quelle matière vient la note. Fond opaque
+            nommé, exigé par le figement à gauche. */}
+        <TableHead
+          scope="row"
+          className={cn("sticky left-0 z-10 h-auto p-2 pl-3 font-normal text-foreground", avecSous ? "bg-muted" : "bg-card")}
+        >
+          <div className="flex flex-col">
+            <span className="font-medium text-foreground">{matiere.name}</span>
+            <code className="font-mono text-3xs text-muted-foreground">
+              {matiere.code}
+              {avecSous && ` · ${matiere.sousMatieres.length} sous-matière${matiere.sousMatieres.length > 1 ? "s" : ""}`}
+            </code>
+          </div>
+        </TableHead>
+        {colonnes.map((col) => (
+          <CelluleMatiereVue key={col.stepId} summary={summary} matiere={matiere} stepId={col.stepId} />
+        ))}
+      </TableRow>
+      {matiere.sousMatieres.map((sec) => (
+        <TableRow key={sec.sectionId} className="text-muted-foreground">
+          <TableHead scope="row" className="sticky left-0 z-10 h-auto bg-card py-1.5 pl-8 text-xs font-normal">
+            <span className="mr-1.5" aria-hidden="true">└</span>
+            {sec.name}
+            <code className="ml-2 font-mono text-3xs">{sec.code}</code>
+          </TableHead>
+          {colonnes.map((col) => (
+            <CelluleSousMatiereVue
+              key={col.stepId}
+              summary={summary}
+              matiere={matiere}
+              sectionId={sec.sectionId}
+              stepId={col.stepId}
+              saisies={texteSaisies(sec.parEtape.get(col.stepId))}
+              bareme={sec.maxScore}
+            />
+          ))}
+        </TableRow>
+      ))}
+    </Fragment>
+  )
+}
+
+/**
+ * Grille : notes SAISIES (`/api/grades/enrollment/:id`) par matière et par
+ * étape. Ligne matière = total du serveur ; lignes sous-matière = notes
+ * brutes. Ni coefficient ni moyenne par matière (décision 3 du lot B).
+ */
+function GrilleNotes({ summary, caption }: { summary: EnrollmentSummary; caption: string }) {
+  const colonnes = colonnesDe(summary)
+  return (
+    <div className="rounded-md border">
+      {/* La table défile toujours : hauteur bornée pour l'en-tête collant,
+          colonne figée pour garder la matière en vue. */}
+      <Table containerClassName="cpmsl-scroll max-h-[70vh]">
+        <TableCaption className="sr-only">{caption}</TableCaption>
+        <TableHeader>
+          <TableRow className="hover:bg-transparent">
+            <TableHead scope="col" className="sticky left-0 top-0 z-20 min-w-[180px] bg-card pl-3 font-semibold">
+              Matière / sous-matière
+            </TableHead>
+            {colonnes.map((s) => (
+              <TableHead key={s.stepId} scope="col" className="sticky top-0 z-10 min-w-[120px] bg-card text-right font-semibold">
+                {s.stepName}
+              </TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {summary.matieres.map((m) => (
+            <LignesMatiere key={m.classSubjectId} summary={summary} matiere={m} colonnes={colonnes} />
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  )
+}
+
+// ── En-tête d'une inscription ────────────────────────────────────────────────
+
+/** Libellés de l'inscription : classe, salle, filière, année, statut, repères. */
+function LibellesInscription({ summary, classe, salle }: { summary: EnrollmentSummary; classe: string; salle: string }) {
+  const e = summary.enrollment
+  return (
+  <div className="flex flex-wrap items-center gap-2">
+    {/* DESIGN.md nomme `.heading-3` pour l'en-tête d'année
+        scolaire : c'est ici que le serif porte l'autorité. */}
+    <span className="heading-3 text-foreground">
+      {classe || "Classe inconnue"}
+    </span>
+    {/* « La Règle des Deux Champs » : la salle est un champ
+        à elle, badge monospace comme la colonne Salle de la
+        liste des élèves. Et la FILIÈRE n'est pas un suffixe
+        de salle — elle vient de l'inscription
+        (`Enrollment.trackId`), pas de la classe : ce libellé
+        composait « NS3 A — SMP », trois données en une
+        chaîne que rien ne permettait de relire. Les deux
+        champs portent une étiquette : hors tableau, un
+        badge nu ne dit pas ce qu'il contient. */}
+    {salle && (
+      <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+        <span className="text-2xs uppercase tracking-wide">Salle</span>
+        <span className="inline-flex items-center justify-center rounded-md bg-muted px-2 py-0.5 font-mono text-xs font-semibold text-foreground">
+          {salle}
+        </span>
+      </span>
+    )}
+    {e.track && (
+      <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+        <span className="text-2xs uppercase tracking-wide">Filière</span>
+        <span className="rounded border border-info-border bg-info-soft px-1.5 py-0.5 text-xs font-medium text-info-ink">
+          {e.track.code}
+        </span>
+      </span>
+    )}
+    <Badge variant="outline" className="font-mono text-xs">
+      {e.classSession.academicYear.yearString}
+    </Badge>
+    {statusBadge(e.status)}
+    {/* `information` et non `succes` : l'année courante est un
+        repère de navigation, pas une validation. Deux verts
+        voisins pour deux sens étaient indiscernables. */}
+    {e.classSession.academicYear.isCurrent && (
+      <Badge className="border-info-border bg-info-soft text-xs text-info-ink hover:bg-info-soft">
+        Année courante
+      </Badge>
+    )}
+    {/* Remonté du panneau au déclencheur : « Tout replier »
+        masquait d'un coup tous les avertissements, et une
+        année en panne devenait indiscernable d'une année
+        sans notes. */}
+    {summary.gradesFailed && (
+      <Badge className="border-warning-border bg-warning-soft text-xs text-warning-ink hover:bg-warning-soft">
+        Notes non chargées
+      </Badge>
+    )}
+    {e.status === "DROPPED" && <LeftBadge leftAt={e.leftAt} />}
+  </div>
+  )
+}
+
+/**
+ * D-22 : départ en cours d'année, tel que déclaré (RS-08). Affichage seul : la
+ * borne des moyennes est appliquée par le serveur (RS-09).
+ */
+function DepartDeclare({ e }: { e: ApiEnrollment }) {
+  if (e.status !== "DROPPED") return null
+  return (
+    <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
+      <dt className="text-muted-foreground">Date du départ</dt>
+      <dd className="text-foreground">{e.leftAt ? formatFrenchLongDate(e.leftAt) : "—"}</dd>
+      <dt className="text-muted-foreground">Dernière étape suivie</dt>
+      <dd className={cn(e.lastAttendedStep ? "text-foreground" : "font-medium text-warning-ink")}>
+        {e.lastAttendedStep?.name ?? "Départ à compléter"}
+      </dd>
+      <dt className="text-muted-foreground">Motif</dt>
+      <dd className="text-foreground">{departureReasonLabel(e.departureReason)}</dd>
+      {e.departureNote && (
+        <>
+          <dt className="text-muted-foreground">Commentaire</dt>
+          <dd className="whitespace-pre-wrap text-foreground">{e.departureNote}</dd>
+        </>
+      )}
+    </dl>
+  )
+}
+
+// ── Chargement ────────────────────────────────────────────────────────────────
+
+/** Notes saisies d'une inscription ; l'échec est retenu, jamais pris pour « aucune note ». */
+async function chargerNotes(e: ApiEnrollment): Promise<{ enrollment: ApiEnrollment; grades: ApiGrade[]; failed: boolean }> {
+  try {
+    const grades = await apiFetch<ApiGrade[]>(`/api/grades/enrollment/${e.id}`)
+    return { enrollment: e, grades, failed: false }
+  } catch {
+    // Sans lui, une année dont les notes n'ont pas chargé afficherait
+    // « Aucune note saisie », ce qui est faux.
+    return { enrollment: e, grades: [], failed: true }
+  }
+}
+
+/**
+ * Une année par inscription : notes saisies, puis moyennes du serveur.
+ *
+ * Étapes de chaque année en UN appel (`/api/academic-years`) : elles fixent
+ * l'étape de référence (lib/parcours/reference.ts). Un échec n'est pas fatal :
+ * les notes restent lisibles, les moyennes sont dites indisponibles. Moyennes :
+ * UN appel `/api/results` par inscription (D-03, ADR-007), triées par année
+ * décroissante.
+ */
+async function chargerAnnees(enrollments: ApiEnrollment[]): Promise<EnrollmentSummary[]> {
+  const [annees, notes] = await Promise.all([
+    apiFetch<AnneeAvecEtapes[]>("/api/academic-years").catch(() => null),
+    Promise.all(enrollments.map(chargerNotes)),
+  ])
+  const moyennes = await chargerMoyennes(
+    enrollments.map((e) => ({ id: e.id, classSessionId: e.classSessionId, academicYearId: e.classSession.academicYear.id })),
+    annees,
+    (classSessionId, stepId) => fetchRoomResults(classSessionId, stepId)
+  )
+  const anneeParId = new Map((annees ?? []).map((a) => [a.id, a]))
+  return notes
+    .map(({ enrollment, grades, failed }) => ({
+      enrollment,
+      matieres: regrouperNotes(grades),
+      gradesFailed: failed,
+      moyennes: moyennes.get(enrollment.id) ?? { kind: "echec" as const },
+      annee: anneeParId.get(enrollment.classSession.academicYear.id) ?? null,
+    }))
+    .sort((a, b) =>
+      b.enrollment.classSession.academicYear.yearString.localeCompare(a.enrollment.classSession.academicYear.yearString)
+    )
+}
+
+function estIntrouvable(err: unknown): boolean {
+  return !!err && typeof err === "object" && "status" in err && (err as { status: number }).status === 404
+}
+
+/** Fiche d'identité de l'élève, en tête de page (affichage seul). */
+function FicheEleve({ student }: { student: StudentDetail }) {
+  const fullName = `${student.user.firstname} ${student.user.lastname}`.trim()
+  return (
+    <Card>
+      <CardContent className="flex flex-col gap-6 p-6 sm:flex-row sm:items-start">
+        <Avatar className="h-24 w-24 shrink-0">
+          <AvatarImage src={normalizeUploadUrl(student.user.profilePhoto)} alt="" />
+          <AvatarFallback className="bg-muted text-muted-foreground">
+            <UserIcon className="h-10 w-10" />
+          </AvatarFallback>
+        </Avatar>
+
+        <div className="flex-1 space-y-3">
+          <div>
+            <h1 className="heading-2 break-words text-foreground">{fullName}</h1>
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{student.studentCode}</code>
+              {student.nisu && (
+                <>
+                  <span>&middot;</span>
+                  <span className="tabular-nums">NISU {student.nisu}</span>
+                </>
+              )}
+              {genderLabel(student.user.gender) && (
+                <>
+                  <span>&middot;</span>
+                  <span>
+                    <span className="sr-only">Sexe : </span>
+                    {genderLabel(student.user.gender)}
+                  </span>
+                </>
+              )}
+              {student.user.birthDate && (
+                <>
+                  <span>&middot;</span>
+                  <span className="inline-flex items-center gap-1">
+                    <CalendarIcon className="h-3.5 w-3.5" />
+                    {formatDate(student.user.birthDate)}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+            {(student.motherName || student.fatherName) && (
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Parents</p>
+                <p className="text-foreground">
+                  {[student.motherName, student.fatherName].filter(Boolean).join(" / ") || "—"}
+                </p>
+              </div>
+            )}
+            {student.address && (
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Adresse</p>
+                <p className="text-foreground">{student.address}</p>
+              </div>
+            )}
+            {(student.phone1 || student.phone2) && (
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Téléphone</p>
+                <p className="inline-flex items-center gap-1 text-foreground">
+                  <PhoneIcon className="h-3.5 w-3.5" />
+                  {[student.phone1, student.phone2].filter(Boolean).join(" / ") || "—"}
+                </p>
+              </div>
+            )}
+            {student.parentsEmail && (
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Email parents</p>
+                <p className="inline-flex items-center gap-1 text-foreground">
+                  <MailIcon className="h-3.5 w-3.5" />
+                  {student.parentsEmail}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -468,41 +841,14 @@ export default function StudentTranscriptPage() {
        * le releve est un document historique, DROPPED et GRADUATED doivent
        * continuer d'y figurer. Seules les inscriptions rendues caduques par un
        * ancien transfert sont ecartees.
-       *
-       * Il s'applique ICI, avant la construction des resumes, donc avant le
-       * calcul de la moyenne globale de scolarite : une annee scindee en deux
-       * inscriptions y pesait double, et le chiffre est imprime sur un document
-       * montre aux familles.
        */
       const enrollments = allEnrollments.filter((e) => e.status !== "TRANSFERRED")
-
-      const gradesPerEnrollment = await Promise.all(
-        enrollments.map(async (e) => {
-          try {
-            const grades = await apiFetch<ApiGrade[]>(`/api/grades/enrollment/${e.id}`)
-            return { enrollment: e, grades, failed: false }
-          } catch {
-            // L'échec est retenu : sans lui, une année dont les notes n'ont pas
-            // chargé affiche « Aucune note saisie », ce qui est faux.
-            return { enrollment: e, grades: [] as ApiGrade[], failed: true }
-          }
-        })
-      )
-
-      const built = gradesPerEnrollment.map(({ enrollment, grades, failed }) =>
-        buildEnrollmentSummary(enrollment, grades, failed)
-      )
-
-      built.sort((a, b) =>
-        b.enrollment.classSession.academicYear.yearString.localeCompare(
-          a.enrollment.classSession.academicYear.yearString
-        )
-      )
+      const built = await chargerAnnees(enrollments)
 
       setSummaries(built)
       setExpandedItems(built.map((s) => s.enrollment.id))
     } catch (err) {
-      if (err && typeof err === "object" && "status" in err && (err as { status: number }).status === 404) {
+      if (estIntrouvable(err)) {
         setNotFound(true)
       } else {
         // Une panne n'est pas une absence : sans cet état distinct, l'écran
@@ -522,44 +868,6 @@ export default function StudentTranscriptPage() {
   useEffect(() => {
     load()
   }, [load])
-
-  const overall = useMemo(() => {
-    const valid = summaries.filter((s) => s.generalAverage !== null) as Array<
-      EnrollmentSummary & { generalAverage: number }
-    >
-
-    /*
-     * Une fois les TRANSFERRED ecartees, il ne devrait rester qu'une
-     * inscription par annee scolaire. S'il en reste plusieurs, la moyenne
-     * ci-dessous compte cette annee deux fois — et `counted` annonce un nombre
-     * d'inscriptions que le lecteur comprend comme un nombre d'annees.
-     *
-     * On ne departage pas : on le dit. Meme principe que `degraded`, que la
-     * version precedente a introduit pour les notes non chargees.
-     */
-    const parAnnee = new Map<string, number>()
-    for (const s of summaries) {
-      const y = s.enrollment.classSession.academicYear.yearString
-      parAnnee.set(y, (parAnnee.get(y) ?? 0) + 1)
-    }
-    const anneesEnDouble = [...parAnnee.entries()]
-      .filter(([, n]) => n > 1)
-      .map(([y]) => y)
-      .sort()
-    // Le compte des inscriptions **retenues** sort avec la valeur : la phrase
-    // sous le chiffre annonçait `summaries.length`, donc « Moyenne des 6
-    // inscriptions » pour la moyenne de 2. Le dénominateur suit le numérateur.
-    return {
-      value: valid.length === 0
-        ? null
-        : valid.reduce((sum, s) => sum + s.generalAverage, 0) / valid.length,
-      counted: valid.length,
-      /** Une année en panne sort du calcul en silence : il faut le dire. */
-      degraded: summaries.some((s) => s.gradesFailed),
-      /** Années portant plus d'une inscription après filtrage : le chiffre est faux. */
-      anneesEnDouble,
-    }
-  }, [summaries])
 
   // Rendu dans les trois états : sans lui, le clavier n'avait aucune
   // échappatoire tant que les trois vagues de chargement n'étaient pas revenues.
@@ -619,129 +927,13 @@ export default function StudentTranscriptPage() {
     )
   }
 
-  const fullName = `${student.user.firstname} ${student.user.lastname}`.trim()
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         {backLink}
       </div>
 
-      {/* Profile card */}
-      <Card>
-        <CardContent className="flex flex-col gap-6 p-6 sm:flex-row sm:items-start">
-          <Avatar className="h-24 w-24 shrink-0">
-            <AvatarImage src={normalizeUploadUrl(student.user.profilePhoto)} alt="" />
-            <AvatarFallback className="bg-muted text-muted-foreground">
-              <UserIcon className="h-10 w-10" />
-            </AvatarFallback>
-          </Avatar>
-
-          <div className="flex-1 space-y-3">
-            <div>
-              <h1 className="heading-2 break-words text-foreground">{fullName}</h1>
-              <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{student.studentCode}</code>
-                {student.nisu && (
-                  <>
-                    <span>&middot;</span>
-                    <span className="tabular-nums">NISU {student.nisu}</span>
-                  </>
-                )}
-                {genderLabel(student.user.gender) && (
-                  <>
-                    <span>&middot;</span>
-                    <span>
-                      <span className="sr-only">Sexe : </span>
-                      {genderLabel(student.user.gender)}
-                    </span>
-                  </>
-                )}
-                {student.user.birthDate && (
-                  <>
-                    <span>&middot;</span>
-                    <span className="inline-flex items-center gap-1">
-                      <CalendarIcon className="h-3.5 w-3.5" />
-                      {formatDate(student.user.birthDate)}
-                    </span>
-                  </>
-                )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
-              {(student.motherName || student.fatherName) && (
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Parents</p>
-                  <p className="text-foreground">
-                    {[student.motherName, student.fatherName].filter(Boolean).join(" / ") || "—"}
-                  </p>
-                </div>
-              )}
-              {student.address && (
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Adresse</p>
-                  <p className="text-foreground">{student.address}</p>
-                </div>
-              )}
-              {(student.phone1 || student.phone2) && (
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Téléphone</p>
-                  <p className="inline-flex items-center gap-1 text-foreground">
-                    <PhoneIcon className="h-3.5 w-3.5" />
-                    {[student.phone1, student.phone2].filter(Boolean).join(" / ") || "—"}
-                  </p>
-                </div>
-              )}
-              {student.parentsEmail && (
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Email parents</p>
-                  <p className="inline-flex items-center gap-1 text-foreground">
-                    <MailIcon className="h-3.5 w-3.5" />
-                    {student.parentsEmail}
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="flex flex-col items-end gap-1 sm:min-w-[140px]">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Moyenne globale
-            </p>
-            {/* Ni couleur ni mention : cette agrégation multi-années n'existe dans
-                aucun document opposable (U1i-1 du backlog), et lui donner la bande
-                du bulletin lui prêterait un verdict MENFP qu'elle n'a pas.
-                Rétrogradée de 36 px à 22 px : la plus grosse chose de l'écran ne
-                peut pas être la seule mesure que le produit n'assume pas. Et le
-                dire à l'écran, pas seulement dans ce commentaire — sans quoi
-                l'absence de couleur se lit « 69 et plus » une fois l'échelle
-                apprise. */}
-            <p className={cn("text-xl font-bold tabular-nums", overall.value == null ? "text-muted-foreground" : "text-foreground")}>
-              {overall.value !== null ? formatAverageOn10(overall.value) : <><span aria-hidden="true">—</span><span className="sr-only">Non calculée</span></>}
-            </p>
-            <p className="text-xs text-muted-foreground">/ 10</p>
-            <p className="mt-2 max-w-[190px] text-right text-xs text-muted-foreground">
-              {overall.counted === summaries.length
-                ? `Moyenne des ${summaries.length} année${summaries.length > 1 ? "s" : ""}`
-                : `Moyenne de ${overall.counted} année${overall.counted > 1 ? "s" : ""} notée${overall.counted > 1 ? "s" : ""} sur ${summaries.length}`}{" "}
-              — hors barème MENFP
-            </p>
-            {overall.anneesEnDouble.length > 0 && (
-              <p className="max-w-[190px] text-right text-xs text-error-ink">
-                Moyenne non fiable : {overall.anneesEnDouble.join(", ")} compte
-                plus d&apos;une inscription. Cette année pèse double dans le
-                calcul.
-              </p>
-            )}
-            {overall.degraded && (
-              <p className="max-w-[190px] text-right text-xs text-warning-ink">
-                Incomplet : des notes n&apos;ont pas pu être chargées.
-              </p>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+      <FicheEleve student={student} />
 
       {/* Transcripts */}
       <Card>
@@ -812,100 +1004,10 @@ export default function StudentTranscriptPage() {
                               {e.classSession.academicYear.yearString.slice(2, 4)}
                             </AvatarFallback>
                           </Avatar>
-                          <div className="flex flex-wrap items-center gap-2">
-                            {/* DESIGN.md nomme `.heading-3` pour l'en-tête d'année
-                                scolaire : c'est ici que le serif porte l'autorité. */}
-                            <span className="heading-3 text-foreground">
-                              {classe || "Classe inconnue"}
-                            </span>
-                            {/* « La Règle des Deux Champs » : la salle est un champ
-                                à elle, badge monospace comme la colonne Salle de la
-                                liste des élèves. Et la FILIÈRE n'est pas un suffixe
-                                de salle — elle vient de l'inscription
-                                (`Enrollment.trackId`), pas de la classe : ce libellé
-                                composait « NS3 A — SMP », trois données en une
-                                chaîne que rien ne permettait de relire. Les deux
-                                champs portent une étiquette : hors tableau, un
-                                badge nu ne dit pas ce qu'il contient. */}
-                            {salle && (
-                              <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                                <span className="text-2xs uppercase tracking-wide">Salle</span>
-                                <span className="inline-flex items-center justify-center rounded-md bg-muted px-2 py-0.5 font-mono text-xs font-semibold text-foreground">
-                                  {salle}
-                                </span>
-                              </span>
-                            )}
-                            {e.track && (
-                              <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                                <span className="text-2xs uppercase tracking-wide">Filière</span>
-                                <span className="rounded border border-info-border bg-info-soft px-1.5 py-0.5 text-xs font-medium text-info-ink">
-                                  {e.track.code}
-                                </span>
-                              </span>
-                            )}
-                            <Badge variant="outline" className="font-mono text-xs">
-                              {e.classSession.academicYear.yearString}
-                            </Badge>
-                            {statusBadge(e.status)}
-                            {/* `information` et non `succes` : l'année courante est un
-                                repère de navigation, pas une validation. Deux verts
-                                voisins pour deux sens étaient indiscernables. */}
-                            {e.classSession.academicYear.isCurrent && (
-                              <Badge className="border-info-border bg-info-soft text-xs text-info-ink hover:bg-info-soft">
-                                Année courante
-                              </Badge>
-                            )}
-                            {/* Remonté du panneau au déclencheur : « Tout replier »
-                                masquait d'un coup tous les avertissements, et une
-                                année en panne devenait indiscernable d'une année
-                                sans notes. */}
-                            {summary.gradesFailed && (
-                              <Badge className="border-warning-border bg-warning-soft text-xs text-warning-ink hover:bg-warning-soft">
-                                Notes non chargées
-                              </Badge>
-                            )}
-                            {e.status === "DROPPED" && <LeftBadge leftAt={e.leftAt} />}
-                          </div>
-                          {/* D-22 : départ en cours d'année, tel que déclaré (RS-08). Affichage
-                              seul : les moyennes de ce Parcours ne changent pas (lot L4). */}
-                          {e.status === "DROPPED" && (
-                            <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
-                              <dt className="text-muted-foreground">Date du départ</dt>
-                              <dd className="text-foreground">{e.leftAt ? formatFrenchLongDate(e.leftAt) : "—"}</dd>
-                              <dt className="text-muted-foreground">Dernière étape suivie</dt>
-                              <dd className={cn(e.lastAttendedStep ? "text-foreground" : "font-medium text-warning-ink")}>
-                                {e.lastAttendedStep?.name ?? "Départ à compléter"}
-                              </dd>
-                              <dt className="text-muted-foreground">Motif</dt>
-                              <dd className="text-foreground">{departureReasonLabel(e.departureReason)}</dd>
-                              {e.departureNote && (
-                                <>
-                                  <dt className="text-muted-foreground">Commentaire</dt>
-                                  <dd className="whitespace-pre-wrap text-foreground">{e.departureNote}</dd>
-                                </>
-                              )}
-                            </dl>
-                          )}
+                          <LibellesInscription summary={summary} classe={classe} salle={salle} />
+                          <DepartDeclare e={e} />
                         </div>
-                        <div className="flex shrink-0 items-baseline gap-2">
-                          <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                            Moy. générale
-                          </span>
-                          <span className={cn("text-lg font-bold tabular-nums", scoreTone(summary.generalAverage))}>
-                            {summary.generalAverage !== null ? (
-                              formatAverageOn10(summary.generalAverage)
-                            ) : (
-                              <span aria-hidden="true">—</span>
-                            )}
-                          </span>
-                          {/* Aucune mention MENFP sur les moyennes de cette page :
-                              elles sont pondérées par coefficient, sans les 70 % R1 /
-                              25 % R2 / 5 % R3 que le pied de bulletin déclare comme la
-                              règle. Afficher la lettre, c'était prononcer un verdict
-                              d'établissement sur un chiffre qui ne l'applique pas. La
-                              teinte reste : elle correspond bien à `colorClass`. */}
-                          <span className="text-xs text-muted-foreground">/ 10</span>
-                        </div>
+                        <MoyenneAnneeEnTete moyennes={summary.moyennes} />
                       </div>
                     </AccordionTrigger>
                     <AccordionContent className="px-3 pb-4">
@@ -950,230 +1052,26 @@ export default function StudentTranscriptPage() {
                         </div>
 
                         <div className="flex-1">
-                          {summary.steps.length > 0 ? (
-                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                              {summary.steps.map((s) => (
-                                // La page tenait déjà les deux paramètres de la route bulletin
-                                // sans jamais y mener : l'administrateur re-sélectionnait à la
-                                // main classe, salle et étape depuis la section Bulletins.
-                                <Link
-                                  key={s.stepId}
-                                  href={`/admin/bulletins/${e.id}/${s.stepId}`}
-                                  className="rounded-md border bg-muted/20 px-3 py-2 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                                >
-                                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                                    {s.stepName}
-                                  </p>
-                                  <p className={cn("mt-0.5 flex items-baseline gap-1.5 text-lg font-semibold tabular-nums", scoreTone(s.average))}>
-                                    {s.average !== null ? (
-                                      formatAverageOn10(s.average)
-                                    ) : (
-                                      <span aria-hidden="true">—</span>
-                                    )}
-                                    <span className="text-xs font-normal text-muted-foreground">/ 10</span>
-                                  </p>
-                                  <span className="sr-only">— ouvrir le bulletin de cette étape</span>
-                                </Link>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="text-xs text-muted-foreground">
-                              Aucune étape avec des notes pour cette année.
-                            </p>
-                          )}
+                          <BlocMoyennesEtapes
+                            moyennes={summary.moyennes}
+                            annee={summary.annee}
+                            enrollmentId={e.id}
+                            onRetry={() => load()}
+                          />
                         </div>
                       </div>
 
-                      {summary.subjects.length === 0 ? (
+                      {summary.matieres.length === 0 ? (
                         <div className="rounded-md border border-dashed bg-muted/20 px-4 py-6 text-center text-xs text-muted-foreground">
                           {summary.gradesFailed
                             ? "Les notes de cette année n'ont pas pu être chargées."
                             : "Aucune note saisie pour cette année."}
                         </div>
                       ) : (
-                        <div className="rounded-md border">
-                          {/* Le conteneur défilant est celui de `Table` ; en ajouter un
-                              second les imbriquait sans que ni l'un ni l'autre ne porte
-                              l'habillage de barre de défilement du système. */}
-                          {/* La table fait ~830 px et défile toujours. Sans hauteur
-                              bornée, un en-tête collant n'aurait rien contre quoi se
-                              résoudre ; sans colonne figée, on lit une colonne de
-                              chiffres sans savoir de quelle matière — et une ligne
-                              `└` anonyme ne veut plus rien dire. */}
-                          <Table containerClassName="cpmsl-scroll max-h-[70vh]">
-                            {/* Prose lue par un lecteur d'écran : la fusion y
-                                serait admise, mais deux champs nommés se lisent
-                                mieux à voix haute qu'un « NS3 A » collé. */}
-                            <TableCaption className="sr-only">
-                              Notes de la classe {classe || "inconnue"}
-                              {salle ? `, salle ${salle}` : ""}, année{" "}
-                              {e.classSession.academicYear.yearString}, par matière et par
-                              étape. Moyennes sur 10.
-                            </TableCaption>
-                            <TableHeader>
-                              <TableRow className="hover:bg-transparent">
-                                <TableHead
-                                  scope="col"
-                                  className="sticky left-0 top-0 z-20 min-w-[180px] bg-card pl-3 font-semibold"
-                                >
-                                  Matière / sous-matière
-                                </TableHead>
-                                <TableHead scope="col" className="sticky top-0 z-10 min-w-[72px] bg-card text-right font-semibold">
-                                  Coef.
-                                </TableHead>
-                                {/* Largeur plancher : sans elle, la colonne Matière se
-                                    comprime avant que le défilement ne s'active. */}
-                                {summary.steps.map((s) => (
-                                  <TableHead key={s.stepId} scope="col" className="sticky top-0 z-10 min-w-[120px] bg-card text-right font-semibold">
-                                    {s.stepName}
-                                  </TableHead>
-                                ))}
-                                <TableHead scope="col" className="sticky top-0 z-10 min-w-[110px] bg-card pr-3 text-right font-semibold">
-                                  Moyenne <span className="font-normal text-muted-foreground">/ 10</span>
-                                </TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {summary.subjects.map((subj) => {
-                                let weighted = 0
-                                let count = 0
-                                summary.steps.forEach((step) => {
-                                  const entry = subj.perStep.get(step.stepId)
-                                  if (!entry || entry.max <= 0) return
-                                  weighted += (entry.raw / entry.max) * 100
-                                  count++
-                                })
-                                const subjAvg = count > 0 ? weighted / count : null
-                                const sections = Array.from(subj.sections.values())
-                                return (
-                                  <Fragment key={subj.subjectId}>
-                                  {/* Ligne matière. Quand elle porte des sous-matières,
-                                      elle en est la somme : c'est le même accumulateur,
-                                      ventilé plus bas. */}
-                                  <TableRow className={cn(sections.length > 0 && "bg-muted")}>
-                                    {/* `th scope="row"` : en navigation cellule à
-                                        cellule, le lecteur d'écran n'annonçait jamais
-                                        de quelle matière venait la note. Fond opaque
-                                        nommé, exigé par le figement à gauche. */}
-                                    <TableHead
-                                      scope="row"
-                                      className={cn(
-                                        "sticky left-0 z-10 h-auto p-2 pl-3 font-normal text-foreground",
-                                        sections.length > 0 ? "bg-muted" : "bg-card"
-                                      )}
-                                    >
-                                      <div className="flex flex-col">
-                                        <span className="font-medium text-foreground">{subj.subjectName}</span>
-                                        <code className="font-mono text-3xs text-muted-foreground">
-                                          {subj.subjectCode}
-                                          {sections.length > 0 && (
-                                            <>
-                                              {" · "}
-                                              {sections.length} sous-matière
-                                              {sections.length > 1 ? "s" : ""}
-                                            </>
-                                          )}
-                                        </code>
-                                      </div>
-                                    </TableHead>
-                                    <TableCell className="text-right text-sm text-muted-foreground tabular-nums">
-                                      {plainFormatter.format(subj.coefficient)}
-                                    </TableCell>
-                                    {summary.steps.map((step) => {
-                                      const entry = subj.perStep.get(step.stepId)
-                                      if (!entry || entry.max <= 0) {
-                                        return (
-                                          <TableCell key={step.stepId} className="text-right text-muted-foreground">
-                                            <span aria-hidden="true">—</span>
-                                            <span className="sr-only">Non noté</span>
-                                          </TableCell>
-                                        )
-                                      }
-                                      // La note est ramenée au pourcentage avant
-                                      // d'être colorée : le gabarit imprimé fait
-                                      // exactement `note / coeff × 100`.
-                                      const pct = (entry.raw / entry.max) * 100
-                                      return (
-                                        <TableCell key={step.stepId} className="text-right tabular-nums">
-                                          <span className={cn("font-medium", scoreTone(pct), alertMark(pct))}>
-                                            {formatScore(entry.raw)}
-                                          </span>
-                                          <span className="text-muted-foreground">
-                                            {" "}
-                                            / {plainFormatter.format(entry.max)}
-                                          </span>
-                                          <Mention value={pct} />
-                                        </TableCell>
-                                      )
-                                    })}
-                                    <TableCell className="pr-3 text-right">
-                                      <span className={cn("font-semibold tabular-nums", scoreTone(subjAvg))}>
-                                        {subjAvg !== null ? (
-                                          formatAverageOn10(subjAvg)
-                                        ) : (
-                                          <span aria-hidden="true">—</span>
-                                        )}
-                                      </span>
-                                    </TableCell>
-                                  </TableRow>
-
-                                  {/* Lignes sous-matière. Ni coefficient ni moyenne :
-                                      dans le modèle, le coefficient est porté par la
-                                      matière (`classSubject`), pas par la section, et
-                                      une moyenne de sous-matière n'est un objet
-                                      d'aucun document.
-
-                                      Ces deux cellules sont **vides**, plus barrées d'un
-                                      tiret : dans la même table, `—` veut déjà dire
-                                      « non noté ». Le même glyphe pour une donnée
-                                      manquante et pour une notion inexistante faisait
-                                      lire trois absences de saisie par ligne. Le
-                                      `sr-only` dit ce que le vide signifie. */}
-                                  {sections.map((sec) => (
-                                    <TableRow key={sec.sectionId} className="text-muted-foreground">
-                                      <TableHead
-                                        scope="row"
-                                        className="sticky left-0 z-10 h-auto bg-card p-2 py-1.5 pl-8 font-normal text-muted-foreground"
-                                      >
-                                        <span className="mr-1.5" aria-hidden="true">└</span>
-                                        {sec.sectionName}
-                                        <code className="ml-2 font-mono text-3xs">{sec.sectionCode}</code>
-                                      </TableHead>
-                                      <TableCell className="py-1.5 text-right">
-                                        <span className="sr-only">Sans coefficient propre</span>
-                                      </TableCell>
-                                      {summary.steps.map((step) => {
-                                        const cell = sec.perStep.get(step.stepId)
-                                        if (!cell || cell.max <= 0) {
-                                          return (
-                                            <TableCell key={step.stepId} className="py-1.5 text-right">
-                                              <span aria-hidden="true">—</span>
-                                              <span className="sr-only">Non noté</span>
-                                            </TableCell>
-                                          )
-                                        }
-                                        const secPct = (cell.raw / cell.max) * 100
-                                        return (
-                                          <TableCell key={step.stepId} className="py-1.5 text-right tabular-nums">
-                                            <span className={cn(scoreTone(secPct), alertMark(secPct))}>
-                                              {formatScore(cell.raw)}
-                                            </span>
-                                            <span> / {plainFormatter.format(cell.max)}</span>
-                                            <Mention value={secPct} />
-                                          </TableCell>
-                                        )
-                                      })}
-                                      <TableCell className="py-1.5 pr-3 text-right">
-                                        <span className="sr-only">Sans moyenne propre</span>
-                                      </TableCell>
-                                    </TableRow>
-                                  ))}
-                                  </Fragment>
-                                )
-                              })}
-                            </TableBody>
-                          </Table>
-                        </div>
+                        <GrilleNotes
+                          summary={summary}
+                          caption={`Notes de la classe ${classe || "inconnue"}${salle ? `, salle ${salle}` : ""}, année ${e.classSession.academicYear.yearString}, par matière et par étape.`}
+                        />
                       )}
 
                       {e.notes && (
