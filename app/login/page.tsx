@@ -95,6 +95,12 @@ function LoginForm() {
       let title = "Erreur de connexion";
       if (err instanceof ApiError) {
         title = titlesByStatus[err.status] ?? "Échec de connexion";
+        // Un refus 403 n'est pas toujours un compte inactif : le serveur
+        // précise la raison dans `code`.
+        const code = (err.body as { code?: unknown } | null)?.code;
+        if (err.status === 403 && code === "IDENTITE_CONNEXION_TYPE_NON_ADMIS") {
+          title = "Accès non ouvert";
+        }
       } else if (err instanceof TypeError) {
         // fetch failed côté navigateur (réseau coupé, CORS, etc.)
         title = "Erreur réseau";

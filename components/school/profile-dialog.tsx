@@ -24,6 +24,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Loader2Icon } from "lucide-react"
 import type { AuthUser } from "@/lib/data/auth-data"
 import { toMessage } from '@/lib/errors'
+import { passwordPolicyError } from '@/lib/password-policy'
 
 interface ProfileDialogProps {
   open: boolean
@@ -90,10 +91,11 @@ export function ProfileDialog({
       })
       return
     }
-    if (newPassword.length < 6) {
+    const policyError = passwordPolicyError(newPassword)
+    if (policyError) {
       toast({
         title: "Erreur",
-        description: "Le mot de passe doit contenir au moins 6 caractères",
+        description: policyError,
         variant: "destructive",
       })
       return
