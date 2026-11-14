@@ -10,6 +10,10 @@
  * vers le browser (sinon la session ne serait pas créée côté client).
  *
  * SEC-A07-001 : rate limit anti brute-force (5 essais / 15 min / IP)
+ *
+ * Le serveur limite lui aussi les tentatives de connexion, par identifiant et
+ * par adresse : l'adresse du visiteur lui est transmise (X-Forwarded-For), et
+ * sa réponse 429 est relayée telle quelle, comme toute autre réponse.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { backendFetch } from "@/lib/backend";
@@ -53,8 +57,9 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // ─── Forward au backend (logique inchangée) ─────────────────────
+  // ─── Forward au backend, avec l'adresse du visiteur ─────────────
   return backendFetch(request, "/api/users/login", "POST", {
     forwardSetCookie: true,
+    clientIp: ip,
   });
 }

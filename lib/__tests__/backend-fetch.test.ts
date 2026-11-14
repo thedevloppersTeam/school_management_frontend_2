@@ -85,6 +85,31 @@ describe('backendFetch — ce que le serveur répond est relayé', () => {
   })
 })
 
+describe('backendFetch — adresse du visiteur (option clientIp)', () => {
+  async function relayWith(options?: { clientIp?: string }) {
+    const { backendFetch } = await import('@/lib/backend')
+    const request = new NextRequest('http://front.test/api/x', { headers: { 'x-forwarded-for': '203.0.113.50' } })
+    await backendFetch(request, '/api/x', 'GET', options)
+    return seen?.headers['x-forwarded-for']
+  }
+
+  it("sans l'option : aucun en-tête X-Forwarded-For, même si la requête reçue en porte un", async () => {
+    expect(await relayWith()).toBeUndefined()
+    expect(await relayWith({})).toBeUndefined()
+  })
+
+  it("avec l'option : l'adresse donnée arrive au serveur, IPv4 comme IPv6", async () => {
+    expect(await relayWith({ clientIp: '203.0.113.7' })).toBe('203.0.113.7')
+    expect(await relayWith({ clientIp: '2001:db8::7' })).toBe('2001:db8::7')
+  })
+
+  it("valeur qui n'est pas une adresse IP : rien n'est transmis", async () => {
+    for (const clientIp of ['unknown', '', '203.0.113.7, 198.51.100.1', '203.0.113.7:8080', 'exemple.test']) {
+      expect(await relayWith({ clientIp }), clientIp).toBeUndefined()
+    }
+  })
+})
+
 describe('backendFetch — vraie panne de transmission', () => {
   it('serveur arrêté : 503 « Serveur injoignable » en français, avec un code', async () => {
     const prev = process.env.BACKEND_URL

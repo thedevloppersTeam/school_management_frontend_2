@@ -85,6 +85,7 @@ function LoginForm() {
       const titlesByStatus: Record<number, string> = {
         401: "Identifiants incorrects",
         403: "Compte inactif",
+        429: "Trop de tentatives",
         500: "Erreur serveur",
         502: "Service indisponible",
         503: "Service indisponible",
@@ -99,10 +100,19 @@ function LoginForm() {
         title = "Erreur réseau";
       }
 
+      // 429 : le message reçu dit le délai d'attente. Il est rédigé pour cet
+      // écran et affiché tel quel ; sans message, libellé générique du statut.
+      const waitMessage =
+        err instanceof ApiError &&
+        err.status === 429 &&
+        typeof (err.body as { message?: unknown } | null)?.message === "string"
+          ? err.message
+          : null;
+
       toast({
         variant: "destructive",
         title,
-        description: toMessage(err),
+        description: waitMessage ?? toMessage(err),
       });
     } finally {
       setIsLoading(false);

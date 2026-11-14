@@ -1,3 +1,4 @@
+import { isIP } from "node:net";
 import { NextRequest, NextResponse } from "next/server";
 import { env } from "./env";
 import { logger } from "./logger";
@@ -18,6 +19,15 @@ export interface BackendFetchOptions {
    * Par défaut : false.
    */
   forwardSetCookie?: boolean;
+
+  /**
+   * Adresse du visiteur, transmise au serveur dans l'en-tête standard
+   * `X-Forwarded-For`. Réservée à la route de connexion, où le serveur compte
+   * les tentatives par adresse.
+   * Par défaut : absente, aucun en-tête d'adresse n'est envoyé. Une valeur qui
+   * n'est pas une adresse IP n'est pas transmise.
+   */
+  clientIp?: string;
 }
 
 function shouldForwardBody(method: string): boolean {
@@ -96,6 +106,10 @@ export async function backendFetch(
   const cookie = request.headers.get("cookie");
   if (cookie) {
     headers.cookie = cookie;
+  }
+
+  if (options.clientIp && isIP(options.clientIp) !== 0) {
+    headers["x-forwarded-for"] = options.clientIp;
   }
 
   let body: ArrayBuffer | undefined;
