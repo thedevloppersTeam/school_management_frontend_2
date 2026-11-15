@@ -74,6 +74,7 @@ import { Pagination } from "@/components/ui/table-pagination";
 import { parseScore } from "@/lib/grades/score-input";
 import { useExamMarkerChange } from "@/components/school/exam-marker-confirm";
 import { showExamSubjectCheckbox } from "@/lib/exam-markers/markers";
+import { examGroups, mixedMention } from "@/lib/exam-markers/subject-group";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -432,6 +433,15 @@ export function CPMSLYearConfigTabs({
   const showExamColumn = showExamSubjectCheckbox(
     levels.find((l) => l.id === classrooms.find((c) => c.id === selectedSessionForAssign)?.levelId),
   );
+  // Une case par MATIÈRE (défaut du 2026-11-15, salle à filières) : elle marque
+  // toutes les affectations de la matière, toutes filières confondues. Les lignes
+  // d'une même matière sont rapprochées pour que la case couvre leur groupe ;
+  // une salle sans filière (une affectation par matière) garde son ordre.
+  const examGroupsOfSession = showExamColumn ? examGroups(classSubjects) : [];
+  const examGroupBySubject = new Map(examGroupsOfSession.map((g) => [g.subjectId, g]));
+  const classSubjectRows = showExamColumn
+    ? examGroupsOfSession.flatMap((g) => g.members)
+    : classSubjects;
 
   // ── Modal assignation (classe d'abord, puis plusieurs matières) ──────────
   const [assignModalOpen, setAssignModalOpen] = useState(false);
@@ -2124,7 +2134,8 @@ export function CPMSLYearConfigTabs({
                           </td>
                         </tr>
                       ) : (
-                        classSubjects.map((cs, i) => {
+                        classSubjectRows.map((cs, i) => {
+                          const examGroup = examGroupBySubject.get(cs.subjectId);
                           return (
                             <tr
                               key={cs.id}
@@ -2199,27 +2210,39 @@ export function CPMSLYearConfigTabs({
                                   )}
                                 </div>
                               </td>
-                              {showExamColumn && (
-                                <td className="px-4 py-3">
+                              {showExamColumn && examGroup && examGroup.members[0].id === cs.id && (
+                                <td className="px-4 py-3 align-top" rowSpan={examGroup.members.length}>
                                   <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-neutral-700">
                                     <input
                                       type="checkbox"
                                       className="h-4 w-4 accent-primary"
-                                      checked={cs.isExam}
+                                      checked={examGroup.state === "checked"}
+                                      ref={(el) => {
+                                        if (el) el.indeterminate = examGroup.state === "mixed";
+                                      }}
                                       disabled={isArchived || examMarker.busy}
-                                      onChange={(e) =>
-                                        void examMarker.request(
-                                          { kind: "classSubject", id: cs.id, label: cs.subjectName, next: e.target.checked },
-                                          () => {
-                                            void loadClassSubjects(selectedSessionForAssign);
-                                            onExamMarkerChanged?.();
-                                          },
-                                        )
+                                      onChange={() =>
+                                        void examMarker.requestSubject(examGroup, () => {
+                                          void loadClassSubjects(selectedSessionForAssign);
+                                          onExamMarkerChanged?.();
+                                        })
                                       }
-                                      aria-label={`Matière d'examen : ${cs.subjectName}`}
+                                      aria-label={
+                                        examGroup.members.length > 1
+                                          ? `Matière d'examen : ${examGroup.label}, ${examGroup.members.length} filières`
+                                          : `Matière d'examen : ${examGroup.label}`
+                                      }
                                     />
-                                    <span className="sr-only sm:not-sr-only">Matière d&apos;examen</span>
+                                    <span className="sr-only sm:not-sr-only">
+                                      Matière d&apos;examen
+                                      {examGroup.members.length > 1 && ` (${examGroup.members.length} filières)`}
+                                    </span>
                                   </label>
+                                  {mixedMention(examGroup) && (
+                                    <p className="mt-1 text-xs text-neutral-600">
+                                      {mixedMention(examGroup)}
+                                    </p>
+                                  )}
                                 </td>
                               )}
                               <td className="px-4 py-3">
