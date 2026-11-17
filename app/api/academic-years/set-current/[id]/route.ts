@@ -1,6 +1,6 @@
 /**
  * POST /api/academic-years/set-current/[id]
- * Proxy → POST https://apicpmsl.stelloud.cloud/api/academic-years/set-current/:id
+ * Proxy → POST <BACKEND_URL>/api/academic-years/set-current/:id
  *
  * Définit une année scolaire comme année active (isCurrent = true).
  * Une seule année peut être active à la fois — les autres passent à false.

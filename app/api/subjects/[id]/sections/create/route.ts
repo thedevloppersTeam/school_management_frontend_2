@@ -1,6 +1,6 @@
 /**
  * POST /api/subjects/[id]/sections/create
- * Proxy → POST https://apicpmsl.stelloud.cloud/api/subjects/:subjectId/sections/create
+ * Proxy → POST <BACKEND_URL>/api/subjects/:subjectId/sections/create
  *
  * Crée une sous-matière pour une matière existante.
  * Body : { name, code, maxScore, displayOrder }

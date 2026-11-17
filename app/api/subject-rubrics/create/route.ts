@@ -1,6 +1,6 @@
 /**
  * POST /api/subject-rubrics/create
- * Proxy → POST https://apicpmsl.stelloud.cloud/api/subject-rubrics/create
+ * Proxy → POST <BACKEND_URL>/api/subject-rubrics/create
  *
  * Crée une nouvelle rubrique (R1, R2, R3 — max 3 par établissement).
  * Body : { name, code, description? }

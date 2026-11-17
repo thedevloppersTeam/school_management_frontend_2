@@ -1,6 +1,6 @@
 /**
  * POST /api/school-info/update
- * Proxy → POST https://apicpmsl.stelloud.cloud/api/school-info/update
+ * Proxy → POST <BACKEND_URL>/api/school-info/update
  *
  * Met à jour les informations de l'établissement.
  * Body : { name, motto?, foundedYear?, logo?, address?, phone?, email? }

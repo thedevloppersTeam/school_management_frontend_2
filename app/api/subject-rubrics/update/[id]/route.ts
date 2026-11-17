@@ -1,6 +1,6 @@
 /**
  * POST /api/subject-rubrics/update/[id]
- * Proxy → POST https://apicpmsl.stelloud.cloud/api/subject-rubrics/update/:id
+ * Proxy → POST <BACKEND_URL>/api/subject-rubrics/update/:id
  *
  * Modifie une rubrique existante.
  * Body : { name?, description? }

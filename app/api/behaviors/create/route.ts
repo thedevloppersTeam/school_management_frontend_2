@@ -1,6 +1,6 @@
 /**
  * POST /api/behaviors/create
- * Proxy → POST https://apicpmsl.stelloud.cloud/api/behaviors/create
+ * Proxy → POST <BACKEND_URL>/api/behaviors/create
  *
  * Crée le comportement d'un élève pour une étape.
  * Contrainte unique : enrollmentId + stepId

@@ -1,6 +1,6 @@
 /**
  * GET /api/auth/me
- * Proxy → GET https://apicpmsl.stelloud.cloud/api/users/me
+ * Proxy → GET <BACKEND_URL>/api/users/me
  *
  * Retourne les infos de l'utilisateur courant (basé sur le cookie de session).
  * Renvoie 401 si la session est invalide ou expirée.

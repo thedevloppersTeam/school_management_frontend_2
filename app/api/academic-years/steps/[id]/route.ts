@@ -1,6 +1,6 @@
 /**
  * GET /api/academic-years/steps/[id]
- * Proxy → GET https://apicpmsl.stelloud.cloud/api/academic-years/steps/:id
+ * Proxy → GET <BACKEND_URL>/api/academic-years/steps/:id
  *
  * Récupère une étape (step) par son ID.
  * Retourne : { id, name, stepNumber, startDate, endDate, academicYearId }

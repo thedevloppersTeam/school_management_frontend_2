@@ -1,6 +1,6 @@
 /**
  * POST /api/attitudes/delete/[id]
- * Proxy → POST https://apicpmsl.stelloud.cloud/api/attitudes/delete/:id
+ * Proxy → POST <BACKEND_URL>/api/attitudes/delete/:id
  *
  * Supprime une attitude.
  * Body : (vide)

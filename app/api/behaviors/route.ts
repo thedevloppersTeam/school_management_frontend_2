@@ -1,6 +1,6 @@
 /**
  * GET /api/behaviors
- * Proxy → GET https://apicpmsl.stelloud.cloud/api/behaviors
+ * Proxy → GET <BACKEND_URL>/api/behaviors
  *
  * Retourne les comportements selon le filtre fourni.
  * Query params (un des deux) :

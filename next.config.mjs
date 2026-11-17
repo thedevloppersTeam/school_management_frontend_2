@@ -1,5 +1,6 @@
 import path from "path";
 import { fileURLToPath } from "url";
+import { resolveBackendUrl } from "./lib/backend-url.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -7,21 +8,13 @@ const __dirname = path.dirname(__filename);
 const isDev = process.env.NODE_ENV === "development";
 
 /**
- * URL du backend.
+ * URL du backend : NEXT_PUBLIC_BACKEND_URL, sinon BACKEND_URL.
+ * Aucune valeur par défaut (A11) : sans l'une des deux, le build échoue
+ * avec un message explicite. Voir lib/backend-url.mjs et le README.
  *
- * Priorité :
- * 1. NEXT_PUBLIC_BACKEND_URL
- * 2. BACKEND_URL
- * 3. Fallback production CPMSL
- *
- * En local, si tu veux pointer vers ton backend local :
- * BACKEND_URL=http://localhost:80
+ * En local : BACKEND_URL=http://localhost:4000
  */
-const BACKEND_URL = (
-  process.env.NEXT_PUBLIC_BACKEND_URL ||
-  process.env.BACKEND_URL ||
-  "https://apicpmsl.stelloud.cloud"
-).replace(/\/$/, "");
+const BACKEND_URL = resolveBackendUrl(process.env);
 
 /**
  * Content Security Policy (CSP)

@@ -1,6 +1,6 @@
 /**
  * POST /api/class-subjects/update/[id]
- * Proxy → POST https://apicpmsl.stelloud.cloud/api/class-subjects/update/:id
+ * Proxy → POST <BACKEND_URL>/api/class-subjects/update/:id
  *
  * Modifie une assignation matière-classe.
  * Body : { teacherId?, coefficientOverride? }

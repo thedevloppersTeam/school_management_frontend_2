@@ -10,7 +10,7 @@
  * backend n'est pas sur localhost ou 127.0.0.1 (voir assertLocalTarget) :
  *   BACKEND_URL               obligatoire, local (lu par les route handlers)
  *   NEXT_PUBLIC_BACKEND_URL   facultatif ; s'il est defini, local aussi
- * Sans BACKEND_URL, next.config.mjs retombe sur le backend de PRODUCTION :
+ * Sans BACKEND_URL, next.config.mjs refuse de demarrer (A11, aucun repli) :
  * les tests s'arretent avant toute navigation.
  */
 import { test, type Page } from '@playwright/test';
@@ -45,7 +45,7 @@ function hoteLocal(variable: string, valeur: string | undefined): void {
   if (!valeur) {
     throw new Error(
       `[e2e] ${variable} n'est pas defini : l'hote du backend ne peut pas etre determine. ` +
-      `Sans lui, next.config.mjs retombe sur le backend de production. Tests arretes.`,
+      `Sans lui, next.config.mjs refuse de demarrer. Tests arretes.`,
     );
   }
   let hote: string;

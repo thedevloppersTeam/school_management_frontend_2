@@ -1,6 +1,6 @@
 /**
  * GET /api/school-info
- * Proxy → GET https://apicpmsl.stelloud.cloud/api/school-info
+ * Proxy → GET <BACKEND_URL>/api/school-info
  *
  * Retourne les informations de l'établissement.
  * Rôles autorisés : ADMIN, SYSTEM_ADMIN

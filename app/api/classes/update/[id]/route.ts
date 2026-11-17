@@ -1,6 +1,6 @@
 /**
  * POST /api/classes/update/[id]
- * Proxy → POST https://apicpmsl.stelloud.cloud/api/classes/update/:id
+ * Proxy → POST <BACKEND_URL>/api/classes/update/:id
  *
  * Modifie une classe existante.
  * Body : { maxStudents?, description? }

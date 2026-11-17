@@ -1,6 +1,6 @@
 /**
  * POST /api/behaviors/update/[id]
- * Proxy → POST https://apicpmsl.stelloud.cloud/api/behaviors/update/:id
+ * Proxy → POST <BACKEND_URL>/api/behaviors/update/:id
  *
  * Modifie le comportement d'un élève pour une étape.
  * Body : {

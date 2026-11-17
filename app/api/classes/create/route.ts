@@ -1,6 +1,6 @@
 /**
  * POST /api/classes/create
- * Proxy → POST https://apicpmsl.stelloud.cloud/api/classes/create
+ * Proxy → POST <BACKEND_URL>/api/classes/create
  *
  * Crée une nouvelle classe (salle).
  * Body : { classTypeId, letter, maxStudents, description? }

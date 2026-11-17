@@ -1,6 +1,6 @@
 /**
  * POST /api/students
- * Proxy → POST https://apicpmsl.stelloud.cloud/api/students/
+ * Proxy → POST <BACKEND_URL>/api/students/
  *
  * Retourne la liste de tous les élèves.
  * Note : le backend utilise POST pour les listes (pas GET).

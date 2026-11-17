@@ -1,6 +1,6 @@
 /**
  * GET /api/subject-rubrics
- * Proxy → GET https://apicpmsl.stelloud.cloud/api/subject-rubrics
+ * Proxy → GET <BACKEND_URL>/api/subject-rubrics
  *
  * Retourne la liste de toutes les rubriques de matières.
  * Rubriques CPMSL : R1 (70%), R2 (25%), R3 (5%) — formule BR-001.

@@ -1,6 +1,6 @@
 /**
  * POST /api/students/update/[id]
- * Proxy → POST https://apicpmsl.stelloud.cloud/api/students/update/:id
+ * Proxy → POST <BACKEND_URL>/api/students/update/:id
  *
  * Modifie le profil d'un élève.
  * Body : { address?, motherName?, fatherName?, phone1?, phone2?, parentsEmail? }

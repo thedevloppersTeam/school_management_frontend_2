@@ -1,6 +1,6 @@
 /**
  * GET /api/academic-years/steps/enable/[id]
- * Proxy → GET https://apicpmsl.stelloud.cloud/api/academic-years/steps/enable/:id
+ * Proxy → GET <BACKEND_URL>/api/academic-years/steps/enable/:id
  *
  * Ouvre une étape — permet la saisie des notes pour cette étape.
  * Rôles autorisés : SYSTEM_ADMIN, ADMIN
