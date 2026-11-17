@@ -9,7 +9,6 @@ export interface User {
   id: string;
   username: string;
   email: string;
-  type: UserRole;
   firstname?: string;
   lastname?: string;
   birthDate?: string;
