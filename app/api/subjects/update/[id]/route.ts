@@ -1,6 +1,6 @@
 /**
  * POST /api/subjects/update/[id]
- * Proxy → POST https://apicpmsl.stelloud.cloud/api/subjects/update/:id
+ * Proxy → POST <BACKEND_URL>/api/subjects/update/:id
  *
  * Modifie une matière existante.
  * Body : { name?, code?, maxScore?, coefficient?, hasSections?, rubricId? }

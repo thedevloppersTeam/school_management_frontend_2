@@ -1,6 +1,6 @@
 /**
  * POST /api/grades/update/[id]
- * Proxy → POST https://apicpmsl.stelloud.cloud/api/grades/update/:id
+ * Proxy → POST <BACKEND_URL>/api/grades/update/:id
  *
  * Modifie une note existante.
  * Body : { studentScore?, gradeType?, comment?, gradedAt? }

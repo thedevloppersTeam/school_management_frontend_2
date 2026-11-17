@@ -1,6 +1,6 @@
 /**
  * POST /api/attitudes/update/[id]
- * Proxy → POST https://apicpmsl.stelloud.cloud/api/attitudes/update/:id
+ * Proxy → POST <BACKEND_URL>/api/attitudes/update/:id
  *
  * Modifie le libellé d'une attitude.
  * Body : { label: string }

@@ -1,6 +1,6 @@
 /**
  * GET /api/attitudes
- * Proxy → GET https://apicpmsl.stelloud.cloud/api/attitudes
+ * Proxy → GET <BACKEND_URL>/api/attitudes
  *
  * Liste les attitudes d'une année scolaire.
  * Query params : ?academicYearId=  (optionnel)

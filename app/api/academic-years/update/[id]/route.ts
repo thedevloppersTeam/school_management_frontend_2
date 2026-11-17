@@ -1,6 +1,6 @@
 /**
  * POST /api/academic-years/update/[id]
- * Proxy → POST https://apicpmsl.stelloud.cloud/api/academic-years/update/:id
+ * Proxy → POST <BACKEND_URL>/api/academic-years/update/:id
  *
  * Modifie les informations d'une année scolaire existante.
  * Body : { name?, startDate?, endDate? }

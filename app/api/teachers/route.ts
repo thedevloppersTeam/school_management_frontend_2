@@ -1,6 +1,6 @@
 /**
  * POST /api/teachers
- * Proxy → POST https://apicpmsl.stelloud.cloud/api/teachers/
+ * Proxy → POST <BACKEND_URL>/api/teachers/
  *
  * Retourne la liste de tous les professeurs.
  * Note : le backend utilise POST pour les listes (pas GET).

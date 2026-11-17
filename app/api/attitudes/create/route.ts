@@ -1,6 +1,6 @@
 /**
  * POST /api/attitudes/create
- * Proxy → POST https://apicpmsl.stelloud.cloud/api/attitudes/create
+ * Proxy → POST <BACKEND_URL>/api/attitudes/create
  *
  * Crée une attitude pour une année scolaire.
  * Body : { label: string, academicYearId: string }

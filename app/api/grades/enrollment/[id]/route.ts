@@ -1,6 +1,6 @@
 /**
  * GET /api/grades/enrollment/[id]
- * Proxy → GET https://apicpmsl.stelloud.cloud/api/grades/enrollment/:enrollmentId
+ * Proxy → GET <BACKEND_URL>/api/grades/enrollment/:enrollmentId
  *
  * Retourne toutes les notes d'un élève pour une inscription donnée.
  * Query params optionnels : stepId, classSubjectId

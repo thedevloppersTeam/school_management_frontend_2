@@ -1,6 +1,6 @@
 /**
  * POST /api/auth/login
- * Proxy → POST https://apicpmsl.stelloud.cloud/api/users/login
+ * Proxy → POST <BACKEND_URL>/api/users/login
  *
  * Authentifie un utilisateur et propage le cookie de session.
  * Body : { username: string, password: string }

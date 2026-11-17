@@ -1,6 +1,6 @@
 /**
  * POST /api/subjects/sections/update/[id]
- * Proxy → POST https://apicpmsl.stelloud.cloud/api/subjects/sections/update/:id
+ * Proxy → POST <BACKEND_URL>/api/subjects/sections/update/:id
  *
  * Modifie une sous-matière existante.
  * Body : { name?, maxScore?, displayOrder? }

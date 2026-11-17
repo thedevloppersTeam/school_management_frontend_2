@@ -16,6 +16,26 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## Variables d'environnement
+
+Le frontend ne contient **aucune adresse de serveur par défaut**. Il faut poser
+l'adresse du backend, sinon `next build` et `next dev` s'arrêtent avec un
+message qui nomme les variables attendues.
+
+| Variable | Rôle |
+|---|---|
+| `BACKEND_URL` | **Obligatoire.** Adresse du backend, lue par `next.config.mjs` (CSP, relais `/uploads`) et par les route handlers `app/api/**` (`lib/env.ts`). HTTPS exigé, sauf `localhost` / `127.0.0.1` en développement. |
+| `NEXT_PUBLIC_BACKEND_URL` | Facultative. Si elle est posée, `next.config.mjs` la préfère à `BACKEND_URL`. Les route handlers, eux, ne lisent que `BACKEND_URL`. |
+
+En local, dans un fichier `.env.local` (jamais commité) :
+
+```
+BACKEND_URL=http://localhost:4000
+```
+
+Sur Vercel, la variable se pose dans *Settings → Environment Variables*, pour
+chaque environnement qui construit le projet (Production, Preview, Development).
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.

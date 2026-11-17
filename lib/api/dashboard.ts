@@ -2,7 +2,7 @@
  * lib/api/dashboard.ts
  * Fonctions fetch pour le tableau de bord.
  * Toutes les requêtes passent par les API routes Next.js (/api/...)
- * qui proxyfient vers https://apicpmsl.stelloud.cloud
+ * qui proxyfient vers le backend (BACKEND_URL)
  */
 
 // ── Types ─────────────────────────────────────────────────────────────────────

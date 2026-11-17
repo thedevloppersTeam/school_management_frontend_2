@@ -1,6 +1,6 @@
 /**
  * POST /api/class-types/create
- * Proxy → POST https://apicpmsl.stelloud.cloud/api/class-types/create
+ * Proxy → POST <BACKEND_URL>/api/class-types/create
  *
  * Crée un nouveau niveau scolaire (1ère AF, NS1, NS3, etc.).
  * Body : { name, isTerminal?, hasTrack? }

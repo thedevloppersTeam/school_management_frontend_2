@@ -1,6 +1,6 @@
 /**
  * GET /api/subjects/[id]/sections
- * Proxy → GET https://apicpmsl.stelloud.cloud/api/subjects/:subjectId/sections
+ * Proxy → GET <BACKEND_URL>/api/subjects/:subjectId/sections
  *
  * Liste les sous-matières (sections) d'une matière.
  * Note : le param Next.js s'appelle "id" (convention projet), mais sémantiquement

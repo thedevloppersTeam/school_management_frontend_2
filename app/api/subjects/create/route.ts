@@ -1,6 +1,6 @@
 /**
  * POST /api/subjects/create
- * Proxy → POST https://apicpmsl.stelloud.cloud/api/subjects/create
+ * Proxy → POST <BACKEND_URL>/api/subjects/create
  *
  * Crée une nouvelle matière dans le référentiel global.
  * Body : { name, code, maxScore, coefficient, hasSections, rubricId? }

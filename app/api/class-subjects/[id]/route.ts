@@ -1,6 +1,6 @@
 /**
  * GET /api/class-subjects/[id]
- * Proxy → GET https://apicpmsl.stelloud.cloud/api/class-subjects/:id
+ * Proxy → GET <BACKEND_URL>/api/class-subjects/:id
  *
  * Récupère une assignation matière-classe par son ID.
  * Rôles autorisés : SYSTEM_ADMIN, ADMIN
