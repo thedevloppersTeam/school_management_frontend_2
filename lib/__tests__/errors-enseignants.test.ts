@@ -32,6 +32,44 @@ describe('409 de la création et de l’activation d’une fiche', () => {
   })
 })
 
+// Lot serveur ID-T-C2 : mêmes codes à la création et à l'activation de la fiche.
+describe('409 du lot ID-T-C2 : adulte, ni ancien élève ni ancien parent', () => {
+  it.each([
+    [
+      'IDENTITE_ENSEIGNANT_COMPTE_MINEUR',
+      "Fiche refusée : ce compte est celui d'une personne mineure ; il ne peut pas recevoir de fiche enseignant.",
+    ],
+    [
+      'IDENTITE_ENSEIGNANT_COMPTE_SANS_DATE_NAISSANCE',
+      "Fiche refusée : ce compte n'a pas de date de naissance, son âge ne peut pas être vérifié ; il ne peut pas recevoir de fiche enseignant.",
+    ],
+    [
+      'IDENTITE_ENSEIGNANT_ANCIEN_COMPTE_ELEVE',
+      "Fiche refusée : ce compte est un ancien compte d'élève ; il ne peut pas recevoir de fiche enseignant.",
+    ],
+    [
+      'IDENTITE_ENSEIGNANT_ANCIEN_COMPTE_PARENT',
+      "Fiche refusée : ce compte est un ancien compte de parent ; il ne peut pas recevoir de fiche enseignant.",
+    ],
+  ])('%s', (code, attendu) => {
+    expect(toMessage(refus(409, code))).toBe(attendu)
+  })
+
+  it.each([
+    'IDENTITE_ENSEIGNANT_COMPTE_MINEUR',
+    'IDENTITE_ENSEIGNANT_COMPTE_SANS_DATE_NAISSANCE',
+    'IDENTITE_ENSEIGNANT_ANCIEN_COMPTE_ELEVE',
+    'IDENTITE_ENSEIGNANT_ANCIEN_COMPTE_PARENT',
+  ])('%s : même message à l’activation (fiche-status), sans le texte du serveur', (code) => {
+    const activation = new ApiError(409, '/api/teachers/fiche-status/00000000-0000-0000-0000-000000000000', 'refus', {
+      code,
+      message: 'Some server text',
+    })
+    expect(toMessage(activation)).toBe(toMessage(refus(409, code)))
+    expect(toMessage(activation)).not.toMatch(/Some server text/)
+  })
+})
+
 describe('autres refus des routes de fiche', () => {
   it.each([
     [403, 'IDENTITE_ROLE_DE_SOI', /votre propre fiche/],

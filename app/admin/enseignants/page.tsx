@@ -123,7 +123,8 @@ export default function EnseignantsPage() {
 
   useEffect(() => {
     let annule = false
-    getMe().then((moi) => {
+    // getMe ne rejette jamais (lib/data/auth-data.tsx : try/catch → null, traité comme « refusé »).
+    void getMe().then((moi) => {
       if (annule) return
       if (!estAdministrateur(moi)) {
         setAcces("refuse")

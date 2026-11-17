@@ -284,7 +284,8 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
 
   // Auth guard
   useEffect(() => {
-    getMe().then((user) => {
+    // getMe ne rejette jamais (try/catch → null, qui renvoie vers /login).
+    void getMe().then((user) => {
       if (!user) {
         // `?expired=1` : sinon proxy.ts renverrait ici (le cookie mort est
         // toujours présent) → boucle /login ↔ /admin.

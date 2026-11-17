@@ -250,6 +250,17 @@ const CODE_MESSAGES: Record<string, string> = {
     "Fiche refusée : ce compte est celui d'un élève.",
   IDENTITE_ENSEIGNANT_COMPTE_PARENT:
     "Fiche refusée : ce compte est relié à un parent.",
+  // Lot serveur ID-T-C2 : un enseignant est un adulte, et n'est pas un ancien élève ni un ancien
+  // parent. Renvoyés par la création (POST /api/teachers/create) ET par l'activation
+  // (fiche-status) : textes valables pour les deux gestes. Ni âge ni date dans le message.
+  IDENTITE_ENSEIGNANT_COMPTE_MINEUR:
+    "Fiche refusée : ce compte est celui d'une personne mineure ; il ne peut pas recevoir de fiche enseignant.",
+  IDENTITE_ENSEIGNANT_COMPTE_SANS_DATE_NAISSANCE:
+    "Fiche refusée : ce compte n'a pas de date de naissance, son âge ne peut pas être vérifié ; il ne peut pas recevoir de fiche enseignant.",
+  IDENTITE_ENSEIGNANT_ANCIEN_COMPTE_ELEVE:
+    "Fiche refusée : ce compte est un ancien compte d'élève ; il ne peut pas recevoir de fiche enseignant.",
+  IDENTITE_ENSEIGNANT_ANCIEN_COMPTE_PARENT:
+    "Fiche refusée : ce compte est un ancien compte de parent ; il ne peut pas recevoir de fiche enseignant.",
   IDENTITE_ENSEIGNANT_FICHE_EXISTANTE:
     "Ce compte a déjà une fiche enseignant : rechargez la liste.",
   IDENTITE_ENSEIGNANT_PERSONNES_DIFFERENTES:
