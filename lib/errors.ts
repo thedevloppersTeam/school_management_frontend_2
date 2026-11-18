@@ -241,6 +241,40 @@ const CODE_MESSAGES: Record<string, string> = {
   CAL_CATEGORIE_EN_DOUBLE: "Une catégorie du catalogue porte déjà ce libellé interne.",
   CAL_EN_DOUBLE:
     "Enregistrement refusé : une autre saisie faite au même moment entre en conflit avec celle-ci. Rechargez la page, puis vérifiez.",
+  // ── Fiches des enseignants (lot ID-T, écran « Enseignants ») ──
+  // Libellés d'après le sens de chaque code côté serveur (api.md, Teachers API).
+  // Aucun ne nomme le compte visé : le message reste lisible sans détail personnel.
+  IDENTITE_ENSEIGNANT_COMPTE_SYSTEM_ADMIN:
+    "Fiche refusée : ce compte a le rôle d'administrateur système, qui ne se cumule pas avec l'enseignement.",
+  IDENTITE_ENSEIGNANT_COMPTE_ELEVE:
+    "Fiche refusée : ce compte est celui d'un élève.",
+  IDENTITE_ENSEIGNANT_COMPTE_PARENT:
+    "Fiche refusée : ce compte est relié à un parent.",
+  // Lot serveur ID-T-C2 : un enseignant est un adulte, et n'est pas un ancien élève ni un ancien
+  // parent. Renvoyés par la création (POST /api/teachers/create) ET par l'activation
+  // (fiche-status) : textes valables pour les deux gestes. Ni âge ni date dans le message.
+  IDENTITE_ENSEIGNANT_COMPTE_MINEUR:
+    "Fiche refusée : ce compte est celui d'une personne mineure ; il ne peut pas recevoir de fiche enseignant.",
+  IDENTITE_ENSEIGNANT_COMPTE_SANS_DATE_NAISSANCE:
+    "Fiche refusée : ce compte n'a pas de date de naissance, son âge ne peut pas être vérifié ; il ne peut pas recevoir de fiche enseignant.",
+  IDENTITE_ENSEIGNANT_ANCIEN_COMPTE_ELEVE:
+    "Fiche refusée : ce compte est un ancien compte d'élève ; il ne peut pas recevoir de fiche enseignant.",
+  IDENTITE_ENSEIGNANT_ANCIEN_COMPTE_PARENT:
+    "Fiche refusée : ce compte est un ancien compte de parent ; il ne peut pas recevoir de fiche enseignant.",
+  IDENTITE_ENSEIGNANT_FICHE_EXISTANTE:
+    "Ce compte a déjà une fiche enseignant : rechargez la liste.",
+  IDENTITE_ENSEIGNANT_PERSONNES_DIFFERENTES:
+    "Activation refusée : la fiche et son compte ne désignent pas la même personne. Prévenez l'administrateur système.",
+  IDENTITE_ROLE_DE_SOI:
+    "Vous ne pouvez pas modifier votre propre fiche enseignant.",
+  IDENTITE_ENSEIGNANT_INTROUVABLE:
+    "Cette fiche enseignant n'existe plus : rechargez la liste.",
+  IDENTITE_COMPTE_INTROUVABLE:
+    "Ce compte n'existe plus : rechargez la liste des comptes.",
+  IDENTITE_ENSEIGNANT_ENTREE_INVALIDE:
+    "Fiche refusée : un champ n'a pas le format attendu (courriel, date d'embauche, téléphone de 20 caractères au plus, fonction de 100 caractères au plus).",
+  IDENTITE_ETAT_ENTREE_INVALIDE:
+    "Demande refusée : l'état demandé n'a pas le format attendu.",
   // Relais : réponse du serveur hors contrat (lib/backend.ts, backendFetchValide)
   CONTRAT_REPONSE_INVALIDE:
     "La réponse du serveur ne correspond pas au format attendu : l'application et le serveur ne sont probablement pas à la même version. Rechargez la page ; si le problème persiste, prévenez l'administrateur.",

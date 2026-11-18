@@ -67,11 +67,13 @@ import {
   UserXIcon,
   LandmarkIcon,
   FileSpreadsheetIcon,
+  IdCardIcon,
 } from "lucide-react";
 
 import { getMe, logout, type AuthUser } from "@/lib/data/auth-data";
 import { cn } from "@/lib/utils";
 import { activeHref } from "@/lib/admin-nav/active-item";
+import { estAdministrateur } from "@/lib/enseignants/fiches";
 import { useAcademicYearContext } from "@/lib/contexts/academic-year-context";
 import { SchoolLogo } from "@/components/school/school-logo";
 import { ProfileDialog } from "@/components/school/profile-dialog";
@@ -83,6 +85,8 @@ interface NavChild {
   label: string;
   href: string;
   icon: React.ElementType;
+  /** Réservé à ADMIN et SYSTEM_ADMIN : masqué pour tout autre compte. */
+  adminOnly?: boolean;
 }
 
 interface NavGroup {
@@ -202,12 +206,29 @@ const navItems: NavItem[] = [
         href: "/admin/academic-years",
         icon: CalendarIcon,
       },
+      // Fiches enseignant liées aux comptes (lot ID-T-F, D-TF1).
+      {
+        label: "Enseignants",
+        href: "/admin/enseignants",
+        icon: IdCardIcon,
+        adminOnly: true,
+      },
     ],
   },
 ];
 
 function isNavGroup(item: NavItem): item is NavGroup {
   return "children" in item;
+}
+
+/** Menu du compte connecté : sans les entrées réservées à l'administration s'il n'en a pas le rôle. */
+function menuDuCompte(items: NavItem[], admin: boolean): NavItem[] {
+  if (admin) return items;
+  return items
+    .map((item) =>
+      isNavGroup(item) ? { ...item, children: item.children.filter((c) => !c.adminOnly) } : item,
+    )
+    .filter((item) => !isNavGroup(item) || item.children.length > 0);
 }
 
 /* ────────────────────── Breadcrumb helper ────────────────────── */
@@ -226,6 +247,7 @@ const breadcrumbMap: Record<string, string> = {
   "/admin/journal": "Journal",
   "/admin/fin-annee/promotion": "Promotion des élèves",
   "/admin/fin-annee/menfp": "Liste MENFP",
+  "/admin/enseignants": "Enseignants",
 };
 
 function getBreadcrumbLabel(pathname: string): string {
@@ -262,7 +284,8 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
 
   // Auth guard
   useEffect(() => {
-    getMe().then((user) => {
+    // getMe ne rejette jamais (try/catch → null, qui renvoie vers /login).
+    void getMe().then((user) => {
       if (!user) {
         // `?expired=1` : sinon proxy.ts renverrait ici (le cookie mort est
         // toujours présent) → boucle /login ↔ /admin.
@@ -301,9 +324,10 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
 
   // Un seul lien actif dans tout le menu : le plus long qui correspond à
   // l'adresse (lib/admin-nav/active-item.ts).
+  const menu = menuDuCompte(navItems, estAdministrateur(currentUser));
   const currentHref = activeHref(
     pathname,
-    navItems.flatMap((item) =>
+    menu.flatMap((item) =>
       isNavGroup(item) ? item.children.map((c) => getNavHref(c.href)) : [item.href],
     ),
   );
@@ -386,7 +410,7 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
             </SidebarGroupLabel>
 
             <SidebarMenu className="px-2">
-              {navItems.map((item) => {
+              {menu.map((item) => {
                 if (!isNavGroup(item)) {
                   const Icon = item.icon;
                   const isActive = item.href === currentHref;
