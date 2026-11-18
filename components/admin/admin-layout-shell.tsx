@@ -74,6 +74,8 @@ import { getMe, logout, type AuthUser } from "@/lib/data/auth-data";
 import { cn } from "@/lib/utils";
 import { activeHref } from "@/lib/admin-nav/active-item";
 import { estAdministrateur } from "@/lib/enseignants/fiches";
+import { decisionDeGarde } from "@/lib/garde/espace";
+import { appliquerRedirection } from "@/lib/garde/redirection";
 import { useAcademicYearContext } from "@/lib/contexts/academic-year-context";
 import { SchoolLogo } from "@/components/school/school-logo";
 import { ProfileDialog } from "@/components/school/profile-dialog";
@@ -282,18 +284,22 @@ export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
 
   const [profileOpen, setProfileOpen] = useState(false);
 
-  // Auth guard
+  // Garde de rôle (E-2, lot ID-T-F-1) : fonction pure de lib/garde/espace.ts.
+  // Sans session → /login?expired=1 (sinon proxy.ts renverrait ici, le cookie
+  // mort étant toujours présent : boucle /login ↔ /admin). Un compte qui n'est
+  // pas administrateur part vers /teacher/dashboard s'il est enseignant, vers
+  // /login sinon ; le cumul ADMIN + TEACHER reste ici (D-TF1-4). Rien de la coque
+  // ni de la page n'est affiché avant la décision. getMe ne rejette jamais (null
+  // en cas d'échec), appliquerRedirection non plus.
   useEffect(() => {
-    // getMe ne rejette jamais (try/catch → null, qui renvoie vers /login).
     void getMe().then((user) => {
-      if (!user) {
-        // `?expired=1` : sinon proxy.ts renverrait ici (le cookie mort est
-        // toujours présent) → boucle /login ↔ /admin.
-        window.location.href = "/login?expired=1";
-      } else {
-        setCurrentUser(user);
-        setAuthLoading(false);
+      const decision = decisionDeGarde("admin", user);
+      if (decision.action === "rediriger") {
+        void appliquerRedirection(decision.vers, decision.fermerLaSession);
+        return;
       }
+      setCurrentUser(user);
+      setAuthLoading(false);
     });
   }, []);
 
