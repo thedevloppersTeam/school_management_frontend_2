@@ -30,6 +30,8 @@ interface ProfileDialogProps {
   onOpenChange: (open: boolean) => void
   user: AuthUser
   onProfileUpdated: (user: AuthUser) => void
+  /** Onglet ouvert à l'affichage (lot ID-T-F-1) ; par défaut le profil. */
+  ongletInitial?: "profile" | "password"
 }
 
 export function ProfileDialog({
@@ -37,6 +39,7 @@ export function ProfileDialog({
   onOpenChange,
   user,
   onProfileUpdated,
+  ongletInitial = "profile",
 }: ProfileDialogProps) {
   const { toast } = useToast()
 
@@ -60,11 +63,10 @@ export function ProfileDialog({
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...user,
-          firstname,
-          lastname,
-        }),
+        // Liste fermée côté serveur (firstname, lastname, profilePhoto) : tout
+        // autre champ, dont ceux de /me que porte `user`, est refusé en 400
+        // (IDENTITE_PROFIL_ENTREE_INVALIDE). Lot ID-T-F-1, D-TF1-3.
+        body: JSON.stringify({ firstname, lastname }),
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
@@ -159,7 +161,7 @@ export function ProfileDialog({
 
         <Separator />
 
-        <Tabs defaultValue="profile" className="mt-2">
+        <Tabs defaultValue={ongletInitial} className="mt-2">
           <TabsList className="w-full">
             <TabsTrigger value="profile" className="flex-1">
               Profil

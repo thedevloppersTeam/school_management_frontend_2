@@ -12,6 +12,7 @@
  *
  * Routes protégées :
  *   - /admin/*       → pages admin (redirect HTML vers /login si pas de cookie)
+ *   - /teacher/*     → espace enseignant (même règle ; lot ID-T-F-1)
  *   - /api/*         → routes proxy (401 JSON si pas de cookie)
  *
  * Exceptions (toujours accessibles sans cookie) :
@@ -93,8 +94,15 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // ── Cas 3 : routes admin protégées ───────────────────────────────────
-  if (pathname.startsWith("/admin")) {
+  // ── Cas 3 : routes admin et espace enseignant protégés ───────────────
+  // /login avec session renvoie toujours vers /admin/dashboard (Cas 2) : la
+  // garde de la coque d'administration renvoie ensuite l'enseignant vers
+  // /teacher/dashboard (E-2, lib/garde/espace.ts).
+  if (
+    pathname.startsWith("/admin") ||
+    pathname === "/teacher" ||
+    pathname.startsWith("/teacher/")
+  ) {
     if (!hasSession) {
       // Préserve la destination dans ?from=... pour redirect post-login
       const loginUrl = new URL("/login", request.url);
