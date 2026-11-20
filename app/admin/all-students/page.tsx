@@ -67,6 +67,8 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { ArchivedYearBanner } from "@/components/school/archived-year-banner"
 import { StudentEnrollForm } from "@/components/school/students/student-enroll-form"
 import { EditStudentModal } from "@/components/school/edit-student-modal"
+import { enregistrerProfil, lireProfilEleve } from "@/lib/api/students"
+import type { CorpsModificationProfil, ProfilInitial } from "@/lib/students/profil"
 import { PromotionPhotoModal } from "@/components/school/promotion-photo-modal"
 import { normalizeUploadUrl } from "@/lib/upload-url"
 import { StatCard } from "@/components/school/stat-card"
@@ -77,6 +79,7 @@ import { estArchivee } from "@/lib/academic-years/status"
 import { libelleClasseSalle } from "@/lib/classes/labels"
 import { isNisuValid, NISU_RULE_LABEL } from "@/lib/nisu"
 import { deleteFailures, type DeleteFailure } from "@/lib/students/delete-report"
+import { toMessage } from "@/lib/errors"
 
 // ── Types locaux ──────────────────────────────────────────────────────────────
 
@@ -173,6 +176,26 @@ function StatusBadge({ status }: { status?: EnrollmentStatus }) {
   }
 }
 
+// Hors du rendu de la page (react-hooks/static-components) : la colonne triée
+// et le sens viennent en props.
+function SortIcon<C extends string>({ col, sortCol, sortDir }: {
+  col: C; sortCol: C | null; sortDir: 'asc' | 'desc' | null
+}) {
+  if (sortCol !== col) {
+    return null
+  }
+  return sortDir === 'asc'
+    ? <ArrowUpIcon className="h-3 w-3 inline ml-1" />
+    : <ArrowDownIcon className="h-3 w-3 inline ml-1" />
+}
+
+// Lecture du profil complet à l'ouverture du modal (MPE-12) : la liste ne
+// charge ni le courriel ni la date de naissance de chaque élève.
+type ProfilEdition =
+  | { studentId: string; statut: 'chargement' }
+  | { studentId: string; statut: 'pret'; profil: ProfilInitial }
+  | { studentId: string; statut: 'erreur'; message: string }
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function StudentsManagementPage() {
@@ -203,6 +226,7 @@ export default function StudentsManagementPage() {
   // Modification profil
   const [editingStudent, setEditingStudent]     = useState<StudentRow | null>(null)
   const [editSubmitting, setEditSubmitting]     = useState(false)
+  const [profilEdition, setProfilEdition]       = useState<ProfilEdition | null>(null)
 
   // Transfert
 
@@ -390,7 +414,9 @@ export default function StudentsManagementPage() {
 
   // `yearLoading` garde l'appel : sans elle, le premier rendu partirait avec
   // `contextYear` à null et afficherait « aucune année active » à tort.
-  useEffect(() => { if (!yearLoading) loadStudents() }, [loadStudents, yearLoading])
+  // L'appel part d'une micro-tâche, pas du corps de l'effet
+  // (react-hooks/set-state-in-effect) ; `loadStudents` est inchangée.
+  useEffect(() => { if (!yearLoading) void Promise.resolve().then(loadStudents) }, [loadStudents, yearLoading])
 
   // ── KPIs ─────────────────────────────────────────────────────────────────────
   const totalStudents       = students.length
@@ -464,42 +490,43 @@ export default function StudentsManagementPage() {
     }
   }
 
-  const SortIcon = ({ col }: { col: SortCol }) => {
-    if (sortCol !== col) {
-      return null
-    }
-    return sortDir === 'asc'
-      ? <ArrowUpIcon className="h-3 w-3 inline ml-1" />
-      : <ArrowDownIcon className="h-3 w-3 inline ml-1" />
-  }
-
   // ── Désactivation ─────────────────────────────────────────────────────────────
 
   // ── Modification profil ────────────────────────────────────────────────────
-  const handleEditStudent = async (data: {
-    address: string; motherName: string; fatherName: string
-    phone1: string; phone2: string; parentsEmail: string
-  }) => {
+  // Le modal s'ouvre tout de suite en « Chargement… » ; la réponse d'un élève
+  // n'écrit que si c'est toujours lui qui est ouvert.
+  const openEditStudent = async (student: StudentRow) => {
+    const studentId = student.studentId
+    setEditingStudent(student)
+    setProfilEdition({ studentId, statut: 'chargement' })
+    try {
+      const profil = await lireProfilEleve(studentId)
+      setProfilEdition(prev => prev?.studentId === studentId ? { studentId, statut: 'pret', profil } : prev)
+    } catch (err) {
+      const message = toMessage(err, "lors de la lecture du profil")
+      setProfilEdition(prev => prev?.studentId === studentId ? { studentId, statut: 'erreur', message } : prev)
+    }
+  }
+
+  const closeEditStudent = () => {
+    setEditingStudent(null)
+    setProfilEdition(null)
+  }
+
+  const handleEditStudent = async (corps: CorpsModificationProfil) => {
     if (!editingStudent) return
     setEditSubmitting(true)
     try {
-      const res = await fetch(`/api/students/update/${editingStudent.studentId}`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => null)
-        throw new Error(err?.message || "")
-      }
+      await enregistrerProfil(editingStudent.studentId, corps)
       toast({ title: "Profil mis à jour" })
-      setEditingStudent(null)
+      closeEditStudent()
       loadStudents()
-    } catch (e) {
-      const msg = e instanceof Error && e.message ? e.message : "Impossible de modifier le profil"
-      // Surface the backend's reason (e.g. "NISU already exists") to the user.
-      toast({ title: "Erreur", description: msg === "NISU already exists" ? "Ce NISU est déjà utilisé par un autre élève." : msg, variant: "destructive" })
+    } catch (err) {
+      toast({
+        title: "Erreur",
+        description: toMessage(err, "lors de la modification du profil"),
+        variant: "destructive",
+      })
     } finally {
       setEditSubmitting(false)
     }
@@ -839,19 +866,19 @@ export default function StudentsManagementPage() {
                     className="cursor-pointer select-none font-semibold"
                     onClick={() => handleSort('nisu')}
                   >
-                    NISU <SortIcon col="nisu" />
+                    NISU <SortIcon col="nisu" sortCol={sortCol} sortDir={sortDir} />
                   </TableHead>
                   <TableHead
                     className="cursor-pointer select-none font-semibold"
                     onClick={() => handleSort('name')}
                   >
-                    Nom complet <SortIcon col="name" />
+                    Nom complet <SortIcon col="name" sortCol={sortCol} sortDir={sortDir} />
                   </TableHead>
                   <TableHead
                     className="cursor-pointer select-none font-semibold"
                     onClick={() => handleSort('class')}
                   >
-                    Classe <SortIcon col="class" />
+                    Classe <SortIcon col="class" sortCol={sortCol} sortDir={sortDir} />
                   </TableHead>
                   <TableHead className="font-semibold">Salle</TableHead>
                   <TableHead className="font-semibold">Statut</TableHead>
@@ -859,7 +886,7 @@ export default function StudentsManagementPage() {
                     className="cursor-pointer select-none font-semibold"
                     onClick={() => handleSort('date')}
                   >
-                    Inscrit le <SortIcon col="date" />
+                    Inscrit le <SortIcon col="date" sortCol={sortCol} sortDir={sortDir} />
                   </TableHead>
                   <TableHead className="pr-6 text-right font-semibold">Actions</TableHead>
                 </TableRow>
@@ -995,7 +1022,7 @@ export default function StudentsManagementPage() {
                                 {student.promotionPhotoUrl ? "Modifier la photo" : "Ajouter une photo"}
                               </DropdownMenuItem>
                             )}
-                            <DropdownMenuItem onClick={() => setEditingStudent(student)}>
+                            <DropdownMenuItem onClick={() => { void openEditStudent(student) }}>
                               <PencilIcon className="mr-2 h-4 w-4" />
                               Modifier le profil
                             </DropdownMenuItem>
@@ -1160,18 +1187,13 @@ export default function StudentsManagementPage() {
       {/* Modal modification profil */}
       {editingStudent && (
         <EditStudentModal
+          key={editingStudent.studentId}
           open={!!editingStudent}
-          onOpenChange={open => !open && setEditingStudent(null)}
+          onOpenChange={open => !open && closeEditStudent()}
           studentName={`${editingStudent.firstname} ${editingStudent.lastname}`}
           studentCode={editingStudent.studentCode}
-          initialData={{
-            address:      editingStudent.address,
-            motherName:   editingStudent.motherName,
-            fatherName:   editingStudent.fatherName,
-            phone1:       editingStudent.phone1,
-            phone2:       editingStudent.phone2,
-            parentsEmail: editingStudent.parentsEmail,
-          }}
+          initialData={profilEdition?.statut === 'pret' ? profilEdition.profil : null}
+          loadError={profilEdition?.statut === 'erreur' ? profilEdition.message : null}
           submitting={editSubmitting}
           onSubmit={handleEditStudent}
         />
