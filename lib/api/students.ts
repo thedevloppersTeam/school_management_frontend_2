@@ -1,3 +1,29 @@
+import { clientFetch } from '@/lib/client-fetch'
+import {
+  profilDepuisEleve,
+  type CorpsModificationProfil,
+  type ProfilInitial,
+} from '@/lib/students/profil'
+
+/**
+ * Enregistre la modification du profil d'un élève, partagée par les pages
+ * « Tous les élèves » et « Élèves de l'année ». Rejette sur toute réponse non
+ * 2xx (ApiError) : l'appelant n'annonce le succès qu'après le retour.
+ */
+export async function enregistrerProfil(studentId: string, corps: CorpsModificationProfil): Promise<void> {
+  await clientFetch<unknown>(`/api/students/update/${encodeURIComponent(studentId)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(corps),
+  })
+}
+
+/** Lit le profil complet de l'élève, pour pré-remplir le modal (MPE-12). */
+export async function lireProfilEleve(studentId: string): Promise<ProfilInitial> {
+  const brut = await clientFetch<unknown>(`/api/students/${encodeURIComponent(studentId)}`)
+  return profilDepuisEleve(brut)
+}
+
 /**
  * Une session de classe telle que l'API la rend.
  *
