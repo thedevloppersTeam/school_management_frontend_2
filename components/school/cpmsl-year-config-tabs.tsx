@@ -51,6 +51,10 @@ import { DeleteSubjectParentModal } from "@/components/school/delete-subject-par
 import { EditSubjectChildModal } from "@/components/school/edit-subject-child-modal";
 import { DeleteSubjectChildModal } from "@/components/school/delete-subject-child-modal";
 import { toMessage } from "@/lib/errors";
+import { clientFetch } from "@/lib/client-fetch";
+import { lireFiches, type FicheLigne } from "@/lib/enseignants/fiches";
+import { lireEnseignantAffecte } from "@/lib/affectations/enseignant";
+import { AffectationEnseignantCell } from "@/components/school/affectation-enseignant-cell";
 import {
   computeClassroomStatuses,
   type ClassroomStatus,
@@ -426,9 +430,52 @@ export function CPMSLYearConfigTabs({
       maxScoreOverride: number | null; // note max propre à cette affectation
       hasSections: boolean;
       isExam: boolean; // matière d'examen (RS-03), classes d'examen seulement
+      teacherId: string | null; // fiche enseignant en place (teachers.id), null = aucun
     }>
   >([]);
   const [loadingClassSubjects, setLoadingClassSubjects] = useState(false);
+
+  // ── Enseignant d'une affectation (lot ID-T-F-3) ──────────────────────────
+  // Toutes les fiches, inactives comprises : la liste ne propose que les actives,
+  // mais le nom d'un enseignant inactif déjà affecté reste lisible (A6). Chargées
+  // une fois, au premier choix d'une salle. Le nom ne vient jamais de
+  // GET /api/class-subjects (Q-2 : le relais en retire `teacher`).
+  const [fichesEnseignants, setFichesEnseignants] = useState<FicheLigne[] | null>(null);
+  const [erreurFichesEnseignants, setErreurFichesEnseignants] = useState<string | null>(null);
+  const [annonceEnseignant, setAnnonceEnseignant] = useState("");
+  React.useEffect(() => {
+    if (!selectedSessionForAssign || fichesEnseignants !== null) return;
+    let actif = true;
+    clientFetch<unknown>("/api/teachers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    })
+      .then((brut) => {
+        if (!actif) return;
+        setFichesEnseignants(lireFiches(brut));
+        setErreurFichesEnseignants(null);
+      })
+      .catch((err) => {
+        if (actif) setErreurFichesEnseignants(toMessage(err, "lors du chargement des enseignants"));
+      });
+    return () => {
+      actif = false;
+    };
+  }, [selectedSessionForAssign, fichesEnseignants]);
+  // Région d'annonce partagée (A3) : vidée puis réécrite, pour qu'un message
+  // identique au précédent (deux échecs au même motif) soit annoncé lui aussi.
+  const annoncerEnseignant = (message: string) => {
+    setAnnonceEnseignant("");
+    window.setTimeout(() => setAnnonceEnseignant(message), 50);
+  };
+  // Mise à jour LOCALE de la ligne après un geste réussi (A2) : le tableau n'est
+  // pas rechargé, le focus et la position restent.
+  const handleEnseignantEnregistre = (classSubjectId: string, teacherId: string | null) => {
+    setClassSubjects((lignes) =>
+      lignes.map((l) => (l.id === classSubjectId ? { ...l, teacherId } : l)),
+    );
+  };
   // Case « Matière d'examen » : seulement pour une salle de niveau is_terminal (RS-03).
   const showExamColumn = showExamSubjectCheckbox(
     levels.find((l) => l.id === classrooms.find((c) => c.id === selectedSessionForAssign)?.levelId),
@@ -682,6 +729,8 @@ export function CPMSLYearConfigTabs({
             isExam?: boolean;
           }) => ({
             isExam: cs.isExam === true,
+            // `teacherId` seulement, jamais l'objet `teacher` (Q-2).
+            teacherId: lireEnseignantAffecte(cs),
             id: cs.id,
             subjectId: cs.subjectId,
             subjectName: cs.subject?.name || "—",
@@ -2054,8 +2103,14 @@ export function CPMSLYearConfigTabs({
                 </p>
               ) : (
                 <div className={TABLE_WRAPPER_CLASS}>
+                  {/* Une seule région d'annonce pour toutes les lignes (A3). */}
+                  <p className="sr-only" aria-live="polite">
+                    {annonceEnseignant}
+                  </p>
+                  {/* Défilement horizontal : la colonne Enseignant élargit le tableau (A8). */}
+                  <div className="overflow-x-auto cpmsl-scroll">
                   <table className="w-full">
-                    <caption className="sr-only">Matières assignées à la classe sélectionnée, avec coefficient et note maximale</caption>
+                    <caption className="sr-only">Matières assignées à la classe sélectionnée, avec coefficient, note maximale et enseignant</caption>
                     <thead>
                       <tr className={TABLE_HEAD_ROW_CLASS}>
                         <th
@@ -2106,6 +2161,12 @@ export function CPMSLYearConfigTabs({
                           scope="col"
                           className={`${TH_CLASS} px-4 py-2.5 text-left`}
                         >
+                          Enseignant
+                        </th>
+                        <th
+                          scope="col"
+                          className={`${TH_CLASS} px-4 py-2.5 text-left`}
+                        >
                           Actions
                         </th>
                       </tr>
@@ -2114,7 +2175,7 @@ export function CPMSLYearConfigTabs({
                       {classSubjects.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={showExamColumn ? 8 : 7}
+                            colSpan={showExamColumn ? 9 : 8}
                             className="px-4 py-6 text-center text-neutral-500 text-sm"
                           >
                             <p>Aucune matière assignée à cette classe</p>
@@ -2245,6 +2306,20 @@ export function CPMSLYearConfigTabs({
                                   )}
                                 </td>
                               )}
+                              <td className="px-4 py-3 align-top">
+                                <AffectationEnseignantCell
+                                  classSubjectId={cs.id}
+                                  matiere={cs.subjectName}
+                                  trackCode={cs.trackCode ?? null}
+                                  salle={copyTargetClassroom?.name ?? ""}
+                                  teacherId={cs.teacherId}
+                                  fiches={fichesEnseignants}
+                                  erreurFiches={erreurFichesEnseignants}
+                                  isArchived={Boolean(isArchived)}
+                                  onEnregistre={handleEnseignantEnregistre}
+                                  onAnnonce={annoncerEnseignant}
+                                />
+                              </td>
                               <td className="px-4 py-3">
                                 {!isArchived && (
                                   <button
@@ -2262,6 +2337,7 @@ export function CPMSLYearConfigTabs({
                       )}
                     </tbody>
                   </table>
+                  </div>
                 </div>
               ))}
 
