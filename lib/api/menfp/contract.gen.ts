@@ -1,6 +1,6 @@
 // GÉNÉRÉ par tools/contract/generate.mjs (npm run contract:generate). NE PAS MODIFIER.
-// Source : contract/openapi.json, copie du serveur au commit 29814e03c177caadd80fe7c8426ceefaa0aba769
-// SHA-256 de la copie : 8e609a58718e5c29e2a466b9700787d809b3124d6d48f9acea0c493552429e6c
+// Source : contract/openapi.json, copie du serveur au commit 93e5887b29e103362f0b70b0c3c6f0584ddf63d9
+// SHA-256 de la copie : fdc5b2b43c5c1eb6309593a00a181937ff8f34dc056ec72489a5e6b828399bae
 // Lecteur tolérant : additionalProperties:false retiré avant génération (ADR-007).
 // format uuid : zod.guid() + pattern du contrat (voir tools/contract/generate.mjs).
 /**
@@ -11,6 +11,57 @@
  * OpenAPI spec version: 1.0.0
  */
 import * as zod from 'zod';
+
+/**
+ * @summary Poser, remplacer ou retirer (null) l'enseignant d'une affectation (lot A, A2 à A8).
+ */
+export const postApiClassSubjectsTeacherIdPathIdRegExp = new RegExp('^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$');
+
+
+export const PostApiClassSubjectsTeacherIdParams = zod.object({
+  "id": zod.guid().regex(postApiClassSubjectsTeacherIdPathIdRegExp)
+})
+
+export const postApiClassSubjectsTeacherIdBodyTeacherIdOneRegExp = new RegExp('^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$');
+
+
+export const PostApiClassSubjectsTeacherIdBody = zod.object({
+  "teacherId": zod.union([zod.guid().regex(postApiClassSubjectsTeacherIdBodyTeacherIdOneRegExp),zod.null()])
+}).describe('Enseignant à affecter (teachers.id), ou null pour retirer l\'enseignant (A8).')
+
+export const postApiClassSubjectsTeacherId200ResponseClassSubjectIdRegExp = new RegExp('^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$');
+export const postApiClassSubjectsTeacherId200ResponseTeacherIdOneRegExp = new RegExp('^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$');
+
+
+export const PostApiClassSubjectsTeacherId200Response = zod.object({
+  "classSubjectId": zod.guid().regex(postApiClassSubjectsTeacherId200ResponseClassSubjectIdRegExp),
+  "geste": zod.enum(['AFFECTATION', 'REMPLACEMENT', 'RETRAIT']),
+  "teacherId": zod.union([zod.guid().regex(postApiClassSubjectsTeacherId200ResponseTeacherIdOneRegExp),zod.null()])
+}).describe('Affectation après le geste : enseignant posé (ou null après un retrait) et nature du geste (A4).')
+
+export const PostApiClassSubjectsTeacherId400Response = zod.object({
+  "code": zod.string(),
+  "message": zod.string()
+}).describe('Refus typé (ADR-008 § 6) : RuleViolation 400, NotFound 404, Conflict 409.')
+
+export const PostApiClassSubjectsTeacherId401Response = zod.object({
+  "message": zod.string()
+}).describe('Refus d\'accès de l\'autorisateur (401, 403).')
+
+export const PostApiClassSubjectsTeacherId403Response = zod.object({
+  "message": zod.string()
+}).describe('Refus d\'accès de l\'autorisateur (401, 403).')
+
+export const PostApiClassSubjectsTeacherId404Response = zod.object({
+  "code": zod.string(),
+  "message": zod.string()
+}).describe('Refus typé (ADR-008 § 6) : RuleViolation 400, NotFound 404, Conflict 409.')
+
+export const PostApiClassSubjectsTeacherId409Response = zod.object({
+  "code": zod.string(),
+  "message": zod.string()
+}).describe('Refus typé (ADR-008 § 6) : RuleViolation 400, NotFound 404, Conflict 409.')
+
 
 /**
  * @summary Niveaux configurables d'une année et état de leur référentiel.

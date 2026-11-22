@@ -6,6 +6,99 @@
     "description": "Généré par architecture/export-contract.cjs depuis les contract.ts des modules (ADR-007 § 2). Ne pas modifier à la main."
   },
   "paths": {
+    "/api/class-subjects/teacher/{id}": {
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/programme.AffectationEnseignantEntree"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/programme.AffectationEnseignantReponse"
+                }
+              }
+            },
+            "description": "Geste fait ; une ligne CLASS_SUBJECT_TEACHER_CHANGED au journal commun."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/programme.Erreur"
+                }
+              }
+            },
+            "description": "Entrée invalide (PROGRAMME_ENTREE_INVALIDE)."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/programme.RefusAcces"
+                }
+              }
+            },
+            "description": "Sans session (ADR-013 § 6)."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/programme.RefusAcces"
+                }
+              }
+            },
+            "description": "Session sans la permission programme.affectation.gerer (ADR-013 § 6)."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/programme.Erreur"
+                }
+              }
+            },
+            "description": "Affectation (PROGRAMME_AFFECTATION_INTROUVABLE) ou fiche (PROGRAMME_ENSEIGNANT_INTROUVABLE) inconnue."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/programme.Erreur"
+                }
+              }
+            },
+            "description": "Année close, fiche ou compte inactif (PROGRAMME_ANNEE_CLOSE, PROGRAMME_FICHE_INACTIVE, PROGRAMME_COMPTE_INACTIF)."
+          }
+        },
+        "summary": "Poser, remplacer ou retirer (null) l'enseignant d'une affectation (lot A, A2 à A8).",
+        "tags": [
+          "programme"
+        ],
+        "x-permission": "programme.affectation.gerer"
+      }
+    },
     "/api/menfp/annees/{academicYearId}/niveaux": {
       "get": {
         "parameters": [
@@ -1234,6 +1327,544 @@
   },
   "components": {
     "schemas": {
+      "identite.AdresseEcoleEntree": {
+        "additionalProperties": false,
+        "description": "Adresse électronique de l'école d'une personne, ou null pour la retirer.",
+        "properties": {
+          "schoolEmail": {
+            "anyOf": [
+              {
+                "format": "email",
+                "maxLength": 150,
+                "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "schoolEmail"
+        ],
+        "type": "object"
+      },
+      "identite.CandidatReponse": {
+        "additionalProperties": false,
+        "description": "Compte sans fiche enseignant, admissible à en recevoir une (D-T4) ; cinq clés seulement.",
+        "properties": {
+          "firstname": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+            "type": "string"
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "lastname": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "firstname",
+          "lastname",
+          "username",
+          "isActive"
+        ],
+        "type": "object"
+      },
+      "identite.CandidatsFiltreEntree": {
+        "additionalProperties": false,
+        "description": "Filtre de la liste des comptes candidats à une fiche enseignant (lot ID-T-C).",
+        "properties": {
+          "q": {
+            "maxLength": 100,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "identite.CompteCreationEntree": {
+        "additionalProperties": false,
+        "description": "Création d'un compte par un administrateur (EF-02, EF-08).",
+        "properties": {
+          "birthDate": {
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+            "type": "string"
+          },
+          "email": {
+            "format": "email",
+            "maxLength": 150,
+            "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$",
+            "type": "string"
+          },
+          "firstname": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "lastname": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "ADMIN",
+              "SYSTEM_ADMIN",
+              "TEACHER",
+              "STUDENT",
+              "PARENT"
+            ],
+            "type": "string"
+          },
+          "username": {
+            "maxLength": 50,
+            "minLength": 1,
+            "pattern": "^\\S(.*\\S)?$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "lastname",
+          "firstname",
+          "birthDate",
+          "username",
+          "password",
+          "type"
+        ],
+        "type": "object"
+      },
+      "identite.CompteModificationEntree": {
+        "additionalProperties": false,
+        "description": "Modification du compte d'un autre par un administrateur (EF-02).",
+        "properties": {
+          "birthDate": {
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+            "type": "string"
+          },
+          "email": {
+            "format": "email",
+            "maxLength": 150,
+            "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$",
+            "type": "string"
+          },
+          "firstname": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "lastname": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "profilePhoto": {
+            "maxLength": 500,
+            "minLength": 1,
+            "pattern": "^\\/uploads(\\/[A-Za-z0-9][A-Za-z0-9._-]*)+$",
+            "type": "string"
+          },
+          "username": {
+            "maxLength": 50,
+            "minLength": 1,
+            "pattern": "^\\S(.*\\S)?$",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "identite.ComptesFiltreEntree": {
+        "additionalProperties": false,
+        "description": "Filtres de la liste des comptes (EF-10).",
+        "properties": {
+          "isActive": {
+            "type": "boolean"
+          },
+          "role": {
+            "enum": [
+              "ADMIN",
+              "SYSTEM_ADMIN",
+              "TEACHER"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "identite.ConnexionEntree": {
+        "additionalProperties": false,
+        "description": "Identifiant et mot de passe d'une demande de connexion (EF-04 à EF-06).",
+        "properties": {
+          "password": {
+            "maxLength": 255,
+            "minLength": 1,
+            "type": "string"
+          },
+          "username": {
+            "maxLength": 255,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ],
+        "type": "object"
+      },
+      "identite.DeliaisonReponse": {
+        "additionalProperties": false,
+        "description": "Déliaison d'une identité externe par un SYSTEM_ADMIN (D-G9).",
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "sessionsFermees": {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "message",
+          "sessionsFermees"
+        ],
+        "type": "object"
+      },
+      "identite.EnseignantCreationEntree": {
+        "additionalProperties": false,
+        "description": "Création de la fiche d'un enseignant par un administrateur.",
+        "properties": {
+          "address": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "description": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "email": {
+            "format": "email",
+            "maxLength": 150,
+            "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$",
+            "type": "string"
+          },
+          "hireDate": {
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+            "type": "string"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "role": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "userId": {
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "userId"
+        ],
+        "type": "object"
+      },
+      "identite.EnseignantModificationEntree": {
+        "additionalProperties": false,
+        "description": "Modification de la fiche d'un enseignant par un administrateur.",
+        "properties": {
+          "address": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "description": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "email": {
+            "format": "email",
+            "maxLength": 150,
+            "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$",
+            "type": "string"
+          },
+          "hireDate": {
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+            "type": "string"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "role": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "identite.EnseignantsFiltreEntree": {
+        "additionalProperties": false,
+        "description": "Filtre de la liste des enseignants (EF-10).",
+        "properties": {
+          "isActive": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "identite.EtatEntree": {
+        "additionalProperties": false,
+        "description": "Activation ou désactivation d'un compte, ou du compte d'un enseignant.",
+        "properties": {
+          "isActive": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "isActive"
+        ],
+        "type": "object"
+      },
+      "identite.MoiReponse": {
+        "additionalProperties": false,
+        "description": "Compte connecté, rôles déduits et droits effectifs (EF-11, EF-22).",
+        "properties": {
+          "firstname": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+            "type": "string"
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "lastname": {
+            "type": "string"
+          },
+          "permissions": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "permission": {
+                  "type": "string"
+                },
+                "portee": {
+                  "enum": [
+                    "tout",
+                    "affectations",
+                    "salles",
+                    "enfants",
+                    "soi"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "permission",
+                "portee"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "roles": {
+            "items": {
+              "enum": [
+                "ADMIN",
+                "SYSTEM_ADMIN",
+                "TEACHER",
+                "PARENT",
+                "STUDENT"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "type": {
+            "enum": [
+              "ADMIN",
+              "SYSTEM_ADMIN",
+              "TEACHER",
+              "PARENT",
+              "STUDENT"
+            ],
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "firstname",
+          "lastname",
+          "username",
+          "type",
+          "isActive",
+          "roles",
+          "permissions"
+        ],
+        "type": "object"
+      },
+      "identite.MonMotDePasseEntree": {
+        "additionalProperties": false,
+        "description": "Changement de son propre mot de passe (EF-08).",
+        "properties": {
+          "currentPassword": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "type": "string"
+          },
+          "newPassword": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "currentPassword",
+          "newPassword"
+        ],
+        "type": "object"
+      },
+      "identite.MotDePasseReinitialisationEntree": {
+        "additionalProperties": false,
+        "description": "Réinitialisation du mot de passe d'un autre compte par un administrateur (EF-09).",
+        "properties": {
+          "newPassword": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "newPassword"
+        ],
+        "type": "object"
+      },
+      "identite.OctroiEntree": {
+        "additionalProperties": false,
+        "description": "Octroi explicite du rôle ADMIN ou SYSTEM_ADMIN, avec son motif (EF-17).",
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "ADMIN",
+              "SYSTEM_ADMIN"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "identite.ProfilPersonnelEntree": {
+        "additionalProperties": false,
+        "description": "Champs qu'un compte peut modifier sur son propre profil (EF-01).",
+        "properties": {
+          "firstname": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "lastname": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "profilePhoto": {
+            "maxLength": 500,
+            "minLength": 1,
+            "pattern": "^\\/uploads(\\/[A-Za-z0-9][A-Za-z0-9._-]*)+$",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "identite.RevocationEntree": {
+        "additionalProperties": false,
+        "description": "Révocation d'un octroi de rôle, avec son motif (EF-17).",
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "type": "object"
+      },
+      "identite.SsoEtatReponse": {
+        "additionalProperties": false,
+        "description": "État de la connexion unique du personnel (SSO OIDC), pour afficher ou masquer le bouton.",
+        "properties": {
+          "actif": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "actif"
+        ],
+        "type": "object"
+      },
       "menfp.ApercuReponse": {
         "additionalProperties": false,
         "properties": {
@@ -3738,6 +4369,109 @@
           "classSessionId",
           "versions",
           "modifieDepuisLeGel"
+        ],
+        "type": "object"
+      },
+      "programme.AffectationEnseignantEntree": {
+        "additionalProperties": false,
+        "description": "Enseignant à affecter (teachers.id), ou null pour retirer l'enseignant (A8).",
+        "properties": {
+          "teacherId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "teacherId"
+        ],
+        "type": "object"
+      },
+      "programme.AffectationEnseignantReponse": {
+        "additionalProperties": false,
+        "description": "Affectation après le geste : enseignant posé (ou null après un retrait) et nature du geste (A4).",
+        "properties": {
+          "classSubjectId": {
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+            "type": "string"
+          },
+          "geste": {
+            "enum": [
+              "AFFECTATION",
+              "REMPLACEMENT",
+              "RETRAIT"
+            ],
+            "type": "string"
+          },
+          "teacherId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "classSubjectId",
+          "teacherId",
+          "geste"
+        ],
+        "type": "object"
+      },
+      "programme.Erreur": {
+        "additionalProperties": false,
+        "description": "Refus typé (ADR-008 § 6) : RuleViolation 400, NotFound 404, Conflict 409.",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object"
+      },
+      "programme.ParamsAffectation": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "programme.RefusAcces": {
+        "additionalProperties": false,
+        "description": "Refus d'accès de l'autorisateur (401, 403).",
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
         ],
         "type": "object"
       }

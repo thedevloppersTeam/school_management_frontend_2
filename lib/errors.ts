@@ -275,6 +275,21 @@ const CODE_MESSAGES: Record<string, string> = {
     "Fiche refusée : un champ n'a pas le format attendu (courriel, date d'embauche, téléphone de 20 caractères au plus, fonction de 100 caractères au plus).",
   IDENTITE_ETAT_ENTREE_INVALIDE:
     "Demande refusée : l'état demandé n'a pas le format attendu.",
+  // ── Affectation d'un enseignant (lot A serveur, POST /api/class-subjects/teacher/:id) ──
+  // Libellés d'après le sens de chaque code côté serveur (api.md, lot A). Aucun ne
+  // nomme l'enseignant : le message reste lisible sans détail personnel.
+  PROGRAMME_ENTREE_INVALIDE:
+    "Demande refusée : l'enseignant choisi n'a pas le format attendu. Rechargez la page, puis réessayez.",
+  PROGRAMME_AFFECTATION_INTROUVABLE:
+    "Cette matière n'est plus assignée à cette salle : rechargez la page.",
+  PROGRAMME_ENSEIGNANT_INTROUVABLE:
+    "Cette fiche enseignant n'existe plus : rechargez la page.",
+  PROGRAMME_FICHE_INACTIVE:
+    "La fiche de cet enseignant a été désactivée entre-temps : il ne peut pas recevoir cette matière. Rechargez la page.",
+  PROGRAMME_COMPTE_INACTIF:
+    "Le compte de cet enseignant a été désactivé entre-temps : il ne peut pas recevoir cette matière. Rechargez la page.",
+  PROGRAMME_ANNEE_CLOSE:
+    "Cette année est archivée : l'enseignant d'une matière ne se change plus. Rechargez la page.",
   // Relais : réponse du serveur hors contrat (lib/backend.ts, backendFetchValide)
   CONTRAT_REPONSE_INVALIDE:
     "La réponse du serveur ne correspond pas au format attendu : l'application et le serveur ne sont probablement pas à la même version. Rechargez la page ; si le problème persiste, prévenez l'administrateur.",
