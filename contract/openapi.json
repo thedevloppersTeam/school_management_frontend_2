@@ -1323,6 +1323,109 @@
         ],
         "x-permission": "menfp.rapport.geler"
       }
+    },
+    "/api/students/update/{id}": {
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/inscriptions.ProfilEleveEntree"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inscriptions.ProfilEleveReponse"
+                }
+              }
+            },
+            "description": "Profil modifié (ou inchangé si rien ne change) ; une ligne STUDENT_PROFILE_UPDATED par modification réelle."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inscriptions.Erreur"
+                }
+              }
+            },
+            "description": "Entrée refusée : ELEVE_PROFIL_ID_INVALIDE, ELEVE_PROFIL_ENTREE_INVALIDE, ELEVE_PROFIL_CHAMP_INCONNU, ELEVE_PROFIL_CHAMP_OBLIGATOIRE, ELEVE_PROFIL_TROP_LONG, ELEVE_PROFIL_DATE_INVALIDE, ELEVE_PROFIL_DATE_FUTURE, ELEVE_PROFIL_COURRIEL_INVALIDE, ELEVE_PROFIL_SEXE_INVALIDE, ELEVE_PROFIL_NISU_INVALIDE, ELEVE_PROFIL_NISU_NON_EFFACABLE."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inscriptions.RefusAcces"
+                }
+              }
+            },
+            "description": "Sans session (ADR-013 § 6)."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inscriptions.RefusAcces"
+                }
+              }
+            },
+            "description": "Session sans la permission inscriptions.eleve.gerer (ADR-013 § 6)."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inscriptions.Erreur"
+                }
+              }
+            },
+            "description": "Élève inconnu (ELEVE_PROFIL_INTROUVABLE)."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inscriptions.Erreur"
+                }
+              }
+            },
+            "description": "NISU ou courriel déjà pris (ELEVE_PROFIL_NISU_PRIS, ELEVE_PROFIL_COURRIEL_PRIS, ELEVE_PROFIL_CONFLIT)."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inscriptions.Erreur"
+                }
+              }
+            },
+            "description": "Erreur interne (ELEVE_PROFIL_ERREUR_INTERNE), sans détail technique."
+          }
+        },
+        "summary": "Modifier le profil d'un élève (identité et coordonnées ; sémantique PATCH, liste fermée).",
+        "tags": [
+          "inscriptions"
+        ],
+        "x-permission": "inscriptions.eleve.gerer"
+      }
     }
   },
   "components": {
@@ -1862,6 +1965,184 @@
         },
         "required": [
           "actif"
+        ],
+        "type": "object"
+      },
+      "inscriptions.Erreur": {
+        "additionalProperties": false,
+        "description": "Refus typé (ADR-008 § 6), codes ELEVE_PROFIL_*, message en français ; jamais de message PostgreSQL.",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object"
+      },
+      "inscriptions.ParamsProfilEleve": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "inscriptions.ProfilEleveEntree": {
+        "additionalProperties": false,
+        "description": "Champs du profil à modifier (sémantique PATCH, liste fermée : toute autre clé → 400 ELEVE_PROFIL_CHAMP_INCONNU).",
+        "properties": {
+          "address": {
+            "description": "Adresse (obligatoire, 255 caractères au plus).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "birthDate": {
+            "description": "Date de naissance AAAA-MM-JJ (obligatoire, date réelle, non future au jour civil de l'école).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "email": {
+            "description": "Courriel de l'élève (150 caractères au plus), enregistré en minuscules, unique sans égard à la casse.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "fatherName": {
+            "description": "Nom du père (200 caractères au plus).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "firstname": {
+            "description": "Prénom (obligatoire, 100 caractères au plus).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "gender": {
+            "description": "Sexe : MALE, FEMALE, ou null (\"\") pour l'effacer.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lastname": {
+            "description": "Nom (obligatoire, 100 caractères au plus).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "motherName": {
+            "description": "Nom de la mère (200 caractères au plus).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "nisu": {
+            "description": "NISU : 20 caractères alphanumériques, enregistré en majuscules, unique ; jamais effaçable.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "parentsEmail": {
+            "description": "Courriel des parents (150 caractères au plus), enregistré en minuscules, non unique.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "phone1": {
+            "description": "Téléphone 1 (20 caractères au plus).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "phone2": {
+            "description": "Téléphone 2 (20 caractères au plus).",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "inscriptions.ProfilEleveReponse": {
+        "additionalProperties": {},
+        "description": "Fiche élève et compte après la modification (forme historique, sans mot de passe).",
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "student": {
+            "additionalProperties": {},
+            "properties": {
+              "id": {
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                "type": "string"
+              },
+              "user": {
+                "additionalProperties": {},
+                "properties": {
+                  "id": {
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "id",
+              "user"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "message",
+          "student"
+        ],
+        "type": "object"
+      },
+      "inscriptions.RefusAcces": {
+        "additionalProperties": false,
+        "description": "Refus d'accès de l'autorisateur (401, 403).",
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
         ],
         "type": "object"
       },

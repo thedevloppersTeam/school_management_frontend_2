@@ -13,10 +13,22 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { todayCivil } from "@/lib/calendar/dates";
 import {
   corpsModificationProfil,
   etatInitialFormulaire,
+  OPTIONS_SEXE,
+  REGLES_PROFIL,
+  sexeDepuisSelect,
+  valeurSelectSexe,
   type ChampProfil,
   type CorpsModificationProfil,
   type ProfilInitial,
@@ -115,8 +127,10 @@ function FormulaireProfil({
   // l'envoi notamment) ne remplace plus la saisie (défaut D-2).
   const [initial] = useState<SaisieProfil>(() => etatInitialFormulaire(initialData));
   const [form, setForm] = useState<SaisieProfil>(initial);
+  // Jour civil de l'utilisatrice, figé à l'ouverture : borne de la date de naissance.
+  const [aujourdhui] = useState(() => todayCivil(new Date()));
 
-  const { corps, erreurs } = corpsModificationProfil(initial, form);
+  const { corps, erreurs } = corpsModificationProfil(initial, form, aujourdhui);
   const aucuneModification = Object.keys(corps).length === 0 && erreurs.length === 0;
   const erreurDe = (champ: ChampProfil) => erreurs.find((e) => e.champ === champ)?.message;
 
@@ -129,9 +143,11 @@ function FormulaireProfil({
         setForm((f) => ({ ...f, [nom]: e.target.value })),
       "aria-invalid": erreur ? true : undefined,
       "aria-describedby": erreur ? `${id}-erreur` : undefined,
+      maxLength: REGLES_PROFIL[nom].max,
       className: cn(inputCls, erreur && "border-error-border"),
     };
   };
+  const erreurSexe = erreurDe("gender");
   const message = (nom: ChampProfil, id: string) => {
     const erreur = erreurDe(nom);
     return erreur ? <p id={`${id}-erreur`} className="text-xs text-error-ink">{erreur}</p> : null;
@@ -158,9 +174,33 @@ function FormulaireProfil({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label htmlFor="edit-birthdate" className={labelCls}>Date de naissance</Label>
-              <Input {...champ("birthDate", "edit-birthdate")} type="date" />
+              <Input {...champ("birthDate", "edit-birthdate")} type="date" max={aujourdhui} />
               {message("birthDate", "edit-birthdate")}
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-gender" className={labelCls}>Sexe</Label>
+              <Select
+                value={valeurSelectSexe(form.gender)}
+                onValueChange={(v) => setForm((f) => ({ ...f, gender: sexeDepuisSelect(v) }))}
+              >
+                <SelectTrigger
+                  id="edit-gender"
+                  aria-invalid={erreurSexe ? true : undefined}
+                  aria-describedby={erreurSexe ? "edit-gender-erreur" : undefined}
+                  className={cn(inputCls, erreurSexe && "border-error-border")}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {OPTIONS_SEXE.map((o) => (
+                    <SelectItem key={o.valeur} value={o.valeur}>{o.libelle}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {message("gender", "edit-gender")}
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label htmlFor="edit-nisu" className={labelCls}>NISU</Label>
               <Input
@@ -170,11 +210,11 @@ function FormulaireProfil({
               />
               {message("nisu", "edit-nisu")}
             </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="edit-email" className={labelCls}>Email de l&apos;élève</Label>
-            <Input {...champ("email", "edit-email")} type="email" placeholder="email@exemple.com" />
-            {message("email", "edit-email")}
+            <div className="space-y-2">
+              <Label htmlFor="edit-email" className={labelCls}>Email de l&apos;élève</Label>
+              <Input {...champ("email", "edit-email")} type="email" placeholder="email@exemple.com" />
+              {message("email", "edit-email")}
+            </div>
           </div>
         </div>
 

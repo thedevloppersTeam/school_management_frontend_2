@@ -68,7 +68,7 @@ import { ArchivedYearBanner } from "@/components/school/archived-year-banner"
 import { StudentEnrollForm } from "@/components/school/students/student-enroll-form"
 import { EditStudentModal } from "@/components/school/edit-student-modal"
 import { enregistrerProfil, lireProfilEleve } from "@/lib/api/students"
-import type { CorpsModificationProfil, ProfilInitial } from "@/lib/students/profil"
+import type { CorpsModificationProfil, ProfilEdition } from "@/lib/students/profil"
 import { PromotionPhotoModal } from "@/components/school/promotion-photo-modal"
 import { normalizeUploadUrl } from "@/lib/upload-url"
 import { StatCard } from "@/components/school/stat-card"
@@ -190,11 +190,8 @@ function SortIcon<C extends string>({ col, sortCol, sortDir }: {
 }
 
 // Lecture du profil complet à l'ouverture du modal (MPE-12) : la liste ne
-// charge ni le courriel ni la date de naissance de chaque élève.
-type ProfilEdition =
-  | { studentId: string; statut: 'chargement' }
-  | { studentId: string; statut: 'pret'; profil: ProfilInitial }
-  | { studentId: string; statut: 'erreur'; message: string }
+// charge ni le courriel, ni la date de naissance, ni le sexe de chaque élève
+// (ProfilEdition, lib/students/profil.ts).
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 

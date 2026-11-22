@@ -1,6 +1,6 @@
 // GÉNÉRÉ par tools/contract/generate.mjs (npm run contract:generate). NE PAS MODIFIER.
-// Source : contract/openapi.json, copie du serveur au commit 93e5887b29e103362f0b70b0c3c6f0584ddf63d9
-// SHA-256 de la copie : fdc5b2b43c5c1eb6309593a00a181937ff8f34dc056ec72489a5e6b828399bae
+// Source : contract/openapi.json, copie du serveur au commit 591a861f7f03ced6b2a74736f2e20a4d67c01a6e
+// SHA-256 de la copie : 0d16ce23b519bcff989e90e0784174d91436e7ec21e3f34471685c540badc603
 // Lecteur tolérant : additionalProperties:false retiré avant génération (ADR-007).
 // format uuid : zod.guid() + pattern du contrat (voir tools/contract/generate.mjs).
 /**
@@ -1502,3 +1502,71 @@ export const PostApiMenfpSallesClassSessionIdRapports409Response = zod.union([zo
   "code": zod.string(),
   "message": zod.string()
 }).describe('Refus typé (ADR-008 § 6) : RuleViolation 400, NotFound 404, Conflict 409.')])
+
+
+/**
+ * @summary Modifier le profil d'un élève (identité et coordonnées ; sémantique PATCH, liste fermée).
+ */
+export const postApiStudentsUpdateIdPathIdRegExp = new RegExp('^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$');
+
+
+export const PostApiStudentsUpdateIdParams = zod.object({
+  "id": zod.guid().regex(postApiStudentsUpdateIdPathIdRegExp)
+})
+
+export const PostApiStudentsUpdateIdBody = zod.object({
+  "address": zod.string().nullish().describe('Adresse (obligatoire, 255 caractères au plus).'),
+  "birthDate": zod.string().nullish().describe('Date de naissance AAAA-MM-JJ (obligatoire, date réelle, non future au jour civil de l\'école).'),
+  "email": zod.string().nullish().describe('Courriel de l\'élève (150 caractères au plus), enregistré en minuscules, unique sans égard à la casse.'),
+  "fatherName": zod.string().nullish().describe('Nom du père (200 caractères au plus).'),
+  "firstname": zod.string().nullish().describe('Prénom (obligatoire, 100 caractères au plus).'),
+  "gender": zod.string().nullish().describe('Sexe : MALE, FEMALE, ou null ("") pour l\'effacer.'),
+  "lastname": zod.string().nullish().describe('Nom (obligatoire, 100 caractères au plus).'),
+  "motherName": zod.string().nullish().describe('Nom de la mère (200 caractères au plus).'),
+  "nisu": zod.string().nullish().describe('NISU : 20 caractères alphanumériques, enregistré en majuscules, unique ; jamais effaçable.'),
+  "parentsEmail": zod.string().nullish().describe('Courriel des parents (150 caractères au plus), enregistré en minuscules, non unique.'),
+  "phone1": zod.string().nullish().describe('Téléphone 1 (20 caractères au plus).'),
+  "phone2": zod.string().nullish().describe('Téléphone 2 (20 caractères au plus).')
+}).describe('Champs du profil à modifier (sémantique PATCH, liste fermée : toute autre clé → 400 ELEVE_PROFIL_CHAMP_INCONNU).')
+
+export const postApiStudentsUpdateId200ResponseStudentIdRegExp = new RegExp('^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$');
+export const postApiStudentsUpdateId200ResponseStudentUserIdRegExp = new RegExp('^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$');
+
+
+export const PostApiStudentsUpdateId200Response = zod.looseObject({
+  "message": zod.string(),
+  "student": zod.looseObject({
+  "id": zod.guid().regex(postApiStudentsUpdateId200ResponseStudentIdRegExp),
+  "user": zod.looseObject({
+  "id": zod.guid().regex(postApiStudentsUpdateId200ResponseStudentUserIdRegExp)
+})
+})
+}).describe('Fiche élève et compte après la modification (forme historique, sans mot de passe).')
+
+export const PostApiStudentsUpdateId400Response = zod.object({
+  "code": zod.string(),
+  "message": zod.string()
+}).describe('Refus typé (ADR-008 § 6), codes ELEVE_PROFIL_*, message en français ; jamais de message PostgreSQL.')
+
+export const PostApiStudentsUpdateId401Response = zod.object({
+  "message": zod.string()
+}).describe('Refus d\'accès de l\'autorisateur (401, 403).')
+
+export const PostApiStudentsUpdateId403Response = zod.object({
+  "message": zod.string()
+}).describe('Refus d\'accès de l\'autorisateur (401, 403).')
+
+export const PostApiStudentsUpdateId404Response = zod.object({
+  "code": zod.string(),
+  "message": zod.string()
+}).describe('Refus typé (ADR-008 § 6), codes ELEVE_PROFIL_*, message en français ; jamais de message PostgreSQL.')
+
+export const PostApiStudentsUpdateId409Response = zod.object({
+  "code": zod.string(),
+  "message": zod.string()
+}).describe('Refus typé (ADR-008 § 6), codes ELEVE_PROFIL_*, message en français ; jamais de message PostgreSQL.')
+
+export const PostApiStudentsUpdateId500Response = zod.object({
+  "code": zod.string(),
+  "message": zod.string()
+}).describe('Refus typé (ADR-008 § 6), codes ELEVE_PROFIL_*, message en français ; jamais de message PostgreSQL.')

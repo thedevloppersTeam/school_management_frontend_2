@@ -35,14 +35,12 @@ const HTTP_MESSAGES: Record<number, string> = {
 // Priorité décroissante : premier match gagne.
 
 const KEYWORD_PATTERNS: Array<{ match: RegExp; message: string }> = [
-  // Conflits d'unicité explicites
+  // Conflits d'unicité explicites. « NISU already exists » vient encore de la
+  // création et de l'inscription d'un élève ; la modification du profil a ses
+  // codes ELEVE_PROFIL_* (CODE_MESSAGES).
   {
     match: /nisu.*(unique|d[ée]j[àa]|exist|us[ée])/i,
     message: "Ce NISU est déjà utilisé par un autre élève.",
-  },
-  {
-    match: /email.*(unique|d[ée]j[àa]|exist|us[ée])/i,
-    message: "Cet email est déjà utilisé.",
   },
   {
     match: /(already exist|d[ée]j[àa] existant|duplicate|unique constraint)/i,
@@ -290,6 +288,41 @@ const CODE_MESSAGES: Record<string, string> = {
     "Le compte de cet enseignant a été désactivé entre-temps : il ne peut pas recevoir cette matière. Rechargez la page.",
   PROGRAMME_ANNEE_CLOSE:
     "Cette année est archivée : l'enseignant d'une matière ne se change plus. Rechargez la page.",
+  // ── Profil d'un élève (lot serveur « profil élève », POST /api/students/update/:id, D-95) ──
+  // Libellés d'après le sens de chaque code côté serveur (api.md). Aucun ne nomme
+  // l'élève ni ne reprend une valeur saisie.
+  ELEVE_PROFIL_ID_INVALIDE:
+    "Demande refusée : l'élève visé n'est pas désigné correctement. Rechargez la page, puis réessayez.",
+  ELEVE_PROFIL_ENTREE_INVALIDE:
+    "Demande refusée : une donnée envoyée n'a pas le format attendu. Rechargez la page, puis réessayez.",
+  ELEVE_PROFIL_CHAMP_INCONNU:
+    "Demande refusée : un champ envoyé ne fait pas partie du profil modifiable. Rechargez la page, puis réessayez.",
+  ELEVE_PROFIL_CHAMP_OBLIGATOIRE:
+    "Le nom, le prénom, la date de naissance et l'adresse sont obligatoires : ils ne peuvent pas être vidés.",
+  ELEVE_PROFIL_TROP_LONG:
+    "Un champ est trop long : 100 caractères au plus pour le nom et le prénom, 255 pour l'adresse, 200 pour les noms des parents, 20 pour un téléphone, 150 pour un courriel.",
+  ELEVE_PROFIL_DATE_INVALIDE:
+    "La date de naissance n'existe pas au calendrier : vérifiez le jour, le mois et l'année.",
+  ELEVE_PROFIL_DATE_FUTURE:
+    "La date de naissance ne peut pas être dans le futur.",
+  ELEVE_PROFIL_COURRIEL_INVALIDE:
+    "Un courriel (de l'élève ou des parents) n'est pas une adresse valide.",
+  ELEVE_PROFIL_SEXE_INVALIDE:
+    "Sexe refusé : choisissez Masculin, Féminin ou Non renseigné.",
+  ELEVE_PROFIL_NISU_INVALIDE:
+    "Le NISU doit contenir exactement 20 caractères alphanumériques (lettres majuscules et chiffres).",
+  ELEVE_PROFIL_NISU_NON_EFFACABLE:
+    "Le NISU ne peut pas être effacé.",
+  ELEVE_PROFIL_INTROUVABLE:
+    "Cet élève n'existe plus (il a peut-être été supprimé) : rechargez la page.",
+  ELEVE_PROFIL_NISU_PRIS:
+    "Ce NISU est déjà utilisé par un autre élève.",
+  ELEVE_PROFIL_COURRIEL_PRIS:
+    "Ce courriel est déjà utilisé par un autre compte.",
+  ELEVE_PROFIL_CONFLIT:
+    "Enregistrement refusé : une autre modification faite au même moment entre en conflit avec celle-ci. Rechargez la page, puis vérifiez.",
+  ELEVE_PROFIL_ERREUR_INTERNE:
+    "Le serveur a rencontré une erreur : le profil n'a pas été enregistré. Réessayez dans un instant.",
   // Relais : réponse du serveur hors contrat (lib/backend.ts, backendFetchValide)
   CONTRAT_REPONSE_INVALIDE:
     "La réponse du serveur ne correspond pas au format attendu : l'application et le serveur ne sont probablement pas à la même version. Rechargez la page ; si le problème persiste, prévenez l'administrateur.",
