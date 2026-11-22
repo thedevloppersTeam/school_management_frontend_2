@@ -50,8 +50,8 @@ import {
 import { ArchivedYearBanner } from "@/components/school/archived-year-banner"
 import { StudentEnrollForm } from "@/components/school/students/student-enroll-form"
 import { EditStudentModal } from "@/components/school/edit-student-modal"
-import { enregistrerProfil } from "@/lib/api/students"
-import type { CorpsModificationProfil } from "@/lib/students/profil"
+import { enregistrerProfil, lireProfilEleve } from "@/lib/api/students"
+import { actionsLigneEleve, type CorpsModificationProfil, type ProfilEdition } from "@/lib/students/profil"
 import { toMessage } from "@/lib/errors"
 import { StepExemptionModal } from "@/components/school/step-exemption-modal"
 import { StudentTrackModal } from "@/components/school/student-track-modal"
@@ -181,6 +181,7 @@ export default function StudentsManagementPage() {
   // Modification profil
   const [editingStudent, setEditingStudent]     = useState<StudentRow | null>(null)
   const [editSubmitting, setEditSubmitting]     = useState(false)
+  const [profilEdition, setProfilEdition]       = useState<ProfilEdition | null>(null)
 
   // Transfert
 
@@ -363,15 +364,39 @@ export default function StudentsManagementPage() {
   }
 
   // ── Modification profil ────────────────────────────────────────────────────
+  // Le modal se pré-remplit par le profil lu à l'ouverture (MPE-12) : la liste
+  // des inscriptions ne porte pas le sexe. Le modal s'ouvre tout de suite en
+  // « Chargement… » ; la réponse d'un élève n'écrit que si c'est toujours lui
+  // qui est ouvert.
+  const openEditStudent = async (student: StudentRow) => {
+    const studentId = student.studentId
+    setEditingStudent(student)
+    setProfilEdition({ studentId, statut: 'chargement' })
+    try {
+      const profil = await lireProfilEleve(studentId)
+      setProfilEdition(prev => prev?.studentId === studentId ? { studentId, statut: 'pret', profil } : prev)
+    } catch (err) {
+      const message = toMessage(err, "lors de la lecture du profil")
+      setProfilEdition(prev => prev?.studentId === studentId ? { studentId, statut: 'erreur', message } : prev)
+    }
+  }
+
+  const closeEditStudent = () => {
+    setEditingStudent(null)
+    setProfilEdition(null)
+  }
+
   // Le corps ne porte que les champs modifiés (lib/students/profil.ts) : un
-  // NISU hérité laissé tel quel n'est jamais renvoyé au serveur.
+  // NISU hérité laissé tel quel n'est jamais renvoyé au serveur. La liste est
+  // relue ensuite : les courriels s'affichent tels que le serveur les a
+  // enregistrés (en minuscules).
   const handleEditStudent = async (corps: CorpsModificationProfil) => {
     if (!editingStudent) return
     setEditSubmitting(true)
     try {
       await enregistrerProfil(editingStudent.studentId, corps)
       toast({ title: "Profil mis à jour" })
-      setEditingStudent(null)
+      closeEditStudent()
       loadStudents()
     } catch (err) {
       toast({
@@ -637,6 +662,7 @@ export default function StudentsManagementPage() {
                 {paginated.map(student => {
                   const nisuInvalid = !isNisuValid(student.nisu)
                   const isInactive = student.status !== 'ACTIVE'
+                  const actions = actionsLigneEleve({ anneeArchivee: isArchived, statut: student.status })
 
                   return (
                     <TableRow
@@ -735,66 +761,68 @@ export default function StudentsManagementPage() {
                         <Button asChild variant="ghost" size="sm" className="h-8 px-2 text-xs">
                           <Link href={`/admin/all-students/${student.studentId}/transcript`}>Voir la fiche</Link>
                         </Button>
-                        {!isArchived && (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8">
-                                <MoreHorizontalIcon className="h-4 w-4" />
-                                <span className="sr-only">Ouvrir le menu</span>
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48">
-                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                              <DropdownMenuSeparator />
-                              {isInactive ? (
-                                student.status === 'DROPPED' ? (
-                                  <DropdownMenuItem
-                                    onClick={() => setCancelling(student)}
-                                    className="text-success-ink focus:text-success-ink"
-                                  >
-                                    <UserRoundCheckIcon className="mr-2 h-4 w-4" />
-                                    Annuler le départ
+                        {/* F-3 (MPE-5) : le profil reste modifiable pour une année archivée et
+                            pour un élève parti ; les gestes d'inscription, non. */}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <MoreHorizontalIcon className="h-4 w-4" />
+                              <span className="sr-only">Ouvrir le menu</span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            {actions.modifierProfil && (
+                              <DropdownMenuItem onClick={() => { void openEditStudent(student) }}>
+                                <PencilIcon className="mr-2 h-4 w-4" />
+                                Modifier le profil
+                              </DropdownMenuItem>
+                            )}
+                            {actions.annulerDepart && (
+                              <DropdownMenuItem
+                                onClick={() => setCancelling(student)}
+                                className="text-success-ink focus:text-success-ink"
+                              >
+                                <UserRoundCheckIcon className="mr-2 h-4 w-4" />
+                                Annuler le départ
+                              </DropdownMenuItem>
+                            )}
+                            {actions.aucunGesteInscription && (
+                              // TRANSFERRED (historique de correction d'affectation) et
+                              // GRADUATED ne sont pas des départs : rien à annuler ici.
+                              <DropdownMenuItem disabled>
+                                Aucune action sur cette inscription
+                              </DropdownMenuItem>
+                            )}
+                            {actions.gestesInscription && (
+                              <>
+                                <DropdownMenuItem onClick={() => setCorrectingStudent(student)}>
+                                  <WrenchIcon className="mr-2 h-4 w-4" />
+                                  Corriger l&apos;affectation
+                                </DropdownMenuItem>
+                                {student.hasTrack && (
+                                  <DropdownMenuItem onClick={() => setTrackStudent(student)}>
+                                    <GraduationCapIcon className="mr-2 h-4 w-4" />
+                                    {student.trackId ? 'Changer la filière' : 'Définir la filière'}
                                   </DropdownMenuItem>
-                                ) : (
-                                  // TRANSFERRED (historique de correction d'affectation) et
-                                  // GRADUATED ne sont pas des départs : rien à annuler ici.
-                                  <DropdownMenuItem disabled>
-                                    Aucune action sur cette inscription
-                                  </DropdownMenuItem>
-                                )
-                              ) : (
-                                <>
-                                  <DropdownMenuItem onClick={() => setEditingStudent(student)}>
-                                    <PencilIcon className="mr-2 h-4 w-4" />
-                                    Modifier le profil
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => setCorrectingStudent(student)}>
-                                    <WrenchIcon className="mr-2 h-4 w-4" />
-                                    Corriger l&apos;affectation
-                                  </DropdownMenuItem>
-                                  {student.hasTrack && (
-                                    <DropdownMenuItem onClick={() => setTrackStudent(student)}>
-                                      <GraduationCapIcon className="mr-2 h-4 w-4" />
-                                      {student.trackId ? 'Changer la filière' : 'Définir la filière'}
-                                    </DropdownMenuItem>
-                                  )}
-                                  <DropdownMenuItem onClick={() => setExemptingStudent(student)}>
-                                    <BadgeAlertIcon className="mr-2 h-4 w-4" />
-                                    Dispenser d&apos;une étape
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    onClick={() => setDeclaring(student)}
-                                    className="text-destructive focus:text-destructive"
-                                  >
-                                    <UserRoundXIcon className="mr-2 h-4 w-4" />
-                                    Déclarer un départ
-                                  </DropdownMenuItem>
-                                </>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        )}
+                                )}
+                                <DropdownMenuItem onClick={() => setExemptingStudent(student)}>
+                                  <BadgeAlertIcon className="mr-2 h-4 w-4" />
+                                  Dispenser d&apos;une étape
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => setDeclaring(student)}
+                                  className="text-destructive focus:text-destructive"
+                                >
+                                  <UserRoundXIcon className="mr-2 h-4 w-4" />
+                                  Déclarer un départ
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -917,22 +945,11 @@ export default function StudentsManagementPage() {
         <EditStudentModal
           key={editingStudent.studentId}
           open={!!editingStudent}
-          onOpenChange={open => !open && setEditingStudent(null)}
+          onOpenChange={open => !open && closeEditStudent()}
           studentName={`${editingStudent.firstname} ${editingStudent.lastname}`}
           studentCode={editingStudent.studentCode}
-          initialData={{
-            lastname:     editingStudent.lastname,
-            firstname:    editingStudent.firstname,
-            birthDate:    editingStudent.birthDate,
-            email:        editingStudent.email,
-            nisu:         editingStudent.nisu,
-            address:      editingStudent.address,
-            motherName:   editingStudent.motherName,
-            fatherName:   editingStudent.fatherName,
-            phone1:       editingStudent.phone1,
-            phone2:       editingStudent.phone2,
-            parentsEmail: editingStudent.parentsEmail,
-          }}
+          initialData={profilEdition?.statut === 'pret' ? profilEdition.profil : null}
+          loadError={profilEdition?.statut === 'erreur' ? profilEdition.message : null}
           submitting={editSubmitting}
           onSubmit={handleEditStudent}
         />

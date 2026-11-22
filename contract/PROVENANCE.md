@@ -6,8 +6,8 @@ validateurs et valide chaque réponse avant usage). Ne pas la modifier à la mai
 
 - Dépôt d'origine : `school_management_server`
 - Chemin d'origine : `contract/openapi.json`
-- Commit serveur : `93e5887b29e103362f0b70b0c3c6f0584ddf63d9`
-- SHA-256 de la copie : `fdc5b2b43c5c1eb6309593a00a181937ff8f34dc056ec72489a5e6b828399bae`
+- Commit serveur : `591a861f7f03ced6b2a74736f2e20a4d67c01a6e`
+- SHA-256 de la copie : `0d16ce23b519bcff989e90e0784174d91436e7ec21e3f34471685c540badc603`
 
 ## Mettre à jour
 

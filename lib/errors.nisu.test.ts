@@ -45,7 +45,8 @@ check('toutes les sorties ci-dessus', sorties.some((s) => /12/.test(s)), false)
 
 out.push('(e) messages sans rapport : traitement actuel')
 check('statut 400 generique', toMessage(serveur(400, 'Bad payload')), 'Les données envoyées ne sont pas valides.')
-check('email deja utilise', toMessage(serveur(409, 'email already exists')), 'Cet email est déjà utilisé.')
+// Plus aucune route n'emploie ce texte (lot frontend « profil élève ») : règle générale des doublons.
+check('email deja utilise', toMessage(serveur(409, 'email already exists')), 'Cet élément existe déjà.')
 check('note au quart de point', toMessage(serveur(400, 'score must be a multiple of 0.25')), 'La note doit être un multiple de 0,25 (.00 / .25 / .50 / .75).')
 check('NISU absent a l\'archivage : non attrape', toMessage(serveur(400, 'Student has no NISU - bulletin cannot be archived')), 'Les données envoyées ne sont pas valides.')
 

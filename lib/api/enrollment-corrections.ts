@@ -239,6 +239,8 @@ export type StudentAuditAction =
   | 'CALENDAR_ENTRY_CREATED'
   | 'CALENDAR_ENTRY_UPDATED'
   | 'CALENDAR_ENTRY_DELETED'
+  // Modification du profil d'un élève (lot serveur « profil élève », D-95).
+  | 'STUDENT_PROFILE_UPDATED'
 
 /** Libellés d'affichage. Seule ASSIGNMENT_CORRECTED est écrite à ce jour. */
 export const AUDIT_ACTION_LABELS: Record<StudentAuditAction, string> = {
@@ -261,6 +263,7 @@ export const AUDIT_ACTION_LABELS: Record<StudentAuditAction, string> = {
   CALENDAR_ENTRY_CREATED:        'Entrée du calendrier créée',
   CALENDAR_ENTRY_UPDATED:        'Entrée du calendrier modifiée',
   CALENDAR_ENTRY_DELETED:        'Entrée du calendrier supprimée',
+  STUDENT_PROFILE_UPDATED:       "Profil de l'élève modifié",
 }
 
 /**
